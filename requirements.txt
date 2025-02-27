@@ -1,0 +1,16 @@
+pre-commit==4.0.1
+numpy==1.26.4
+torch==2.5.1
+tqdm==4.67.1
+seaborn==0.13.2
+pytest==7.4.4
+opencv-python==4.11.0.86
+imageio==2.37.0
+jax==0.5.0
+# documentation
+sphinx==7.4.7
+sphinx-rtd-theme==2.0.0
+sphinxcontrib-bibtex==2.6.2
+sphinx_togglebutton==0.3.2
+sphinx-copybutton==0.5.2
+sphinx-tabs==3.4.7
