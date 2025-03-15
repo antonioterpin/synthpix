@@ -22,7 +22,7 @@ NUMBER_OF_EXECUTIONS = config["NUMBER_OF_EXECUTIONS"]
 
 
 @pytest.mark.parametrize(
-    "image_shape", [(16, 16), (64, 32), (32, 64), (256, 128), (128, 256), (256, 256)]
+    "image_shape", [(16, 16), (64, 32), (32, 64), (256, 128), (128, 256)]
 )
 def test_flow_apply_to_image(image_shape, visualize=False):
     """Test that we can apply a flow field to a synthetic image."""

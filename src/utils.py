@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import yaml
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="[%(levelname)s][%(asctime)s][%(filename)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     # filename='app.log',
@@ -99,6 +99,7 @@ def bilinear_interpolate(
     y1 = jnp.ceil(y).astype(int)
 
     # Clamp to image boundaries
+    # Note: in this way, the positions need to be within the image boundaries
     x0 = jnp.clip(x0, 0, W - 1)
     x1 = jnp.clip(x1, 0, W - 1)
     y0 = jnp.clip(y0, 0, H - 1)

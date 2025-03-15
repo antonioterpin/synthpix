@@ -1,0 +1,251 @@
+"""SyntheticImageSampler class for generating synthetic images from flow fields."""
+from typing import Callable, Tuple
+
+import jax
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+
+from src.sym.processing import input_check_gen_img_from_flow
+
+
+class SyntheticImageSampler:
+    """Iterator class that generates synthetic images from flow fields.
+
+    This class repeatedly samples flow fields from a FlowFieldScheduler, and for each,
+    generates a specified number of synthetic images using JAX random keys.
+    The generation is performed by a JAX-compatible synthesis function passed by the user.
+    The sampler yields batches of synthetic images, and automatically switches to a new
+    flow field after generating a defined number of images from the current one.
+
+    Typical usage involves feeding the resulting batches into a model training loop or
+    downstream processing pipeline.
+    """
+
+    def __init__(
+        self,
+        scheduler,
+        img_gen_fn: Callable[..., jnp.ndarray],
+        images_per_field: int = 1000,
+        batch_size: int = 250,
+        big_image_shape: Tuple[int, int] = (1536, 2048),
+        image_shape: Tuple[int, int] = (1216, 1936),
+        img_offset: Tuple[int, int] = (20, 20),
+        num_particles: int = 40000,
+        p_hide_img1: float = 0.01,
+        p_hide_img2: float = 0.01,
+        diameter_range: Tuple[float, float] = (0.1, 1.0),
+        intensity_range: Tuple[float, float] = (50, 200),
+        rho_range: Tuple[float, float] = (-0.99, 0.99),
+        dt: float = 1.0,
+        VERBOSE: bool = False,
+        DEBUG: bool = False,
+        seed: int = 0,
+    ):
+        """Initializes the SyntheticImageSampler.
+
+        Args:
+            scheduler: An instance of FlowFieldScheduler that provides flow fields.
+            img_gen_fn: Callable[..., jnp.ndarray]
+                JAX-compatible function (flow_field, key, ...) -> batch of images.
+            images_per_field: int
+                Number of synthetic images to generate per flow field.
+            batch_size: int
+                Number of synthetic images per batch.
+            big_image_shape: Tuple[int, int]
+                Shape of the big image from which the flow field is sampled.
+            image_shape: Tuple[int, int]
+                Shape of the synthetic images.
+            img_offset: Tuple[int, int]
+                Offset for the synthetic images within the big image.
+            num_particles: int
+                Number of particles to simulate.
+            p_hide_img1: float
+                Probability of hiding particles in the first image.
+            p_hide_img2: float
+                Probability of hiding particles in the second image.
+            diameter_range: Tuple[float, float]
+                Range of diameters for particles.
+            intensity_range: Tuple[float, float]
+                Range of intensities for particles.
+            rho_range: Tuple[float, float]
+                Range of correlation coefficients for particles.
+            dt: float
+                Time step for the simulation.
+            VERBOSE: bool
+                Verbosity flag for debugging.
+            DEBUG: bool
+                Debugging flag for additional output.
+            seed: int
+                Random seed for JAX PRNG.
+        """
+        self.scheduler = scheduler
+        self.img_gen_fn_jit = jax.jit(
+            lambda flow, key: img_gen_fn(
+                key=key,
+                flow_field=flow,
+                big_image_shape=self.big_image_shape,
+                image_shape=self.image_shape,
+                img_offset=self.img_offset,
+                num_images=self.batch_size,
+                num_particles=self.num_particles,
+                p_hide_img1=self.p_hide_img1,
+                p_hide_img2=self.p_hide_img2,
+                diameter_range=self.diameter_range,
+                intensity_range=self.intensity_range,
+                rho_range=self.rho_range,
+                dt=self.dt,
+            )
+        )
+        self.images_per_field = images_per_field
+        self.batch_size = batch_size
+        self.big_image_shape = big_image_shape
+        self.image_shape = image_shape
+        self.img_offset = img_offset
+        self.num_particles = num_particles
+        self.p_hide_img1 = p_hide_img1
+        self.p_hide_img2 = p_hide_img2
+        self.diameter_range = diameter_range
+        self.intensity_range = intensity_range
+        self.rho_range = rho_range
+        self.dt = dt
+        self.VERBOSE = VERBOSE
+        self.DEBUG = DEBUG
+        self.seed = seed
+        # Input validation for configuration parameters
+        if len(image_shape) != 2 or not all(
+            isinstance(s, int) and s > 0 for s in image_shape
+        ):
+            raise ValueError("image_shape must be a tuple of two positive integers.")
+        if len(big_image_shape) != 2 or not all(
+            isinstance(s, int) and s > 0 for s in big_image_shape
+        ):
+            raise ValueError(
+                "big_image_shape must be a tuple of two positive integers."
+            )
+        if len(img_offset) != 2 or not all(
+            isinstance(s, int) and s >= 0 for s in img_offset
+        ):
+            raise ValueError("img_offset must be a tuple of two non-negative integers.")
+        if not isinstance(num_particles, int) or num_particles <= 0:
+            raise ValueError("num_particles must be a positive integer.")
+        if not isinstance(images_per_field, int) or images_per_field <= 0:
+            raise ValueError("images_per_field must be a positive integer.")
+        if not isinstance(batch_size, int) or batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer.")
+        if not (0 <= p_hide_img1 <= 1):
+            raise ValueError("p_hide_img1 must be between 0 and 1.")
+        if not (0 <= p_hide_img2 <= 1):
+            raise ValueError("p_hide_img2 must be between 0 and 1.")
+        if len(diameter_range) != 2 or not all(
+            isinstance(d, (int, float)) and d > 0 for d in diameter_range
+        ):
+            raise ValueError("diameter_range must be a tuple of two positive floats.")
+        if len(intensity_range) != 2 or not all(
+            isinstance(i, (int, float)) and i >= 0 for i in intensity_range
+        ):
+            raise ValueError(
+                "intensity_range must be a tuple of two non-negative floats."
+            )
+        if len(rho_range) != 2 or not all(
+            isinstance(r, (int, float)) and -1 <= r <= 1 for r in rho_range
+        ):
+            raise ValueError(
+                "rho_range must be a tuple of two floats between -1 and 1."
+            )
+        if not isinstance(dt, (int, float)):
+            raise ValueError("dt must be a scalar (int or float)")
+
+        if VERBOSE:
+            print("Input arguments of SyntheticImageSampler are valid.")
+            print(f"Image shape: {self.image_shape}")
+            print(f"Big image shape: {self.big_image_shape}")
+            print(f"Image offset: {self.img_offset}")
+            print(f"Number of particles: {self.num_particles}")
+            print(f"Images per field: {self.images_per_field}")
+            print(f"Batch size: {self.batch_size}")
+            print(f"Diameter range: {self.diameter_range}")
+            print(f"Intensity range: {self.intensity_range}")
+            print(f"Rho range: {self.rho_range}")
+            print(f"dt: {self.dt}")
+            print(f"p_hide_img1: {self.p_hide_img1}")
+            print(f"p_hide_img2: {self.p_hide_img2}")
+            print(f"Seed: {self.seed}")
+            print(f"Flow field scheduler: {self.scheduler}")
+            print(f"Image generation function: {img_gen_fn}")
+
+        # Initialize the random key for JAX
+        self._rng = jax.random.PRNGKey(seed)
+        self._current_flow = None
+        self._images_generated = 0
+
+    def __iter__(self):
+        """Returns the iterator instance itself.
+
+        This allows the SyntheticImageSampler to be used in for-loops and other
+        iterable contexts, as it implements both __iter__ and __next__.
+
+        Returns:
+            SyntheticImageSampler: The iterator instance.
+        """
+        return self
+
+    def __next__(self):
+        """Generates the next batch of synthetic images.
+
+        Raises:
+            StopIteration: Never raised by default, can be controlled externally.
+
+        Returns:
+            jnp.ndarray: A batch of synthetic images generated on GPU.
+        """
+        # Check if we need to initialize or switch to a new flow field
+        if (
+            self._current_flow is None
+            or self._images_generated >= self.images_per_field
+        ):
+            self._current_flow = jnp.array(next(self.scheduler))
+            self._images_generated = 0
+
+        # Generate a new random key for image generation
+        self._rng, subkey = jax.random.split(self._rng)
+
+        if self.DEBUG:
+            print(f"Current flow field shape: {self._current_flow.shape}")
+            print(f"Current flow field type: {type(self._current_flow)}")
+            print(f"Current random key: {subkey}")
+            input_check_gen_img_from_flow(
+                key=subkey,
+                flow_field=self._current_flow,
+                big_image_shape=self.big_image_shape,
+                image_shape=self.image_shape,
+                img_offset=self.img_offset,
+                num_images=self.batch_size,
+                num_particles=self.num_particles,
+                p_hide_img1=self.p_hide_img1,
+                p_hide_img2=self.p_hide_img2,
+                diameter_range=self.diameter_range,
+                intensity_range=self.intensity_range,
+                rho_range=self.rho_range,
+                dt=self.dt,
+                VERBOSE=self.VERBOSE,
+            )
+
+        # Generate a new batch of images using the current flow field
+        imgs1, imgs2 = self.img_gen_fn_jit(self._current_flow, subkey)
+
+        if self.DEBUG:
+            print(f"Generated images1 shape: {imgs1.shape}")
+            print(f"Generated images2 shape: {imgs2.shape}")
+            print(f"Current flow field shape: {self._current_flow.shape}")
+            plt.imsave("generated_image1.png", imgs1[0], cmap="gray")
+            plt.imsave("generated_image2.png", imgs2[0], cmap="gray")
+
+        assert (
+            imgs1.shape[0] == self.batch_size
+        ), f"Expected {self.batch_size} images but got {imgs1.shape[0]}"
+        assert (
+            imgs2.shape[0] == self.batch_size
+        ), f"Expected {self.batch_size} images but got {imgs2.shape[0]}"
+
+        self._images_generated += self.batch_size
+        return imgs1, imgs2
