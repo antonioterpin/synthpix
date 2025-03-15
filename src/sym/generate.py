@@ -91,10 +91,11 @@ def add_noise_to_image(
 
 def img_gen_from_density(
     key: jax.random.PRNGKey,
-    image_shape: Tuple[int, int] = (256, 256),
+    image_shape: Tuple[int, int] = (1536, 2048),
     seeding_density: float = 0.05,
     diameter_range: Tuple[float, float] = (0.1, 1.0),
     intensity_range: Tuple[float, float] = (50, 200),
+    particle_positions: jnp.ndarray = None,
 ) -> jnp.ndarray:
     """Generate a synthetic particle image using 2D Gaussians from seeding density.
 
@@ -110,6 +111,8 @@ def img_gen_from_density(
             Minimum and maximum particle diameter in pixels.
         intensity_range: Tuple[float, float]
             Minimum and maximum peak intensity (I0).
+        particle_positions: jnp.ndarray
+            Optional array of particle positions (x, y) in pixels.
 
     Returns:
         jnp.ndarray: Synthetic particle image of shape `image_shape`.
@@ -141,9 +144,14 @@ def img_gen_from_density(
     # 3. Sample random parameters
     key_x, key_y, key_d, key_i = jax.random.split(key, 4)
 
-    # Particle center positions
-    x0s = jax.random.uniform(key_x, shape=(num_particles,), minval=0, maxval=width)
-    y0s = jax.random.uniform(key_y, shape=(num_particles,), minval=0, maxval=height)
+    if particle_positions is not None:
+        # Use the provided particle positions
+        x0s, y0s = particle_positions.T
+        num_particles = len(x0s)
+    else:
+        # Particle center positions
+        x0s = jax.random.uniform(key_x, shape=(num_particles,), minval=0, maxval=width)
+        y0s = jax.random.uniform(key_y, shape=(num_particles,), minval=0, maxval=height)
 
     # Diameters in the specified range, then convert to sigma = diameter / 2
     diameters = jax.random.uniform(
