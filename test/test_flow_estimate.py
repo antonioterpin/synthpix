@@ -8,7 +8,7 @@ import pytest
 from src.sym.apply import apply_flow_to_image
 from src.sym.estimate import CrossCorrelationEstimator
 from src.sym.example_flows import horizontal_flow, pipe_horizontal_flow, vortex_flow
-from src.sym.generate import add_noise_to_image, generate_synthetic_particle_image
+from src.sym.generate import add_noise_to_image, img_gen_from_density
 from src.utils import compute_image_scaled_height
 
 FLOW_FIELD_TOLERANCE = 1e-2
@@ -236,7 +236,7 @@ def test_flow_estimation(
     # 1. Generate a synthetic particle image
     flow_func = horizontal_flow
     key = jax.random.PRNGKey(seed)
-    img1 = generate_synthetic_particle_image(
+    img1 = img_gen_from_density(
         key,
         image_shape=image_shape,
         seeding_density=density,

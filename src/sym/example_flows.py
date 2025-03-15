@@ -60,3 +60,35 @@ def vortex_flow(t: float, x: float, y: float) -> Tuple[float, float]:
     u = -y * jnp.cos(2 * jnp.pi * f * t)
     v = x * jnp.cos(2 * jnp.pi * f * t)
     return u, v
+
+
+def get_flow_function(selected_flow, image_shape=(128, 128)):
+    """Generate a flow field for testing purposes.
+
+    It creates a flow field function based on the selected_flow.
+
+    Args:
+        selected_flow (str): The selected flow field type.
+        image_shape (tuple[int, int]): The image shape.
+
+    Returns:
+        Tuple[float, float]: The flow field components.
+    """
+    match selected_flow:
+        case "horizontal":
+            return lambda t, x, y: (10.0, 0.0)
+        case "vertical":
+            return lambda t, x, y: (0.0, 10.0)
+        case "diagonal":
+            return lambda t, x, y: (10.0, 10.0)
+        case "no_flow":
+            return lambda t, x, y: (0.0, 0.0)
+        case "pipe_horizontal":
+            return lambda t, x, y: (20 - 0.004 * (y - image_shape[1] / 2) ** 2, 0.0)
+        case "vortex":
+            return lambda t, x, y: (
+                -((y - 64) * 10.0 / 64.0 * jnp.cos(2 * jnp.pi * t)),
+                ((x - 64) * 10.0 / 64.0 * jnp.cos(2 * jnp.pi * t)),
+            )
+        case _:
+            raise ValueError("Invalid flow selected")

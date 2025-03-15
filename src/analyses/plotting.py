@@ -1,4 +1,5 @@
 """Plotting functions for the data analysis."""
+
 import os
 from typing import Callable, Tuple
 
