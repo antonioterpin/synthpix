@@ -4,6 +4,7 @@ import logging
 import signal
 from typing import Union
 
+import jax
 import jax.numpy as jnp
 import yaml
 
@@ -94,8 +95,8 @@ def bilinear_interpolate(
     x0 = jnp.floor(x).astype(int)
     y0 = jnp.floor(y).astype(int)
     # Ceiling (neighbor) of x, y
-    x1 = x0 + 1
-    y1 = y0 + 1
+    x1 = jnp.ceil(x).astype(int)
+    y1 = jnp.ceil(y).astype(int)
 
     # Clamp to image boundaries
     x0 = jnp.clip(x0, 0, W - 1)
@@ -122,6 +123,68 @@ def bilinear_interpolate(
     return Ia * wa + Ib * wb + Ic * wc + Id * wd
 
 
+def trilinear_interpolate(
+    volume: jnp.ndarray, x: jnp.ndarray, y: jnp.ndarray, z: jnp.ndarray
+) -> jnp.ndarray:
+    """Perform trilinear interpolation of `volume` at floating-point pixel coordinates.
+
+    Args:
+        volume (jnp.ndarray): 3D volume to sample from, of shape (D, H, W).
+        x (jnp.ndarray): Array of floating-point x-coordinates.
+        y (jnp.ndarray): Array of floating-point y-coordinates.
+        z (jnp.ndarray): Array of floating-point z-coordinates.
+
+    Returns:
+        jnp.ndarray: Interpolated intensities at each (z, y, x) location.
+    """
+    D, H, W = volume.shape
+
+    # Floor and ceil indices for each coordinate
+    x0 = jnp.floor(x).astype(int)
+    y0 = jnp.floor(y).astype(int)
+    z0 = jnp.floor(z).astype(int)
+
+    x1 = jnp.ceil(x).astype(int)
+    y1 = jnp.ceil(y).astype(int)
+    z1 = jnp.ceil(z).astype(int)
+
+    # Clamp indices to be within volume boundaries
+    x0 = jnp.clip(x0, 0, W - 1)
+    x1 = jnp.clip(x1, 0, W - 1)
+    y0 = jnp.clip(y0, 0, H - 1)
+    y1 = jnp.clip(y1, 0, H - 1)
+    z0 = jnp.clip(z0, 0, D - 1)
+    z1 = jnp.clip(z1, 0, D - 1)
+
+    # Compute interpolation weights for each axis
+    alpha_x = x - jnp.floor(x)
+    alpha_y = y - jnp.floor(y)
+    alpha_z = z - jnp.floor(z)
+
+    # Retrieve intensities from the eight corners of the cube
+    Ia = volume[z0, y0, x0]
+    Ib = volume[z0, y0, x1]
+    Ic = volume[z0, y1, x0]
+    Id = volume[z0, y1, x1]
+    Ie = volume[z1, y0, x0]
+    If = volume[z1, y0, x1]
+    Ig = volume[z1, y1, x0]
+    Ih = volume[z1, y1, x1]
+
+    # Compute weights for each corner
+    wa = (1.0 - alpha_x) * (1.0 - alpha_y) * (1.0 - alpha_z)
+    wb = alpha_x * (1.0 - alpha_y) * (1.0 - alpha_z)
+    wc = (1.0 - alpha_x) * alpha_y * (1.0 - alpha_z)
+    wd = alpha_x * alpha_y * (1.0 - alpha_z)
+    we = (1.0 - alpha_x) * (1.0 - alpha_y) * alpha_z
+    wf = alpha_x * (1.0 - alpha_y) * alpha_z
+    wg = (1.0 - alpha_x) * alpha_y * alpha_z
+    wh = alpha_x * alpha_y * alpha_z
+
+    # Compute the weighted sum of the corner intensities
+    return Ia * wa + Ib * wb + Ic * wc + Id * wd + Ie * we + If * wf + Ig * wg + Ih * wh
+
+
 class GracefulShutdown:
     """A context manager for graceful shutdowns."""
 
@@ -139,3 +202,25 @@ class GracefulShutdown:
     def __exit__(self, exc_type, exc_value, traceback):
         """Unregister the signal handler."""
         pass
+
+
+def generate_array_flow_field(flow_f, grid_shape: tuple[int, int]) -> jnp.ndarray:
+    """Generate a array flow field from a flow field function.
+
+    Args:
+        flow_f: The flow field function.
+        grid_shape (tuple[int, int]): The shape of the grid.
+
+    Returns:
+        jnp.ndarray: The array flow field.
+    """
+    # Get the image shape
+    H, W = grid_shape
+    # Create pixel coordinate grids: y in [0..H-1], x in [0..W-1]
+    rows = jnp.arange(H)
+    cols = jnp.arange(W)
+
+    # vmap over both axes, and apply the flow function at time t=1
+    arr = jax.vmap(lambda i: jax.vmap(lambda j: jnp.array(flow_f(1, i, j)))(cols))(rows)
+
+    return arr
