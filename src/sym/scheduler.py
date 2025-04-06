@@ -40,7 +40,6 @@ class FlowFieldScheduler:
         # Validate file paths
         for file_path in self.file_list:
             if not isinstance(file_path, str):
-                print(file_path)
                 raise ValueError("All file paths must be strings.")
             if not file_path.endswith(".h5"):
                 raise ValueError(f"File {file_path} is not an HDF5 file.")

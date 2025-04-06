@@ -27,7 +27,7 @@ class SyntheticImageSampler:
         img_gen_fn: Callable[..., jnp.ndarray],
         images_per_field: int = 1000,
         batch_size: int = 250,
-        big_image_shape: Tuple[int, int] = (1536, 2048),
+        position_bounds: Tuple[int, int] = (1536, 2048),
         image_shape: Tuple[int, int] = (1216, 1936),
         img_offset: Tuple[int, int] = (20, 20),
         num_particles: int = 40000,
@@ -51,7 +51,7 @@ class SyntheticImageSampler:
                 Number of synthetic images to generate per flow field.
             batch_size: int
                 Number of synthetic images per batch.
-            big_image_shape: Tuple[int, int]
+            position_bounds: Tuple[int, int]
                 Shape of the big image from which the flow field is sampled.
             image_shape: Tuple[int, int]
                 Shape of the synthetic images.
@@ -83,7 +83,7 @@ class SyntheticImageSampler:
             lambda flow, key: img_gen_fn(
                 key=key,
                 flow_field=flow,
-                big_image_shape=self.big_image_shape,
+                position_bounds=self.position_bounds,
                 image_shape=self.image_shape,
                 img_offset=self.img_offset,
                 num_images=self.batch_size,
@@ -98,7 +98,7 @@ class SyntheticImageSampler:
         )
         self.images_per_field = images_per_field
         self.batch_size = batch_size
-        self.big_image_shape = big_image_shape
+        self.position_bounds = position_bounds
         self.image_shape = image_shape
         self.img_offset = img_offset
         self.num_particles = num_particles
@@ -116,11 +116,11 @@ class SyntheticImageSampler:
             isinstance(s, int) and s > 0 for s in image_shape
         ):
             raise ValueError("image_shape must be a tuple of two positive integers.")
-        if len(big_image_shape) != 2 or not all(
-            isinstance(s, int) and s > 0 for s in big_image_shape
+        if len(position_bounds) != 2 or not all(
+            isinstance(s, int) and s > 0 for s in position_bounds
         ):
             raise ValueError(
-                "big_image_shape must be a tuple of two positive integers."
+                "position_bounds must be a tuple of two positive integers."
             )
         if len(img_offset) != 2 or not all(
             isinstance(s, int) and s >= 0 for s in img_offset
@@ -158,7 +158,7 @@ class SyntheticImageSampler:
         if VERBOSE:
             print("Input arguments of SyntheticImageSampler are valid.")
             print(f"Image shape: {self.image_shape}")
-            print(f"Big image shape: {self.big_image_shape}")
+            print(f"Big image shape: {self.position_bounds}")
             print(f"Image offset: {self.img_offset}")
             print(f"Number of particles: {self.num_particles}")
             print(f"Images per field: {self.images_per_field}")
@@ -216,7 +216,7 @@ class SyntheticImageSampler:
             input_check_gen_img_from_flow(
                 key=subkey,
                 flow_field=self._current_flow,
-                big_image_shape=self.big_image_shape,
+                position_bounds=self.position_bounds,
                 image_shape=self.image_shape,
                 img_offset=self.img_offset,
                 num_images=self.batch_size,

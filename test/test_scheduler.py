@@ -122,6 +122,8 @@ def test_scheduler_iteration(randomize, x_dim, y_dim, z_dim, num_files):
     ), "All flow fields should have shape ({}, {}, {}). Got: {}".format(
         x_dim, z_dim // 2, 2, [flow.shape for flow in all_flows]
     )
+    for i in range(num_files):
+        os.remove(files[i])
 
 
 @pytest.mark.parametrize(

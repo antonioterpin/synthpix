@@ -14,7 +14,7 @@ from src.utils import is_int
 def input_check_gen_img_from_flow(
     key: jax.random.PRNGKey,
     flow_field: jnp.ndarray,
-    big_image_shape: Tuple[int, int] = (1536, 2048),
+    position_bounds: Tuple[int, int] = (1536, 2048),
     image_shape: Tuple[int, int] = (1216, 1936),
     img_offset: Tuple[int, int] = (20, 20),
     num_images: int = 300,
@@ -35,7 +35,7 @@ def input_check_gen_img_from_flow(
         flow_field: jnp.ndarray
             Array of shape (H, W, 2) containing the velocity field
             at each grid_step.
-        big_image_shape: Tuple[int, int]
+        position_bounds: Tuple[int, int]
             (height, width) of the output big image.
         image_shape: Tuple[int, int]
             (height, width) of the output image.
@@ -73,11 +73,11 @@ def input_check_gen_img_from_flow(
     ):
         raise ValueError("image_shape must be a tuple of two positive integers.")
     if (
-        len(big_image_shape) != 2
-        or not all(s > 0 for s in big_image_shape)
-        or not all(is_int(s) for s in big_image_shape)
+        len(position_bounds) != 2
+        or not all(s > 0 for s in position_bounds)
+        or not all(is_int(s) for s in position_bounds)
     ):
-        raise ValueError("big_image_shape must be a tuple of two positive integers.")
+        raise ValueError("position_bounds must be a tuple of two positive integers.")
     if (
         len(img_offset) != 2
         or not all(is_int(s) for s in img_offset)
@@ -111,7 +111,7 @@ def input_check_gen_img_from_flow(
         print("Input arguments of generate_images_from_flow are valid.")
         print(f"Flow field shape: {flow_field.shape}")
         print(f"Image shape: {image_shape}")
-        print(f"Big image shape: {big_image_shape}")
+        print(f"Big image shape: {position_bounds}")
         print(f"Number of images: {num_images}")
         print(f"Number of particles: {num_particles}")
         print(f"Probability of hiding particles in image 1: {p_hide_img1}")
@@ -125,7 +125,7 @@ def input_check_gen_img_from_flow(
 def generate_images_from_flow(
     key: jax.random.PRNGKey,
     flow_field: jnp.ndarray,
-    big_image_shape: Tuple[int, int] = (1536, 2048),
+    position_bounds: Tuple[int, int] = (1536, 2048),
     image_shape: Tuple[int, int] = (1216, 1936),
     num_images: int = 300,
     img_offset: Tuple[int, int] = (20, 20),
@@ -146,14 +146,12 @@ def generate_images_from_flow(
         flow_field: jnp.ndarray
             Array of shape (H, W, 2) containing the velocity field
             at each grid_step.
-        big_image_shape: Tuple[int, int]
+        position_bounds: Tuple[int, int]
             (height, width) of the output big image.
         image_shape: Tuple[int, int]
             (height, width) of the output image.
         num_images: int
             Number of image pairs to generate.
-        img_offset: Tuple[int, int]
-            Offset to apply to the generated images.
         img_offset: Tuple[int, int]
             Offset to apply to the generated images.
         num_particles: int
@@ -193,7 +191,7 @@ def generate_images_from_flow(
             subkey2, 1.0 - p_hide_img2, shape=(num_particles,)
         ).astype(jnp.int32)
 
-        W, H = big_image_shape
+        W, H = position_bounds
         # Generate random particle positions
         particle_positions = jax.random.uniform(
             subkey3, (num_particles, 2), minval=0.0, maxval=1.0
@@ -202,7 +200,7 @@ def generate_images_from_flow(
         if DEBUG:
             input_check_img_gen_from_data(
                 particle_positions=particle_positions,
-                image_shape=big_image_shape,
+                image_shape=position_bounds,
                 diameter_range=diameter_range,
                 intensity_range=intensity_range,
                 rho_range=rho_range,
@@ -212,7 +210,7 @@ def generate_images_from_flow(
         first_img = img_gen_from_data(
             key=subkey4,
             particle_positions=particle_positions * mask_img1[:, None],
-            image_shape=big_image_shape,
+            image_shape=position_bounds,
             diameter_range=diameter_range,
             intensity_range=intensity_range,
             rho_range=rho_range,
@@ -247,7 +245,7 @@ def generate_images_from_flow(
         if DEBUG:
             input_check_img_gen_from_data(
                 particle_positions=final_positions,
-                image_shape=big_image_shape,
+                image_shape=position_bounds,
                 diameter_range=diameter_range,
                 intensity_range=intensity_range,
                 rho_range=rho_range,
@@ -257,7 +255,7 @@ def generate_images_from_flow(
         second_img = img_gen_from_data(
             key=subkey5,
             particle_positions=final_positions * mask_img2[:, None],
-            image_shape=big_image_shape,
+            image_shape=position_bounds,
             diameter_range=diameter_range,
             intensity_range=intensity_range,
             rho_range=rho_range,
@@ -270,8 +268,8 @@ def generate_images_from_flow(
         return first_imgs, second_imgs, key
 
     # Initialize state: empty arrays to collect images and the RNG key
-    first_imgs = jnp.zeros((num_images, *big_image_shape))
-    second_imgs = jnp.zeros((num_images, *big_image_shape))
+    first_imgs = jnp.zeros((num_images, *position_bounds))
+    second_imgs = jnp.zeros((num_images, *position_bounds))
 
     # fix the key shape
     key = jnp.reshape(key, (-1, key.shape[-1]))[0]
