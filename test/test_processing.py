@@ -9,7 +9,12 @@ from jax.sharding import Mesh, NamedSharding, PartitionSpec
 # Import existing modules
 from src.sym.example_flows import get_flow_function
 from src.sym.processing import generate_images_from_flow, input_check_gen_img_from_flow
-from src.utils import generate_matrix_flow_field
+from src.utils import generate_array_flow_field, load_configuration
+
+config = load_configuration("config/timeit.yaml")
+
+REPETITIONS = config["REPETITIONS"]
+NUMBER_OF_EXECUTIONS = config["NUMBER_OF_EXECUTIONS"]
 
 
 @pytest.mark.parametrize(
@@ -234,7 +239,7 @@ def test_generate_images_from_flow(selected_flow, visualize=True):
     dt = 5.0
 
     # 2. create a flow field
-    flow_field = generate_matrix_flow_field(
+    flow_field = generate_array_flow_field(
         get_flow_function(selected_flow, image_shape), image_shape
     )
 
@@ -262,14 +267,6 @@ def test_generate_images_from_flow(selected_flow, visualize=True):
         import matplotlib.pyplot as plt
         import numpy as np
 
-        # plt.figure(num=selected_flow, figsize=(8, 4))
-        # plt.subplot(1, 2, 1)
-        # plt.title("Original Image")
-        # plt.imshow(np.array(img), cmap="gray")
-        # plt.subplot(1, 2, 2)
-        # plt.title("Warped Image")
-        # plt.imshow(np.array(img_warped), cmap="gray")
-        # plt.show()
         plt.imsave("img.png", np.array(img), cmap="gray")
         plt.imsave("img_warped.png", np.array(img_warped), cmap="gray")
 
@@ -283,18 +280,18 @@ def test_generate_images_from_flow(selected_flow, visualize=True):
 @pytest.mark.parametrize("particles_number", [40000])
 @pytest.mark.parametrize("num_images", [100])
 def test_speed_generate_images_from_flow(particles_number, selected_flow, num_images):
-    """Test that apply_flow_to_particles_array is faster than a limit time."""
+    """Test that generate_images_from_flow is faster than a limit time."""
 
     # Check how many GPUs are available
     num_devices = len(jax.devices())
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 2e-2
+        limit_time = 0e-2
     elif num_devices == 2:
-        limit_time = 8e-3
+        limit_time = 0e-3
     elif num_devices == 4:
-        limit_time = 4e-3
+        limit_time = 0e-3
 
     # Setup device mesh
     devices = mesh_utils.create_device_mesh((num_devices,))
@@ -304,20 +301,18 @@ def test_speed_generate_images_from_flow(particles_number, selected_flow, num_im
     image_shape = (1216, 1936)
     big_image_shape = (1536, 2048)
 
-    # Number of executions for a reliable measurement
-    num_executions = 100 // num_devices
-
     # 1. Generate key
     key = jax.random.PRNGKey(0)
 
     # 2. create a flow field
-    flow_field = generate_matrix_flow_field(
+    flow_field = generate_array_flow_field(
         get_flow_function(selected_flow, big_image_shape), big_image_shape
     )
 
     # 3. send particles and keys to the devices
     keys = jax.random.split(key, num_devices)
     keys = jnp.stack(keys)
+    print(keys.shape)
 
     sharding_keys = NamedSharding(mesh, PartitionSpec("dp"))
     sharding_flow_field = NamedSharding(mesh, PartitionSpec())
@@ -325,20 +320,16 @@ def test_speed_generate_images_from_flow(particles_number, selected_flow, num_im
     keys_sharded = jax.device_put(keys, sharding_keys)
     flow_field_replicated = jax.device_put(flow_field, sharding_flow_field)
 
-    jit_generate_images = jax.jit(
-        lambda key, flow: generate_images_from_flow(
-            key,
-            flow,
-            big_image_shape=big_image_shape,
-            image_shape=image_shape,
-            num_particles=particles_number,
-            num_images=num_images,
-        ),
-    )
+    jax.debug.visualize_array_sharding(keys_sharded)
 
     # jit_generate_images = jax.jit(
     #     lambda key, flow: generate_images_from_flow(
-    #         key, flow, image_shape=image_shape
+    #         key,
+    #         flow,
+    #         big_image_shape=big_image_shape,
+    #         image_shape=image_shape,
+    #         num_particles=particles_number,
+    #         num_images=num_images,
     #     ),
     #     in_shardings=(
     #         NamedSharding(mesh, PartitionSpec("dp")),
@@ -349,21 +340,50 @@ def test_speed_generate_images_from_flow(particles_number, selected_flow, num_im
     #         NamedSharding(mesh, PartitionSpec("dp", None, None)),
     #     ),
     # )
+    # sharding = jax.sharding.NamedSharding(mesh, PartitionSpec("dp"))
+    # jit_generate_images = jax.jit(
+    #     lambda key, flow: jax.lax.with_sharding_constraint(generate_images_from_flow(
+    #         key,
+    #         flow,
+    #         big_image_shape=big_image_shape,
+    #         image_shape=image_shape,
+    #         num_particles=particles_number,
+    #         num_images=num_images,
+    #     ),sharding)
+    # )
+
+    jit_generate_images = jax.jit(
+        lambda key, flow: generate_images_from_flow(
+            key,
+            flow,
+            big_image_shape=big_image_shape,
+            image_shape=image_shape,
+            num_particles=particles_number,
+            num_images=num_images,
+        )
+    )
 
     def run_generate_jit():
         imgs1, imgs2 = jit_generate_images(keys_sharded, flow_field_replicated)
         imgs1.block_until_ready()
         imgs2.block_until_ready()
+        return imgs1, imgs2
 
     # Warm up the function
-    run_generate_jit()
+    imgs1, imgs2 = run_generate_jit()
 
+    # Now you can visualize
+    print(imgs1.shape)
+    print(imgs1.devices())
+    print(imgs1.sharding)
+    jax.debug.visualize_array_sharding(imgs1[0])
     # Measure the time of the jit function
     total_time_jit = timeit.repeat(
         stmt=run_generate_jit,
-        number=num_executions,
+        number=NUMBER_OF_EXECUTIONS,
+        repeat=REPETITIONS,
     )
-    average_time_jit = min(total_time_jit) / (num_executions * num_devices)
+    average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
     # Check if the time is less than the limit
     assert (
         average_time_jit < limit_time

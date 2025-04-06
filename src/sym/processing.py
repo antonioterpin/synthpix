@@ -4,7 +4,7 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 
-from src.sym.apply import apply_flow_to_particles_array, input_check_apply_flow_array
+from src.sym.apply import apply_flow_to_particles, input_check_apply_flow
 
 # Import existing modules
 from src.sym.generate import img_gen_from_data, input_check_img_gen_from_data
@@ -219,7 +219,7 @@ def generate_images_from_flow(
         )
 
         if DEBUG:
-            input_check_apply_flow_array(
+            input_check_apply_flow(
                 particle_positions=particle_positions, flow_field=flow_field, dt=dt
             )
 
@@ -232,7 +232,7 @@ def generate_images_from_flow(
         ).T
 
         # Apply flow field to particle positions
-        final_positions = apply_flow_to_particles_array(
+        final_positions = apply_flow_to_particles(
             particle_positions=particle_positions, flow_field=flow_field, dt=dt
         )
 
