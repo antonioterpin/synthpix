@@ -1,14 +1,17 @@
 """SyntheticImageSampler class for generating synthetic images from flow fields."""
+import logging
 from typing import Callable, Tuple
 
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
-
-from src.sym.processing import input_check_gen_img_from_flow
 from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, PartitionSpec
+
+from src.sym.processing import input_check_gen_img_from_flow
+from src.utils import get_logger
+
+logger = get_logger(__name__)
 
 
 class SyntheticImageSampler:
@@ -30,7 +33,7 @@ class SyntheticImageSampler:
         img_gen_fn: Callable[..., jnp.ndarray],
         images_per_field: int = 1000,
         batch_size: int = 250,
-        big_image_shape: Tuple[int, int] = (1536, 2048),
+        position_bounds: Tuple[int, int] = (1536, 2048),
         image_shape: Tuple[int, int] = (1216, 1936),
         img_offset: Tuple[int, int] = (20, 20),
         num_particles: int = 40000,
@@ -40,8 +43,6 @@ class SyntheticImageSampler:
         intensity_range: Tuple[float, float] = (50, 200),
         rho_range: Tuple[float, float] = (-0.99, 0.99),
         dt: float = 1.0,
-        VERBOSE: bool = False,
-        DEBUG: bool = False,
         seed: int = 0,
     ):
         """Initializes the SyntheticImageSampler.
@@ -54,7 +55,7 @@ class SyntheticImageSampler:
                 Number of synthetic images to generate per flow field.
             batch_size: int
                 Number of synthetic images per batch.
-            big_image_shape: Tuple[int, int]
+            position_bounds: Tuple[int, int]
                 Shape of the big image from which the flow field is sampled.
             image_shape: Tuple[int, int]
                 Shape of the synthetic images.
@@ -74,10 +75,6 @@ class SyntheticImageSampler:
                 Range of correlation coefficients for particles.
             dt: float
                 Time step for the simulation.
-            VERBOSE: bool
-                Verbosity flag for debugging.
-            DEBUG: bool
-                Debugging flag for additional output.
             seed: int
                 Random seed for JAX PRNG.
         """
@@ -86,14 +83,19 @@ class SyntheticImageSampler:
 
         # Make sure the batch size is divisible by the number of devices
         if batch_size % jax.device_count() != 0:
-            batch_size = (
-                batch_size // jax.device_count() + 1
-            ) * jax.device_count()
-            if VERBOSE:
-                print(
-                    f"Batch size was not divisible by the number of devices. "
-                    f"Setting batch_size to {batch_size}."
-                )
+            batch_size = (batch_size // jax.device_count() + 1) * jax.device_count()
+
+            logger.warning(
+                f"Batch size was not divisible by the number of devices. "
+                f"Setting batch_size to {batch_size}."
+            )
+
+        if images_per_field % batch_size != 0:
+            logger.warning(
+                f"images_per_field was not divisible by the batch size. "
+                f"Generating an extra {images_per_field % batch_size} images "
+                f"per flow field."
+            )
 
         # Check how many GPUs are available
         num_devices = len(jax.devices())
@@ -106,12 +108,45 @@ class SyntheticImageSampler:
         devices = mesh_utils.create_device_mesh((num_devices,))
         mesh = Mesh(devices, axis_names=(shard_keys))
 
+        if not hasattr(scheduler, "__iter__"):
+            raise ValueError("scheduler must be an iterable object.")
+        if not hasattr(scheduler, "__next__"):
+            raise ValueError(
+                "scheduler must be an iterable object with __next__ method."
+            )
         self.scheduler = scheduler
-        self.img_gen_fn_jit = jax.jit(shard_map(
-            lambda key, flow: img_gen_fn(
+
+        if not callable(img_gen_fn):
+            raise ValueError("img_gen_fn must be a callable function.")
+
+        if not logger.isEnabledFor(logging.DEBUG):
+            self.img_gen_fn_jit = jax.jit(
+                shard_map(
+                    lambda key, flow: img_gen_fn(
+                        key=key,
+                        flow_field=flow,
+                        position_bounds=self.position_bounds,
+                        image_shape=self.image_shape,
+                        img_offset=self.img_offset,
+                        num_images=self.batch_size,
+                        num_particles=self.num_particles,
+                        p_hide_img1=self.p_hide_img1,
+                        p_hide_img2=self.p_hide_img2,
+                        diameter_range=self.diameter_range,
+                        intensity_range=self.intensity_range,
+                        rho_range=self.rho_range,
+                        dt=self.dt,
+                    ),
+                    mesh=mesh,
+                    in_specs=(PartitionSpec(shard_keys), PartitionSpec()),
+                    out_specs=(PartitionSpec(shard_keys), PartitionSpec(shard_keys)),
+                )
+            )
+        else:
+            self.img_gen_fn_jit = lambda key, flow: img_gen_fn(
                 key=key,
                 flow_field=flow,
-                big_image_shape=self.big_image_shape,
+                position_bounds=self.position_bounds,
                 image_shape=self.image_shape,
                 img_offset=self.img_offset,
                 num_images=self.batch_size // num_devices,
@@ -122,89 +157,93 @@ class SyntheticImageSampler:
                 intensity_range=self.intensity_range,
                 rho_range=self.rho_range,
                 dt=self.dt,
-            ),
-            mesh=mesh,
-            in_specs=(PartitionSpec(shard_keys), PartitionSpec()),
-            out_specs=(PartitionSpec(shard_keys), PartitionSpec(shard_keys)),
-        ))
+            )
+
+        if not isinstance(images_per_field, int) or images_per_field <= 0:
+            raise ValueError("images_per_field must be a positive integer.")
         self.images_per_field = images_per_field
+
+        if not isinstance(batch_size, int) or batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer.")
         self.batch_size = batch_size
-        self.big_image_shape = big_image_shape
-        self.image_shape = image_shape
-        self.img_offset = img_offset
-        self.num_particles = num_particles
-        self.p_hide_img1 = p_hide_img1
-        self.p_hide_img2 = p_hide_img2
-        self.diameter_range = diameter_range
-        self.intensity_range = intensity_range
-        self.rho_range = rho_range
-        self.dt = dt
-        self.VERBOSE = VERBOSE
-        self.DEBUG = DEBUG
-        self.seed = seed
-        # Input validation for configuration parameters
+
+        if len(position_bounds) != 2 or not all(
+            isinstance(s, int) and s > 0 for s in position_bounds
+        ):
+            raise ValueError(
+                "position_bounds must be a tuple of two positive integers."
+            )
+        self.position_bounds = position_bounds
+
         if len(image_shape) != 2 or not all(
             isinstance(s, int) and s > 0 for s in image_shape
         ):
             raise ValueError("image_shape must be a tuple of two positive integers.")
-        if len(big_image_shape) != 2 or not all(
-            isinstance(s, int) and s > 0 for s in big_image_shape
-        ):
-            raise ValueError(
-                "big_image_shape must be a tuple of two positive integers."
-            )
+        self.image_shape = image_shape
+
         if len(img_offset) != 2 or not all(
             isinstance(s, int) and s >= 0 for s in img_offset
         ):
             raise ValueError("img_offset must be a tuple of two non-negative integers.")
+        self.img_offset = img_offset
+
         if not isinstance(num_particles, int) or num_particles <= 0:
             raise ValueError("num_particles must be a positive integer.")
-        if not isinstance(images_per_field, int) or images_per_field <= 0:
-            raise ValueError("images_per_field must be a positive integer.")
-        if not isinstance(batch_size, int) or batch_size <= 0:
-            raise ValueError("batch_size must be a positive integer.")
+        self.num_particles = num_particles
+
         if not (0 <= p_hide_img1 <= 1):
             raise ValueError("p_hide_img1 must be between 0 and 1.")
+        self.p_hide_img1 = p_hide_img1
+
         if not (0 <= p_hide_img2 <= 1):
             raise ValueError("p_hide_img2 must be between 0 and 1.")
+        self.p_hide_img2 = p_hide_img2
+
         if len(diameter_range) != 2 or not all(
             isinstance(d, (int, float)) and d > 0 for d in diameter_range
         ):
             raise ValueError("diameter_range must be a tuple of two positive floats.")
+        self.diameter_range = diameter_range
+
         if len(intensity_range) != 2 or not all(
             isinstance(i, (int, float)) and i >= 0 for i in intensity_range
         ):
             raise ValueError(
                 "intensity_range must be a tuple of two non-negative floats."
             )
+        self.intensity_range = intensity_range
+
         if len(rho_range) != 2 or not all(
             isinstance(r, (int, float)) and -1 <= r <= 1 for r in rho_range
         ):
             raise ValueError(
                 "rho_range must be a tuple of two floats between -1 and 1."
             )
+        self.rho_range = rho_range
+
         if not isinstance(dt, (int, float)):
             raise ValueError("dt must be a scalar (int or float)")
+        self.dt = dt
 
-        if VERBOSE:
-            print("Input arguments of SyntheticImageSampler are valid.")
-            print(f"Image shape: {self.image_shape}")
-            print(f"Big image shape: {self.big_image_shape}")
-            print(f"Image offset: {self.img_offset}")
-            print(f"Number of particles: {self.num_particles}")
-            print(f"Images per field: {self.images_per_field}")
-            print(f"Batch size: {self.batch_size}")
-            print(f"Diameter range: {self.diameter_range}")
-            print(f"Intensity range: {self.intensity_range}")
-            print(f"Rho range: {self.rho_range}")
-            print(f"dt: {self.dt}")
-            print(f"p_hide_img1: {self.p_hide_img1}")
-            print(f"p_hide_img2: {self.p_hide_img2}")
-            print(f"Seed: {self.seed}")
-            print(f"Flow field scheduler: {self.scheduler}")
-            print(f"Image generation function: {img_gen_fn}")
+        self.seed = seed
 
-        
+        logger.debug("Input arguments of SyntheticImageSampler are valid.")
+        logger.debug(f"Image shape: {self.image_shape}")
+        logger.debug(f"Big image shape: {self.position_bounds}")
+        logger.debug(f"Image offset: {self.img_offset}")
+        logger.debug(f"Number of particles: {self.num_particles}")
+        logger.debug(f"Images per field: {self.images_per_field}")
+        logger.debug(f"Batch size: {self.batch_size}")
+        logger.debug(f"Diameter range: {self.diameter_range}")
+        logger.debug(f"Intensity range: {self.intensity_range}")
+        logger.debug(f"Rho range: {self.rho_range}")
+        logger.debug(f"dt: {self.dt}")
+        logger.debug(f"p_hide_img1: {self.p_hide_img1}")
+        logger.debug(f"p_hide_img2: {self.p_hide_img2}")
+        logger.debug(f"Seed: {self.seed}")
+        logger.debug(f"Flow field scheduler: {self.scheduler}")
+        logger.debug(f"Image generation function: {img_gen_fn}")
+
         self._rng = jax.random.PRNGKey(seed)
         self._current_flow = None
         self._images_generated = 0
@@ -241,14 +280,15 @@ class SyntheticImageSampler:
         self._rng, subkey = jax.random.split(self._rng)
         keys = jax.random.split(subkey, jax.device_count())
 
-        if self.DEBUG:
-            print(f"Current flow field shape: {self._current_flow.shape}")
-            print(f"Current flow field type: {type(self._current_flow)}")
-            print(f"Current random keys: {keys}")
+        logger.debug(f"Current flow field shape: {self._current_flow.shape}")
+        logger.debug(f"Current flow field type: {type(self._current_flow)}")
+        logger.debug(f"Current random key: {keys}")
+
+        if logger.isEnabledFor(logging.DEBUG):
             input_check_gen_img_from_flow(
                 key=keys[0],
                 flow_field=self._current_flow,
-                big_image_shape=self.big_image_shape,
+                position_bounds=self.position_bounds,
                 image_shape=self.image_shape,
                 img_offset=self.img_offset,
                 num_images=self.batch_size,
@@ -259,18 +299,12 @@ class SyntheticImageSampler:
                 intensity_range=self.intensity_range,
                 rho_range=self.rho_range,
                 dt=self.dt,
-                VERBOSE=self.VERBOSE,
             )
 
         # Generate a new batch of images using the current flow field
         imgs1, imgs2 = self.img_gen_fn_jit(keys, self._current_flow)
 
-        if self.DEBUG:
-            print(f"Generated images1 shape: {imgs1.shape}")
-            print(f"Generated images2 shape: {imgs2.shape}")
-            print(f"Current flow field shape: {self._current_flow.shape}")
-            plt.imsave("generated_image1.png", imgs1[0], cmap="gray")
-            plt.imsave("generated_image2.png", imgs2[0], cmap="gray")
+        logger.debug(f"Generated images shape: {imgs1.shape}, {imgs2.shape}")
 
         assert (
             imgs1.shape[0] == self.batch_size
@@ -279,5 +313,7 @@ class SyntheticImageSampler:
             imgs2.shape[0] == self.batch_size
         ), f"Expected {self.batch_size} images but got {imgs2.shape[0]}"
 
+        logger.info(f"Generated {self.batch_size} couples of images")
         self._images_generated += self.batch_size
+        logger.debug(f"Total images generated so far: {self._images_generated}")
         return imgs1, imgs2

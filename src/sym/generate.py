@@ -142,7 +142,7 @@ def img_gen_from_density(
     X, Y = jnp.meshgrid(x_grid, y_grid)
 
     # 3. Sample random parameters
-    key_x, key_y, key_d, key_i = jax.random.split(key, 4)
+    key_pos, key_d, key_i = jax.random.split(key, 3)
 
     if particle_positions is not None:
         # Use the provided particle positions
@@ -150,8 +150,9 @@ def img_gen_from_density(
         num_particles = len(x0s)
     else:
         # Particle center positions
-        x0s = jax.random.uniform(key_x, shape=(num_particles,), minval=0, maxval=width)
-        y0s = jax.random.uniform(key_y, shape=(num_particles,), minval=0, maxval=height)
+        particle_positions = jax.random.uniform(
+            key_pos, (num_particles, 2), minval=0.0, maxval=1.0
+        ) * jnp.array([width, height])
 
     # Diameters in the specified range, then convert to sigma = diameter / 2
     diameters = jax.random.uniform(
@@ -176,7 +177,9 @@ def img_gen_from_density(
     def particle_image(x0, y0, sigma, amp):
         return gaussian_2d(X, Y, x0, y0, sigma, amp)
 
-    particles = jax.vmap(particle_image)(x0s, y0s, sigmas, intensities)
+    particles = jax.vmap(particle_image)(
+        particle_positions[:, 0], particle_positions[:, 1], sigmas, intensities
+    )
     image = image + jnp.sum(particles, axis=0)
 
     return jnp.clip(image, min=0, max=255)

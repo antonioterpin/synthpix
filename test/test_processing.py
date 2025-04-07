@@ -71,21 +71,21 @@ def test_invalid_image_shape(image_shape):
 
 
 @pytest.mark.parametrize(
-    "big_image_shape", [(-1, 128), (128, -1), (0, 128), (128, 0), (128.2, 128.2)]
+    "position_bounds", [(-1, 128), (128, -1), (0, 128), (128, 0), (128.2, 128.2)]
 )
-def test_invalid_big_image_shape(big_image_shape):
-    """Test that invalid big_image_shape raises a ValueError."""
+def test_invalid_position_bounds(position_bounds):
+    """Test that invalid position_bounds raises a ValueError."""
     key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((128, 128, 2))
     image_shape = (128, 128)
     img_offset = (0, 0)
     with pytest.raises(
-        ValueError, match="big_image_shape must be a tuple of two positive integers."
+        ValueError, match="position_bounds must be a tuple of two positive integers."
     ):
         input_check_gen_img_from_flow(
             key,
             flow_field=flow_field,
-            big_image_shape=big_image_shape,
+            position_bounds=position_bounds,
             image_shape=image_shape,
             img_offset=img_offset,
         )
@@ -98,7 +98,7 @@ def test_invalid_img_offset(img_offset):
     """Test that invalid img_offset raises a ValueError."""
     key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((128, 128, 2))
-    big_image_shape = (256, 256)
+    position_bounds = (256, 256)
     image_shape = (128, 128)
     with pytest.raises(
         ValueError, match="img_offset must be a tuple of two non-negative integers."
@@ -106,7 +106,7 @@ def test_invalid_img_offset(img_offset):
         input_check_gen_img_from_flow(
             key,
             flow_field=flow_field,
-            big_image_shape=big_image_shape,
+            position_bounds=position_bounds,
             image_shape=image_shape,
             img_offset=img_offset,
         )
@@ -229,7 +229,7 @@ def test_generate_images_from_flow(visualize=True):
     # 1. setup the image parameters
     key = jax.random.PRNGKey(0)
     selected_flow = "horizontal"
-    big_image_shape = (128, 128)
+    position_bounds = (128, 128)
     image_shape = (128, 128)
     num_particles = 1
     p_hide_img1 = 0.01
@@ -248,7 +248,7 @@ def test_generate_images_from_flow(visualize=True):
     img, img_warped = generate_images_from_flow(
         key,
         flow_field,
-        big_image_shape=big_image_shape,
+        position_bounds=position_bounds,
         image_shape=image_shape,
         num_particles=num_particles,
         num_images=1,
@@ -281,9 +281,9 @@ def test_generate_images_from_flow(visualize=True):
 @pytest.mark.parametrize("particles_number", [40000])
 @pytest.mark.parametrize("num_images", [100])
 @pytest.mark.parametrize("image_shape", [(1216, 1936)])
-@pytest.mark.parametrize("big_image_shape", [(1536, 2048)])
+@pytest.mark.parametrize("position_bounds", [(1536, 2048)])
 def test_speed_generate_images_from_flow(
-    particles_number, selected_flow, num_images, image_shape, big_image_shape
+    particles_number, selected_flow, num_images, image_shape, position_bounds
 ):
     """Test that generate_images_from_flow is faster than a limit time."""
 
@@ -314,7 +314,7 @@ def test_speed_generate_images_from_flow(
 
     # 2. create a flow field
     flow_field = generate_array_flow_field(
-        get_flow_function(selected_flow, big_image_shape), big_image_shape
+        get_flow_function(selected_flow, position_bounds), position_bounds
     )
 
     # 3. Setup the random keys
@@ -325,9 +325,9 @@ def test_speed_generate_images_from_flow(
     jit_generate_images = jax.jit(
         shard_map(
             lambda key, flow: generate_images_from_flow(
-                key,
-                flow,
-                big_image_shape=big_image_shape,
+                key=key,
+                flow_field=flow,
+                position_bounds=position_bounds,
                 image_shape=image_shape,
                 num_particles=particles_number,
                 num_images=num_images,
@@ -345,7 +345,6 @@ def test_speed_generate_images_from_flow(
 
     # Warm up the function
     run_generate_jit()
-    
 
     # Measure the time of the jit function
     # We divide by the number of devices because shard_map

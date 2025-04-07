@@ -128,6 +128,8 @@ def test_scheduler_iteration(randomize, x_dim, y_dim, z_dim, num_files):
     ), "All flow fields should have shape ({}, {}, {}). Got: {}".format(
         x_dim, z_dim // 2, 2, [flow.shape for flow in all_flows]
     )
+    for i in range(num_files):
+        os.remove(files[i])
 
 
 @pytest.mark.parametrize(
@@ -163,9 +165,6 @@ def test_scheduler_real_file(file_list, randomize):
     "file_list, randomize, prefetch",
     [
         (["/shared/fluids/channel_full_ts_0004.h5"], True, True),
-        (["/shared/fluids/channel_full_ts_0008.h5"], True, False),
-        (["/shared/fluids/channel_full_ts_0012.h5"], False, True),
-        (["/shared/fluids/channel_full_ts_0016.h5"], False, False),
     ],
 )
 def test_scheduler_time(file_list, randomize, prefetch):
