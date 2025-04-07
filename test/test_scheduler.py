@@ -7,6 +7,12 @@ import numpy as np
 import pytest
 
 from src.sym.scheduler import FlowFieldScheduler
+from src.utils import load_configuration
+
+config = load_configuration("config/timeit.yaml")
+
+REPETITIONS = config["REPETITIONS"]
+NUMBER_OF_EXECUTIONS = config["NUMBER_OF_EXECUTIONS"]
 
 
 def create_mock_hdf5(filename, x_dim=10, y_dim=6, z_dim=5, features=3):
@@ -180,12 +186,12 @@ def test_scheduler_time(file_list, randomize, prefetch):
             pass
 
     # Measure the time of the scheduler iteration
-    num_executions = 1
     total_time = timeit.repeat(
         stmt=iterate_scheduler,
-        number=num_executions,
+        number=NUMBER_OF_EXECUTIONS,
+        repeat=REPETITIONS,
     )
-    average_time = min(total_time)
+    average_time = min(total_time) / NUMBER_OF_EXECUTIONS
 
     assert (
         average_time < 10.0

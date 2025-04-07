@@ -223,12 +223,12 @@ def test_invalid_dt(dt):
         )
 
 
-@pytest.mark.parametrize("selected_flow", ["horizontal"])
-def test_generate_images_from_flow(selected_flow, visualize=True):
+def test_generate_images_from_flow(visualize=True):
     """Test that we can apply a flow field as a jax array to random particles."""
 
     # 1. setup the image parameters
     key = jax.random.PRNGKey(0)
+    selected_flow = "horizontal"
     big_image_shape = (128, 128)
     image_shape = (128, 128)
     num_particles = 1
@@ -342,10 +342,10 @@ def test_speed_generate_images_from_flow(
         imgs1, imgs2 = jit_generate_images(keys, flow_field)
         imgs1.block_until_ready()
         imgs2.block_until_ready()
-        return imgs1, imgs2
 
     # Warm up the function
     run_generate_jit()
+    
 
     # Measure the time of the jit function
     # We divide by the number of devices because shard_map

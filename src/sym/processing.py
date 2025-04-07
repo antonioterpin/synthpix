@@ -193,11 +193,11 @@ def generate_images_from_flow(
             subkey2, 1.0 - p_hide_img2, shape=(num_particles,)
         ).astype(jnp.int32)
 
-        W, H = big_image_shape
+        H, W = big_image_shape
         # Generate random particle positions
         particle_positions = jax.random.uniform(
             subkey3, (num_particles, 2), minval=0.0, maxval=1.0
-        ) * jnp.array([W, H])
+        ) * jnp.array([H, W])
 
         if DEBUG:
             input_check_img_gen_from_data(

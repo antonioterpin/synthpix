@@ -11,7 +11,12 @@ import pytest
 from src.sym.image_sampler import SyntheticImageSampler
 from src.sym.processing import generate_images_from_flow
 from src.sym.scheduler import FlowFieldScheduler
+from src.utils import load_configuration
 
+config = load_configuration("config/timeit.yaml")
+
+REPETITIONS = config["REPETITIONS"]
+NUMBER_OF_EXECUTIONS = config["NUMBER_OF_EXECUTIONS"]
 
 def create_mock_hdf5(filename, x_dim=3, y_dim=4, z_dim=5, features=3):
     path = os.path.join(tempfile.gettempdir(), filename)
@@ -368,7 +373,6 @@ def test_speed_sampler_dummy_fn(file_path):
     runs = 3
     total_time = timeit.repeat(stmt=run_sampler, number=execs, repeat=runs)
     avg_time = min(total_time) / execs
-    print(f"Dummy fn average time per run: {avg_time:.6f} s")
     assert avg_time < 0.5, "Performance test failed: Time exceeded threshold"
 
 
@@ -386,17 +390,31 @@ def test_speed_sampler_dummy_fn(file_path):
         ]
     ],
 )
-def test_speed_sampler_real_fn(file_path):
-    batch_size = 250
-    images_per_field = 1000
+@pytest.mark.parametrize("batch_size", [250])
+@pytest.mark.parametrize("images_per_field", [1000])
+@pytest.mark.parametrize("seed", [0])
+def test_speed_sampler_real_fn(file_path, batch_size, images_per_field, seed):
+    """Test that the sampler with the real image generation function is fast enough."""
 
+    # Check how many GPUs are available
+    num_devices = len(jax.devices())
+
+    # Limit time in seconds (depends on the number of GPUs)
+    if num_devices == 1:
+        limit_time = 2e-1
+    elif num_devices == 2:
+        limit_time = 1.1e-1
+    elif num_devices == 4:
+        limit_time = 7e-2
+
+    # Create the scheduler and sampler
     scheduler = FlowFieldScheduler(file_path, loop=False, prefetch=True)
     sampler = SyntheticImageSampler(
         scheduler=scheduler,
         img_gen_fn=generate_images_from_flow,
         images_per_field=images_per_field,
         batch_size=batch_size,
-        seed=0,
+        seed=seed,
     )
 
     def run_sampler():
@@ -411,9 +429,8 @@ def test_speed_sampler_real_fn(file_path):
     # Warm up the function
     run_sampler()
 
-    execs = 5
-    runs = 3
-    total_time = timeit.repeat(stmt=run_sampler, number=execs, repeat=runs)
-    avg_time = min(total_time) / execs / len(file_path)
-    print(f"Avg time to generate {images_per_field} couples of images: {avg_time} s")
-    assert avg_time < 0.0, "Performance test failed: Time exceeded threshold"
+    # Measure the time taken to run the sampler
+    total_time = timeit.repeat(stmt=run_sampler, number=NUMBER_OF_EXECUTIONS, repeat=REPETITIONS)
+    avg_time = min(total_time) / NUMBER_OF_EXECUTIONS / len(file_path)
+    
+    assert avg_time < limit_time, f"The average time is {avg_time}, time limit: {limit_time}"

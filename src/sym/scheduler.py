@@ -172,9 +172,6 @@ class FlowFieldScheduler:
     def get_batch(self, batch_size):
         """Retrieves a batch of flow fields.
 
-        TODO: Implement and test this method to return a batch of flow fields
-        in a more efficient way.
-
         Args:
             batch_size (int): Number of flow fields to load in the batch.
 
