@@ -6,6 +6,9 @@ import random
 import h5py
 import numpy as np
 
+from src.utils import get_logger
+
+logger = get_logger(__name__)
 
 class FlowFieldScheduler:
     """Iterator class that sequentially loads flow field data from a list of HDF5 files.
@@ -16,7 +19,7 @@ class FlowFieldScheduler:
     """
 
     def __init__(
-        self, file_list, randomize=False, loop=False, prefetch=True, DEBUG=False
+        self, file_list, randomize=False, loop=False, prefetch=True
     ):
         """Initializes the FlowFieldScheduler.
 
@@ -27,33 +30,39 @@ class FlowFieldScheduler:
             prefetch (bool): If True, preload the entire current file into RAM
                              and keep it cached until switching to the next file.
                              If False, load only one slice at a time directly from disk.
-            DEBUG (bool): If True, enable debug logging.
         """
+        # Validate file paths
         if not file_list:
             raise ValueError("The file_list must not be empty.")
-        self.file_list = file_list
-        self.randomize = randomize
-        self.loop = loop
-        self.prefetch = prefetch
-        self.DEBUG = DEBUG
-
-        # Validate file paths
-        for file_path in self.file_list:
+        
+        for file_path in file_list:
             if not isinstance(file_path, str):
                 raise ValueError("All file paths must be strings.")
             if not file_path.endswith(".h5"):
                 raise ValueError(f"File {file_path} is not an HDF5 file.")
             if not os.path.isfile(file_path):
                 raise ValueError(f"File {file_path} does not exist.")
+            
+        self.file_list = file_list
 
         # Argument validation
         if not isinstance(self.randomize, bool):
             raise ValueError("randomize must be a boolean value.")
+        self.randomize = randomize
+        
         if not isinstance(self.loop, bool):
             raise ValueError("loop must be a boolean value.")
+        self.loop = loop
+        
         if not isinstance(self.prefetch, bool):
             raise ValueError("prefetch must be a boolean value.")
+        self.prefetch = prefetch
 
+        logger.debug(
+            f"FlowFieldScheduler initialized with {len(self.file_list)} files, "
+            f"randomize={self.randomize}, loop={self.loop}, prefetch={self.prefetch}"
+        )
+        
         # Initialize state variables
         self.epoch = 0
         self.index = 0
@@ -64,8 +73,7 @@ class FlowFieldScheduler:
 
         if self.randomize:
             random.shuffle(self.file_list)
-        logging.basicConfig(level=logging.INFO if not DEBUG else logging.DEBUG)
-
+            
     def __len__(self):
         """Length of the file list.
 
@@ -120,13 +128,15 @@ class FlowFieldScheduler:
                             dset = file[dataset_key]
                             self._cached_data = file[dataset_key][
                                 :, :, : dset.shape[2] // 2, :
-                            ]  # full preload
+                            ] 
                             # Known issue: We're not using the full dataset
                             # because the length step along the x axes is
                             # twice as much as the z axis. We need to fix this by changing
                             # the dataset structure in the first place.
                         self._cached_file = file_path
                         self.y_sel = 0
+                        logger.info(
+                            f"Prefetched data from {file_path}, shape {self._cached_data.shape}")
 
                     if self.y_sel >= self._cached_data.shape[1]:
                         self.index += 1

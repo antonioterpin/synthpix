@@ -44,7 +44,32 @@ def dummy_img_gen_fn(
         * (jnp.sum(flow_field) + jnp.sum(key)),
     )
 
+@pytest.mark.parametrize("scheduler", [None, "invalid_scheduler"])
+def test_invalid_scheduler():
+    """Test that invalid scheduler raises a ValueError."""
+    with pytest.raises(ValueError, match="scheduler must be an iterable object."):
+        SyntheticImageSampler(
+            scheduler=None,
+            img_gen_fn=dummy_img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            seed=0,
+        )
 
+def test_invalid_img_gen_fn():
+    """Test that invalid img_gen_fn raises a ValueError."""
+    files = [create_mock_hdf5("invalid_img_gen_fn_test.h5")]
+    scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
+    with pytest.raises(ValueError, match="img_gen_fn must be a callable function."):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=None,
+            batch_size=2,
+            images_per_field=10,
+            seed=0,
+        )
+    os.remove(files[0])  # Clean up the temporary file
+    
 @pytest.mark.parametrize("batch_size", [-1, 0, 1.5])
 def test_invalid_batch_size(batch_size):
     """Test that invalid batch_size raises a ValueError."""

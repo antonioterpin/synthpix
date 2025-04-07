@@ -8,14 +8,17 @@ import jax
 import jax.numpy as jnp
 import yaml
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(levelname)s][%(asctime)s][%(filename)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    # filename='app.log',
-)
 
-logger = logging
+def get_logger(name=__name__):
+    logger = logging.getLogger(name)
+    if not logger.hasHandlers():
+        logging.basicConfig(
+            level=logging.INFO,
+            format="[%(levelname)s][%(asctime)s][%(filename)s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+            # filename='app.log',
+        )
+    return logger
 
 
 def is_int(val: Union[int, float]) -> bool:

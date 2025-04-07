@@ -322,36 +322,6 @@ def test_speed_generate_images_from_flow(particles_number, selected_flow, num_im
 
     jax.debug.visualize_array_sharding(keys_sharded)
 
-    # jit_generate_images = jax.jit(
-    #     lambda key, flow: generate_images_from_flow(
-    #         key,
-    #         flow,
-    #         position_bounds=position_bounds,
-    #         image_shape=image_shape,
-    #         num_particles=particles_number,
-    #         num_images=num_images,
-    #     ),
-    #     in_shardings=(
-    #         NamedSharding(mesh, PartitionSpec("dp")),
-    #         NamedSharding(mesh, PartitionSpec()),
-    #     ),
-    #     out_shardings=(
-    #         NamedSharding(mesh, PartitionSpec("dp", None, None)),
-    #         NamedSharding(mesh, PartitionSpec("dp", None, None)),
-    #     ),
-    # )
-    # sharding = jax.sharding.NamedSharding(mesh, PartitionSpec("dp"))
-    # jit_generate_images = jax.jit(
-    #     lambda key, flow: jax.lax.with_sharding_constraint(generate_images_from_flow(
-    #         key,
-    #         flow,
-    #         position_bounds=position_bounds,
-    #         image_shape=image_shape,
-    #         num_particles=particles_number,
-    #         num_images=num_images,
-    #     ),sharding)
-    # )
-
     jit_generate_images = jax.jit(
         lambda key, flow: generate_images_from_flow(
             key,
