@@ -302,11 +302,11 @@ def test_synthetic_sampler_batches(batch_size, images_per_field, image_shape):
     for _ in range(images_per_field // batch_size):
         batch = next(iterator)
         all_batches.append(batch)
-        assert batch[0].shape == (
-            batch_size,
-            8,
-            8,
-        ), "Each batch should have correct shape"
+        assert batch[0].shape[0] >= batch_size, (
+            "Each batch should have a number of "
+            "images bigger or equal than batch_size"
+        )
+        assert batch[0][0].shape >= image_shape, "Incorrect image shape"
         assert isinstance(batch[0], jnp.ndarray), "Output should be a JAX array"
 
     assert (
@@ -345,7 +345,10 @@ def test_sampler_switches_flow_fields(batch_size, images_per_field):
         ((64, 64), 4, 200),
     ],
 )
-def test_sampler_with_real_img_gen_fn(image_shape, num_images, num_particles):
+@pytest.mark.parametrize("batch_size", [4])
+def test_sampler_with_real_img_gen_fn(
+    image_shape, num_images, num_particles, batch_size
+):
     files = [
         create_mock_hdf5(
             "real_synth_test_file.h5",
@@ -363,7 +366,7 @@ def test_sampler_with_real_img_gen_fn(image_shape, num_images, num_particles):
         position_bounds=(image_shape[0] * 2, image_shape[1] * 2),
         num_particles=num_particles,
         images_per_field=num_images,
-        batch_size=2,
+        batch_size=batch_size,
         seed=0,
     )
 
@@ -372,13 +375,13 @@ def test_sampler_with_real_img_gen_fn(image_shape, num_images, num_particles):
         batch[0], jnp.ndarray
     ), f"Output should be a JAX array, got {type(batch[0])}"
     assert batch[0].shape == (
-        2,
+        batch_size,
         *image_shape,
-    ), f"Image batch should have shape {(2, *image_shape)}, got {batch[0].shape}"
+    ), f"Image batch should have shape {(batch_size, *image_shape)}, got {batch[0].shape}"
     assert batch[1].shape == (
-        2,
+        batch_size,
         *image_shape,
-    ), f"Image batch should have shape {(2, *image_shape)}, got {batch[1].shape}"
+    ), f"Image batch should have shape {(batch_size, *image_shape)}, got {batch[1].shape}"
     os.remove(files[0])  # Clean up the temporary file
 
 

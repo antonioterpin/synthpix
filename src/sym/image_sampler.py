@@ -81,22 +81,6 @@ class SyntheticImageSampler:
         # Name of the axis for the device mesh
         shard_keys = "keys"
 
-        # Make sure the batch size is divisible by the number of devices
-        if batch_size % jax.device_count() != 0:
-            batch_size = (batch_size // jax.device_count() + 1) * jax.device_count()
-
-            logger.warning(
-                f"Batch size was not divisible by the number of devices. "
-                f"Setting batch_size to {batch_size}."
-            )
-
-        if images_per_field % batch_size != 0:
-            logger.warning(
-                f"images_per_field was not divisible by the batch size. "
-                f"Generating an extra {images_per_field % batch_size} images "
-                f"per flow field."
-            )
-
         # Check how many GPUs are available
         num_devices = len(jax.devices())
 
@@ -119,52 +103,19 @@ class SyntheticImageSampler:
         if not callable(img_gen_fn):
             raise ValueError("img_gen_fn must be a callable function.")
 
-        if not logger.isEnabledFor(logging.DEBUG):
-            self.img_gen_fn_jit = jax.jit(
-                shard_map(
-                    lambda key, flow: img_gen_fn(
-                        key=key,
-                        flow_field=flow,
-                        position_bounds=self.position_bounds,
-                        image_shape=self.image_shape,
-                        img_offset=self.img_offset,
-                        num_images=self.batch_size,
-                        num_particles=self.num_particles,
-                        p_hide_img1=self.p_hide_img1,
-                        p_hide_img2=self.p_hide_img2,
-                        diameter_range=self.diameter_range,
-                        intensity_range=self.intensity_range,
-                        rho_range=self.rho_range,
-                        dt=self.dt,
-                    ),
-                    mesh=mesh,
-                    in_specs=(PartitionSpec(shard_keys), PartitionSpec()),
-                    out_specs=(PartitionSpec(shard_keys), PartitionSpec(shard_keys)),
-                )
-            )
-        else:
-            self.img_gen_fn_jit = lambda key, flow: img_gen_fn(
-                key=key,
-                flow_field=flow,
-                position_bounds=self.position_bounds,
-                image_shape=self.image_shape,
-                img_offset=self.img_offset,
-                num_images=self.batch_size // num_devices,
-                num_particles=self.num_particles,
-                p_hide_img1=self.p_hide_img1,
-                p_hide_img2=self.p_hide_img2,
-                diameter_range=self.diameter_range,
-                intensity_range=self.intensity_range,
-                rho_range=self.rho_range,
-                dt=self.dt,
-            )
-
         if not isinstance(images_per_field, int) or images_per_field <= 0:
             raise ValueError("images_per_field must be a positive integer.")
         self.images_per_field = images_per_field
 
         if not isinstance(batch_size, int) or batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
+        # Make sure the batch size is divisible by the number of devices
+        if batch_size % num_devices != 0:
+            batch_size = (batch_size // num_devices + 1) * num_devices
+            logger.warning(
+                f"Batch size was not divisible by the number of devices. "
+                f"Setting batch_size to {batch_size}."
+            )
         self.batch_size = batch_size
 
         if len(position_bounds) != 2 or not all(
@@ -225,7 +176,56 @@ class SyntheticImageSampler:
             raise ValueError("dt must be a scalar (int or float)")
         self.dt = dt
 
+        if not isinstance(seed, int) or seed < 0:
+            raise ValueError("seed must be a positive integer.")
         self.seed = seed
+
+        if images_per_field % batch_size != 0:
+            logger.warning(
+                f"images_per_field was not divisible by the batch size. "
+                f"Generating an extra {images_per_field % batch_size} images "
+                f"per flow field."
+            )
+
+        if not logger.isEnabledFor(logging.DEBUG):
+            self.img_gen_fn_jit = jax.jit(
+                shard_map(
+                    lambda key, flow: img_gen_fn(
+                        key=key,
+                        flow_field=flow,
+                        position_bounds=self.position_bounds,
+                        image_shape=self.image_shape,
+                        img_offset=self.img_offset,
+                        num_images=self.batch_size // num_devices,
+                        num_particles=self.num_particles,
+                        p_hide_img1=self.p_hide_img1,
+                        p_hide_img2=self.p_hide_img2,
+                        diameter_range=self.diameter_range,
+                        intensity_range=self.intensity_range,
+                        rho_range=self.rho_range,
+                        dt=self.dt,
+                    ),
+                    mesh=mesh,
+                    in_specs=(PartitionSpec(shard_keys), PartitionSpec()),
+                    out_specs=(PartitionSpec(shard_keys), PartitionSpec(shard_keys)),
+                )
+            )
+        else:
+            self.img_gen_fn_jit = lambda key, flow: img_gen_fn(
+                key=key,
+                flow_field=flow,
+                position_bounds=self.position_bounds,
+                image_shape=self.image_shape,
+                img_offset=self.img_offset,
+                num_images=self.batch_size // num_devices,
+                num_particles=self.num_particles,
+                p_hide_img1=self.p_hide_img1,
+                p_hide_img2=self.p_hide_img2,
+                diameter_range=self.diameter_range,
+                intensity_range=self.intensity_range,
+                rho_range=self.rho_range,
+                dt=self.dt,
+            )
 
         logger.debug("Input arguments of SyntheticImageSampler are valid.")
         logger.debug(f"Image shape: {self.image_shape}")
