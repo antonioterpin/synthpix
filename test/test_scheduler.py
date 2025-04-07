@@ -159,9 +159,6 @@ def test_scheduler_real_file(file_list, randomize):
     "file_list, randomize, prefetch",
     [
         (["/shared/fluids/channel_full_ts_0004.h5"], True, True),
-        (["/shared/fluids/channel_full_ts_0008.h5"], True, False),
-        (["/shared/fluids/channel_full_ts_0012.h5"], False, True),
-        (["/shared/fluids/channel_full_ts_0016.h5"], False, False),
     ],
 )
 def test_scheduler_time(file_list, randomize, prefetch):

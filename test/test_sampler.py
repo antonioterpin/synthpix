@@ -46,11 +46,11 @@ def dummy_img_gen_fn(
 
 
 @pytest.mark.parametrize("scheduler", [None, "invalid_scheduler"])
-def test_invalid_scheduler():
+def test_invalid_scheduler(scheduler):
     """Test that invalid scheduler raises a ValueError."""
     with pytest.raises(ValueError, match="scheduler must be an iterable object."):
         SyntheticImageSampler(
-            scheduler=None,
+            scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
             batch_size=2,
             images_per_field=10,
@@ -85,7 +85,6 @@ def test_invalid_batch_size(batch_size):
             batch_size=batch_size,
             images_per_field=10,
             seed=0,
-            VERBOSE=True,
         )
     os.remove(files[0])  # Clean up the temporary file
 
@@ -360,8 +359,6 @@ def test_sampler_with_real_img_gen_fn(image_shape, num_images, num_particles):
         images_per_field=num_images,
         batch_size=2,
         seed=0,
-        DEBUG=True,
-        VERBOSE=True,
     )
 
     batch = next(sampler)

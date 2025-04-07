@@ -49,15 +49,15 @@ class FlowFieldScheduler:
         self.file_list = file_list
 
         # Argument validation
-        if not isinstance(self.randomize, bool):
+        if not isinstance(randomize, bool):
             raise ValueError("randomize must be a boolean value.")
         self.randomize = randomize
 
-        if not isinstance(self.loop, bool):
+        if not isinstance(loop, bool):
             raise ValueError("loop must be a boolean value.")
         self.loop = loop
 
-        if not isinstance(self.prefetch, bool):
+        if not isinstance(prefetch, bool):
             raise ValueError("prefetch must be a boolean value.")
         self.prefetch = prefetch
 

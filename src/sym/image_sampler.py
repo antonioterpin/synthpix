@@ -85,8 +85,27 @@ class SyntheticImageSampler:
 
         if not callable(img_gen_fn):
             raise ValueError("img_gen_fn must be a callable function.")
-        self.img_gen_fn_jit = jax.jit(
-            lambda flow, key: img_gen_fn(
+
+        if not logger.isEnabledFor(logging.DEBUG):
+            self.img_gen_fn_jit = jax.jit(
+                lambda flow, key: img_gen_fn(
+                    key=key,
+                    flow_field=flow,
+                    position_bounds=self.position_bounds,
+                    image_shape=self.image_shape,
+                    img_offset=self.img_offset,
+                    num_images=self.batch_size,
+                    num_particles=self.num_particles,
+                    p_hide_img1=self.p_hide_img1,
+                    p_hide_img2=self.p_hide_img2,
+                    diameter_range=self.diameter_range,
+                    intensity_range=self.intensity_range,
+                    rho_range=self.rho_range,
+                    dt=self.dt,
+                )
+            )
+        else:
+            self.img_gen_fn_jit = lambda flow, key: img_gen_fn(
                 key=key,
                 flow_field=flow,
                 position_bounds=self.position_bounds,
@@ -101,7 +120,6 @@ class SyntheticImageSampler:
                 rho_range=self.rho_range,
                 dt=self.dt,
             )
-        )
 
         if not isinstance(images_per_field, int) or images_per_field <= 0:
             raise ValueError("images_per_field must be a positive integer.")

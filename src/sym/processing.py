@@ -1,5 +1,4 @@
 """Processing module for generating images from flow fields."""
-import logging
 from typing import Tuple
 
 import jax
@@ -28,6 +27,7 @@ def generate_images_from_flow(
     intensity_range: Tuple[float, float] = (50, 200),
     rho_range: Tuple[float, float] = (-0.99, 0.99),
     dt: float = 1.0,
+    DEBUG: bool = False,
 ):
     """Generates a batch of image pairs from a flow field.
 
@@ -60,6 +60,8 @@ def generate_images_from_flow(
         dt: float
             Time step for the simulation, used to scale the velocity
             to compute the displacement.
+        DEBUG: bool
+            If True, does input validation and prints debug information.
 
     Returns:
         tuple: Two image batches (num_images, H, W) each.
@@ -86,7 +88,7 @@ def generate_images_from_flow(
             subkey3, (num_particles, 2), minval=0.0, maxval=1.0
         ) * jnp.array([W, H])
 
-        if logger.isEnabledFor(logging.DEBUG):
+        if DEBUG:
             input_check_img_gen_from_data(
                 particle_positions=particle_positions,
                 image_shape=position_bounds,
@@ -105,7 +107,7 @@ def generate_images_from_flow(
             rho_range=rho_range,
         )
 
-        if logger.isEnabledFor(logging.DEBUG):
+        if DEBUG:
             input_check_apply_flow(
                 particle_positions=particle_positions, flow_field=flow_field, dt=dt
             )
@@ -131,7 +133,7 @@ def generate_images_from_flow(
             ]
         ).T
 
-        if logger.isEnabledFor(logging.DEBUG):
+        if DEBUG:
             input_check_img_gen_from_data(
                 particle_positions=final_positions,
                 image_shape=position_bounds,
@@ -196,7 +198,6 @@ def input_check_gen_img_from_flow(
     intensity_range: Tuple[float, float] = (50, 200),
     rho_range: Tuple[float, float] = (-0.99, 0.99),
     dt: float = 1.0,
-    VERBOSE: bool = False,
 ):
     """Check the input arguments for generate_images_from_flow.
 
