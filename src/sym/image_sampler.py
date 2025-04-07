@@ -1,14 +1,15 @@
 """SyntheticImageSampler class for generating synthetic images from flow fields."""
+import logging
 from typing import Callable, Tuple
 
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
-import logging
-from src.utils import get_logger
+
 from src.sym.processing import input_check_gen_img_from_flow
+from src.utils import get_logger
 
 logger = get_logger(__name__)
+
 
 class SyntheticImageSampler:
     """Iterator class that generates synthetic images from flow fields.
@@ -77,9 +78,11 @@ class SyntheticImageSampler:
         if not hasattr(scheduler, "__iter__"):
             raise ValueError("scheduler must be an iterable object.")
         if not hasattr(scheduler, "__next__"):
-            raise ValueError("scheduler must be an iterable object with __next__ method.")
+            raise ValueError(
+                "scheduler must be an iterable object with __next__ method."
+            )
         self.scheduler = scheduler
-        
+
         if not callable(img_gen_fn):
             raise ValueError("img_gen_fn must be a callable function.")
         self.img_gen_fn_jit = jax.jit(
@@ -99,15 +102,15 @@ class SyntheticImageSampler:
                 dt=self.dt,
             )
         )
-        
+
         if not isinstance(images_per_field, int) or images_per_field <= 0:
             raise ValueError("images_per_field must be a positive integer.")
         self.images_per_field = images_per_field
-        
+
         if not isinstance(batch_size, int) or batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
         self.batch_size = batch_size
-        
+
         if len(position_bounds) != 2 or not all(
             isinstance(s, int) and s > 0 for s in position_bounds
         ):
@@ -115,37 +118,37 @@ class SyntheticImageSampler:
                 "position_bounds must be a tuple of two positive integers."
             )
         self.position_bounds = position_bounds
-        
+
         if len(image_shape) != 2 or not all(
             isinstance(s, int) and s > 0 for s in image_shape
         ):
             raise ValueError("image_shape must be a tuple of two positive integers.")
         self.image_shape = image_shape
-        
+
         if len(img_offset) != 2 or not all(
             isinstance(s, int) and s >= 0 for s in img_offset
         ):
             raise ValueError("img_offset must be a tuple of two non-negative integers.")
         self.img_offset = img_offset
-        
+
         if not isinstance(num_particles, int) or num_particles <= 0:
             raise ValueError("num_particles must be a positive integer.")
         self.num_particles = num_particles
-        
+
         if not (0 <= p_hide_img1 <= 1):
             raise ValueError("p_hide_img1 must be between 0 and 1.")
         self.p_hide_img1 = p_hide_img1
-        
+
         if not (0 <= p_hide_img2 <= 1):
             raise ValueError("p_hide_img2 must be between 0 and 1.")
         self.p_hide_img2 = p_hide_img2
-        
+
         if len(diameter_range) != 2 or not all(
             isinstance(d, (int, float)) and d > 0 for d in diameter_range
         ):
             raise ValueError("diameter_range must be a tuple of two positive floats.")
         self.diameter_range = diameter_range
-        
+
         if len(intensity_range) != 2 or not all(
             isinstance(i, (int, float)) and i >= 0 for i in intensity_range
         ):
@@ -153,7 +156,7 @@ class SyntheticImageSampler:
                 "intensity_range must be a tuple of two non-negative floats."
             )
         self.intensity_range = intensity_range
-        
+
         if len(rho_range) != 2 or not all(
             isinstance(r, (int, float)) and -1 <= r <= 1 for r in rho_range
         ):
@@ -161,13 +164,13 @@ class SyntheticImageSampler:
                 "rho_range must be a tuple of two floats between -1 and 1."
             )
         self.rho_range = rho_range
-        
+
         if not isinstance(dt, (int, float)):
             raise ValueError("dt must be a scalar (int or float)")
         self.dt = dt
-        
+
         self.seed = seed
-        
+
         logger.debug("Input arguments of SyntheticImageSampler are valid.")
         logger.debug(f"Image shape: {self.image_shape}")
         logger.debug(f"Big image shape: {self.position_bounds}")
@@ -184,7 +187,7 @@ class SyntheticImageSampler:
         logger.debug(f"Seed: {self.seed}")
         logger.debug(f"Flow field scheduler: {self.scheduler}")
         logger.debug(f"Image generation function: {img_gen_fn}")
-        
+
         # Initialize the random key for JAX
         self._rng = jax.random.PRNGKey(seed)
         self._current_flow = None
@@ -224,7 +227,7 @@ class SyntheticImageSampler:
         logger.debug(f"Current flow field shape: {self._current_flow.shape}")
         logger.debug(f"Current flow field type: {type(self._current_flow)}")
         logger.debug(f"Current random key: {subkey}")
-        
+
         if logger.isEnabledFor(logging.DEBUG):
             input_check_gen_img_from_flow(
                 key=subkey,
@@ -239,12 +242,12 @@ class SyntheticImageSampler:
                 diameter_range=self.diameter_range,
                 intensity_range=self.intensity_range,
                 rho_range=self.rho_range,
-                dt=self.dt
+                dt=self.dt,
             )
 
         # Generate a new batch of images using the current flow field
         imgs1, imgs2 = self.img_gen_fn_jit(self._current_flow, subkey)
-        
+
         logger.debug(f"Generated images shape: {imgs1.shape}, {imgs2.shape}")
 
         assert (
@@ -254,9 +257,7 @@ class SyntheticImageSampler:
             imgs2.shape[0] == self.batch_size
         ), f"Expected {self.batch_size} images but got {imgs2.shape[0]}"
 
-        logger.info(
-            f"Generated {self.batch_size} couples of images"
-        )
+        logger.info(f"Generated {self.batch_size} couples of images")
         self._images_generated += self.batch_size
         logger.debug(f"Total images generated so far: {self._images_generated}")
         return imgs1, imgs2

@@ -44,6 +44,7 @@ def dummy_img_gen_fn(
         * (jnp.sum(flow_field) + jnp.sum(key)),
     )
 
+
 @pytest.mark.parametrize("scheduler", [None, "invalid_scheduler"])
 def test_invalid_scheduler():
     """Test that invalid scheduler raises a ValueError."""
@@ -55,6 +56,7 @@ def test_invalid_scheduler():
             images_per_field=10,
             seed=0,
         )
+
 
 def test_invalid_img_gen_fn():
     """Test that invalid img_gen_fn raises a ValueError."""
@@ -69,7 +71,8 @@ def test_invalid_img_gen_fn():
             seed=0,
         )
     os.remove(files[0])  # Clean up the temporary file
-    
+
+
 @pytest.mark.parametrize("batch_size", [-1, 0, 1.5])
 def test_invalid_batch_size(batch_size):
     """Test that invalid batch_size raises a ValueError."""

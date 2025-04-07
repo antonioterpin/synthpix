@@ -10,6 +10,16 @@ import yaml
 
 
 def get_logger(name=__name__):
+    """Get a logger with a specific name.
+
+    Args:
+        name: str
+            The name of the logger.
+
+    Returns:
+        logging.Logger:
+            The logger instance.
+    """
     logger = logging.getLogger(name)
     if not logger.hasHandlers():
         logging.basicConfig(
@@ -66,8 +76,10 @@ def particles_per_pixel(image: jnp.ndarray, threshold: float = 0.1) -> float:
     """Estimates the number of particles per pixel in the image.
 
     Args:
-        image (jnp.ndarray): The input image of shape (H, W, 1).
-        threshold (float): The threshold to apply to the image.
+        image: jnp.ndarray
+            The input image of shape (H, W, 1).
+        threshold: float
+            The threshold to apply to the image.
 
     Returns:
         float: The estimated density.
@@ -85,9 +97,12 @@ def bilinear_interpolate(
     """Perform bilinear interpolation of `image` at floating-point pixel coordinates.
 
     Args:
-        image (jnp.ndarray): 2D image to sample from, of shape (H, W).
-        x (jnp.ndarray): 2D array of floating-point x-coordinates
-        y (jnp.ndarray): 2D array of floating-point y-coordinates
+        image: jnp.ndarray
+            2D image to sample from, of shape (H, W).
+        x: jnp.ndarray
+            2D array of floating-point x-coordinates
+        y: jnp.ndarray
+            2D array of floating-point y-coordinates
 
     Returns:
         jnp.ndarray: Interpolated intensities at each (y, x) location, of shape (H, W).
@@ -133,10 +148,14 @@ def trilinear_interpolate(
     """Perform trilinear interpolation of `volume` at floating-point pixel coordinates.
 
     Args:
-        volume (jnp.ndarray): 3D volume to sample from, of shape (D, H, W).
-        x (jnp.ndarray): Array of floating-point x-coordinates.
-        y (jnp.ndarray): Array of floating-point y-coordinates.
-        z (jnp.ndarray): Array of floating-point z-coordinates.
+        volume: jnp.ndarray
+            3D volume to sample from, of shape (D, H, W).
+        x: jnp.ndarray
+            Array of floating-point x-coordinates.
+        y: jnp.ndarray
+            Array of floating-point y-coordinates.
+        z: jnp.ndarray
+            Array of floating-point z-coordinates.
 
     Returns:
         jnp.ndarray: Interpolated intensities at each (z, y, x) location.
@@ -212,11 +231,14 @@ def generate_array_flow_field(flow_f, grid_shape: tuple[int, int]) -> jnp.ndarra
     """Generate a array flow field from a flow field function.
 
     Args:
-        flow_f: The flow field function.
-        grid_shape (tuple[int, int]): The shape of the grid.
+        flow_f:
+            The flow field function.
+        grid_shape: tuple[int, int]
+            The shape of the grid.
 
     Returns:
-        jnp.ndarray: The array flow field.
+        arr: jnp.ndarray
+            The array flow field.
     """
     # Get the image shape
     H, W = grid_shape

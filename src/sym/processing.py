@@ -1,15 +1,18 @@
 """Processing module for generating images from flow fields."""
+import logging
 from typing import Tuple
 
 import jax
 import jax.numpy as jnp
 
-# Import existing modules
-from src.sym.generate import img_gen_from_data, input_check_img_gen_from_data
-from src.utils import is_int, get_logger
 from src.sym.apply import apply_flow_to_particles, input_check_apply_flow
 
+# Import existing modules
+from src.sym.generate import img_gen_from_data, input_check_img_gen_from_data
+from src.utils import get_logger, is_int
+
 logger = get_logger(__name__)
+
 
 def generate_images_from_flow(
     key: jax.random.PRNGKey,
@@ -25,7 +28,6 @@ def generate_images_from_flow(
     intensity_range: Tuple[float, float] = (50, 200),
     rho_range: Tuple[float, float] = (-0.99, 0.99),
     dt: float = 1.0,
-    DEBUG: bool = False,
 ):
     """Generates a batch of image pairs from a flow field.
 
@@ -58,8 +60,6 @@ def generate_images_from_flow(
         dt: float
             Time step for the simulation, used to scale the velocity
             to compute the displacement.
-        DEBUG: bool
-            If True, checks the input arguments and prints debug information.
 
     Returns:
         tuple: Two image batches (num_images, H, W) each.
@@ -86,7 +86,7 @@ def generate_images_from_flow(
             subkey3, (num_particles, 2), minval=0.0, maxval=1.0
         ) * jnp.array([W, H])
 
-        if DEBUG:
+        if logger.isEnabledFor(logging.DEBUG):
             input_check_img_gen_from_data(
                 particle_positions=particle_positions,
                 image_shape=position_bounds,
@@ -105,7 +105,7 @@ def generate_images_from_flow(
             rho_range=rho_range,
         )
 
-        if DEBUG:
+        if logger.isEnabledFor(logging.DEBUG):
             input_check_apply_flow(
                 particle_positions=particle_positions, flow_field=flow_field, dt=dt
             )
@@ -131,7 +131,7 @@ def generate_images_from_flow(
             ]
         ).T
 
-        if DEBUG:
+        if logger.isEnabledFor(logging.DEBUG):
             input_check_img_gen_from_data(
                 particle_positions=final_positions,
                 image_shape=position_bounds,
@@ -180,6 +180,7 @@ def generate_images_from_flow(
     ]
 
     return final_imgs, final_imgs2
+
 
 def input_check_gen_img_from_flow(
     key: jax.random.PRNGKey,
