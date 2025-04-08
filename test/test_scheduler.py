@@ -191,6 +191,10 @@ def test_scheduler_real_file(randomize):
         x_dim, z_dim // 2, 2, [flow.shape for flow in all_flows]
     )
 
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    if os.path.isfile(file_path):
+        os.remove(file_path)
+
 
 @pytest.mark.parametrize(
     "randomize, prefetch",
