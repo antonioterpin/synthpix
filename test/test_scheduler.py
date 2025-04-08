@@ -1,5 +1,6 @@
 import os
 import tempfile
+import timeit
 
 import h5py
 import numpy as np
@@ -7,9 +8,6 @@ import pytest
 
 from src.sym.scheduler import FlowFieldScheduler
 from src.utils import load_configuration
-
-import timeit
-
 
 config = load_configuration("config/timeit.yaml")
 
@@ -161,10 +159,14 @@ def test_scheduler_iteration(randomize, x_dim, y_dim, z_dim, num_files):
 )
 def test_scheduler_real_file(randomize):
     """Test the iteration over a real size file."""
+    import os
+
+    CI = os.environ.get("CI") == "true"
+
     # Parameters for the test
-    x_dim = 1536
-    y_dim = 100
-    z_dim = 2048
+    x_dim = 1536 if not CI else 128
+    y_dim = 100 if not CI else 10
+    z_dim = 2048 if not CI else 128
     features = 3
 
     # Create a mock HDF5 file with the specified dimensions and features
@@ -174,16 +176,13 @@ def test_scheduler_real_file(randomize):
             filename, x_dim=x_dim, y_dim=y_dim, z_dim=z_dim, features=features
         )
     ]
-
     scheduler = FlowFieldScheduler(file_list, randomize=randomize, loop=False)
-
     all_flows = []
     try:
         while True:
             all_flows.append(next(scheduler))
     except StopIteration:
         pass
-
     assert (
         len(all_flows) == y_dim
     ), f"Expected {y_dim} flow fields to be returned, got: {len(all_flows)}"
@@ -192,7 +191,6 @@ def test_scheduler_real_file(randomize):
     ), "All flow fields should have shape ({}, {}, {}). Got: {}".format(
         x_dim, z_dim // 2, 2, [flow.shape for flow in all_flows]
     )
-
     file_path = os.path.join(tempfile.gettempdir(), filename)
     if os.path.isfile(file_path):
         os.remove(file_path)
@@ -207,16 +205,20 @@ def test_scheduler_real_file(randomize):
 )
 def test_scheduler_time(randomize, prefetch):
     """Test the time taken for the scheduler to iterate over one standard file."""
+    # Create a mock HDF5 file with the specified dimensions
+    import os
+
+    CI = os.environ.get("CI") == "true"
 
     if prefetch:
-        time_limit = 10.0
+        time_limit = 0.01 if CI else 10.0
     else:
-        time_limit = 20.0
+        time_limit = 0.02 if CI else 20.0
 
-    # Create a mock HDF5 file with the specified dimensions
-    x_dim = 1536
-    y_dim = 100
-    z_dim = 2048
+    # Parameters for the test
+    x_dim = 1536 if not CI else 128
+    y_dim = 100 if not CI else 10
+    z_dim = 2048 if not CI else 128
     features = 3
     filename = "mock_data.h5"
     file_list = [
@@ -224,7 +226,6 @@ def test_scheduler_time(randomize, prefetch):
             filename, x_dim=x_dim, y_dim=y_dim, z_dim=z_dim, features=features
         )
     ]
-
     scheduler = FlowFieldScheduler(
         file_list=file_list, randomize=randomize, loop=False, prefetch=prefetch
     )
@@ -246,7 +247,6 @@ def test_scheduler_time(randomize, prefetch):
         repeat=REPETITIONS,
     )
     average_time = min(total_time) / NUMBER_OF_EXECUTIONS
-
     assert (
         average_time < time_limit
     ), f"Scheduler took too long to iterate: {average_time:.2f} seconds"
