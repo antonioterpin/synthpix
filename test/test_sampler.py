@@ -406,7 +406,6 @@ def test_sampler_with_real_img_gen_fn(
         batch_size,
         *image_shape,
     ), f"Image batch should have shape {(batch_size, *image_shape)}, got {batch[1].shape}"
-    os.remove(files[0])  # Clean up the temporary file
 
 
 @pytest.mark.skipif(
@@ -415,10 +414,12 @@ def test_sampler_with_real_img_gen_fn(
 )
 @pytest.mark.parametrize("file_path", [["test_file_0.h5"]])
 def test_speed_sampler_dummy_fn(file_path):
-    batch_size = 8
-    images_per_field = 32
+    batch_size = 200
+    images_per_field = 1000
     x_dim = 1536
     z_dim = 2048
+    image_shape = (1216, 1936)
+    position_bounds = (1536, 2048)
 
     if len(jax.devices()) == 1:
         limit_time = 0.5
@@ -432,7 +433,7 @@ def test_speed_sampler_dummy_fn(file_path):
         create_mock_hdf5(
             filename=file_path[0],
             x_dim=x_dim,
-            y_dim=NUMBER_OF_EXECUTIONS * REPETITIONS,
+            y_dim=NUMBER_OF_EXECUTIONS * REPETITIONS + 1,
             z_dim=z_dim,
         )
     ]
@@ -441,6 +442,8 @@ def test_speed_sampler_dummy_fn(file_path):
     sampler = SyntheticImageSampler(
         scheduler=scheduler,
         img_gen_fn=dummy_img_gen_fn,
+        image_shape=image_shape,
+        position_bounds=position_bounds,
         images_per_field=images_per_field,
         batch_size=batch_size,
         seed=0,
@@ -462,9 +465,11 @@ def test_speed_sampler_dummy_fn(file_path):
     avg_time = min(total_time) / NUMBER_OF_EXECUTIONS
 
     # Clean up the temporary file
-    os.remove(file_path[0])
+    os.remove(files[0])
 
-    assert avg_time < 0, f"The average time is {avg_time}, time limit: {limit_time}"
+    assert (
+        avg_time < limit_time
+    ), f"The average time is {avg_time}, time limit: {limit_time}"
 
 
 @pytest.mark.skipif(
@@ -480,13 +485,15 @@ def test_speed_sampler_real_fn(file_path, batch_size, images_per_field, seed):
     # Set the dimensions of the mock data to simulate the real data
     x_dim = 1536
     z_dim = 2048
+    image_shape = (1216, 1936)
+    position_bounds = (1536, 2048)
 
     # Create a temporary HDF5 file with mock data
     files = [
         create_mock_hdf5(
             filename=file_path[0],
             x_dim=x_dim,
-            y_dim=NUMBER_OF_EXECUTIONS * REPETITIONS,
+            y_dim=NUMBER_OF_EXECUTIONS * REPETITIONS + 1,
             z_dim=z_dim,
         )
     ]
@@ -510,6 +517,8 @@ def test_speed_sampler_real_fn(file_path, batch_size, images_per_field, seed):
         images_per_field=images_per_field,
         batch_size=batch_size,
         seed=seed,
+        image_shape=image_shape,
+        position_bounds=position_bounds,
     )
 
     def run_sampler():

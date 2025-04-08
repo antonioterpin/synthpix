@@ -154,7 +154,8 @@ def test_scheduler_iteration(randomize, x_dim, y_dim, z_dim, num_files):
 
 
 @pytest.mark.parametrize(
-    "randomize", [(True), (False)],
+    "randomize",
+    [(True), (False)],
 )
 def test_scheduler_real_file(randomize):
     """Test the iteration over a real size file."""
@@ -163,10 +164,14 @@ def test_scheduler_real_file(randomize):
     y_dim = 100
     z_dim = 2048
     features = 3
-    
-    # Create a mock HDF5 file with the specified dimensions and features    
+
+    # Create a mock HDF5 file with the specified dimensions and features
     filename = "mock_data.h5"
-    file_list = [create_mock_hdf5(filename, x_dim=x_dim, y_dim=y_dim, z_dim=z_dim, features=features)]
+    file_list = [
+        create_mock_hdf5(
+            filename, x_dim=x_dim, y_dim=y_dim, z_dim=z_dim, features=features
+        )
+    ]
 
     scheduler = FlowFieldScheduler(file_list, randomize=randomize, loop=False)
 
@@ -196,19 +201,23 @@ def test_scheduler_real_file(randomize):
 )
 def test_scheduler_time(randomize, prefetch):
     """Test the time taken for the scheduler to iterate over one standard file."""
-    
+
     if prefetch:
         time_limit = 10.0
     else:
         time_limit = 20.0
-          
+
     # Create a mock HDF5 file with the specified dimensions
     x_dim = 1536
     y_dim = 100
     z_dim = 2048
     features = 3
     filename = "mock_data.h5"
-    file_list = [create_mock_hdf5(filename, x_dim=x_dim, y_dim=y_dim, z_dim=z_dim, features=features)]
+    file_list = [
+        create_mock_hdf5(
+            filename, x_dim=x_dim, y_dim=y_dim, z_dim=z_dim, features=features
+        )
+    ]
 
     scheduler = FlowFieldScheduler(
         file_list=file_list, randomize=randomize, loop=False, prefetch=prefetch
