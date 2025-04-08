@@ -234,7 +234,7 @@ def input_check_img_gen_from_data(
 
 def img_gen_from_data(
     key: jax.random.PRNGKey,
-    image_shape: Tuple[int, int] = (1936, 1216),
+    image_shape: Tuple[int, int] = (256, 256),
     particle_positions: jnp.ndarray = None,
     diameter_range: Tuple[float, float] = (0.1, 1.0),
     intensity_range: Tuple[float, float] = (50, 200),
