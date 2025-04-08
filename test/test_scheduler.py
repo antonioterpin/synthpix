@@ -8,7 +8,7 @@ import pytest
 from src.sym.scheduler import FlowFieldScheduler
 from src.utils import load_configuration
 
-# import timeit
+import timeit
 
 
 config = load_configuration("config/timeit.yaml")
@@ -155,101 +155,101 @@ def test_scheduler_iteration(randomize, x_dim, y_dim, z_dim, num_files):
     )
 
 
-# @pytest.mark.parametrize(
-#     "randomize",
-#     [(True), (False)],
-# )
-# def test_scheduler_real_file(randomize):
-#     """Test the iteration over a real size file."""
-#     # Parameters for the test
-#     x_dim = 1536
-#     y_dim = 100
-#     z_dim = 2048
-#     features = 3
+@pytest.mark.parametrize(
+    "randomize",
+    [(True), (False)],
+)
+def test_scheduler_real_file(randomize):
+    """Test the iteration over a real size file."""
+    # Parameters for the test
+    x_dim = 1536
+    y_dim = 100
+    z_dim = 2048
+    features = 3
 
-#     # Create a mock HDF5 file with the specified dimensions and features
-#     filename = "mock_data.h5"
-#     file_list = [
-#         create_mock_hdf5(
-#             filename, x_dim=x_dim, y_dim=y_dim, z_dim=z_dim, features=features
-#         )
-#     ]
+    # Create a mock HDF5 file with the specified dimensions and features
+    filename = "mock_data.h5"
+    file_list = [
+        create_mock_hdf5(
+            filename, x_dim=x_dim, y_dim=y_dim, z_dim=z_dim, features=features
+        )
+    ]
 
-#     scheduler = FlowFieldScheduler(file_list, randomize=randomize, loop=False)
+    scheduler = FlowFieldScheduler(file_list, randomize=randomize, loop=False)
 
-#     all_flows = []
-#     try:
-#         while True:
-#             all_flows.append(next(scheduler))
-#     except StopIteration:
-#         pass
+    all_flows = []
+    try:
+        while True:
+            all_flows.append(next(scheduler))
+    except StopIteration:
+        pass
 
-#     assert (
-#         len(all_flows) == y_dim
-#     ), f"Expected {y_dim} flow fields to be returned, got: {len(all_flows)}"
-#     assert all(
-#         flow.shape == (x_dim, z_dim // 2, 2) for flow in all_flows
-#     ), "All flow fields should have shape ({}, {}, {}). Got: {}".format(
-#         x_dim, z_dim // 2, 2, [flow.shape for flow in all_flows]
-#     )
+    assert (
+        len(all_flows) == y_dim
+    ), f"Expected {y_dim} flow fields to be returned, got: {len(all_flows)}"
+    assert all(
+        flow.shape == (x_dim, z_dim // 2, 2) for flow in all_flows
+    ), "All flow fields should have shape ({}, {}, {}). Got: {}".format(
+        x_dim, z_dim // 2, 2, [flow.shape for flow in all_flows]
+    )
 
-#     file_path = os.path.join(tempfile.gettempdir(), filename)
-#     if os.path.isfile(file_path):
-#         os.remove(file_path)
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    if os.path.isfile(file_path):
+        os.remove(file_path)
 
 
-# @pytest.mark.parametrize(
-#     "randomize, prefetch",
-#     [
-#         (True, True),
-#         (False, False),
-#     ],
-# )
-# def test_scheduler_time(randomize, prefetch):
-#     """Test the time taken for the scheduler to iterate over one standard file."""
+@pytest.mark.parametrize(
+    "randomize, prefetch",
+    [
+        (True, True),
+        (False, False),
+    ],
+)
+def test_scheduler_time(randomize, prefetch):
+    """Test the time taken for the scheduler to iterate over one standard file."""
 
-#     if prefetch:
-#         time_limit = 10.0
-#     else:
-#         time_limit = 20.0
+    if prefetch:
+        time_limit = 10.0
+    else:
+        time_limit = 20.0
 
-#     # Create a mock HDF5 file with the specified dimensions
-#     x_dim = 1536
-#     y_dim = 100
-#     z_dim = 2048
-#     features = 3
-#     filename = "mock_data.h5"
-#     file_list = [
-#         create_mock_hdf5(
-#             filename, x_dim=x_dim, y_dim=y_dim, z_dim=z_dim, features=features
-#         )
-#     ]
+    # Create a mock HDF5 file with the specified dimensions
+    x_dim = 1536
+    y_dim = 100
+    z_dim = 2048
+    features = 3
+    filename = "mock_data.h5"
+    file_list = [
+        create_mock_hdf5(
+            filename, x_dim=x_dim, y_dim=y_dim, z_dim=z_dim, features=features
+        )
+    ]
 
-#     scheduler = FlowFieldScheduler(
-#         file_list=file_list, randomize=randomize, loop=False, prefetch=prefetch
-#     )
+    scheduler = FlowFieldScheduler(
+        file_list=file_list, randomize=randomize, loop=False, prefetch=prefetch
+    )
 
-#     def iterate_scheduler():
-#         try:
-#             while True:
-#                 next(scheduler)
-#         except StopIteration:
-#             scheduler.epoch = 0
-#             scheduler.index = 0
-#             scheduler.y_sel = 0
-#             pass
+    def iterate_scheduler():
+        try:
+            while True:
+                next(scheduler)
+        except StopIteration:
+            scheduler.epoch = 0
+            scheduler.index = 0
+            scheduler.y_sel = 0
+            pass
 
-#     # Measure the time of the scheduler iteration
-#     total_time = timeit.repeat(
-#         stmt=iterate_scheduler,
-#         number=NUMBER_OF_EXECUTIONS,
-#         repeat=REPETITIONS,
-#     )
-#     average_time = min(total_time) / NUMBER_OF_EXECUTIONS
+    # Measure the time of the scheduler iteration
+    total_time = timeit.repeat(
+        stmt=iterate_scheduler,
+        number=NUMBER_OF_EXECUTIONS,
+        repeat=REPETITIONS,
+    )
+    average_time = min(total_time) / NUMBER_OF_EXECUTIONS
 
-#     assert (
-#         average_time < time_limit
-#     ), f"Scheduler took too long to iterate: {average_time:.2f} seconds"
+    assert (
+        average_time < time_limit
+    ), f"Scheduler took too long to iterate: {average_time:.2f} seconds"
 
 
 def test_cleanup():
