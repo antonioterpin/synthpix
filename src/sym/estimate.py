@@ -10,6 +10,8 @@ from src.utils import get_logger
 
 logger = get_logger(__name__)
 
+logger = get_logger(__name__)
+
 class FlowFieldEstimator(abc.ABC):
     """Base class for flow field estimators."""
 
