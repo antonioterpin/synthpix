@@ -23,6 +23,13 @@ def create_mock_hdf5(filename, x_dim=10, y_dim=6, z_dim=5, features=3):
     return path
 
 
+def test_temp_file():
+    """Create a temporary file for all other input validation tests."""
+    filename = "mock_data.h5"
+    path = create_mock_hdf5(filename)
+    assert os.path.isfile(path), f"Temporary file {path} was not created."
+
+
 @pytest.mark.parametrize("file_list", [[None], [123, "invalid"], [123, "invalid"]])
 def test_invalid_file_list_type(file_list):
     """Test that invalid file_list types raise a ValueError."""
@@ -47,7 +54,9 @@ def test_non_hdf5_file(file_list):
 @pytest.mark.parametrize("randomize", [None, 123, "invalid"])
 def test_invalid_randomize(randomize):
     """Test that invalid randomize values raise a ValueError."""
-    file_list = ["/shared/fluids/channel_full_ts_0004.h5"]
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    file_list = [file_path]
     with pytest.raises(ValueError, match="randomize must be a boolean value."):
         FlowFieldScheduler(file_list, randomize=randomize)
 
@@ -55,7 +64,9 @@ def test_invalid_randomize(randomize):
 @pytest.mark.parametrize("loop", [None, 123, "invalid"])
 def test_invalid_loop(loop):
     """Test that invalid loop values raise a ValueError."""
-    file_list = ["/shared/fluids/channel_full_ts_0004.h5"]
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    file_list = [file_path]
     with pytest.raises(ValueError, match="loop must be a boolean value."):
         FlowFieldScheduler(file_list, loop=loop)
 
@@ -63,7 +74,9 @@ def test_invalid_loop(loop):
 @pytest.mark.parametrize("prefetch", [None, 123, "invalid"])
 def test_invalid_prefetch(prefetch):
     """Test that invalid prefetch values raise a ValueError."""
-    file_list = ["/shared/fluids/channel_full_ts_0004.h5"]
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    file_list = [file_path]
     with pytest.raises(ValueError, match="prefetch must be a boolean value."):
         FlowFieldScheduler(file_list, prefetch=prefetch)
 
@@ -79,17 +92,24 @@ def test_empty_file_list(file_list, randomize, loop):
 
 
 @pytest.mark.parametrize(
-    "file_list, randomize, loop",
+    "randomize, loop, prefetch",
     [
-        (["/shared/fluids/channel_full_ts_0004.h5"], True, True),
-        (["/shared/fluids/channel_full_ts_0008.h5"], False, True),
-        (["/shared/fluids/channel_full_ts_0012.h5"], True, False),
-        (["/shared/fluids/channel_full_ts_0016.h5"], False, False),
+        (True, True, True),
+        (False, True, True),
+        (True, False, True),
+        (False, False, True),
+        (True, True, False),
+        (False, True, False),
+        (True, False, False),
+        (False, False, False),
     ],
 )
-def test_flow_field_scheduler_init(file_list, randomize, loop):
+def test_flow_field_scheduler_init(randomize, loop, prefetch):
     """Test the initialization of FlowFieldScheduler with a valid file list."""
-    scheduler = FlowFieldScheduler(file_list, randomize, loop)
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    file_list = [file_path]
+    scheduler = FlowFieldScheduler(file_list, randomize, loop, prefetch)
     assert len(scheduler.file_list) == len(file_list)
     assert scheduler.randomize is randomize
     assert scheduler.loop is loop
@@ -118,6 +138,9 @@ def test_scheduler_iteration(randomize, x_dim, y_dim, z_dim, num_files):
     except StopIteration:
         pass
 
+    for i in range(num_files):
+        os.remove(files[i])
+
     assert (
         len(all_flows) == num_files * y_dim
     ), "Expected {} flow fields to be returned, got: {}".format(
@@ -128,19 +151,22 @@ def test_scheduler_iteration(randomize, x_dim, y_dim, z_dim, num_files):
     ), "All flow fields should have shape ({}, {}, {}). Got: {}".format(
         x_dim, z_dim // 2, 2, [flow.shape for flow in all_flows]
     )
-    for i in range(num_files):
-        os.remove(files[i])
 
 
 @pytest.mark.parametrize(
-    "file_list, randomize",
-    [
-        (["/shared/fluids/channel_full_ts_0004.h5"], True),
-        (["/shared/fluids/channel_full_ts_0008.h5"], False),
-    ],
+    "randomize", [(True), (False)],
 )
-def test_scheduler_real_file(file_list, randomize):
-    """Test the iteration over a real file."""
+def test_scheduler_real_file(randomize):
+    """Test the iteration over a real size file."""
+    # Parameters for the test
+    x_dim = 1536
+    y_dim = 100
+    z_dim = 2048
+    features = 3
+    
+    # Create a mock HDF5 file with the specified dimensions and features    
+    filename = "mock_data.h5"
+    file_list = [create_mock_hdf5(filename, x_dim=x_dim, y_dim=y_dim, z_dim=z_dim, features=features)]
 
     scheduler = FlowFieldScheduler(file_list, randomize=randomize, loop=False)
 
@@ -152,23 +178,37 @@ def test_scheduler_real_file(file_list, randomize):
         pass
 
     assert (
-        len(all_flows) == 100
-    ), "Expected 100 flow fields to be returned, got: " + str(len(all_flows))
+        len(all_flows) == y_dim
+    ), f"Expected {y_dim} flow fields to be returned, got: {len(all_flows)}"
     assert all(
-        flow.shape == (1536, 1024, 2) for flow in all_flows
-    ), "All flow fields should have shape (1536, 1024, 2). Got: " + str(
-        [flow.shape for flow in all_flows]
+        flow.shape == (x_dim, z_dim // 2, 2) for flow in all_flows
+    ), "All flow fields should have shape ({}, {}, {}). Got: {}".format(
+        x_dim, z_dim // 2, 2, [flow.shape for flow in all_flows]
     )
 
 
 @pytest.mark.parametrize(
-    "file_list, randomize, prefetch",
+    "randomize, prefetch",
     [
-        (["/shared/fluids/channel_full_ts_0004.h5"], True, True),
+        (True, True),
+        (False, False),
     ],
 )
-def test_scheduler_time(file_list, randomize, prefetch):
+def test_scheduler_time(randomize, prefetch):
     """Test the time taken for the scheduler to iterate over one standard file."""
+    
+    if prefetch:
+        time_limit = 10.0
+    else:
+        time_limit = 20.0
+          
+    # Create a mock HDF5 file with the specified dimensions
+    x_dim = 1536
+    y_dim = 100
+    z_dim = 2048
+    features = 3
+    filename = "mock_data.h5"
+    file_list = [create_mock_hdf5(filename, x_dim=x_dim, y_dim=y_dim, z_dim=z_dim, features=features)]
 
     scheduler = FlowFieldScheduler(
         file_list=file_list, randomize=randomize, loop=False, prefetch=prefetch
@@ -193,5 +233,22 @@ def test_scheduler_time(file_list, randomize, prefetch):
     average_time = min(total_time) / NUMBER_OF_EXECUTIONS
 
     assert (
-        average_time < 10.0
+        average_time < time_limit
     ), f"Scheduler took too long to iterate: {average_time:.2f} seconds"
+
+
+def test_cleanup():
+    """Cleanup function to remove temporary files."""
+    files = [
+        "mock_data.h5",
+        "test_file_0.h5",
+        "test_file_1.h5",
+        "test_file_2.h5",
+        "test_file_3.h5",
+    ]
+
+    # Clean up the temporary files
+    for file in files:
+        file_path = os.path.join(tempfile.gettempdir(), file)
+        if os.path.isfile(file_path):
+            os.remove(file_path)

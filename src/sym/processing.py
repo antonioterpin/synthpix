@@ -16,8 +16,8 @@ logger = get_logger(__name__)
 def generate_images_from_flow(
     key: jax.random.PRNGKey,
     flow_field: jnp.ndarray,
-    position_bounds: Tuple[int, int] = (1536, 2048),
-    image_shape: Tuple[int, int] = (1216, 1936),
+    position_bounds: Tuple[int, int] = (512, 512),
+    image_shape: Tuple[int, int] = (256, 256),
     num_images: int = 300,
     img_offset: Tuple[int, int] = (20, 20),
     num_particles: int = 10000,
@@ -187,8 +187,8 @@ def generate_images_from_flow(
 def input_check_gen_img_from_flow(
     key: jax.random.PRNGKey,
     flow_field: jnp.ndarray,
-    position_bounds: Tuple[int, int] = (1536, 2048),
-    image_shape: Tuple[int, int] = (1216, 1936),
+    position_bounds: Tuple[int, int] = (512, 512),
+    image_shape: Tuple[int, int] = (256, 256),
     img_offset: Tuple[int, int] = (20, 20),
     num_images: int = 300,
     num_particles: int = 10000,

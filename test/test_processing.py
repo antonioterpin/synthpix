@@ -223,7 +223,7 @@ def test_invalid_dt(dt):
         )
 
 
-def test_generate_images_from_flow(visualize=True):
+def test_generate_images_from_flow(visualize=False):
     """Test that we can apply a flow field as a jax array to random particles."""
 
     # 1. setup the image parameters

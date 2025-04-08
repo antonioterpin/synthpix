@@ -51,6 +51,13 @@ def dummy_img_gen_fn(
     )
 
 
+def test_temp_file():
+    """Create a temporary file for all other input validation tests."""
+    filename = "mock_data.h5"
+    path = create_mock_hdf5(filename)
+    assert os.path.isfile(path), f"Temporary file {path} was not created."
+
+
 @pytest.mark.parametrize("scheduler", [None, "invalid_scheduler"])
 def test_invalid_scheduler(scheduler):
     """Test that invalid scheduler raises a ValueError."""
@@ -66,7 +73,9 @@ def test_invalid_scheduler(scheduler):
 
 def test_invalid_img_gen_fn():
     """Test that invalid img_gen_fn raises a ValueError."""
-    files = [create_mock_hdf5("invalid_img_gen_fn_test.h5")]
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    files = [file_path]
     scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
     with pytest.raises(ValueError, match="img_gen_fn must be a callable function."):
         SyntheticImageSampler(
@@ -76,13 +85,14 @@ def test_invalid_img_gen_fn():
             images_per_field=10,
             seed=0,
         )
-    os.remove(files[0])  # Clean up the temporary file
 
 
 @pytest.mark.parametrize("batch_size", [-1, 0, 1.5])
 def test_invalid_batch_size(batch_size):
     """Test that invalid batch_size raises a ValueError."""
-    files = [create_mock_hdf5("invalid_batch_size_test.h5")]
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    files = [file_path]
     scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
     with pytest.raises(ValueError, match="batch_size must be a positive integer."):
         SyntheticImageSampler(
@@ -92,13 +102,14 @@ def test_invalid_batch_size(batch_size):
             images_per_field=10,
             seed=0,
         )
-    os.remove(files[0])  # Clean up the temporary file
 
 
 @pytest.mark.parametrize("images_per_field", [-1, 0, 1.5])
 def test_invalid_images_per_field(images_per_field):
     """Test that invalid images_per_field raises a ValueError."""
-    files = [create_mock_hdf5("invalid_images_per_field_test.h5")]
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    files = [file_path]
     scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
     with pytest.raises(
         ValueError, match="images_per_field must be a positive integer."
@@ -110,7 +121,6 @@ def test_invalid_images_per_field(images_per_field):
             images_per_field=images_per_field,
             seed=0,
         )
-    os.remove(files[0])  # Clean up the temporary file
 
 
 @pytest.mark.parametrize(
@@ -118,7 +128,9 @@ def test_invalid_images_per_field(images_per_field):
 )
 def test_invalid_image_shape(image_shape):
     """Test that invalid image_shape raises a ValueError."""
-    files = [create_mock_hdf5("invalid_image_shape_test.h5")]
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    files = [file_path]
     scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
     with pytest.raises(
         ValueError, match="image_shape must be a tuple of two positive integers."
@@ -131,7 +143,6 @@ def test_invalid_image_shape(image_shape):
             image_shape=image_shape,
             seed=0,
         )
-    os.remove(files[0])  # Clean up the temporary file
 
 
 @pytest.mark.parametrize(
@@ -139,7 +150,9 @@ def test_invalid_image_shape(image_shape):
 )
 def test_invalid_position_bounds(position_bounds):
     """Test that invalid position_bounds raises a ValueError."""
-    files = [create_mock_hdf5("invalid_position_bounds_test.h5")]
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    files = [file_path]
     scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
     with pytest.raises(
         ValueError, match="position_bounds must be a tuple of two positive integers."
@@ -152,13 +165,14 @@ def test_invalid_position_bounds(position_bounds):
             position_bounds=position_bounds,
             seed=0,
         )
-    os.remove(files[0])  # Clean up the temporary file
 
 
 @pytest.mark.parametrize("num_particles", [-1, 0, 1.5])
 def test_invalid_num_particles(num_particles):
     """Test that invalid num_particles raises a ValueError."""
-    files = [create_mock_hdf5("invalid_num_particles_test.h5")]
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    files = [file_path]
     scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
     with pytest.raises(ValueError, match="num_particles must be a positive integer."):
         SyntheticImageSampler(
@@ -169,13 +183,14 @@ def test_invalid_num_particles(num_particles):
             num_particles=num_particles,
             seed=0,
         )
-    os.remove(files[0])  # Clean up the temporary file
 
 
 @pytest.mark.parametrize("p_hide_img1", [-0.1, 1.1])
 def test_invalid_p_hide_img1(p_hide_img1):
     """Test that invalid p_hide_img1 raises a ValueError."""
-    files = [create_mock_hdf5("invalid_p_hide_img1_test.h5")]
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    files = [file_path]
     scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
     with pytest.raises(ValueError, match="p_hide_img1 must be between 0 and 1."):
         SyntheticImageSampler(
@@ -186,13 +201,14 @@ def test_invalid_p_hide_img1(p_hide_img1):
             p_hide_img1=p_hide_img1,
             seed=0,
         )
-    os.remove(files[0])  # Clean up the temporary file
 
 
 @pytest.mark.parametrize("p_hide_img2", [-0.1, 1.1])
 def test_invalid_p_hide_img2(p_hide_img2):
     """Test that invalid p_hide_img2 raises a ValueError."""
-    files = [create_mock_hdf5("invalid_p_hide_img2_test.h5")]
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    files = [file_path]
     scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
     with pytest.raises(ValueError, match="p_hide_img2 must be between 0 and 1."):
         SyntheticImageSampler(
@@ -203,13 +219,14 @@ def test_invalid_p_hide_img2(p_hide_img2):
             p_hide_img2=p_hide_img2,
             seed=0,
         )
-    os.remove(files[0])  # Clean up the temporary file
 
 
 @pytest.mark.parametrize("diameter_range", [(0, 1), (1, 0), (-1, 1)])
 def test_invalid_diameter_range(diameter_range):
     """Test that invalid diameter_range raises a ValueError."""
-    files = [create_mock_hdf5("invalid_diameter_range_test.h5")]
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    files = [file_path]
     scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
     with pytest.raises(
         ValueError, match="diameter_range must be a tuple of two positive floats."
@@ -222,13 +239,14 @@ def test_invalid_diameter_range(diameter_range):
             diameter_range=diameter_range,
             seed=0,
         )
-    os.remove(files[0])  # Clean up the temporary file
 
 
 @pytest.mark.parametrize("intensity_range", [(-1, 200), (50, -1)])
 def test_invalid_intensity_range(intensity_range):
     """Test that invalid intensity_range raises a ValueError."""
-    files = [create_mock_hdf5("invalid_intensity_range_test.h5")]
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    files = [file_path]
     scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
     with pytest.raises(
         ValueError, match="intensity_range must be a tuple of two non-negative floats."
@@ -241,13 +259,14 @@ def test_invalid_intensity_range(intensity_range):
             intensity_range=intensity_range,
             seed=0,
         )
-    os.remove(files[0])  # Clean up the temporary file
 
 
 @pytest.mark.parametrize("rho_range", [(-1.1, 1), (1, -1.1)])
 def test_invalid_rho_range(rho_range):
     """Test that invalid rho_range raises a ValueError."""
-    files = [create_mock_hdf5("invalid_rho_range_test.h5")]
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    files = [file_path]
     scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
     with pytest.raises(
         ValueError, match="rho_range must be a tuple of two floats between -1 and 1."
@@ -260,13 +279,14 @@ def test_invalid_rho_range(rho_range):
             rho_range=rho_range,
             seed=0,
         )
-    os.remove(files[0])  # Clean up the temporary file
 
 
 @pytest.mark.parametrize("dt", ["invalid_dt", jnp.array([1]), jnp.array([1.0, 2.0])])
 def test_invalid_dt(dt):
     """Test that invalid dt raises a ValueError."""
-    files = [create_mock_hdf5("invalid_dt_test.h5")]
+    filename = "mock_data.h5"
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    files = [file_path]
     scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
     with pytest.raises(ValueError, match="dt must be a scalar \\(int or float\\)"):
         SyntheticImageSampler(
@@ -277,7 +297,6 @@ def test_invalid_dt(dt):
             dt=dt,
             seed=0,
         )
-    os.remove(files[0])  # Clean up the temporary file
 
 
 @pytest.mark.parametrize(
@@ -309,16 +328,17 @@ def test_synthetic_sampler_batches(batch_size, images_per_field, image_shape):
         ), "Each batch should have correct shape"
         assert isinstance(batch[0], jnp.ndarray), "Output should be a JAX array"
 
+    for i, _ in enumerate(files):
+        os.remove(files[i])  # Clean up the temporary file
+
     assert (
         len(all_batches) == images_per_field // batch_size
     ), f"Should yield {images_per_field // batch_size} batches"
-    for i, _ in enumerate(files):
-        os.remove(files[i])  # Clean up the temporary file
 
 
 @pytest.mark.parametrize("batch_size, images_per_field", [(2, 4), (1, 3)])
 def test_sampler_switches_flow_fields(batch_size, images_per_field):
-    files = [create_mock_hdf5("switch_test_file.h5")]
+    files = [create_mock_hdf5("test_file_0.h5")]
     scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
 
     sampler = SyntheticImageSampler(
@@ -330,12 +350,14 @@ def test_sampler_switches_flow_fields(batch_size, images_per_field):
     )
 
     batch1 = next(sampler)
-    batch3 = next(sampler)  # new flow field
+    batch2 = next(sampler)
+
+    # Clean up the temporary file
+    os.remove(files[0])  # Clean up the temporary file
 
     assert not jnp.allclose(
-        batch1[0], batch3[0]
+        batch1[0], batch2[0]
     ), "Different flow fields should yield different image values"
-    os.remove(files[0])  # Clean up the temporary file
 
 
 @pytest.mark.parametrize(
@@ -348,7 +370,7 @@ def test_sampler_switches_flow_fields(batch_size, images_per_field):
 def test_sampler_with_real_img_gen_fn(image_shape, num_images, num_particles):
     files = [
         create_mock_hdf5(
-            "real_synth_test_file.h5",
+            "test_file_0.h5",
             x_dim=image_shape[0],
             y_dim=5,
             z_dim=image_shape[1],
@@ -368,6 +390,8 @@ def test_sampler_with_real_img_gen_fn(image_shape, num_images, num_particles):
     )
 
     batch = next(sampler)
+
+    os.remove(files[0])  # Clean up the temporary file
     assert isinstance(
         batch[0], jnp.ndarray
     ), f"Output should be a JAX array, got {type(batch[0])}"
@@ -386,12 +410,31 @@ def test_sampler_with_real_img_gen_fn(image_shape, num_images, num_particles):
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connect to the server.",
 )
-@pytest.mark.parametrize("file_path", [["/shared/fluids/channel_full_ts_0004.h5"]])
+@pytest.mark.parametrize("file_path", [["test_file_0.h5"]])
 def test_speed_sampler_dummy_fn(file_path):
     batch_size = 8
     images_per_field = 32
+    x_dim = 1536
+    z_dim = 2048
 
-    scheduler = FlowFieldScheduler(file_path, loop=False, prefetch=True)
+    if len(jax.devices()) == 1:
+        limit_time = 0.5
+    elif len(jax.devices()) == 2:
+        limit_time = 1.1e-1
+    elif len(jax.devices()) == 4:
+        limit_time = 7e-2
+
+    # Create a temporary HDF5 file with mock data
+    files = [
+        create_mock_hdf5(
+            filename=file_path[0],
+            x_dim=x_dim,
+            y_dim=NUMBER_OF_EXECUTIONS * REPETITIONS,
+            z_dim=z_dim,
+        )
+    ]
+
+    scheduler = FlowFieldScheduler(files, loop=False, prefetch=True)
     sampler = SyntheticImageSampler(
         scheduler=scheduler,
         img_gen_fn=dummy_img_gen_fn,
@@ -410,32 +453,40 @@ def test_speed_sampler_dummy_fn(file_path):
     # Warm up the function
     run_sampler()
 
-    execs = 5
-    runs = 3
-    total_time = timeit.repeat(stmt=run_sampler, number=execs, repeat=runs)
-    avg_time = min(total_time) / execs
-    assert avg_time < 0.5, "Performance test failed: Time exceeded threshold"
+    total_time = timeit.repeat(
+        stmt=run_sampler, number=NUMBER_OF_EXECUTIONS, repeat=REPETITIONS
+    )
+    avg_time = min(total_time) / NUMBER_OF_EXECUTIONS
+
+    # Clean up the temporary file
+    os.remove(file_path[0])
+
+    assert avg_time < 0, f"The average time is {avg_time}, time limit: {limit_time}"
 
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connect to the server.",
 )
-@pytest.mark.parametrize(
-    "file_path",
-    [
-        [
-            "/shared/fluids/channel_full_ts_0004.h5",
-            "/shared/fluids/channel_full_ts_0008.h5",
-            "/shared/fluids/channel_full_ts_0012.h5",
-        ]
-    ],
-)
+@pytest.mark.parametrize("file_path", [["mock_data.h5"]])
 @pytest.mark.parametrize("batch_size", [250])
 @pytest.mark.parametrize("images_per_field", [1000])
 @pytest.mark.parametrize("seed", [0])
 def test_speed_sampler_real_fn(file_path, batch_size, images_per_field, seed):
     """Test that the sampler with the real image generation function is fast enough."""
+    # Set the dimensions of the mock data to simulate the real data
+    x_dim = 1536
+    z_dim = 2048
+
+    # Create a temporary HDF5 file with mock data
+    files = [
+        create_mock_hdf5(
+            filename=file_path[0],
+            x_dim=x_dim,
+            y_dim=NUMBER_OF_EXECUTIONS * REPETITIONS,
+            z_dim=z_dim,
+        )
+    ]
 
     # Check how many GPUs are available
     num_devices = len(jax.devices())
@@ -449,7 +500,7 @@ def test_speed_sampler_real_fn(file_path, batch_size, images_per_field, seed):
         limit_time = 7e-2
 
     # Create the scheduler and sampler
-    scheduler = FlowFieldScheduler(file_path, loop=False, prefetch=True)
+    scheduler = FlowFieldScheduler(files, loop=False, prefetch=True)
     sampler = SyntheticImageSampler(
         scheduler=scheduler,
         img_gen_fn=generate_images_from_flow,
@@ -476,6 +527,20 @@ def test_speed_sampler_real_fn(file_path, batch_size, images_per_field, seed):
     )
     avg_time = min(total_time) / NUMBER_OF_EXECUTIONS / len(file_path)
 
+    # Clean up the temporary file
+    os.remove(files[0])
+
     assert (
         avg_time < limit_time
     ), f"The average time is {avg_time}, time limit: {limit_time}"
+
+
+def test_cleanup():
+    """Cleanup function to remove temporary files."""
+    files = ["mock_data.h5", "test_file_0.h5", "test_file_1.h5"]
+
+    # Clean up the temporary files
+    for file in files:
+        file_path = os.path.join(tempfile.gettempdir(), file)
+        if os.path.isfile(file_path):
+            os.remove(file_path)

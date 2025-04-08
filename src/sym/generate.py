@@ -91,7 +91,7 @@ def add_noise_to_image(
 
 def img_gen_from_density(
     key: jax.random.PRNGKey,
-    image_shape: Tuple[int, int] = (1536, 2048),
+    image_shape: Tuple[int, int] = (256, 256),
     seeding_density: float = 0.05,
     diameter_range: Tuple[float, float] = (0.1, 1.0),
     intensity_range: Tuple[float, float] = (50, 200),
