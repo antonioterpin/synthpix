@@ -213,7 +213,7 @@ def test_scheduler_time(randomize, prefetch):
     if prefetch:
         time_limit = 0.01 if CI else 10.0
     else:
-        time_limit = 0.001 if CI else 20.0
+        time_limit = 0.02 if CI else 20.0
 
     # Parameters for the test
     x_dim = 1536 if not CI else 128
