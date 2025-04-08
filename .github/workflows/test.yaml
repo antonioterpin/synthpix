@@ -8,13 +8,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 60  # Increase the timeout to 60 minutes
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        include:
-          - name: Test
 
     steps:
       # Step 1: Check out the repository code
