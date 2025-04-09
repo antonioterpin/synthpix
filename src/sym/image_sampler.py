@@ -23,6 +23,9 @@ class SyntheticImageSampler:
 
     Typical usage involves feeding the resulting batches into a model training loop or
     downstream processing pipeline.
+
+    Predefined Configurations:
+        - JHTDB: Parameters for a specific case using JHTDB data.
     """
 
     def __init__(
