@@ -10,37 +10,18 @@ import yaml
 
 DEBUG = False
 
+# Create a logger instance
+logger = logging.getLogger(__name__)
 
-def get_logger(name=__name__):
-    """Get a logger with a specific name.
+# Set the logging level
+logger.setLevel(logging.DEBUG if DEBUG else logging.INFO)
 
-    Args:
-        name: str
-            The name of the logger.
-
-    Returns:
-        logging.Logger:
-            The logger instance.
-    """
-    logger = logging.getLogger(name)
-    if not logger.hasHandlers():
-        if DEBUG:
-            logger.setLevel(logging.DEBUG)
-            logging.basicConfig(
-                level=logging.DEBUG,
-                format="[%(levelname)s][%(asctime)s][%(filename)s] %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
-                # filename='app.log',
-            )
-        else:
-            logger.setLevel(logging.INFO)
-            logging.basicConfig(
-                level=logging.INFO,
-                format="[%(levelname)s][%(asctime)s] %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
-                # filename='app.log',
-            )
-    return logger
+# Configure the logging format
+logging.basicConfig(
+    level=logger.level,
+    format="[%(levelname)s][%(asctime)s][%(filename)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 
 def is_int(val: Union[int, float]) -> bool:

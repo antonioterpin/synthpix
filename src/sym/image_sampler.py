@@ -9,9 +9,7 @@ from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, PartitionSpec
 
 from src.sym.processing import input_check_gen_img_from_flow
-from src.utils import get_logger
-
-logger = get_logger(__name__)
+from src.utils import logger
 
 
 class SyntheticImageSampler:
@@ -315,4 +313,4 @@ class SyntheticImageSampler:
         logger.info(f"Generated {self.batch_size} couples of images")
         self._images_generated += self.batch_size
         logger.debug(f"Total images generated so far: {self._images_generated}")
-        return imgs1, imgs2
+        return imgs1, imgs2, self._current_flow

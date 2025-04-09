@@ -1,5 +1,4 @@
 """FlowFieldScheduler to load the flow field data from files."""
-import logging
 import os
 import random
 from abc import ABC, abstractmethod
@@ -7,8 +6,7 @@ from abc import ABC, abstractmethod
 import h5py
 import numpy as np
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+from src.utils import logger
 
 
 class BaseFlowFieldScheduler(ABC):
