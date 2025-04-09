@@ -15,7 +15,7 @@ from src.utils import generate_array_flow_field, load_configuration
 config = load_configuration("config/timeit.yaml")
 
 REPETITIONS = config["REPETITIONS"]
-NUMBER_OF_EXECUTIONS = config["NUMBER_OF_EXECUTIONS"]
+NUMBER_OF_EXECUTIONS = config["EXECUTIONS_DATA_GEN"]
 
 
 @pytest.mark.parametrize(

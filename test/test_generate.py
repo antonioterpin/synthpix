@@ -18,7 +18,7 @@ from src.utils import load_configuration
 config = load_configuration("config/timeit.yaml")
 
 REPETITIONS = config["REPETITIONS"]
-NUMBER_OF_EXECUTIONS = config["NUMBER_OF_EXECUTIONS"]
+NUMBER_OF_EXECUTIONS = config["EXECUTIONS_IMG_GEN"]
 
 
 @pytest.mark.parametrize(
