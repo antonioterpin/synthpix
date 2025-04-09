@@ -13,7 +13,7 @@ from src.sym.processing import generate_images_from_flow
 from src.sym.scheduler import FlowFieldScheduler
 from src.utils import load_configuration
 
-config = load_configuration("config/timeit.yaml")
+config = load_configuration("config/testing.yaml")
 
 REPETITIONS = config["REPETITIONS"]
 NUMBER_OF_EXECUTIONS = config["EXECUTIONS_SAMPLER"]
@@ -480,13 +480,17 @@ def test_speed_sampler_dummy_fn(file_path):
 @pytest.mark.parametrize("batch_size", [250])
 @pytest.mark.parametrize("images_per_field", [1000])
 @pytest.mark.parametrize("seed", [0])
-def test_speed_sampler_real_fn(file_path, batch_size, images_per_field, seed):
+@pytest.mark.parametrize("num_particles", [40000])
+def test_speed_sampler_real_fn(
+    file_path, batch_size, images_per_field, seed, num_particles
+):
     """Test that the sampler with the real image generation function is fast enough."""
     # Set the dimensions of the mock data to simulate the real data
     x_dim = 1536
     z_dim = 2048
     image_shape = (1216, 1936)
     position_bounds = (1536, 2048)
+    img_offset = (160, 56)
 
     # Create a temporary HDF5 file with mock data
     files = [
@@ -503,11 +507,11 @@ def test_speed_sampler_real_fn(file_path, batch_size, images_per_field, seed):
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 2e-1
+        limit_time = 0e-1
     elif num_devices == 2:
-        limit_time = 1.1e-1
+        limit_time = 0e-1
     elif num_devices == 4:
-        limit_time = 7e-2
+        limit_time = 0e-2
 
     # Create the scheduler and sampler
     scheduler = FlowFieldScheduler(files, loop=False, prefetch=True)
@@ -519,6 +523,8 @@ def test_speed_sampler_real_fn(file_path, batch_size, images_per_field, seed):
         seed=seed,
         image_shape=image_shape,
         position_bounds=position_bounds,
+        img_offset=img_offset,
+        num_particles=num_particles,
     )
 
     def run_sampler():
