@@ -15,7 +15,7 @@ from src.sym.generate import (
 )
 from src.utils import load_configuration
 
-config = load_configuration("config/timeit.yaml")
+config = load_configuration("config/testing.yaml")
 
 REPETITIONS = config["REPETITIONS"]
 NUMBER_OF_EXECUTIONS = config["EXECUTIONS_IMG_GEN"]

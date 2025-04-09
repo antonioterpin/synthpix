@@ -1,54 +1,43 @@
-"""FlowFieldScheduler to load the flow field data from HDF5 files."""
-import logging
+"""FlowFieldScheduler to load the flow field data from files."""
 import os
 import random
+from abc import ABC, abstractmethod
 
 import h5py
 import numpy as np
 
-from src.utils import get_logger
-
-logger = get_logger(__name__)
+from src.utils import logger
 
 
-class FlowFieldScheduler:
-    """Iterator class that sequentially loads flow field data from a list of HDF5 files.
+class BaseFlowFieldScheduler(ABC):
+    """Abstract class for scheduling access to flow field data from various file formats.
 
-    It provides both iterative access and batch retrieval of flow fields,
-    with options for preloading files into memory, randomizing the file order each epoch,
-    and looping indefinitely over the dataset.
+    This class provides iteration, looping, caching, and batch loading capabilities.
+    Subclasses must implement file-specific loading and y-slice extraction logic.
     """
 
-    def __init__(self, file_list, randomize=False, loop=False, prefetch=True):
-        """Initializes the FlowFieldScheduler.
+    def __init__(self, file_list, randomize=False, loop=False):
+        """Initializes the scheduler.
 
         Args:
             file_list: list
-                List of HDF5 file paths.
+                List of file paths to flow field datasets.
             randomize: bool
-                If True, randomize the order of files each epoch.
+                If True, shuffle the order of files each epoch.
             loop: bool
                 If True, loop over the dataset indefinitely.
-            prefetch: bool
-                If True, preload the entire current file into RAM
-                             and keep it cached until switching to the next file.
-                             If False, load only one slice at a time directly from disk.
         """
-        # Validate file paths
         if not file_list:
             raise ValueError("The file_list must not be empty.")
 
         for file_path in file_list:
             if not isinstance(file_path, str):
                 raise ValueError("All file paths must be strings.")
-            if not file_path.endswith(".h5"):
-                raise ValueError(f"File {file_path} is not an HDF5 file.")
             if not os.path.isfile(file_path):
                 raise ValueError(f"File {file_path} does not exist.")
 
         self.file_list = file_list
 
-        # Argument validation
         if not isinstance(randomize, bool):
             raise ValueError("randomize must be a boolean value.")
         self.randomize = randomize
@@ -57,132 +46,93 @@ class FlowFieldScheduler:
             raise ValueError("loop must be a boolean value.")
         self.loop = loop
 
-        if not isinstance(prefetch, bool):
-            raise ValueError("prefetch must be a boolean value.")
-        self.prefetch = prefetch
-
-        logger.debug(
-            f"FlowFieldScheduler initialized with {len(self.file_list)} files, "
-            f"randomize={self.randomize}, loop={self.loop}, prefetch={self.prefetch}"
-        )
-
-        # Initialize state variables
         self.epoch = 0
         self.index = 0
-        self.y_sel = 0
-
-        self._cached_data = None
-        self._cached_file = None
 
         if self.randomize:
             random.shuffle(self.file_list)
 
+        self._cached_data = None
+        self._cached_file = None
+        self._slice_idx = 0
+
+        logger.debug(
+            f"BaseFlowFieldScheduler initialized with {len(self.file_list)} files, "
+            f"randomize={self.randomize}, loop={self.loop}"
+        )
+
     def __len__(self):
-        """Length of the file list.
+        """Returns the number of files in the dataset.
 
         Returns:
-            int: Number of files in the file list.
+            int: Number of files in file_list.
         """
         return len(self.file_list)
 
     def __iter__(self):
-        """Return the iterator instance itself.
-
-        This allows the FlowFieldScheduler instance to be used in for-loops
-        and other iterable contexts, as it implements both __iter__ and __next__.
+        """Returns the iterator instance itself.
 
         Returns:
-            FlowFieldScheduler: The iterator instance (self).
+            BaseFlowFieldScheduler: The iterator instance.
         """
         return self
 
-    def __next__(self):
-        """Returns the next flow field from the dataset.
+    def reset(self, reset_epoch=True):
+        """Resets the state, including file pointers and, optionally, epoch count."""
+        if reset_epoch:
+            self.epoch = 0
+        self.index = 0
+        self._slice_idx = 0
+        self._cached_data = None
+        self._cached_file = None
+        if self.randomize:
+            random.shuffle(self.file_list)
+        logger.info("Scheduler state has been reset.")
 
-        Raises:
-            StopIteration: If the end of the dataset is reached and loop is False.
-            Exception: If there is an error loading the file.
+    def __next__(self):
+        """Returns the next flow field slice from the dataset.
 
         Returns:
-            flow_field: np.ndarray
-                Flow field data for the current y-slice.
+            np.ndarray: A single flow field slice.
+
+        Raises:
+            StopIteration: If no more data and loop is False.
         """
         while True:
-            # Check if we need to reset the index for the next epoch
             if self.index >= len(self.file_list):
                 if not self.loop:
                     raise StopIteration
-
-                # Prepare for the next epoch
-                self.index = 0
-                self.y_sel = 0
-                self.epoch += 1
-                if self.randomize:
-                    random.shuffle(self.file_list)
-                logging.info(f"Starting epoch {self.epoch}")
+                self.reset(reset_epoch=False)
+                logger.info(f"Starting epoch {self.epoch}")
 
             file_path = self.file_list[self.index]
 
-            logger.debug(
-                f"Loading file {file_path}, index {self.index}, y_sel {self.y_sel}"
-            )
-
             try:
-                if self.prefetch:
-                    # Load full file into memory once
-                    if self._cached_file != file_path:
-                        with h5py.File(file_path, "r") as file:
-                            dataset_key = list(file)[0]
-                            dset = file[dataset_key]
-                            self._cached_data = file[dataset_key][
-                                :, :, : dset.shape[2] // 2, :
-                            ]
-                            # Known issue: We're not using the full dataset
-                            # because the length step along the x axes is
-                            # twice as much as the z axis. We need to fix this by changing
-                            # the dataset structure in the first place.
-                        self._cached_file = file_path
-                        self.y_sel = 0
-                        logger.info(
-                            f"Prefetched data from {file_path}, "
-                            f"shape {self._cached_data.shape}"
-                        )
+                if self._cached_file != file_path:
+                    self._cached_data = self.load_file(file_path)
+                    self._cached_file = file_path
+                    self._slice_idx = 0
+                    logger.info(
+                        f"Prefetched data from {file_path}, "
+                        f"shape {self._cached_data.shape}"
+                    )
 
-                    if self.y_sel >= self._cached_data.shape[1]:
-                        self.index += 1
-                        self.y_sel = 0
-                        self._cached_file = None
-                        self._cached_data = None
-                        continue
+                if self._slice_idx >= self._cached_data.shape[1]:
+                    self.index += 1
+                    self._cached_file = None
+                    self._cached_data = None
+                    continue
 
-                    data_slice = self._cached_data[:, self.y_sel, :, :]
-                else:
-                    # Load slice on demand
-                    with h5py.File(file_path, "r") as file:
-                        dataset_key = list(file)[0]
-                        dset = file[dataset_key]
-
-                        if self.y_sel >= dset.shape[1]:
-                            self.index += 1
-                            self.y_sel = 0
-                            continue
-
-                        data_slice = dset[:, self.y_sel, : dset.shape[2] // 2, :]
-                        # Known issue: We're not using the full dataset, refer to
-                        # the comment above for details.
-                flow_field_x = data_slice[:, :, 0]
-                flow_field_z = data_slice[:, :, 2]
-                flow_field = np.stack([flow_field_x, flow_field_z], axis=2)
-
-                logging.info(
-                    f"Loaded y={self.y_sel} from {file_path}, shape {flow_field.shape}"
+                flow_field = self.get_next_slice()
+                logger.debug(
+                    f"Loaded slice y={self._slice_idx} from {file_path}, "
+                    f"shape {flow_field.shape}"
                 )
-
-                self.y_sel += 1
+                self._slice_idx += 1
                 return flow_field
 
             except Exception as e:
-                logging.error(f"Error loading {file_path}: {e}")
+                logger.error(f"Error loading {file_path}: {e}")
                 self.index += 1
                 self._cached_data = None
                 self._cached_file = None
@@ -193,37 +143,99 @@ class FlowFieldScheduler:
 
         Args:
             batch_size: int
-                Number of flow fields to load in the batch.
+                Number of flow field slices to retrieve.
 
         Returns:
-            batch: list
-                A list of flow fields.
+            list: A list of flow field slices.
         """
-        # Save current state
-        current_prefetch = self.prefetch
         current_cached_file = self._cached_file
         current_data = self._cached_data
         current_epoch = self.epoch
         current_index = self.index
-        current_y_sel = self.y_sel
+        current_slice_idx = self._slice_idx
 
-        # Reset state for batch loading and force prefetch
-        self.prefetch = True
         self._cached_file = None
         self._cached_data = None
         self.index = 0
-        self.y_sel = 0
+        self._slice_idx = 0
         self.epoch = 0
         if self.randomize:
             random.shuffle(self.file_list)
+
         batch = [next(self) for _ in range(batch_size)]
 
-        # Restore state
-        self.prefetch = current_prefetch
         self._cached_file = current_cached_file
         self._cached_data = current_data
         self.epoch = current_epoch
         self.index = current_index
-        self.y_sel = current_y_sel
+        self._slice_idx = current_slice_idx
 
+        logger.debug(f"Loaded batch of {batch_size} flow field slices.")
         return batch
+
+    @abstractmethod
+    def load_file(self, file_path):
+        """Loads a file and returns the dataset for caching.
+
+        Args:
+            file_path: str
+                Path to the file to be loaded.
+
+        Returns:
+            np.ndarray: The loaded dataset.
+        """
+        pass
+
+    @abstractmethod
+    def get_next_slice(self):
+        """Extracts the next slice from the cached data.
+
+        Returns:
+            np.ndarray: A 2D flow field slice.
+        """
+        pass
+
+
+class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
+    """Scheduler for loading flow field data from HDF5 files.
+
+    Assumes each file contains a single dataset with shape (T, Y, Z, C),
+    and extracts the x and z components (0 and 2) from each y-slice.
+    """
+
+    def __init__(self, file_list, randomize=False, loop=False):
+        """Initializes the HDF5 scheduler."""
+        super().__init__(file_list, randomize, loop)
+        if not all(file_path.endswith(".h5") for file_path in file_list):
+            raise ValueError("All files must be HDF5 files with .h5 extension.")
+
+    def load_file(self, file_path):
+        """Loads the dataset from the HDF5 file.
+
+        Args:
+            file_path: str
+                Path to the HDF5 file.
+
+        Returns:
+            np.ndarray: Loaded dataset with truncated x-axis.
+        """
+        with h5py.File(file_path, "r") as file:
+            dataset_key = list(file)[0]
+            dset = file[dataset_key]
+            data = dset[:, :, : dset.shape[2] // 2, :]
+            # Known issue: We're not using the full dataset
+            # because the length step along the x axes is
+            # twice as much as the z axis. We need to fix this by changing
+            # the dataset structure in the first place.
+        return data
+
+    def get_next_slice(self):
+        """Retrieves a flow field slice (x and z components) for the current y index.
+
+        Returns:
+            np.ndarray: Flow field with shape (T, Z, 2).
+        """
+        data_slice = self._cached_data[:, self._slice_idx, :, :]
+        flow_field_x = data_slice[:, :, 0]
+        flow_field_z = data_slice[:, :, 2]
+        return np.stack([flow_field_x, flow_field_z], axis=2)

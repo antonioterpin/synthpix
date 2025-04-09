@@ -6,11 +6,7 @@ import abc
 import jax
 import jax.numpy as jnp
 
-from src.utils import get_logger
-
-logger = get_logger(__name__)
-
-logger = get_logger(__name__)
+from src.utils import logger
 
 
 class FlowFieldEstimator(abc.ABC):

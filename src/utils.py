@@ -8,27 +8,20 @@ import jax
 import jax.numpy as jnp
 import yaml
 
+DEBUG = False
 
-def get_logger(name=__name__):
-    """Get a logger with a specific name.
+# Create a logger instance
+logger = logging.getLogger(__name__)
 
-    Args:
-        name: str
-            The name of the logger.
+# Set the logging level
+logger.setLevel(logging.DEBUG if DEBUG else logging.INFO)
 
-    Returns:
-        logging.Logger:
-            The logger instance.
-    """
-    logger = logging.getLogger(name)
-    if not logger.hasHandlers():
-        logging.basicConfig(
-            level=logging.INFO,
-            format="[%(levelname)s][%(asctime)s][%(filename)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-            # filename='app.log',
-        )
-    return logger
+# Configure the logging format
+logging.basicConfig(
+    level=logger.level,
+    format="[%(levelname)s][%(asctime)s][%(filename)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 
 def is_int(val: Union[int, float]) -> bool:

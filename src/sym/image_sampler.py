@@ -9,9 +9,7 @@ from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, PartitionSpec
 
 from src.sym.processing import input_check_gen_img_from_flow
-from src.utils import get_logger
-
-logger = get_logger(__name__)
+from src.utils import logger
 
 
 class SyntheticImageSampler:
@@ -183,8 +181,9 @@ class SyntheticImageSampler:
         if images_per_field % batch_size != 0:
             logger.warning(
                 f"images_per_field was not divisible by the batch size. "
-                f"Generating an extra {images_per_field % batch_size} images "
-                f"per flow field."
+                f"Generating an extra "
+                f"{((images_per_field // batch_size + 1)*batch_size - images_per_field)}"
+                f" per flow field."
             )
 
         if not logger.isEnabledFor(logging.DEBUG):
@@ -249,21 +248,20 @@ class SyntheticImageSampler:
         self._images_generated = 0
 
     def __iter__(self):
-        """Returns the iterator instance itself.
-
-        This allows the SyntheticImageSampler to be used in for-loops and other
-        iterable contexts, as it implements both __iter__ and __next__.
-
-        Returns:
-            SyntheticImageSampler: The iterator instance.
-        """
+        """Returns the iterator instance itself."""
         return self
+
+    def reset(self):
+        """Resets the state variables to their initial values."""
+        self._rng = jax.random.PRNGKey(self.seed)
+        self._current_flow = None
+        self._images_generated = 0
 
     def __next__(self):
         """Generates the next batch of synthetic images.
 
         Raises:
-            StopIteration: Never raised by default, can be controlled externally.
+            StopIteration: Never raised by default, it is thrown by scheduler.
 
         Returns:
             jnp.ndarray: A batch of synthetic images generated on GPU.
@@ -316,4 +314,4 @@ class SyntheticImageSampler:
         logger.info(f"Generated {self.batch_size} couples of images")
         self._images_generated += self.batch_size
         logger.debug(f"Total images generated so far: {self._images_generated}")
-        return imgs1, imgs2
+        return imgs1, imgs2, self._current_flow
