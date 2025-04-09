@@ -18,7 +18,7 @@ def generate_images_from_flow(
     position_bounds: Tuple[int, int] = (512, 512),
     image_shape: Tuple[int, int] = (256, 256),
     num_images: int = 300,
-    img_offset: Tuple[int, int] = (20, 20),
+    img_offset: Tuple[int, int] = (128, 128),
     num_particles: int = 10000,
     p_hide_img1: float = 0.01,
     p_hide_img2: float = 0.01,
@@ -26,6 +26,8 @@ def generate_images_from_flow(
     intensity_range: Tuple[float, float] = (50, 200),
     rho_range: Tuple[float, float] = (-0.99, 0.99),
     dt: float = 1.0,
+    alpha1: float = 1.0,
+    alpha2: float = 1.0
 ):
     """Generates a batch of image pairs from a flow field.
 
@@ -64,6 +66,9 @@ def generate_images_from_flow(
     Returns:
         tuple: Two image batches (num_images, H, W) each.
     """
+    # scale factors for particle positions
+    alpha1 = flow_field.shape[0] / position_bounds[0]
+    alpha2 = flow_field.shape[1] / position_bounds[1]
 
     def bodyfun(i, state):
         first_imgs, second_imgs, key = state
@@ -75,10 +80,10 @@ def generate_images_from_flow(
         # generate random masks
         mask_img1 = jax.random.bernoulli(
             subkey1, 1.0 - p_hide_img1, shape=(num_particles,)
-        ).astype(jnp.int32)
+        )
         mask_img2 = jax.random.bernoulli(
             subkey2, 1.0 - p_hide_img2, shape=(num_particles,)
-        ).astype(jnp.int32)
+        )
 
         H, W = position_bounds
         # Generate random particle positions
@@ -113,8 +118,8 @@ def generate_images_from_flow(
         # Divide the x coordinates by 2 to match the flow field
         particle_positions = jnp.array(
             [
-                particle_positions[:, 0] / 2,
-                particle_positions[:, 1],
+                particle_positions[:, 0] * alpha1,
+                particle_positions[:, 1] * alpha2,
             ]
         ).T
 
@@ -126,8 +131,8 @@ def generate_images_from_flow(
         # Rescale the x coordinates back to the original scale
         final_positions = jnp.array(
             [
-                final_positions[:, 0] * 2,
-                final_positions[:, 1],
+                final_positions[:, 0] / alpha1,
+                final_positions[:, 1] / alpha2,
             ]
         ).T
 

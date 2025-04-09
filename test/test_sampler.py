@@ -16,7 +16,7 @@ from src.utils import load_configuration
 config = load_configuration("config/timeit.yaml")
 
 REPETITIONS = config["REPETITIONS"]
-NUMBER_OF_EXECUTIONS = config["NUMBER_OF_EXECUTIONS"]
+NUMBER_OF_EXECUTIONS = config["EXECUTIONS_SAMPLER"]
 
 
 def create_mock_hdf5(filename, x_dim=3, y_dim=4, z_dim=5, features=3):

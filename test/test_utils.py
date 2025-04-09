@@ -1,6 +1,15 @@
+import jax.numpy as jnp
 import pytest
 
-from src.utils import compute_image_scaled_height, is_int
+from src.sym.example_flows import get_flow_function
+from src.utils import (
+    bilinear_interpolate,
+    compute_image_scaled_height,
+    generate_array_flow_field,
+    is_int,
+    particles_per_pixel,
+    trilinear_interpolate,
+)
 
 
 @pytest.mark.parametrize(
@@ -80,3 +89,101 @@ def test_is_int(val, expected):
         expected (bool): The expected result.
     """
     assert is_int(val) == expected
+
+
+@pytest.mark.parametrize(
+    "image, x, y, expected",
+    [
+        (jnp.array([[0, 1], [2, 3]]), 0.5, 0.5, 1.5),
+        (jnp.array([[0, 1], [2, 3]]), 0.25, 0.75, 1.75),
+        (jnp.array([[0, 1], [2, 3]]), 0.75, 0.25, 1.25),
+        (jnp.array([[0, 1], [2, 3]]), -0.5, -0.5, 0.0),
+    ],
+)
+def test_bilinear_interpolate(image, x, y, expected):
+    """Test the bilinear_interpolate function with various inputs
+
+    Args:
+        image (jnp.ndarray): The input image.
+        x (jnp.ndarray): The x-coordinates for interpolation.
+        y (jnp.ndarray): The y-coordinates for interpolation.
+        expected (jnp.ndarray): The expected interpolated values.
+    """
+    assert bilinear_interpolate(image, x, y) == expected
+
+
+@pytest.mark.parametrize(
+    "image, x, y, z, expected",
+    [
+        (jnp.array([[[0, 1], [2, 3]], [[4, 5], [6, 7]]]), 0.5, 0.5, 0.5, 3.5),
+        (jnp.array([[[0, 1], [2, 3]], [[4, 5], [6, 7]]]), 0.25, 0.75, 0.75, 4.75),
+        (jnp.array([[[0, 1], [2, 3]], [[4, 5], [6, 7]]]), -0.5, -0.5, -0.5, 0.0),
+    ],
+)
+def test_trilinear_interpolate(image, x, y, z, expected):
+    """Test the trilinear_interpolate function with various inputs.
+
+    Args:
+        image (jnp.ndarray): The input image.
+        x (jnp.ndarray): The x-coordinates for interpolation.
+        y (jnp.ndarray): The y-coordinates for interpolation.
+        z (jnp.ndarray): The z-coordinates for interpolation.
+        expected (jnp.ndarray): The expected interpolated values.
+    """
+    assert trilinear_interpolate(image, x, y, z) == expected
+
+
+@pytest.mark.parametrize(
+    "shape, flow_field_type, expected",
+    [
+        (
+            (10, 10),
+            "vertical",
+            jnp.ones((10, 10, 2), dtype=jnp.float32)
+            * jnp.array([0, 10], dtype=jnp.float32),
+        ),
+        (
+            (20, 20),
+            "horizontal",
+            jnp.ones((20, 20, 2), dtype=jnp.float32)
+            * jnp.array([10, 0], dtype=jnp.float32),
+        ),
+    ],
+)
+def test_generate_array_flow_field(shape, flow_field_type, expected):
+    """Test the generate_array_flow_field function with various inputs.
+
+    Args:
+        shape (tuple): The shape of the flow field.
+        flow_field (jnp.ndarray): The expected flow field.
+    """
+    # Generate the flow field using the specified type
+    flow_field = get_flow_function(flow_field_type)
+    generated_flow_field = generate_array_flow_field(flow_field, shape)
+
+    print(generated_flow_field)
+    print(expected)
+    assert generated_flow_field.shape == (shape[0], shape[1], 2)
+    assert generated_flow_field.shape == expected.shape
+    assert jnp.allclose(generated_flow_field, expected, atol=1e-5)
+    assert generated_flow_field.dtype == jnp.float32
+
+
+@pytest.mark.parametrize(
+    "image, threshold, expected",
+    [
+        (jnp.array([[0, 1], [2, 3]], dtype=jnp.float32), 1.0, 0.5),
+        (jnp.array([[0, 1], [2, 3]], dtype=jnp.float32), 2.0, 0.25),
+        (jnp.array([[0, 1], [2, 3]], dtype=jnp.float32), 3.0, 0.0),
+    ],
+)
+def test_particles_per_pixel(image, threshold, expected):
+    """Test the particles_per_pixel function with various inputs.
+
+    Args:
+        image (jnp.ndarray): The input image.
+        threshold (float): The threshold to apply to the image.
+        expected (float): The expected density.
+    """
+    # Call the function and check the result
+    assert jnp.isclose(particles_per_pixel(image, threshold), expected, atol=1e-5)

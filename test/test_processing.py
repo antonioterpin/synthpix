@@ -12,10 +12,10 @@ from src.sym.example_flows import get_flow_function
 from src.sym.processing import generate_images_from_flow, input_check_gen_img_from_flow
 from src.utils import generate_array_flow_field, load_configuration
 
-config = load_configuration("config/timeit.yaml")
+config = load_configuration("config/testing.yaml")
 
 REPETITIONS = config["REPETITIONS"]
-NUMBER_OF_EXECUTIONS = config["NUMBER_OF_EXECUTIONS"]
+NUMBER_OF_EXECUTIONS = config["EXECUTIONS_DATA_GEN"]
 
 
 @pytest.mark.parametrize(
@@ -91,27 +91,6 @@ def test_invalid_position_bounds(position_bounds):
         )
 
 
-@pytest.mark.parametrize(
-    "img_offset", [(-1, 0), (0, -1), (128.5, 0), (0, 128.5), (1, 2, 3)]
-)
-def test_invalid_img_offset(img_offset):
-    """Test that invalid img_offset raises a ValueError."""
-    key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((128, 128, 2))
-    position_bounds = (256, 256)
-    image_shape = (128, 128)
-    with pytest.raises(
-        ValueError, match="img_offset must be a tuple of two non-negative integers."
-    ):
-        input_check_gen_img_from_flow(
-            key,
-            flow_field=flow_field,
-            position_bounds=position_bounds,
-            image_shape=image_shape,
-            img_offset=img_offset,
-        )
-
-
 @pytest.mark.parametrize("num_particles", [-1, 0, 1.5, 2.5])
 def test_invalid_num_particles(num_particles):
     """Test that invalid num_particles raise a ValueError."""
@@ -136,6 +115,27 @@ def test_invalid_num_images(num_images):
     with pytest.raises(ValueError, match="num_images must be a positive integer."):
         input_check_gen_img_from_flow(
             key, flow_field=flow_field, image_shape=image_shape, num_images=num_images
+        )
+
+
+@pytest.mark.parametrize(
+    "img_offset", [(-1, 0), (0, -1), (128.5, 0), (0, 128.5), (1, 2, 3)]
+)
+def test_invalid_img_offset(img_offset):
+    """Test that invalid img_offset raises a ValueError."""
+    key = jax.random.PRNGKey(0)
+    flow_field = jnp.zeros((128, 128, 2))
+    position_bounds = (256, 256)
+    image_shape = (128, 128)
+    with pytest.raises(
+        ValueError, match="img_offset must be a tuple of two non-negative integers."
+    ):
+        input_check_gen_img_from_flow(
+            key,
+            flow_field=flow_field,
+            position_bounds=position_bounds,
+            image_shape=image_shape,
+            img_offset=img_offset,
         )
 
 
@@ -223,18 +223,19 @@ def test_invalid_dt(dt):
         )
 
 
-def test_generate_images_from_flow(visualize=False):
-    """Test that we can apply a flow field as a jax array to random particles."""
+def test_generate_images_from_flow(visualize=True):
+    """Test that we can generate images from a flow field."""
 
     # 1. setup the image parameters
     key = jax.random.PRNGKey(0)
     selected_flow = "horizontal"
     position_bounds = (128, 128)
     image_shape = (128, 128)
-    num_particles = 1
-    p_hide_img1 = 0.01
+    num_particles = 10
+    img_offset = (0, 0)
+    p_hide_img1 = 0.5
     p_hide_img2 = 0.5
-    diameter_range = (2, 4)
+    diameter_range = (0.1, 0.5)
     intensity_range = (50, 250)
     rho_range = (-0.2, 0.2)
     dt = 5.0
@@ -252,6 +253,7 @@ def test_generate_images_from_flow(visualize=False):
         image_shape=image_shape,
         num_particles=num_particles,
         num_images=1,
+        img_offset=img_offset,
         p_hide_img1=p_hide_img1,
         p_hide_img2=p_hide_img2,
         diameter_range=diameter_range,
