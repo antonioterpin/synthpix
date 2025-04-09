@@ -181,8 +181,9 @@ class SyntheticImageSampler:
         if images_per_field % batch_size != 0:
             logger.warning(
                 f"images_per_field was not divisible by the batch size. "
-                f"Generating an extra {images_per_field % batch_size} images "
-                f"per flow field."
+                f"Generating an extra "
+                f"{((images_per_field // batch_size + 1)*batch_size - images_per_field)}"
+                f" per flow field."
             )
 
         if not logger.isEnabledFor(logging.DEBUG):

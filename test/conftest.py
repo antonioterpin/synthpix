@@ -1,11 +1,15 @@
-import pytest
+"""Conftest.py for Sampler and Scheduler tests."""
 import os
 import tempfile
+
 import h5py
 import numpy as np
+import pytest
+
 from src.sym.scheduler import HDF5FlowFieldScheduler
 
-@pytest.fixture
+
+@pytest.fixture(scope="module")
 def hdf5_test_dims(request):
     """Fixture to provide default dimensions for HDF5 files.
 
@@ -21,8 +25,6 @@ def hdf5_test_dims(request):
         "z_dim": 2048 if not CI else 128,
         "features": 3,
     }
-    if hasattr(request, "param"):
-        default_dims.update(request.param)
     return default_dims
 
 
@@ -61,13 +63,13 @@ def mock_hdf5_files(request, hdf5_test_dims, generate_hdf5_file, num_files=1):
 
 
 @pytest.fixture(scope="module")
-def temp_file(request, generate_hdf5_file):
+def temp_file(request, generate_hdf5_file, hdf5_test_dims):
+    """Fixture to create a temporary HDF5 file for testing."""
     if hasattr(request, "param"):
         dims = request.param
     else:
-        dims = {"x_dim": 10, "y_dim": 6, "z_dim": 5, "features": 3}
+        dims = hdf5_test_dims
     filename = "mock_data.h5"
-    dims = {"x_dim": 10, "y_dim": 6, "z_dim": 5, "features": 3}
     path = generate_hdf5_file(filename, dims=dims)
     try:
         yield path
@@ -94,9 +96,13 @@ def temp_txt_file(request):
 def scheduler(temp_file, request):
     """Fixture to create an HDF5FlowFieldScheduler for testing."""
     # Default parameters for the scheduler
-    randomize = request.param.get("randomize", False) if hasattr(request, "param") else False
+    randomize = (
+        request.param.get("randomize", False) if hasattr(request, "param") else False
+    )
     loop = request.param.get("loop", False) if hasattr(request, "param") else False
 
     # Create the scheduler using the temporary HDF5 file
-    scheduler_instance = HDF5FlowFieldScheduler([temp_file], randomize=randomize, loop=loop)
+    scheduler_instance = HDF5FlowFieldScheduler(
+        [temp_file], randomize=randomize, loop=loop
+    )
     return scheduler_instance

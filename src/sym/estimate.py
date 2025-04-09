@@ -8,6 +8,7 @@ import jax.numpy as jnp
 
 from src.utils import logger
 
+
 class FlowFieldEstimator(abc.ABC):
     """Base class for flow field estimators."""
 

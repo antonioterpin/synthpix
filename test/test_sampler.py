@@ -7,7 +7,7 @@ import pytest
 from src.sym.image_sampler import SyntheticImageSampler
 from src.sym.processing import generate_images_from_flow
 from src.sym.scheduler import HDF5FlowFieldScheduler
-from src.utils import load_configuration
+from src.utils import load_configuration, logger
 
 config = load_configuration("config/testing.yaml")
 
@@ -416,8 +416,10 @@ def test_speed_sampler_real_fn(batch_size, images_per_field, seed, scheduler):
 
     def run_sampler():
         for i, batch in enumerate(sampler):
+            logger.debug(scheduler._cached_data.shape)
             batch[0].block_until_ready()
             batch[1].block_until_ready()
+            batch[2].block_until_ready()
             if i >= images_per_field // batch_size:
                 break
 
