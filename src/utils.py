@@ -8,6 +8,7 @@ import jax
 import jax.numpy as jnp
 import yaml
 
+DEBUG = False
 
 def get_logger(name=__name__):
     """Get a logger with a specific name.
@@ -22,12 +23,22 @@ def get_logger(name=__name__):
     """
     logger = logging.getLogger(name)
     if not logger.hasHandlers():
-        logging.basicConfig(
-            level=logging.INFO,
-            format="[%(levelname)s][%(asctime)s][%(filename)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-            # filename='app.log',
-        )
+        if DEBUG:
+            logger.setLevel(logging.DEBUG)
+            logging.basicConfig(
+                level=logging.DEBUG,
+                format="[%(levelname)s][%(asctime)s][%(filename)s] %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+                # filename='app.log',
+            )
+        else:
+            logger.setLevel(logging.INFO)
+            logging.basicConfig(
+                level=logging.INFO,
+                format="[%(levelname)s][%(asctime)s] %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+                # filename='app.log',
+            )
     return logger
 
 

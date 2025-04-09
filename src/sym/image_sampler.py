@@ -249,21 +249,20 @@ class SyntheticImageSampler:
         self._images_generated = 0
 
     def __iter__(self):
-        """Returns the iterator instance itself.
-
-        This allows the SyntheticImageSampler to be used in for-loops and other
-        iterable contexts, as it implements both __iter__ and __next__.
-
-        Returns:
-            SyntheticImageSampler: The iterator instance.
-        """
+        """Returns the iterator instance itself."""
         return self
+
+    def reset(self):
+        """Resets the state variables to their initial values."""
+        self._rng = jax.random.PRNGKey(self.seed)
+        self._current_flow = None
+        self._images_generated = 0
 
     def __next__(self):
         """Generates the next batch of synthetic images.
 
         Raises:
-            StopIteration: Never raised by default, can be controlled externally.
+            StopIteration: Never raised by default, it is thrown by scheduler.
 
         Returns:
             jnp.ndarray: A batch of synthetic images generated on GPU.

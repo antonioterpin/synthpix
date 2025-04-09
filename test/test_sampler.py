@@ -10,7 +10,7 @@ import pytest
 
 from src.sym.image_sampler import SyntheticImageSampler
 from src.sym.processing import generate_images_from_flow
-from src.sym.scheduler import FlowFieldScheduler
+from src.sym.scheduler import BaseFlowFieldScheduler, HDF5FlowFieldScheduler
 from src.utils import load_configuration
 
 config = load_configuration("config/timeit.yaml")
@@ -76,7 +76,7 @@ def test_invalid_img_gen_fn():
     filename = "mock_data.h5"
     file_path = os.path.join(tempfile.gettempdir(), filename)
     files = [file_path]
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
     with pytest.raises(ValueError, match="img_gen_fn must be a callable function."):
         SyntheticImageSampler(
             scheduler=scheduler,
@@ -93,7 +93,7 @@ def test_invalid_batch_size(batch_size):
     filename = "mock_data.h5"
     file_path = os.path.join(tempfile.gettempdir(), filename)
     files = [file_path]
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
     with pytest.raises(ValueError, match="batch_size must be a positive integer."):
         SyntheticImageSampler(
             scheduler=scheduler,
@@ -110,7 +110,7 @@ def test_invalid_images_per_field(images_per_field):
     filename = "mock_data.h5"
     file_path = os.path.join(tempfile.gettempdir(), filename)
     files = [file_path]
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
     with pytest.raises(
         ValueError, match="images_per_field must be a positive integer."
     ):
@@ -131,7 +131,7 @@ def test_invalid_image_shape(image_shape):
     filename = "mock_data.h5"
     file_path = os.path.join(tempfile.gettempdir(), filename)
     files = [file_path]
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
     with pytest.raises(
         ValueError, match="image_shape must be a tuple of two positive integers."
     ):
@@ -153,7 +153,7 @@ def test_invalid_position_bounds(position_bounds):
     filename = "mock_data.h5"
     file_path = os.path.join(tempfile.gettempdir(), filename)
     files = [file_path]
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
     with pytest.raises(
         ValueError, match="position_bounds must be a tuple of two positive integers."
     ):
@@ -173,7 +173,7 @@ def test_invalid_num_particles(num_particles):
     filename = "mock_data.h5"
     file_path = os.path.join(tempfile.gettempdir(), filename)
     files = [file_path]
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
     with pytest.raises(ValueError, match="num_particles must be a positive integer."):
         SyntheticImageSampler(
             scheduler=scheduler,
@@ -191,7 +191,7 @@ def test_invalid_p_hide_img1(p_hide_img1):
     filename = "mock_data.h5"
     file_path = os.path.join(tempfile.gettempdir(), filename)
     files = [file_path]
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
     with pytest.raises(ValueError, match="p_hide_img1 must be between 0 and 1."):
         SyntheticImageSampler(
             scheduler=scheduler,
@@ -209,7 +209,7 @@ def test_invalid_p_hide_img2(p_hide_img2):
     filename = "mock_data.h5"
     file_path = os.path.join(tempfile.gettempdir(), filename)
     files = [file_path]
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
     with pytest.raises(ValueError, match="p_hide_img2 must be between 0 and 1."):
         SyntheticImageSampler(
             scheduler=scheduler,
@@ -227,7 +227,7 @@ def test_invalid_diameter_range(diameter_range):
     filename = "mock_data.h5"
     file_path = os.path.join(tempfile.gettempdir(), filename)
     files = [file_path]
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
     with pytest.raises(
         ValueError, match="diameter_range must be a tuple of two positive floats."
     ):
@@ -247,7 +247,7 @@ def test_invalid_intensity_range(intensity_range):
     filename = "mock_data.h5"
     file_path = os.path.join(tempfile.gettempdir(), filename)
     files = [file_path]
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
     with pytest.raises(
         ValueError, match="intensity_range must be a tuple of two non-negative floats."
     ):
@@ -267,7 +267,7 @@ def test_invalid_rho_range(rho_range):
     filename = "mock_data.h5"
     file_path = os.path.join(tempfile.gettempdir(), filename)
     files = [file_path]
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
     with pytest.raises(
         ValueError, match="rho_range must be a tuple of two floats between -1 and 1."
     ):
@@ -287,7 +287,7 @@ def test_invalid_dt(dt):
     filename = "mock_data.h5"
     file_path = os.path.join(tempfile.gettempdir(), filename)
     files = [file_path]
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)  
     with pytest.raises(ValueError, match="dt must be a scalar \\(int or float\\)"):
         SyntheticImageSampler(
             scheduler=scheduler,
@@ -305,7 +305,7 @@ def test_invalid_dt(dt):
 )
 def test_synthetic_sampler_batches(batch_size, images_per_field, image_shape):
     files = [create_mock_hdf5(f"test_file_{i}.h5") for i in range(2)]
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
 
     sampler = SyntheticImageSampler(
         scheduler=scheduler,
@@ -339,7 +339,7 @@ def test_synthetic_sampler_batches(batch_size, images_per_field, image_shape):
 @pytest.mark.parametrize("batch_size, images_per_field", [(2, 4), (1, 3)])
 def test_sampler_switches_flow_fields(batch_size, images_per_field):
     files = [create_mock_hdf5("test_file_0.h5")]
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=False)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
 
     sampler = SyntheticImageSampler(
         scheduler=scheduler,
@@ -380,7 +380,7 @@ def test_sampler_with_real_img_gen_fn(
             features=3,
         )
     ]
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=True)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
     sampler = SyntheticImageSampler(
         scheduler=scheduler,
         img_gen_fn=generate_images_from_flow,
@@ -438,7 +438,7 @@ def test_speed_sampler_dummy_fn(file_path):
         )
     ]
 
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=True)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
     sampler = SyntheticImageSampler(
         scheduler=scheduler,
         img_gen_fn=dummy_img_gen_fn,
@@ -510,7 +510,7 @@ def test_speed_sampler_real_fn(file_path, batch_size, images_per_field, seed):
         limit_time = 7e-2
 
     # Create the scheduler and sampler
-    scheduler = FlowFieldScheduler(files, loop=False, prefetch=True)
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
     sampler = SyntheticImageSampler(
         scheduler=scheduler,
         img_gen_fn=generate_images_from_flow,

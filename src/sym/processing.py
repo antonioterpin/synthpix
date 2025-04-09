@@ -8,10 +8,9 @@ from src.sym.apply import apply_flow_to_particles, input_check_apply_flow
 
 # Import existing modules
 from src.sym.generate import img_gen_from_data, input_check_img_gen_from_data
-from src.utils import get_logger, is_int
+from src.utils import get_logger, is_int, DEBUG
 
 logger = get_logger(__name__)
-
 
 def generate_images_from_flow(
     key: jax.random.PRNGKey,
@@ -27,7 +26,6 @@ def generate_images_from_flow(
     intensity_range: Tuple[float, float] = (50, 200),
     rho_range: Tuple[float, float] = (-0.99, 0.99),
     dt: float = 1.0,
-    DEBUG: bool = False,
 ):
     """Generates a batch of image pairs from a flow field.
 
@@ -36,11 +34,11 @@ def generate_images_from_flow(
             Random key for reproducibility.
         flow_field: jnp.ndarray
             Array of shape (H, W, 2) containing the velocity field
-            at each grid_step.
+            at each grid_step, in grid_steps per second.
         position_bounds: Tuple[int, int]
-            (height, width) of the output big image.
+            (height, width) of the output big image in pixels.
         image_shape: Tuple[int, int]
-            (height, width) of the output image.
+            (height, width) of the output image in pixels.
         num_images: int
             Number of image pairs to generate.
         img_offset: Tuple[int, int]
