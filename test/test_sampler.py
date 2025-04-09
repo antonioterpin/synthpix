@@ -4,8 +4,8 @@ import jax
 import jax.numpy as jnp
 import pytest
 
+from src.sym.data_generate import generate_images_from_flow
 from src.sym.image_sampler import SyntheticImageSampler
-from src.sym.processing import generate_images_from_flow
 from src.sym.scheduler import HDF5FlowFieldScheduler
 from src.utils import load_configuration, logger
 
@@ -397,13 +397,29 @@ def test_speed_sampler_dummy_fn(scheduler):
 @pytest.mark.parametrize("batch_size", [250])
 @pytest.mark.parametrize("images_per_field", [1000])
 @pytest.mark.parametrize("seed", [0])
+@pytest.mark.parametrize("num_particles", [40000])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_speed_sampler_real_fn(batch_size, images_per_field, seed, scheduler):
+def test_speed_sampler_real_fn(
+    batch_size, images_per_field, seed, num_particles, scheduler
+):
     image_shape = (1216, 1936)
     position_bounds = (1536, 2048)
+    img_offset = (160, 56)
 
+    # Check how many GPUs are available
+    num_devices = len(jax.devices())
+
+    # Limit time in seconds (depends on the number of GPUs)
+    if num_devices == 1:
+        limit_time = 1.5e-1
+    elif num_devices == 2:
+        limit_time = 8.5e-2
+    elif num_devices == 4:
+        limit_time = 6e-2
+
+    # Create the sampler
     sampler = SyntheticImageSampler(
         scheduler=scheduler,
         img_gen_fn=generate_images_from_flow,
@@ -412,9 +428,13 @@ def test_speed_sampler_real_fn(batch_size, images_per_field, seed, scheduler):
         seed=seed,
         image_shape=image_shape,
         position_bounds=position_bounds,
+        img_offset=img_offset,
+        num_particles=num_particles,
     )
 
     def run_sampler():
+        # Generates images_per_field // batch_size batches
+        # of size batch_size
         for i, batch in enumerate(sampler):
             logger.debug(scheduler._cached_data.shape)
             batch[0].block_until_ready()
@@ -423,13 +443,15 @@ def test_speed_sampler_real_fn(batch_size, images_per_field, seed, scheduler):
             if i >= images_per_field // batch_size:
                 break
 
+    # Warm up the function
     run_sampler()
+
+    # Measure the time taken to run the sampler
     total_time = timeit.repeat(
         stmt=run_sampler, number=NUMBER_OF_EXECUTIONS, repeat=REPETITIONS
     )
     avg_time = min(total_time) / NUMBER_OF_EXECUTIONS
 
-    num_devices = len(jax.devices())
-    limit_time = 0.2 if num_devices == 1 else 0.11 if num_devices == 2 else 0.07
-
-    assert avg_time < limit_time
+    assert (
+        avg_time < limit_time
+    ), f"The average time is {avg_time}, time limit: {limit_time}"

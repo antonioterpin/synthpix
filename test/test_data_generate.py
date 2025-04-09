@@ -7,9 +7,13 @@ from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, PartitionSpec
 
+from src.sym.data_generate import (
+    generate_images_from_flow,
+    input_check_gen_img_from_flow,
+)
+
 # Import existing modules
 from src.sym.example_flows import get_flow_function
-from src.sym.processing import generate_images_from_flow, input_check_gen_img_from_flow
 from src.utils import generate_array_flow_field, load_configuration
 
 config = load_configuration("config/testing.yaml")
@@ -223,7 +227,7 @@ def test_invalid_dt(dt):
         )
 
 
-def test_generate_images_from_flow(visualize=True):
+def test_generate_images_from_flow(visualize=False):
     """Test that we can generate images from a flow field."""
 
     # 1. setup the image parameters
@@ -273,6 +277,10 @@ def test_generate_images_from_flow(visualize=True):
         plt.imsave("img.png", np.array(img), cmap="gray")
         plt.imsave("img_warped.png", np.array(img_warped), cmap="gray")
 
+    # 5. check the shape of the images
+    assert img.shape == image_shape
+    assert img_warped.shape == image_shape
+
 
 # skipif is used to skip the test if the user is not connected to the server
 @pytest.mark.skipif(
@@ -284,8 +292,14 @@ def test_generate_images_from_flow(visualize=True):
 @pytest.mark.parametrize("num_images", [100])
 @pytest.mark.parametrize("image_shape", [(1216, 1936)])
 @pytest.mark.parametrize("position_bounds", [(1536, 2048)])
+@pytest.mark.parametrize("img_offset", [(160, 56)])
 def test_speed_generate_images_from_flow(
-    particles_number, selected_flow, num_images, image_shape, position_bounds
+    particles_number,
+    selected_flow,
+    num_images,
+    image_shape,
+    position_bounds,
+    img_offset,
 ):
     """Test that generate_images_from_flow is faster than a limit time."""
 
@@ -297,11 +311,11 @@ def test_speed_generate_images_from_flow(
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 2e-2
+        limit_time = 1.2e-2
     elif num_devices == 2:
-        limit_time = 1e-2
+        limit_time = 6.5e-3
     elif num_devices == 4:
-        limit_time = 5e-3
+        limit_time = 3.9e-3
 
     # Setup device mesh
     # We want to shard a key to each device
@@ -331,6 +345,7 @@ def test_speed_generate_images_from_flow(
                 flow_field=flow,
                 position_bounds=position_bounds,
                 image_shape=image_shape,
+                img_offset=img_offset,
                 num_particles=particles_number,
                 num_images=num_images,
             ),

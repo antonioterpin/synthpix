@@ -8,9 +8,7 @@ from src.sym.apply import apply_flow_to_particles, input_check_apply_flow
 
 # Import existing modules
 from src.sym.generate import img_gen_from_data, input_check_img_gen_from_data
-from src.utils import is_int, logger
-
-DEBUG = False
+from src.utils import DEBUG_JIT, is_int, logger
 
 
 def generate_images_from_flow(
@@ -59,8 +57,6 @@ def generate_images_from_flow(
         dt: float
             Time step for the simulation, used to scale the velocity
             to compute the displacement.
-        DEBUG: bool
-            If True, does input validation and prints debug information.
 
     Returns:
         tuple: Two image batches (num_images, H, W) each.
@@ -90,7 +86,7 @@ def generate_images_from_flow(
             subkey3, (num_particles, 2), minval=0.0, maxval=1.0
         ) * jnp.array([H, W])
 
-        if DEBUG:
+        if DEBUG_JIT:
             input_check_img_gen_from_data(
                 particle_positions=particle_positions,
                 image_shape=position_bounds,
@@ -109,7 +105,7 @@ def generate_images_from_flow(
             rho_range=rho_range,
         )
 
-        if DEBUG:
+        if DEBUG_JIT:
             input_check_apply_flow(
                 particle_positions=particle_positions, flow_field=flow_field, dt=dt
             )
@@ -135,7 +131,7 @@ def generate_images_from_flow(
             ]
         ).T
 
-        if DEBUG:
+        if DEBUG_JIT:
             input_check_img_gen_from_data(
                 particle_positions=final_positions,
                 image_shape=position_bounds,
@@ -154,6 +150,16 @@ def generate_images_from_flow(
             rho_range=rho_range,
         )
 
+        # Crop the images to image_shape
+        first_img = first_img[
+            img_offset[0] : image_shape[0] + img_offset[0],
+            img_offset[1] : image_shape[1] + img_offset[1],
+        ]
+        second_img = second_img[
+            img_offset[0] : image_shape[0] + img_offset[0],
+            img_offset[1] : image_shape[1] + img_offset[1],
+        ]
+
         # Update the images
         first_imgs = first_imgs.at[i].set(first_img)
         second_imgs = second_imgs.at[i].set(second_img)
@@ -161,27 +167,17 @@ def generate_images_from_flow(
         return first_imgs, second_imgs, key
 
     # Initialize state: empty arrays to collect images and the RNG key
-    first_imgs = jnp.zeros((num_images, *position_bounds))
-    second_imgs = jnp.zeros((num_images, *position_bounds))
+    first_imgs = jnp.zeros((num_images, *image_shape))
+    second_imgs = jnp.zeros((num_images, *image_shape))
 
     # fix the key shape
     key = jnp.reshape(key, (-1, key.shape[-1]))[0]
 
+    # Initialize the state
     init_state = (first_imgs, second_imgs, key)
+
+    # Generate images using a for loop
     final_imgs, final_imgs2, _ = jax.lax.fori_loop(0, num_images, bodyfun, init_state)
-
-    # Crop the images to the desired shape
-    final_imgs = final_imgs[
-        :,
-        img_offset[0] : image_shape[0] + img_offset[0],
-        img_offset[1] : image_shape[1] + img_offset[1],
-    ]
-
-    final_imgs2 = final_imgs2[
-        :,
-        img_offset[0] : image_shape[0] + img_offset[0],
-        img_offset[1] : image_shape[1] + img_offset[1],
-    ]
 
     return final_imgs, final_imgs2
 

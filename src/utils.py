@@ -9,6 +9,7 @@ import jax.numpy as jnp
 import yaml
 
 DEBUG = False
+DEBUG_JIT = False
 
 # Create a logger instance
 logger = logging.getLogger(__name__)
