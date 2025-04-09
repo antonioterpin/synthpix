@@ -98,10 +98,8 @@ class BaseFlowFieldScheduler(ABC):
         Raises:
             StopIteration: If no more data and loop is False.
         """
-        while True:
+        while self.index < len(self.file_list) or self.loop:
             if self.index >= len(self.file_list):
-                if not self.loop:
-                    raise StopIteration
                 self.reset(reset_epoch=False)
                 logger.info(f"Starting epoch {self.epoch}")
 
@@ -137,6 +135,8 @@ class BaseFlowFieldScheduler(ABC):
                 self._cached_data = None
                 self._cached_file = None
                 continue
+
+        raise StopIteration
 
     def get_batch(self, batch_size):
         """Retrieves a batch of flow fields.

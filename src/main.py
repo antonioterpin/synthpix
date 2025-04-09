@@ -41,8 +41,51 @@ def visualize_and_save(batch, output_dir="output_images", num_images_to_display=
     )
 
 
-def main():
+def main(args):
     """Main function to run the SyntheticImageSampler pipeline."""
+    # Apply predefined configuration if specified
+    if args.config:
+        config = PREDEFINED_CONFIGS[args.config]
+        for key, value in config.items():
+            setattr(args, key, value)
+
+    # Initialize the scheduler
+    scheduler = HDF5FlowFieldScheduler(args.scheduler_files, loop=False)
+
+    # Initialize the sampler
+    sampler = SyntheticImageSampler(
+        scheduler=scheduler,
+        img_gen_fn=generate_images_from_flow,
+        images_per_field=args.images_per_field,
+        batch_size=args.batch_size,
+        image_shape=tuple(args.image_shape),
+        position_bounds=tuple(args.position_bounds),
+        num_particles=args.num_particles,
+        p_hide_img1=args.p_hide_img1,
+        p_hide_img2=args.p_hide_img2,
+        diameter_range=tuple(args.diameter_range),
+        intensity_range=tuple(args.intensity_range),
+        rho_range=tuple(args.rho_range),
+        dt=args.dt,
+        seed=args.seed,
+    )
+
+    # Run the sampler and print results
+    logger.info("Starting the SyntheticImageSampler pipeline...")
+    for i, batch in enumerate(sampler):
+        logger.info(f"Batch {i + 1} generated.")
+        logger.info(f"Image batch 1 shape: {batch[0].shape}")
+        logger.info(f"Image batch 2 shape: {batch[1].shape}")
+        logger.info(f"Flow field shape: {batch[2].shape}")
+
+        if args.visualize:
+            visualize_and_save(batch, args.output_dir, args.num_images_to_display)
+
+        if i >= args.images_per_field // args.batch_size - 1:
+            break
+
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Demo for SyntheticImageSampler pipeline."
     )
@@ -170,47 +213,4 @@ def main():
 
     args = parser.parse_args()
 
-    # Apply predefined configuration if specified
-    if args.config:
-        config = PREDEFINED_CONFIGS[args.config]
-        for key, value in config.items():
-            setattr(args, key, value)
-
-    # Initialize the scheduler
-    scheduler = HDF5FlowFieldScheduler(args.scheduler_files, loop=False)
-
-    # Initialize the sampler
-    sampler = SyntheticImageSampler(
-        scheduler=scheduler,
-        img_gen_fn=generate_images_from_flow,
-        images_per_field=args.images_per_field,
-        batch_size=args.batch_size,
-        image_shape=tuple(args.image_shape),
-        position_bounds=tuple(args.position_bounds),
-        num_particles=args.num_particles,
-        p_hide_img1=args.p_hide_img1,
-        p_hide_img2=args.p_hide_img2,
-        diameter_range=tuple(args.diameter_range),
-        intensity_range=tuple(args.intensity_range),
-        rho_range=tuple(args.rho_range),
-        dt=args.dt,
-        seed=args.seed,
-    )
-
-    # Run the sampler and print results
-    logger.info("Starting the SyntheticImageSampler pipeline...")
-    for i, batch in enumerate(sampler):
-        logger.info(f"Batch {i + 1} generated.")
-        logger.info(f"Image batch 1 shape: {batch[0].shape}")
-        logger.info(f"Image batch 2 shape: {batch[1].shape}")
-        logger.info(f"Flow field shape: {batch[2].shape}")
-
-        if args.visualize:
-            visualize_and_save(batch, args.output_dir, args.num_images_to_display)
-
-        if i >= args.images_per_field // args.batch_size - 1:
-            break
-
-
-if __name__ == "__main__":
-    main()
+    main(args)
