@@ -8,7 +8,7 @@ from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, PartitionSpec
 
-from src.sym.processing import input_check_gen_img_from_flow
+from src.sym.data_generate import input_check_gen_img_from_flow
 from src.utils import logger
 
 

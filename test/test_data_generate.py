@@ -7,9 +7,13 @@ from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, PartitionSpec
 
+from src.sym.data_generate import (
+    generate_images_from_flow,
+    input_check_gen_img_from_flow,
+)
+
 # Import existing modules
 from src.sym.example_flows import get_flow_function
-from src.sym.processing import generate_images_from_flow, input_check_gen_img_from_flow
 from src.utils import generate_array_flow_field, load_configuration
 
 config = load_configuration("config/testing.yaml")

@@ -4,8 +4,8 @@ import jax
 import jax.numpy as jnp
 import pytest
 
+from src.sym.data_generate import generate_images_from_flow
 from src.sym.image_sampler import SyntheticImageSampler
-from src.sym.processing import generate_images_from_flow
 from src.sym.scheduler import HDF5FlowFieldScheduler
 from src.utils import load_configuration, logger
 
@@ -402,24 +402,22 @@ def test_speed_sampler_dummy_fn(scheduler):
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_speed_sampler_real_fn(
-    batch_size, images_per_field, seed, num_particles
-, scheduler):
+    batch_size, images_per_field, seed, num_particles, scheduler
+):
     image_shape = (1216, 1936)
     position_bounds = (1536, 2048)
     img_offset = (160, 56)
-
-    
 
     # Check how many GPUs are available
     num_devices = len(jax.devices())
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 0e-1
+        limit_time = 1.5e-1
     elif num_devices == 2:
-        limit_time = 0e-1
+        limit_time = 8.5e-2
     elif num_devices == 4:
-        limit_time = 0e-2
+        limit_time = 6e-2
 
     # Create the sampler
     sampler = SyntheticImageSampler(

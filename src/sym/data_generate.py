@@ -8,9 +8,7 @@ from src.sym.apply import apply_flow_to_particles, input_check_apply_flow
 
 # Import existing modules
 from src.sym.generate import img_gen_from_data, input_check_img_gen_from_data
-from src.utils import is_int, logger, DEBUG_JIT
-
-
+from src.utils import DEBUG_JIT, is_int, logger
 
 
 def generate_images_from_flow(
