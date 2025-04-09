@@ -181,3 +181,5 @@ data/
 
 # Workspace
 fluids-estimation.code-workspace
+
+/output_images
