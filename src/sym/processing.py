@@ -8,9 +8,10 @@ from src.sym.apply import apply_flow_to_particles, input_check_apply_flow
 
 # Import existing modules
 from src.sym.generate import img_gen_from_data, input_check_img_gen_from_data
-from src.utils import get_logger, is_int, DEBUG
+from src.utils import DEBUG, get_logger, is_int
 
 logger = get_logger(__name__)
+
 
 def generate_images_from_flow(
     key: jax.random.PRNGKey,
@@ -27,7 +28,7 @@ def generate_images_from_flow(
     rho_range: Tuple[float, float] = (-0.99, 0.99),
     dt: float = 1.0,
     alpha1: float = 1.0,
-    alpha2: float = 1.0
+    alpha2: float = 1.0,
 ):
     """Generates a batch of image pairs from a flow field.
 

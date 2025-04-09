@@ -6,7 +6,7 @@ import h5py
 import numpy as np
 import pytest
 
-from src.sym.scheduler import HDF5FlowFieldScheduler, BaseFlowFieldScheduler
+from src.sym.scheduler import BaseFlowFieldScheduler, HDF5FlowFieldScheduler
 from src.utils import load_configuration
 
 config = load_configuration("config/timeit.yaml")
@@ -18,10 +18,11 @@ NUMBER_OF_EXECUTIONS = config["NUMBER_OF_EXECUTIONS"]
 # Fixtures
 # ============================
 
+
 @pytest.fixture
 def hdf5_test_dims(request):
     """Fixture to provide default dimensions for HDF5 files.
-    
+
     The dimensions are set based on the CI environment variable,
     but can be overridden by passing parameters in the request.
     The parameters need to be a dictionary with keys:
@@ -42,6 +43,7 @@ def hdf5_test_dims(request):
 @pytest.fixture(scope="module")
 def generate_hdf5_file():
     """Fixture to generate a temporary HDF5 file with random data."""
+
     def _generate(filename="test.h5", dims=None):
         path = os.path.join(tempfile.gettempdir(), filename)
         with h5py.File(path, "w") as f:
@@ -50,6 +52,7 @@ def generate_hdf5_file():
             ).astype(np.float32)
             f.create_dataset("flow", data=data)
         return path
+
     return _generate
 
 
@@ -86,6 +89,7 @@ def temp_file(request, generate_hdf5_file):
         if os.path.exists(path):
             os.remove(path)
 
+
 @pytest.fixture
 def temp_txt_file(request):
     """Fixture to create a temporary text file."""
@@ -98,9 +102,12 @@ def temp_txt_file(request):
     finally:
         if os.path.exists(path):
             os.remove(path)
+
+
 # ============================
 # Base Class Input Validation Tests
 # ============================
+
 
 @pytest.mark.parametrize("file_list", [[None], [123, "invalid"], [123, "invalid"]])
 def test_invalid_file_list_type(file_list):
@@ -126,7 +133,10 @@ def test_invalid_loop(loop, temp_file):
         HDF5FlowFieldScheduler([temp_file], loop=loop)
 
 
-@pytest.mark.parametrize("file_list, randomize, loop", [([], True, True), ([], False, True), ([], True, False), ([], False, False)])
+@pytest.mark.parametrize(
+    "file_list, randomize, loop",
+    [([], True, True), ([], False, True), ([], True, False), ([], False, False)],
+)
 def test_empty_file_list(file_list, randomize, loop):
     with pytest.raises(ValueError, match="The file_list must not be empty."):
         HDF5FlowFieldScheduler(file_list, randomize=randomize, loop=loop)
@@ -136,15 +146,19 @@ def test_empty_file_list(file_list, randomize, loop):
 # Subclass-Specific Validation
 # ============================
 
+
 def test_non_hdf5_file(temp_txt_file):
     """Test that non-HDF5 files raise a ValueError."""
-    with pytest.raises(ValueError, match="All files must be HDF5 files with .h5 extension."):
+    with pytest.raises(
+        ValueError, match="All files must be HDF5 files with .h5 extension."
+    ):
         HDF5FlowFieldScheduler(file_list=temp_txt_file)
 
 
 # ============================
 # Abstract Behavior Tests
 # ============================
+
 
 class DummyScheduler(BaseFlowFieldScheduler):
     def __init__(self, file_list, randomize=False, loop=False):
@@ -158,7 +172,9 @@ class DummyScheduler(BaseFlowFieldScheduler):
 
 
 def test_abstract_scheduler_iteration(generate_hdf5_file):
-    tmp_file = generate_hdf5_file("dummy_test.h5", dims={"x_dim": 4, "y_dim": 2, "z_dim": 4, "features": 3})
+    tmp_file = generate_hdf5_file(
+        "dummy_test.h5", dims={"x_dim": 4, "y_dim": 2, "z_dim": 4, "features": 3}
+    )
     scheduler = DummyScheduler([tmp_file])
     count = sum(1 for _ in scheduler)
     assert count == 2
@@ -169,9 +185,10 @@ def test_abstract_scheduler_iteration(generate_hdf5_file):
 # Core Functional Tests
 # ============================
 
-@pytest.mark.parametrize("randomize, loop", [
-    (True, True), (False, True), (True, False), (False, False)
-])
+
+@pytest.mark.parametrize(
+    "randomize, loop", [(True, True), (False, True), (True, False), (False, False)]
+)
 def test_flow_field_scheduler_init(randomize, loop, temp_file):
     scheduler = HDF5FlowFieldScheduler([temp_file], randomize, loop)
     assert scheduler.randomize is randomize
@@ -181,11 +198,13 @@ def test_flow_field_scheduler_init(randomize, loop, temp_file):
     assert scheduler._slice_idx == 0
 
 
-@pytest.mark.parametrize("hdf5_test_dims", [{"x_dim": 10, "y_dim": 6, "z_dim": 20}], indirect=True)
+@pytest.mark.parametrize(
+    "hdf5_test_dims", [{"x_dim": 10, "y_dim": 6, "z_dim": 20}], indirect=True
+)
 @pytest.mark.parametrize("mock_hdf5_files", [2], indirect=True)
 def test_scheduler_iteration(mock_hdf5_files):
     files, dims = mock_hdf5_files
-    
+
     scheduler = HDF5FlowFieldScheduler(file_list=files, randomize=True, loop=False)
 
     num_flows = 0
@@ -197,15 +216,19 @@ def test_scheduler_iteration(mock_hdf5_files):
     assert num_flows == len(files) * dims["y_dim"]
 
 
-@pytest.mark.parametrize("hdf5_test_dims", [
-    {"x_dim": 10, "y_dim": 6, "z_dim": 20},  # Standard case
-    {"x_dim": 1, "y_dim": 1, "z_dim": 1},   # Minimal dimensions
-], indirect=True)
+@pytest.mark.parametrize(
+    "hdf5_test_dims",
+    [
+        {"x_dim": 10, "y_dim": 6, "z_dim": 20},  # Standard case
+        {"x_dim": 1, "y_dim": 1, "z_dim": 1},  # Minimal dimensions
+    ],
+    indirect=True,
+)
 @pytest.mark.parametrize("mock_hdf5_files", [2], indirect=True)
 def test_scheduler_iteration_with_multiple_files(mock_hdf5_files):
     """Test that the scheduler iterates correctly over multiple HDF5 files."""
     files, dims = mock_hdf5_files
-    
+
     scheduler = HDF5FlowFieldScheduler(files, randomize=True, loop=False)
 
     # Validate scheduler configuration
@@ -216,7 +239,11 @@ def test_scheduler_iteration_with_multiple_files(mock_hdf5_files):
     num_flows = 0
     for flow in scheduler:
         # Validate the shape of each flow
-        expected_shape = (dims["x_dim"], dims["z_dim"] // 2, 2)  # Assumes slicing z_dim and selecting 2 features
+        expected_shape = (
+            dims["x_dim"],
+            dims["z_dim"] // 2,
+            2,
+        )  # Assumes slicing z_dim and selecting 2 features
         assert flow.shape == expected_shape
         num_flows += 1
 

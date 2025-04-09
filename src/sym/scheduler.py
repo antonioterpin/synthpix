@@ -1,3 +1,4 @@
+"""FlowFieldScheduler to load the flow field data from files."""
 import logging
 import os
 import random
@@ -11,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 class BaseFlowFieldScheduler(ABC):
-    """Abstract base class for scheduling access to flow field data from various file formats.
+    """Abstract class for scheduling access to flow field data from various file formats.
 
     This class provides iteration, looping, caching, and batch loading capabilities.
     Subclasses must implement file-specific loading and y-slice extraction logic.
@@ -114,7 +115,8 @@ class BaseFlowFieldScheduler(ABC):
                     self._cached_file = file_path
                     self._slice_idx = 0
                     logger.info(
-                        f"Prefetched data from {file_path}, shape {self._cached_data.shape}"
+                        f"Prefetched data from {file_path}, "
+                        f"shape {self._cached_data.shape}"
                     )
 
                 if self._slice_idx >= self._cached_data.shape[1]:
@@ -125,7 +127,8 @@ class BaseFlowFieldScheduler(ABC):
 
                 flow_field = self.get_next_slice()
                 logger.debug(
-                    f"Loaded slice y={self._slice_idx} from {file_path}, shape {flow_field.shape}"
+                    f"Loaded slice y={self._slice_idx} from {file_path}, "
+                    f"shape {flow_field.shape}"
                 )
                 self._slice_idx += 1
                 return flow_field
@@ -201,11 +204,13 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
     Assumes each file contains a single dataset with shape (T, Y, Z, C),
     and extracts the x and z components (0 and 2) from each y-slice.
     """
+
     def __init__(self, file_list, randomize=False, loop=False):
+        """Initializes the HDF5 scheduler."""
         super().__init__(file_list, randomize, loop)
         if not all(file_path.endswith(".h5") for file_path in file_list):
             raise ValueError("All files must be HDF5 files with .h5 extension.")
-        
+
     def load_file(self, file_path):
         """Loads the dataset from the HDF5 file.
 

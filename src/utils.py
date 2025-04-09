@@ -10,6 +10,7 @@ import yaml
 
 DEBUG = False
 
+
 def get_logger(name=__name__):
     """Get a logger with a specific name.
 

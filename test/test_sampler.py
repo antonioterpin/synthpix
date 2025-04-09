@@ -10,7 +10,7 @@ import pytest
 
 from src.sym.image_sampler import SyntheticImageSampler
 from src.sym.processing import generate_images_from_flow
-from src.sym.scheduler import BaseFlowFieldScheduler, HDF5FlowFieldScheduler
+from src.sym.scheduler import HDF5FlowFieldScheduler
 from src.utils import load_configuration
 
 config = load_configuration("config/timeit.yaml")
@@ -287,7 +287,7 @@ def test_invalid_dt(dt):
     filename = "mock_data.h5"
     file_path = os.path.join(tempfile.gettempdir(), filename)
     files = [file_path]
-    scheduler = HDF5FlowFieldScheduler(files, loop=False)  
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
     with pytest.raises(ValueError, match="dt must be a scalar \\(int or float\\)"):
         SyntheticImageSampler(
             scheduler=scheduler,
