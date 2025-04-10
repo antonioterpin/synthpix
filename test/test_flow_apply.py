@@ -180,6 +180,57 @@ def test_invalid_dt(dt):
         input_check_apply_flow(particle_positions, flow_field, dt)
 
 
+@pytest.mark.parametrize(
+    "flow_field_res_x",
+    ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])],
+)
+def test_invalid_flow_field_res_x(flow_field_res_x):
+    """Test that invalid flow_field_res_x raise a ValueError."""
+    particle_positions = jnp.zeros((1, 2))
+    flow_field = jnp.zeros((128, 128, 2))
+    with pytest.raises(
+        ValueError,
+        match="flow_field_res_x must be a positive scalar \\(int or float\\)",
+    ):
+        input_check_apply_flow(
+            particle_positions, flow_field, flow_field_res_x=flow_field_res_x
+        )
+
+
+@pytest.mark.parametrize(
+    "flow_field_res_y",
+    ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])],
+)
+def test_invalid_flow_field_res_y(flow_field_res_y):
+    """Test that invalid flow_field_res_y raise a ValueError."""
+    particle_positions = jnp.zeros((1, 2))
+    flow_field = jnp.zeros((128, 128, 2))
+    with pytest.raises(
+        ValueError,
+        match="flow_field_res_y must be a positive scalar \\(int or float\\)",
+    ):
+        input_check_apply_flow(
+            particle_positions, flow_field, flow_field_res_y=flow_field_res_y
+        )
+
+
+@pytest.mark.parametrize(
+    "flow_field_res_z",
+    ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])],
+)
+def test_invalid_flow_field_res_z(flow_field_res_z):
+    """Test that invalid flow_field_res_z raise a ValueError."""
+    particle_positions = jnp.zeros((1, 2))
+    flow_field = jnp.zeros((128, 128, 2))
+    with pytest.raises(
+        ValueError,
+        match="flow_field_res_z must be a positive scalar \\(int or float\\)",
+    ):
+        input_check_apply_flow(
+            particle_positions, flow_field, flow_field_res_z=flow_field_res_z
+        )
+
+
 # skipif is used to skip the test if the user is not connected to the server
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),

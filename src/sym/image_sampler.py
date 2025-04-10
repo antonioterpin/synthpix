@@ -34,10 +34,11 @@ class SyntheticImageSampler:
         img_gen_fn: Callable[..., jnp.ndarray],
         images_per_field: int = 1000,
         batch_size: int = 250,
-        flow_field_size: Tuple[int, int] = (512, 512),
+        flow_field_shape: Tuple[int, int] = (256, 256),
+        flow_field_size: Tuple[float, float] = (1000.0, 1000.0),
         image_shape: Tuple[int, int] = (256, 256),
-        resolution: Tuple[int, int] = (512, 512),
-        img_offset: Tuple[int, int] = (20, 20),
+        resolution: float = 1.0,
+        img_offset: Tuple[float, float] = (20.0, 20.0),
         num_particles: int = 40000,
         p_hide_img1: float = 0.01,
         p_hide_img2: float = 0.01,
@@ -61,12 +62,18 @@ class SyntheticImageSampler:
                 Number of synthetic images to generate per flow field.
             batch_size: int
                 Number of synthetic images per batch.
-            flow_field_size: Tuple[int, int]
-                Shape of the flow field in length units.
+            flow_field_shape: Tuple[int, int]
+                Shape of the flow field in grid steps.
+            flow_field_size: Tuple[float, float]
+                Area in which the flow field has been calculated
+                in a length measure unit. (e.g in meters, cm, etc.)
             image_shape: Tuple[int, int]
                 Shape of the synthetic images.
-            img_offset: Tuple[int, int]
-                Offset for the synthetic images within the big image.
+            resolution: float
+                Resolution of the images in pixels per unit length.
+            img_offset: Tuple[float, float]
+                Distance in the two axes from the top left corner of the flow field
+                and the top left corner of the image a length measure unit.
             num_particles: int
                 Number of particles to simulate.
             p_hide_img1: float
@@ -83,6 +90,18 @@ class SyntheticImageSampler:
                 Time step for the simulation.
             seed: int
                 Random seed for JAX PRNG.
+            max_speed_x: float
+                Maximum speed in the x-direction for the flow field
+                in length measure unit per seconds.
+            max_speed_y: float
+                Maximum speed in the y-direction for the flow field
+                in length measure unit per seconds.
+            min_speed_x: float
+                Minimum speed in the x-direction for the flow field
+                in length measure unit per seconds.
+            min_speed_y: float
+                Minimum speed in the y-direction for the flow field
+                in length measure unit per seconds.
         """
         # Name of the axis for the device mesh
         shard_keys = "keys"
@@ -125,12 +144,17 @@ class SyntheticImageSampler:
         self.batch_size = batch_size
 
         if len(flow_field_size) != 2 or not all(
-            isinstance(s, int) and s > 0 for s in flow_field_size
+            isinstance(s, (int, float)) and s > 0 for s in flow_field_size
+        ):
+            raise ValueError("flow_field_size must be a tuple of two positive numbers.")
+        self.flow_field_size = flow_field_size
+
+        if len(flow_field_shape) != 2 or not all(
+            isinstance(s, int) and s > 0 for s in flow_field_shape
         ):
             raise ValueError(
-                "flow_field_size must be a tuple of two positive integers."
+                "flow_field_shape must be a tuple of two positive integers."
             )
-        self.flow_field_size = flow_field_size
 
         if len(image_shape) != 2 or not all(
             isinstance(s, int) and s > 0 for s in image_shape
@@ -138,11 +162,14 @@ class SyntheticImageSampler:
             raise ValueError("image_shape must be a tuple of two positive integers.")
         self.image_shape = image_shape
 
+        if not isinstance(resolution, (int, float)) or resolution <= 0:
+            raise ValueError("resolution must be a positive number.")
+        self.resolution = resolution
+
         if len(img_offset) != 2 or not all(
-            isinstance(s, int) and s >= 0 for s in img_offset
+            isinstance(s, (int, float)) and s >= 0 for s in img_offset
         ):
-            raise ValueError("img_offset must be a tuple of two non-negative integers.")
-        self.img_offset = img_offset
+            raise ValueError("img_offset must be a tuple of two non-negative numbers.")
 
         if not isinstance(num_particles, int) or num_particles <= 0:
             raise ValueError("num_particles must be a positive integer.")
@@ -194,6 +221,74 @@ class SyntheticImageSampler:
                 f" per flow field."
             )
 
+        if not isinstance(max_speed_x, (int, float)):
+            raise ValueError("max_speed_x must be a number.")
+        if not isinstance(max_speed_y, (int, float)):
+            raise ValueError("max_speed_y must be a number.")
+        if not isinstance(min_speed_x, (int, float)):
+            raise ValueError("min_speed_x must be a number.")
+        if not isinstance(min_speed_y, (int, float)):
+            raise ValueError("min_speed_y must be a number.")
+        if max_speed_x < min_speed_x:
+            raise ValueError("max_speed_x must be greater than min_speed_x.")
+        if max_speed_y < min_speed_y:
+            raise ValueError("max_speed_y must be greater than min_speed_y.")
+
+        # Clip the max and min speeds.
+        # Positive values of min speeds and negative values of max speeds
+        # are not useful to create the position bounds
+        if max_speed_x < 0 or max_speed_y < 0:
+            max_speed_x = 0.0
+            max_speed_y = 0.0
+        if min_speed_x > 0 or min_speed_y > 0:
+            min_speed_x = 0.0
+            min_speed_y = 0.0
+
+        # Calculate the position bounds offset in length measure unit
+        position_bounds_offset = (
+            img_offset[0] - max_speed_y * dt,
+            img_offset[1] - max_speed_x * dt,
+        )
+        self.position_bounds_offset = position_bounds_offset
+
+        # Position bounds in length measure unit
+        position_bounds = (
+            image_shape[0] / resolution + max_speed_y * dt - min_speed_y * dt,
+            image_shape[1] / resolution + max_speed_x * dt - min_speed_x * dt,
+        )
+
+        # Check if the position bounds offset is negative or if the position bounds
+        # exceed the flow field size
+        if position_bounds_offset[0] <= 0 or position_bounds_offset[1] <= 0:
+            raise ValueError(
+                f"The image is too near the flow field left or top edge. "
+                f"The minimum image offset is {(max_speed_y * dt, max_speed_x * dt)}."
+            )
+        if (
+            position_bounds[0] + position_bounds_offset[0] >= flow_field_size[0]
+            or position_bounds[1] + position_bounds_offset[1] >= flow_field_size[1]
+        ):
+            raise ValueError(
+                f"The size of the flow field is too small."
+                f"it must be at least "
+                f"({position_bounds[0] + position_bounds_offset[0]},"
+                f"{position_bounds[1] + position_bounds_offset[1]})."
+            )
+
+        # Calculate the image offset in pixels
+        self.img_offset = (
+            int(img_offset[0] * resolution - position_bounds_offset[0] * resolution),
+            int(img_offset[1] * resolution - position_bounds_offset[1] * resolution),
+        )
+
+        # Calculate the position bounds in pixels
+        self.position_bounds = tuple(int(x * resolution) for x in position_bounds)
+
+        # Calculate the resolution of the flow field
+        # in grid steps per length measure unit
+        self.flow_field_res_y = flow_field_shape[0] / flow_field_size[0]
+        self.flow_field_res_x = flow_field_shape[1] / flow_field_size[1]
+
         if not logger.isEnabledFor(logging.DEBUG):
             self.img_gen_fn_jit = jax.jit(
                 shard_map(
@@ -211,6 +306,8 @@ class SyntheticImageSampler:
                         intensity_range=self.intensity_range,
                         rho_range=self.rho_range,
                         dt=self.dt,
+                        flow_field_res_x=self.flow_field_res_x,
+                        flow_field_res_y=self.flow_field_res_y,
                     ),
                     mesh=mesh,
                     in_specs=(PartitionSpec(shard_keys), PartitionSpec()),
@@ -232,6 +329,8 @@ class SyntheticImageSampler:
                 intensity_range=self.intensity_range,
                 rho_range=self.rho_range,
                 dt=self.dt,
+                flow_field_res_x=self.flow_field_res_x,
+                flow_field_res_y=self.flow_field_res_y,
             )
 
         logger.debug("Input arguments of SyntheticImageSampler are valid.")
@@ -279,8 +378,19 @@ class SyntheticImageSampler:
             self._current_flow is None
             or self._images_generated >= self.images_per_field
         ):
-            self._current_flow = jnp.array(next(self.scheduler))
+            _current_flow = jnp.array(next(self.scheduler))
             self._images_generated = 0
+            # Cropping the flow field to the image size
+            self._current_flow = _current_flow[
+                int(self.position_bounds_offset[0] * self.flow_field_res_y) : int(
+                    self.position_bounds_offset[0] * self.flow_field_res_y
+                    + self.position_bounds[0] / self.resolution * self.flow_field_res_y
+                ),
+                int(self.position_bounds_offset[1] * self.flow_field_res_x) : int(
+                    self.position_bounds_offset[1] * self.flow_field_res_x
+                    + self.position_bounds[1] / self.resolution * self.flow_field_res_x
+                ),
+            ]
 
         # Generate a new random key for image generation
         self._rng, subkey = jax.random.split(self._rng)

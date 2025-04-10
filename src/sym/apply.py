@@ -64,6 +64,9 @@ def input_check_apply_flow(
     particle_positions: jnp.ndarray,
     flow_field: jnp.ndarray,
     dt: float = 1.0,
+    flow_field_res_x: float = 1.0,
+    flow_field_res_y: float = 1.0,
+    flow_field_res_z: float = 1.0,
 ) -> jnp.ndarray:
     """Check the input arguments for apply_flow_to_particles.
 
@@ -76,6 +79,15 @@ def input_check_apply_flow(
         dt: float
             Time step for the simulation, used to scale the velocity
             to compute the displacement. Defaults to 1.0.
+        flow_field_res_x: float
+            Resolution of the flow field in the x direction
+            in grid steps per length measure unit.
+        flow_field_res_y: float
+            Resolution of the flow field in the y direction
+            in grid steps per length measure unit
+        flow_field_res_z: float
+            Resolution of the flow field in the z direction
+            in grid steps per length measure unit
     """
     if (
         not isinstance(particle_positions, jnp.ndarray)
@@ -104,11 +116,21 @@ def input_check_apply_flow(
     if not isinstance(dt, (int, float)):
         raise ValueError("dt must be a scalar (int or float)")
 
+    if not isinstance(flow_field_res_x, (int, float)) or flow_field_res_x <= 0:
+        raise ValueError("flow_field_res_x must be a positive scalar (int or float)")
+    if not isinstance(flow_field_res_y, (int, float)) or flow_field_res_y <= 0:
+        raise ValueError("flow_field_res_y must be a positive scalar (int or float)")
+    if not isinstance(flow_field_res_z, (int, float)) or flow_field_res_z <= 0:
+        raise ValueError("flow_field_res_z must be a positive scalar (int or float)")
+
 
 def apply_flow_to_particles(
     particle_positions: jnp.ndarray,
     flow_field: jnp.ndarray,
     dt: float = 1.0,
+    flow_field_res_x: float = 1.0,
+    flow_field_res_y: float = 1.0,
+    flow_field_res_z: float = 1.0,
 ) -> jnp.ndarray:
     """Applies a flow field to an array of particle coordinates.
 
@@ -125,6 +147,15 @@ def apply_flow_to_particles(
         dt: float
             Time step for the simulation, used to scale the velocity
             to compute the displacement. Defaults to 1.0.
+        flow_field_res_x: float
+            Resolution of the flow field in the x direction
+            in grid steps per length measure unit.
+        flow_field_res_y: float
+            Resolution of the flow field in the y direction
+            in grid steps per length measure unit
+        flow_field_res_z: float
+            Resolution of the flow field in the z direction
+            in grid steps per length measure unit
 
     Returns:
         jnp.ndarray: Array of shape (N, 2) or (N, 3)
@@ -140,8 +171,8 @@ def apply_flow_to_particles(
             # Compute the velocity (u, v) for the given particle
             # with bilinear interpolation.
             # Note: velocity u corresponds to the x-direction and v to y.
-            u = bilinear_interpolate(flow_field[..., 0], y, x)
-            v = bilinear_interpolate(flow_field[..., 1], y, x)
+            u = bilinear_interpolate(flow_field[..., 0], y, x) * flow_field_res_x
+            v = bilinear_interpolate(flow_field[..., 1], y, x) * flow_field_res_y
 
             # Return the new position: (y + v * dt, x + u * dt)
             return jnp.array([y + v * dt, x + u * dt])
@@ -156,9 +187,9 @@ def apply_flow_to_particles(
             # Compute the velocity (u, v, w) for the given particle
             # with trilinear interpolation.
             # Note: velocity u corresponds to the x-direction, v to y, and w to z.
-            u = trilinear_interpolate(flow_field[..., 0], x, y, z)
-            v = trilinear_interpolate(flow_field[..., 1], x, y, z)
-            w = trilinear_interpolate(flow_field[..., 2], x, y, z)
+            u = trilinear_interpolate(flow_field[..., 0], x, y, z) * flow_field_res_x
+            v = trilinear_interpolate(flow_field[..., 1], x, y, z) * flow_field_res_y
+            w = trilinear_interpolate(flow_field[..., 2], x, y, z) * flow_field_res_z
 
             # Return the new position: (z + w * dt, y + v * dt, x + u * dt)
             return jnp.array([z + w * dt, y + v * dt, x + u * dt])
