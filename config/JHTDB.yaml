@@ -13,3 +13,7 @@ intensity_range: [50, 200]
 rho_range: [-0.99, 0.99]
 dt: 1.0
 seed: 0
+max_speed_x: 1.37205
+min_speed_x: -0.16798
+max_speed_y: 0.56078
+min_speed_y: -0.72517

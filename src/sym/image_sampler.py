@@ -34,8 +34,9 @@ class SyntheticImageSampler:
         img_gen_fn: Callable[..., jnp.ndarray],
         images_per_field: int = 1000,
         batch_size: int = 250,
-        position_bounds: Tuple[int, int] = (512, 512),
+        flow_field_size: Tuple[int, int] = (512, 512),
         image_shape: Tuple[int, int] = (256, 256),
+        resolution: Tuple[int, int] = (512, 512),
         img_offset: Tuple[int, int] = (20, 20),
         num_particles: int = 40000,
         p_hide_img1: float = 0.01,
@@ -45,6 +46,10 @@ class SyntheticImageSampler:
         rho_range: Tuple[float, float] = (-0.99, 0.99),
         dt: float = 1.0,
         seed: int = 0,
+        max_speed_x: float = 0.5,
+        max_speed_y: float = 0.5,
+        min_speed_x: float = -0.5,
+        min_speed_y: float = -0.5,
     ):
         """Initializes the SyntheticImageSampler.
 
@@ -56,8 +61,8 @@ class SyntheticImageSampler:
                 Number of synthetic images to generate per flow field.
             batch_size: int
                 Number of synthetic images per batch.
-            position_bounds: Tuple[int, int]
-                Shape of the big image from which the flow field is sampled.
+            flow_field_size: Tuple[int, int]
+                Shape of the flow field. #TODO
             image_shape: Tuple[int, int]
                 Shape of the synthetic images.
             img_offset: Tuple[int, int]
