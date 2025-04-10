@@ -194,6 +194,7 @@ def test_particles_per_pixel(image, threshold, expected):
     # Call the function and check the result
     assert jnp.isclose(particles_per_pixel(image, threshold), expected, atol=1e-5)
 
+
 def test_update_config_file():
     """Test the update_config_file function."""
     # Create a temporary configuration file based on base_config.yaml
@@ -228,6 +229,7 @@ def test_update_config_file():
         # Ensure the temporary file is deleted
         if os.path.exists(temp_config_path):
             os.remove(temp_config_path)
+
 
 @pytest.mark.parametrize("mock_hdf5_files", [2], indirect=True)
 def test_calculate_min_and_max_speeds(mock_hdf5_files):

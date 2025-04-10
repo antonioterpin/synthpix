@@ -352,6 +352,7 @@ class SyntheticImageSampler:
 
         self._rng = jax.random.PRNGKey(seed)
         self._current_flow = None
+        self.output_flow_field = None
         self._images_generated = 0
 
     def __iter__(self):
@@ -380,7 +381,7 @@ class SyntheticImageSampler:
         ):
             _current_flow = jnp.array(next(self.scheduler))
             self._images_generated = 0
-            # Cropping the flow field to the image size
+            # Cropping the flow field to the position bounds
             self._current_flow = _current_flow[
                 int(self.position_bounds_offset[0] * self.flow_field_res_y) : int(
                     self.position_bounds_offset[0] * self.flow_field_res_y
@@ -389,6 +390,18 @@ class SyntheticImageSampler:
                 int(self.position_bounds_offset[1] * self.flow_field_res_x) : int(
                     self.position_bounds_offset[1] * self.flow_field_res_x
                     + self.position_bounds[1] / self.resolution * self.flow_field_res_x
+                ),
+            ]
+
+            # Cropping the flow field to the image shape
+            self.output_flow_field = _current_flow[
+                int(self.img_offset[0] * self.flow_field_res_y) : int(
+                    self.img_offset[0] * self.flow_field_res_y
+                    + self.image_shape[0] / self.resolution * self.flow_field_res_y
+                ),
+                int(self.img_offset[1] * self.flow_field_res_x) : int(
+                    self.img_offset[1] * self.flow_field_res_x
+                    + self.image_shape[1] / self.resolution * self.flow_field_res_x
                 ),
             ]
 
@@ -432,4 +445,5 @@ class SyntheticImageSampler:
         logger.info(f"Generated {self.batch_size} couples of images")
         self._images_generated += self.batch_size
         logger.debug(f"Total images generated so far: {self._images_generated}")
-        return imgs1, imgs2, self._current_flow
+        logger.info(f"Output flow field shape: {self.output_flow_field.shape}")
+        return imgs1, imgs2, self.output_flow_field

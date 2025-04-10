@@ -3,6 +3,7 @@ import argparse
 import os
 import sys
 
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -44,7 +45,7 @@ def visualize_and_save(batch, output_dir="output_images", num_images_to_display=
 
         # Downsample the flow field for better visualization
         # Adjust this factor as needed
-        downsample_factor = 30
+        downsample_factor = 10
         flow_x_downsampled = flow_x[::downsample_factor, ::downsample_factor]
         flow_y_downsampled = flow_y[::downsample_factor, ::downsample_factor]
 
@@ -73,9 +74,11 @@ def main(
     scheduler_files,
     images_per_field,
     batch_size,
+    flow_field_shape,
     flow_field_size,
     image_shape,
     resolution,
+    img_offset,
     num_particles,
     p_hide_img1,
     p_hide_img2,
@@ -99,8 +102,10 @@ def main(
         images_per_field (int): Number of synthetic images to generate per flow field.
         batch_size (int): Number of synthetic images per batch.
         image_shape (tuple): Shape of the synthetic images.
-        flow_field_size (tuple): Shape of the flow field in length units.
+        flow_field_shape (tuple): Shape of the flow field in grid steps.
+        flow_field_size (tuple): Shape of the flow field in length measure units.
         resolution (tuple): Resolution of the images in pixels per meter.
+        img_offset (tuple): Offset of the images in length measure units.
         num_particles (int): Number of particles to simulate.
         p_hide_img1 (float): Probability of hiding particles in the first image.
         p_hide_img2 (float): Probability of hiding particles in the second image.
@@ -126,8 +131,11 @@ def main(
         img_gen_fn=generate_images_from_flow,
         images_per_field=images_per_field,
         batch_size=batch_size,
+        flow_field_shape=tuple(flow_field_shape),
+        flow_field_size=tuple(flow_field_size),
         image_shape=tuple(image_shape),
-        # position_bounds=tuple(position_bounds),
+        resolution=resolution,
+        img_offset=img_offset,
         num_particles=num_particles,
         p_hide_img1=p_hide_img1,
         p_hide_img2=p_hide_img2,
@@ -136,6 +144,10 @@ def main(
         rho_range=tuple(rho_range),
         dt=dt,
         seed=seed,
+        max_speed_x=max_speed_x,
+        max_speed_y=max_speed_y,
+        min_speed_x=min_speed_x,
+        min_speed_y=min_speed_y,
     )
 
     # Run the sampler and print results
@@ -232,13 +244,22 @@ if __name__ == "__main__":
             print("[WARNING]: Invalid choice. Exiting.")
             sys.exit(1)
 
+    # Open the first scheduler file and get its shape
+    first_file = config["scheduler_files"][0]
+    with h5py.File(first_file, "r") as f:
+        dataset_name = list(f.keys())[0]
+        data_shape = f[dataset_name].shape
+        flow_field_shape = data_shape[0], data_shape[2] // 2
+
     main(
         scheduler_files=config["scheduler_files"],
         images_per_field=config["images_per_field"],
         batch_size=config["batch_size"],
+        flow_field_shape=flow_field_shape,
         flow_field_size=tuple(config["flow_field_size"]),
         image_shape=tuple(config["image_shape"]),
         resolution=config["resolution"],
+        img_offset=tuple(config["img_offset"]),
         num_particles=config["num_particles"],
         p_hide_img1=config["p_hide_img1"],
         p_hide_img2=config["p_hide_img2"],
