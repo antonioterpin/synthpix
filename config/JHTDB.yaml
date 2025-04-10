@@ -1,0 +1,15 @@
+scheduler_files: [
+  /shared/fluids/channel_full_ts_0004.h5
+]
+images_per_field: 1000
+batch_size: 256
+image_shape: [256, 256]
+position_bounds: [512, 512]
+num_particles: 40000
+p_hide_img1: 0.01
+p_hide_img2: 0.01
+diameter_range: [0.1, 1.0]
+intensity_range: [50, 200]
+rho_range: [-0.99, 0.99]
+dt: 1.0
+seed: 0
