@@ -223,7 +223,7 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
             dataset_key = list(file)[0]
             dset = file[dataset_key]
             data = dset[:, :, : dset.shape[2] // 2, :]
-            # Known issue: We're not using the full dataset
+            # TODO: We're not using the full dataset
             # because the length step along the x axes is
             # twice as much as the z axis. We need to fix this by changing
             # the dataset structure in the first place.
