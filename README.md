@@ -8,13 +8,17 @@ conda activate fluids-estimation
 pip install pip --upgrade
 ```
 
-### CUDA 12 installation
+### JAX CUDA 12 installation
 Please follow the official instructions for
 - [cuda12](https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local).
 - [cudnn](https://developer.nvidia.com/cudnn-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local)
 Note: wheels only available on linux.
 ```bash
 pip install "jax[cuda12_pip]"
+```
+You can also install the CPU version:
+```bash
+pip install jax
 ```
 
 Then, install all the other requirements:
