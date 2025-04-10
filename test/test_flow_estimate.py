@@ -355,9 +355,10 @@ if __name__ == "__main__":
     from torch.utils.data import DataLoader
 
     from src.analyses.image_data.dataloader import ImageDataset
-    from src.utils import load_configuration, logger
+    from src.utils import get_logger, load_configuration
 
     # Load PIV configuration from config
+    logger = get_logger(__name__)
     config = load_configuration("config/flow_estimator/cross-correlation.yaml")
     logger.info("Using configuration:", config)
 

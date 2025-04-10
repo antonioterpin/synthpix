@@ -1,0 +1,1 @@
+{"dataset": "channel", "function": "u", "output_filename": "channel_full_ts", "stridet": 1, "stridex": 1, "stridey": 5, "stridez": 1, "te": 1, "token": "", "ts": 1, "xe": 2048, "xs": 1, "ye": 500, "ys": 1, "ze": 1536, "zs": 1}
