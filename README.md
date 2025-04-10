@@ -5,12 +5,7 @@ We will use [conda](https://conda.io/en/latest/user-guide/install/) to handle th
 ```sh
 conda create -n fluids-estimation python=3.10
 conda activate fluids-estimation
-```
-
-To install the requirements, run:
-```sh
 pip install pip --upgrade
-pip install -r requirements.txt
 ```
 
 ### CUDA 12 installation
@@ -19,7 +14,12 @@ Please follow the official instructions for
 - [cudnn](https://developer.nvidia.com/cudnn-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local)
 Note: wheels only available on linux.
 ```bash
-python -m pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install "jax[cuda12_pip]"
+```
+
+Then, install all the other requirements:
+```bash
+pip install -r requirements.txt
 ```
 
 ## Compiling the documentation with Sphinx
@@ -45,11 +45,15 @@ The compiled HTML pages will be located in the docs/build directory. You can ope
 ## Contributing
 The `Coding style validation` action will fail if the pre-commit checks do not pass. To make sure that these are checked automatically on push, run:
 ```sh
-pre-commit install --hook-type pre-push
+pre-commit install --hook-type pre-push --install-hooks
 ```
 To run the pre-commit checks on specific files:
 ```bash
 pre-commit run --files <files>
+```
+To run on all files:
+```bash
+pre-commit run --all-files
 ```
 If for some reason you really want to ignore them during commit/push, add `--no-verify`.
 
