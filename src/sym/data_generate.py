@@ -177,6 +177,8 @@ def generate_images_from_flow(
     init_state = (first_imgs, second_imgs, key)
 
     # Generate images using a for loop
+    # For some reason, even if the different indices are independent, vmap is slower
+    # TODO: try jax.lax.map
     final_imgs, final_imgs2, _ = jax.lax.fori_loop(0, num_images, bodyfun, init_state)
 
     return final_imgs, final_imgs2
