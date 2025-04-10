@@ -15,10 +15,10 @@ from src.sym.example_flows import get_flow_function
 from src.sym.generate import img_gen_from_data, img_gen_from_density
 from src.utils import generate_array_flow_field, load_configuration
 
-config = load_configuration("config/timeit.yaml")
+config = load_configuration("config/testing.yaml")
 
 REPETITIONS = config["REPETITIONS"]
-NUMBER_OF_EXECUTIONS = config["NUMBER_OF_EXECUTIONS"]
+NUMBER_OF_EXECUTIONS = config["EXECUTIONS_APPLY"]
 
 
 @pytest.mark.parametrize(
