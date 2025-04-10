@@ -1,12 +1,16 @@
 """Utility functions for the vision module."""
 
 import logging
+import os
 import signal
 from typing import Union
 
+import h5py
 import jax
 import jax.numpy as jnp
+import numpy as np
 import yaml
+from tqdm import tqdm
 
 DEBUG = False
 DEBUG_JIT = False
@@ -241,3 +245,84 @@ def generate_array_flow_field(flow_f, grid_shape: tuple[int, int]) -> jnp.ndarra
     arr = jax.vmap(lambda i: jax.vmap(lambda j: jnp.array(flow_f(1, i, j)))(cols))(rows)
 
     return arr
+
+
+def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
+    """Calculate the missing speeds for a list of files.
+
+    Args:
+        file_list: list[str]
+            The list of files.
+
+    Returns:
+        dict[str, float]: A dictionary containing the minimum and maximum speeds
+            in the x and y directions with keys:
+            - "min_speed_x"
+            - "max_speed_x"
+            - "min_speed_y"
+            - "max_speed_y"
+    """
+    # Input validation
+    if not file_list:
+        raise ValueError("The file_list must not be empty.")
+
+    for file_path in file_list:
+        if not isinstance(file_path, str):
+            raise ValueError("All file paths must be strings.")
+        if not os.path.isfile(file_path):
+            raise ValueError(f"File {file_path} does not exist.")
+        if not file_path.endswith(".h5"):
+            raise ValueError(f"File {file_path} is not a .h5 file.")
+
+    # Initialize lists to store the min and max speeds for each file
+    max_speeds_x = []
+    max_speeds_y = []
+    min_speeds_x = []
+    min_speeds_y = []
+    # Wrap the file list with tqdm for a loading bar
+    for file in tqdm(file_list, desc="Processing files"):
+        with h5py.File(file, "r") as f:
+            # Read the file
+            dataset_name = list(f.keys())[0]
+            data = f[dataset_name][:]
+
+            # Find the min and max speeds along each axis
+            max_speeds_x.append(np.max(data[:, :, :, 0]))
+            max_speeds_y.append(
+                np.max(data[:, :, :, 2])
+            )  # TODO: set to 1, left to 2 for test
+            min_speeds_x.append(np.min(data[:, :, :, 0]))
+            min_speeds_y.append(np.min(data[:, :, :, 2]))
+
+    min_speed_x = np.min(min_speeds_x)
+    max_speed_x = np.max(max_speeds_x)
+    min_speed_y = np.min(min_speeds_y)
+    max_speed_y = np.max(max_speeds_y)
+
+    return {
+        "min_speed_x": min_speed_x,
+        "max_speed_x": max_speed_x,
+        "min_speed_y": min_speed_y,
+        "max_speed_y": max_speed_y,
+    }
+
+
+def update_config_file(config_path: str, updated_values: dict):
+    """Update the YAML configuration file with new values.
+
+    Args:
+        config_path: str
+            Path to the configuration file.
+        updated_values: dict
+            Dictionary containing the updated values.
+    """
+    with open(config_path, "r") as file:
+        config_data = yaml.safe_load(file)
+
+    # Convert all values in updated_values to standard Python types
+    updated_values = {key: float(value) for key, value in updated_values.items()}
+
+    config_data.update(updated_values)
+
+    with open(config_path, "w") as file:
+        yaml.safe_dump(config_data, file)

@@ -3,8 +3,9 @@ scheduler_files: [
 ]
 images_per_field: 1000
 batch_size: 256
+flow_field_size: [512, 512]
 image_shape: [256, 256]
-position_bounds: [512, 512]
+resolution: 1
 num_particles: 40000
 p_hide_img1: 0.01
 p_hide_img2: 0.01

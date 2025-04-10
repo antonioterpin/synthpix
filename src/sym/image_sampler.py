@@ -62,7 +62,7 @@ class SyntheticImageSampler:
             batch_size: int
                 Number of synthetic images per batch.
             flow_field_size: Tuple[int, int]
-                Shape of the flow field. #TODO
+                Shape of the flow field in length units.
             image_shape: Tuple[int, int]
                 Shape of the synthetic images.
             img_offset: Tuple[int, int]
@@ -124,13 +124,13 @@ class SyntheticImageSampler:
             )
         self.batch_size = batch_size
 
-        if len(position_bounds) != 2 or not all(
-            isinstance(s, int) and s > 0 for s in position_bounds
+        if len(flow_field_size) != 2 or not all(
+            isinstance(s, int) and s > 0 for s in flow_field_size
         ):
             raise ValueError(
-                "position_bounds must be a tuple of two positive integers."
+                "flow_field_size must be a tuple of two positive integers."
             )
-        self.position_bounds = position_bounds
+        self.flow_field_size = flow_field_size
 
         if len(image_shape) != 2 or not all(
             isinstance(s, int) and s > 0 for s in image_shape
@@ -200,7 +200,7 @@ class SyntheticImageSampler:
                     lambda key, flow: img_gen_fn(
                         key=key,
                         flow_field=flow,
-                        position_bounds=self.position_bounds,
+                        position_bounds=self.flow_field_size,
                         image_shape=self.image_shape,
                         img_offset=self.img_offset,
                         num_images=self.batch_size // num_devices,
@@ -221,7 +221,7 @@ class SyntheticImageSampler:
             self.img_gen_fn_jit = lambda key, flow: img_gen_fn(
                 key=key,
                 flow_field=flow,
-                position_bounds=self.position_bounds,
+                position_bounds=self.flow_field_size,
                 image_shape=self.image_shape,
                 img_offset=self.img_offset,
                 num_images=self.batch_size // num_devices,
@@ -236,7 +236,7 @@ class SyntheticImageSampler:
 
         logger.debug("Input arguments of SyntheticImageSampler are valid.")
         logger.debug(f"Image shape: {self.image_shape}")
-        logger.debug(f"Big image shape: {self.position_bounds}")
+        logger.debug(f"Big image shape: {self.flow_field_size}")
         logger.debug(f"Image offset: {self.img_offset}")
         logger.debug(f"Number of particles: {self.num_particles}")
         logger.debug(f"Images per field: {self.images_per_field}")

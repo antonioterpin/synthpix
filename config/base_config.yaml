@@ -1,0 +1,30 @@
+batch_size: 256
+diameter_range:
+- 0.1
+- 1.0
+dt: 1.0
+flow_field_size:
+- 512
+- 512
+image_shape:
+- 256
+- 256
+images_per_field: 1000
+intensity_range:
+- 50
+- 200
+max_speed_x: 1.3489508628845215
+max_speed_y: 0.501191258430481
+min_speed_x: -0.10241036862134933
+min_speed_y: -0.45968499779701233
+num_particles: 40000
+p_hide_img1: 0.01
+p_hide_img2: 0.01
+resolution: 1
+rho_range:
+- -0.99
+- 0.99
+scheduler_files:
+- /shared/fluids/channel_full_ts_0004.h5
+- /shared/fluids/channel_full_ts_0008.h5
+seed: 0
