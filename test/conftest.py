@@ -69,7 +69,7 @@ def temp_file(request, generate_hdf5_file, hdf5_test_dims):
         dims = request.param
     else:
         dims = hdf5_test_dims
-    filename = "mock_data.h5"
+    filename = "mock_data_tmp.h5"
     path = generate_hdf5_file(filename, dims=dims)
     try:
         yield path

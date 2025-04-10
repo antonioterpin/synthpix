@@ -227,6 +227,100 @@ def test_invalid_dt(dt):
         )
 
 
+@pytest.mark.parametrize(
+    "flow_field_res_x",
+    ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])],
+)
+def test_invalid_flow_field_res_x(flow_field_res_x):
+    """Test that invalid flow_field_res_x raise a ValueError."""
+    key = jax.random.PRNGKey(0)
+    flow_field = jnp.zeros((128, 128, 2))
+    image_shape = (128, 128)
+    with pytest.raises(
+        ValueError,
+        match="flow_field_res_x must be a positive scalar \\(int or float\\)",
+    ):
+        input_check_gen_img_from_flow(
+            key,
+            flow_field=flow_field,
+            image_shape=image_shape,
+            flow_field_res_x=flow_field_res_x,
+        )
+
+
+@pytest.mark.parametrize(
+    "flow_field_res_y",
+    ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])],
+)
+def test_invalid_flow_field_res_y(flow_field_res_y):
+    """Test that invalid flow_field_res_y raise a ValueError."""
+    key = jax.random.PRNGKey(0)
+    flow_field = jnp.zeros((128, 128, 2))
+    image_shape = (128, 128)
+    with pytest.raises(
+        ValueError,
+        match="flow_field_res_y must be a positive scalar \\(int or float\\)",
+    ):
+        input_check_gen_img_from_flow(
+            key,
+            flow_field=flow_field,
+            image_shape=image_shape,
+            flow_field_res_y=flow_field_res_y,
+        )
+
+
+@pytest.mark.parametrize(
+    "image_shape, img_offset, position_bounds, error_message",
+    [
+        (
+            (128, 128),
+            (0, 0),
+            (64, 128),
+            "The height of the position_bounds must be greater "
+            "than the height of the image plus the offset.",
+        ),
+        (
+            (128, 128),
+            (1, 0),
+            (128, 128),
+            "The height of the position_bounds must be greater "
+            "than the height of the image plus the offset.",
+        ),
+        (
+            (128, 128),
+            (0, 0),
+            (128, 64),
+            "The width of the position_bounds must be greater "
+            "than the width of the image plus the offset.",
+        ),
+        (
+            (128, 128),
+            (0, 1),
+            (128, 128),
+            "The width of the position_bounds must be greater "
+            "than the width of the image plus the offset.",
+        ),
+    ],
+)
+def test_incoherent_image_shape_and_position_bounds(
+    image_shape, img_offset, position_bounds, error_message
+):
+    """Test that incoherent image_shape and position_bounds raise a ValueError."""
+    key = jax.random.PRNGKey(0)
+    flow_field = jnp.zeros((128, 128, 2))
+    with pytest.raises(
+        ValueError,
+        match=error_message,
+    ):
+        input_check_gen_img_from_flow(
+            key,
+            flow_field=flow_field,
+            position_bounds=position_bounds,
+            image_shape=image_shape,
+            img_offset=img_offset,
+        )
+
+
 def test_generate_images_from_flow(visualize=False):
     """Test that we can generate images from a flow field."""
 
