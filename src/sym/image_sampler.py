@@ -9,7 +9,12 @@ from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, PartitionSpec
 
 from src.sym.data_generate import input_check_gen_img_from_flow
-from src.utils import logger
+from src.utils import (
+    DEBUG_JIT,
+    flow_field_adapter,
+    input_check_flow_field_adapter,
+    logger,
+)
 
 
 class SyntheticImageSampler:
@@ -38,6 +43,7 @@ class SyntheticImageSampler:
         flow_field_size: Tuple[float, float] = (1000.0, 1000.0),
         image_shape: Tuple[int, int] = (256, 256),
         resolution: float = 1.0,
+        velocities_per_pixel: float = 1.0,
         img_offset: Tuple[float, float] = (20.0, 20.0),
         num_particles: int = 40000,
         p_hide_img1: float = 0.01,
@@ -71,6 +77,8 @@ class SyntheticImageSampler:
                 Shape of the synthetic images.
             resolution: float
                 Resolution of the images in pixels per unit length.
+            velocities_per_pixel: float
+                Number of velocities per pixel in the output flow field.
             img_offset: Tuple[float, float]
                 Distance in the two axes from the top left corner of the flow field
                 and the top left corner of the image a length measure unit.
@@ -165,6 +173,17 @@ class SyntheticImageSampler:
         if not isinstance(resolution, (int, float)) or resolution <= 0:
             raise ValueError("resolution must be a positive number.")
         self.resolution = resolution
+
+        if (
+            not isinstance(velocities_per_pixel, (int, float))
+            or velocities_per_pixel <= 0
+        ):
+            raise ValueError("velocities_per_pixel must be a positive number.")
+        self.velocities_per_pixel = velocities_per_pixel
+        self.output_flow_field_shape = (
+            int(image_shape[0] * velocities_per_pixel),
+            int(image_shape[1] * velocities_per_pixel),
+        )
 
         if len(img_offset) != 2 or not all(
             isinstance(s, (int, float)) and s >= 0 for s in img_offset
@@ -295,7 +314,7 @@ class SyntheticImageSampler:
                     lambda key, flow: img_gen_fn(
                         key=key,
                         flow_field=flow,
-                        position_bounds=self.flow_field_size,
+                        position_bounds=self.position_bounds,
                         image_shape=self.image_shape,
                         img_offset=self.img_offset,
                         num_images=self.batch_size // num_devices,
@@ -318,7 +337,7 @@ class SyntheticImageSampler:
             self.img_gen_fn_jit = lambda key, flow: img_gen_fn(
                 key=key,
                 flow_field=flow,
-                position_bounds=self.flow_field_size,
+                position_bounds=self.position_bounds,
                 image_shape=self.image_shape,
                 img_offset=self.img_offset,
                 num_images=self.batch_size // num_devices,
@@ -342,6 +361,7 @@ class SyntheticImageSampler:
         logger.debug(f"Flow field size: {self.flow_field_size}")
         logger.debug(f"Image shape: {self.image_shape}")
         logger.debug(f"Resolution: {self.resolution}")
+        logger.debug(f"Velocities per pixel: {velocities_per_pixel}")
         logger.debug(f"Image offset: {self.img_offset}")
         logger.debug(f"Number of particles: {self.num_particles}")
         logger.debug(f"p_hide_img1: {self.p_hide_img1}")
@@ -400,7 +420,7 @@ class SyntheticImageSampler:
             ]
 
             # Cropping the flow field to the image shape
-            self.output_flow_field = _current_flow[
+            flow_field_image_size = _current_flow[
                 int(self.img_offset[0] * self.flow_field_res_y) : int(
                     self.img_offset[0] * self.flow_field_res_y
                     + self.image_shape[0] / self.resolution * self.flow_field_res_y
@@ -410,6 +430,21 @@ class SyntheticImageSampler:
                     + self.image_shape[1] / self.resolution * self.flow_field_res_x
                 ),
             ]
+
+            # Creating the output flow field
+            if not DEBUG_JIT:
+                flow_field_adapter_jit = jax.jit(
+                    flow_field_adapter, static_argnames=["new_flow_field_shape"]
+                )
+            else:
+                input_check_flow_field_adapter(
+                    flow_field_image_size, self.output_flow_field_shape
+                )
+                flow_field_adapter_jit = flow_field_adapter
+
+            self.output_flow_field = flow_field_adapter_jit(
+                flow_field_image_size, self.output_flow_field_shape
+            )
 
         # Generate a new random key for image generation
         self._rng, subkey = jax.random.split(self._rng)

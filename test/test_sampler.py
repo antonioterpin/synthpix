@@ -161,6 +161,27 @@ def test_invalid_resolution(resolution, scheduler):
         )
 
 
+@pytest.mark.parametrize(
+    "velocities_per_pixel", [-1, 0, "invalid_velocities_per_pixel"]
+)
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_velocities_per_pixel(velocities_per_pixel, scheduler):
+    """Test that invalid velocities_per_pixel raises a ValueError."""
+    with pytest.raises(
+        ValueError, match="velocities_per_pixel must be a positive number."
+    ):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            velocities_per_pixel=velocities_per_pixel,
+            seed=0,
+        )
+
+
 @pytest.mark.parametrize("img_offset", [(-1, 128), (128, -1)])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
@@ -413,6 +434,46 @@ def test_invalid_min_speed_y(min_speed_y, scheduler):
         )
 
 
+@pytest.mark.parametrize("min_speed_x, max_speed_x", [(1, -1), (2, 1)])
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_min_max_speed_x(min_speed_x, max_speed_x, scheduler):
+    """Test that invalid min_speed_x and max_speed_x raises a ValueError."""
+    with pytest.raises(
+        ValueError, match="max_speed_x must be greater than min_speed_x."
+    ):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            min_speed_x=min_speed_x,
+            max_speed_x=max_speed_x,
+            seed=0,
+        )
+
+
+@pytest.mark.parametrize("min_speed_y, max_speed_y", [(1, -1), (2, 1)])
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_min_max_speed_y(min_speed_y, max_speed_y, scheduler):
+    """Test that invalid min_speed_y and max_speed_y raises a ValueError."""
+    with pytest.raises(
+        ValueError, match="max_speed_y must be greater than min_speed_y."
+    ):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            min_speed_y=min_speed_y,
+            max_speed_y=max_speed_y,
+            seed=0,
+        )
+
+
 @pytest.mark.parametrize("img_gen_fn", [None, "invalid_img_gen_fn"])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
@@ -588,26 +649,25 @@ def test_sampler_with_real_img_gen_fn(
 
     batch = next(sampler)
 
-    position_bounds = sampler.position_bounds
-    res_x = sampler.flow_field_res_x
-    res_y = sampler.flow_field_res_y
+    image_shape = sampler.image_shape
     res = sampler.resolution
+    velocities_per_pixel = sampler.velocities_per_pixel
     output_size = jnp.array(
         [
-            batch[2].shape[0] / res_y,
-            batch[2].shape[1] / res_x,
+            batch[2].shape[0] / velocities_per_pixel / res,
+            batch[2].shape[1] / velocities_per_pixel / res,
             batch[2].shape[2],
         ]
     )
 
-    expected_size = jnp.array([position_bounds[0] / res, position_bounds[1] / res, 2])
+    expected_size = jnp.array([image_shape[0] / res, image_shape[1] / res, 2])
 
     assert isinstance(batch[0], jnp.ndarray)
     assert isinstance(batch[1], jnp.ndarray)
     assert isinstance(batch[2], jnp.ndarray)
     assert batch[0].shape == (batch_size, *image_shape)
     assert batch[1].shape == (batch_size, *image_shape)
-    assert jnp.allclose(output_size, expected_size, atol=5)
+    assert jnp.allclose(output_size, expected_size, atol=0.01)
 
 
 @pytest.mark.skipif(

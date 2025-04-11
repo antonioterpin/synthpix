@@ -1,6 +1,8 @@
 import os
 import tempfile
+import timeit
 
+import jax
 import jax.numpy as jnp
 import pytest
 import yaml
@@ -10,12 +12,20 @@ from src.utils import (
     bilinear_interpolate,
     calculate_min_and_max_speeds,
     compute_image_scaled_height,
+    flow_field_adapter,
     generate_array_flow_field,
+    input_check_flow_field_adapter,
     is_int,
+    load_configuration,
     particles_per_pixel,
     trilinear_interpolate,
     update_config_file,
 )
+
+config = load_configuration("config/testing.yaml")
+
+REPETITIONS = config["REPETITIONS"]
+NUMBER_OF_EXECUTIONS = config["EXECUTIONS_UTILS"]
 
 
 @pytest.mark.parametrize(
@@ -255,3 +265,146 @@ def test_calculate_min_and_max_speeds(mock_hdf5_files):
 
     with pytest.raises(ValueError):
         calculate_min_and_max_speeds(["nonexistent_file.h5"])  # Nonexistent file
+
+
+@pytest.mark.parametrize("new_flow_field_shape", [(-128, 128), (256, 256.0), "invalid"])
+def test_invalid_new_flow_field_shape(new_flow_field_shape):
+    """Test that invalid new_flow_field_shape raises a ValueError."""
+    flow_field = jnp.ones((256, 256, 2))
+    with pytest.raises(
+        ValueError,
+        match="new_flow_field_shape must be a tuple of two positive integers.",
+    ):
+        input_check_flow_field_adapter(
+            flow_field=flow_field,
+            new_flow_field_shape=new_flow_field_shape,
+        )
+
+
+@pytest.mark.parametrize(
+    "flow_field", [(256, 256), jnp.ones((256, 256)), jnp.ones((256, 256, 3)), "invalid"]
+)
+def test_invalid_flow_field(flow_field):
+    """Test that invalid flow_field raises a ValueError."""
+    new_flow_field_shape = (256, 256)
+    with pytest.raises(
+        ValueError,
+        match="Flow_field must be a 3D jnp.ndarray with shape \\(H, W, 2\\).",
+    ):
+        input_check_flow_field_adapter(
+            flow_field=flow_field, new_flow_field_shape=new_flow_field_shape
+        )
+
+
+@pytest.mark.parametrize(
+    "flow_field, flow_field_shape, new_flow_field_shape, "
+    "expected_shape, expected_first_vector",
+    [
+        ("horizontal", (1280, 1280), (128, 128), (128, 128, 2), jnp.array([10.0, 0.0])),
+        ("vertical", (12, 12), (256, 256), (256, 256, 2), jnp.array([0.0, 10.0])),
+        ("diagonal", (1, 1), (2560, 2560), (2560, 2560, 2), jnp.array([10.0, 10.0])),
+    ],
+)
+def test_flow_field_adapter_shape(
+    flow_field,
+    flow_field_shape,
+    new_flow_field_shape,
+    expected_shape,
+    expected_first_vector,
+):
+    """Test that flow_field_adapter returns the correct shape and first vector."""
+    # Generate a flow field based on the selected flow type
+    flow_function = get_flow_function(flow_field)
+    flow_field = generate_array_flow_field(flow_function, flow_field_shape)
+
+    # Call the adapter function
+    new_flow_field = flow_field_adapter(
+        flow_field=flow_field,
+        new_flow_field_shape=new_flow_field_shape,
+    )
+
+    # Check the shape of the adapted flow field
+    assert new_flow_field.shape == expected_shape
+
+    # Check the first vector of the adapted flow field
+    assert jnp.allclose(new_flow_field[0][0], expected_first_vector)
+
+
+@pytest.mark.parametrize(
+    "flow_field, new_flow_field_shape, expected",
+    [
+        (
+            jnp.array([[[10, 10], [10, 0]], [[0, 0], [0, 0]]]),
+            (3, 3),
+            jnp.array([5.0, 2.5]),
+        ),
+        (
+            jnp.array([[[10, 5], [0, 5]], [[0, 5], [10, 5]]]),
+            (3, 3),
+            jnp.array([5.0, 5.0]),
+        ),
+        (
+            jnp.array([[[1, 5], [2, 6]], [[3, 7], [4, 8]]]),
+            (3, 3),
+            jnp.array([2.5, 6.5]),
+        ),
+    ],
+)
+def test_flow_field_adapter(flow_field, new_flow_field_shape, expected):
+    """Test that flow_field_adapter returns the correct central vector."""
+
+    # Call the adapter function
+    new_flow_field = flow_field_adapter(
+        flow_field=flow_field,
+        new_flow_field_shape=new_flow_field_shape,
+    )
+
+    # Check the flow field
+    assert jnp.allclose(new_flow_field[1, 1], expected)
+
+
+# skipif is used to skip the test if the user is not connected to the server
+@pytest.mark.skipif(
+    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
+    reason="user not connect to the server.",
+)
+@pytest.mark.parametrize("selected_flow", ["horizontal"])
+@pytest.mark.parametrize("flow_field_shape", [(1216, 1936)])
+@pytest.mark.parametrize("new_flow_field_shape", [(256, 256)])
+def test_speed_flow_field_adapter(
+    selected_flow, flow_field_shape, new_flow_field_shape
+):
+    """Test that flow_field_adapter is faster than a limit time."""
+
+    # Limit time in seconds (depends on the number of GPUs)
+    limit_time = 3.5e-5
+
+    # Create a flow field
+    flow_field = generate_array_flow_field(
+        get_flow_function(selected_flow, flow_field_shape), flow_field_shape
+    )
+
+    # Create the jit function
+    flow_field_adapter_jit = jax.jit(
+        flow_field_adapter, static_argnames=["new_flow_field_shape"]
+    )
+
+    def run_flow_field_adapter_jit():
+        result = flow_field_adapter_jit(
+            flow_field=flow_field, new_flow_field_shape=new_flow_field_shape
+        )
+        result.block_until_ready()
+
+    # Warm up the function
+    run_flow_field_adapter_jit()
+
+    # Measure the time of the jit function
+    total_time_jit = timeit.repeat(
+        stmt=run_flow_field_adapter_jit, number=NUMBER_OF_EXECUTIONS, repeat=REPETITIONS
+    )
+    average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
+
+    # Check if the time is less than the limit
+    assert (
+        average_time_jit < limit_time
+    ), f"The average time is {average_time_jit}, time limit: {limit_time}"
