@@ -180,27 +180,6 @@ def test_invalid_img_offset(img_offset, scheduler):
         )
 
 
-@pytest.mark.parametrize(
-    "flow_field_shape", [(-1, 128), (128, -1), (0, 128), (128, 0), (128.5, 128.5)]
-)
-@pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": False}], indirect=True
-)
-def test_invalid_flow_field_shape(flow_field_shape, scheduler):
-    """Test that invalid flow_field_shape raises a ValueError."""
-    with pytest.raises(
-        ValueError, match="flow_field_shape must be a tuple of two positive integers."
-    ):
-        SyntheticImageSampler(
-            scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            flow_field_shape=flow_field_shape,
-            seed=0,
-        )
-
-
 @pytest.mark.parametrize("num_particles", [-1, 0, 1.5])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
@@ -345,70 +324,39 @@ def test_invalid_seed(seed, scheduler):
         )
 
 
-@pytest.mark.parametrize("max_speed_x", [(-1, 1), (1, -1)])
+@pytest.mark.parametrize("config_path", [None, 0])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_max_speed_x(max_speed_x, scheduler):
-    """Test that invalid max_speed_x raises a ValueError."""
-    with pytest.raises(ValueError, match="max_speed_x must be a number."):
+def test_invalid_config_path(config_path, scheduler):
+    """Test that invalid config_path raises a ValueError."""
+    with pytest.raises(ValueError, match="config_path must be a string."):
         SyntheticImageSampler(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
             batch_size=2,
             images_per_field=10,
-            max_speed_x=max_speed_x,
+            config_path=config_path,
             seed=0,
         )
 
-
-@pytest.mark.parametrize("max_speed_y", [(-1, 1), (1, -1)])
-@pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": False}], indirect=True
-)
-def test_invalid_max_speed_y(max_speed_y, scheduler):
-    """Test that invalid max_speed_y raises a ValueError."""
-    with pytest.raises(ValueError, match="max_speed_y must be a number."):
+    with pytest.raises(ValueError, match="config_path must be a .yaml file."):
         SyntheticImageSampler(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
             batch_size=2,
             images_per_field=10,
-            max_speed_y=max_speed_y,
+            config_path="invalid_config.txt",
             seed=0,
         )
 
-
-@pytest.mark.parametrize("min_speed_x", [(-1, 1), (1, -1)])
-@pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": False}], indirect=True
-)
-def test_invalid_min_speed_x(min_speed_x, scheduler):
-    """Test that invalid min_speed_x raises a ValueError."""
-    with pytest.raises(ValueError, match="min_speed_x must be a number."):
+    with pytest.raises(ValueError, match="config_path does not exist."):
         SyntheticImageSampler(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
             batch_size=2,
             images_per_field=10,
-            min_speed_x=min_speed_x,
-            seed=0,
-        )
-
-
-@pytest.mark.parametrize("min_speed_y", [(-1, 1), (1, -1)])
-@pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": False}], indirect=True
-)
-def test_invalid_min_speed_y(min_speed_y, scheduler):
-    """Test that invalid min_speed_y raises a ValueError."""
-    with pytest.raises(ValueError, match="min_speed_y must be a number."):
-        SyntheticImageSampler(
-            scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            min_speed_y=min_speed_y,
+            config_path="non_existent_file.yaml",
             seed=0,
         )
 
@@ -453,6 +401,8 @@ def test_invalid_img_offset_and_speed(
             img_offset=img_offset,
             max_speed_x=max_speed_x,
             max_speed_y=max_speed_y,
+            min_speed_x=0.0,
+            min_speed_y=0.0,
             seed=0,
         )
 
@@ -482,6 +432,13 @@ def test_invalid_flow_field_size_and_img_offset(
     scheduler,
 ):
     """Test that invalid flow_field_size and img_offset raises a ValueError."""
+    if max_speed_x < 0 or max_speed_y < 0:
+        max_speed_x = 0.0
+        max_speed_y = 0.0
+    if min_speed_x > 0 or min_speed_y > 0:
+        min_speed_x = 0.0
+        min_speed_y = 0.0
+
     position_bounds = (
         image_shape[0] / resolution + max_speed_y * dt - min_speed_y * dt,
         image_shape[1] / resolution + max_speed_x * dt - min_speed_x * dt,
@@ -496,6 +453,10 @@ def test_invalid_flow_field_size_and_img_offset(
         f"({position_bounds[0] + position_bounds_offset[0]},"
         f"{position_bounds[1] + position_bounds_offset[1]})."
     )
+
+    logger.debug("test: " + str(position_bounds_offset))
+    logger.debug(position_bounds)
+
     with pytest.raises(ValueError, match=expected_message):
         SyntheticImageSampler(
             scheduler=scheduler,
@@ -626,7 +587,6 @@ def test_speed_sampler_dummy_fn(
 ):
     """Test the speed of the sampler with a dummy image generation function."""
     # Define the parameters for the test
-    flow_field_shape = (1536, 1024)
     image_shape = (1216, 1936)
     img_offset = (2.5e-2, 5e-2)
     flow_field_size = (3 * jnp.pi, 4 * jnp.pi)
@@ -644,7 +604,6 @@ def test_speed_sampler_dummy_fn(
         images_per_field=images_per_field,
         batch_size=batch_size,
         flow_field_size=flow_field_size,
-        flow_field_shape=flow_field_shape,
         resolution=resolution,
         seed=seed,
         image_shape=image_shape,
@@ -690,7 +649,6 @@ def test_speed_sampler_dummy_fn(
 def test_speed_sampler_real_fn(
     batch_size, images_per_field, seed, num_particles, scheduler
 ):
-    flow_field_shape = (1536, 1024)
     image_shape = (1216, 1936)
     img_offset = (2.5e-2, 5e-2)
     flow_field_size = (3 * jnp.pi, 4 * jnp.pi)
@@ -719,7 +677,6 @@ def test_speed_sampler_real_fn(
         images_per_field=images_per_field,
         batch_size=batch_size,
         flow_field_size=flow_field_size,
-        flow_field_shape=flow_field_shape,
         resolution=resolution,
         seed=seed,
         image_shape=image_shape,

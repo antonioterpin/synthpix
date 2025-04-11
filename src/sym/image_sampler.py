@@ -1,5 +1,6 @@
 """SyntheticImageSampler class for generating synthetic images from flow fields."""
-import logging
+import os
+import sys
 from typing import Callable, Tuple
 
 import jax
@@ -9,7 +10,7 @@ from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, PartitionSpec
 
 from src.sym.data_generate import input_check_gen_img_from_flow
-from src.utils import logger
+from src.utils import DEBUG_JIT, logger, missing_speeds_panel
 
 
 class SyntheticImageSampler:
@@ -34,10 +35,10 @@ class SyntheticImageSampler:
         img_gen_fn: Callable[..., jnp.ndarray],
         images_per_field: int = 1000,
         batch_size: int = 250,
-        flow_field_shape: Tuple[int, int] = (256, 256),
         flow_field_size: Tuple[float, float] = (1000.0, 1000.0),
         image_shape: Tuple[int, int] = (256, 256),
         resolution: float = 1.0,
+        velocities_per_pixel: float = 1.0,
         img_offset: Tuple[float, float] = (20.0, 20.0),
         num_particles: int = 40000,
         p_hide_img1: float = 0.01,
@@ -47,10 +48,11 @@ class SyntheticImageSampler:
         rho_range: Tuple[float, float] = (-0.99, 0.99),
         dt: float = 1.0,
         seed: int = 0,
-        max_speed_x: float = 0.5,
-        max_speed_y: float = 0.5,
-        min_speed_x: float = -0.5,
-        min_speed_y: float = -0.5,
+        max_speed_x: float = None,
+        max_speed_y: float = None,
+        min_speed_x: float = None,
+        min_speed_y: float = None,
+        config_path: str = "config/base_config.yaml",
     ):
         """Initializes the SyntheticImageSampler.
 
@@ -102,6 +104,8 @@ class SyntheticImageSampler:
             min_speed_y: float
                 Minimum speed in the y-direction for the flow field
                 in length measure unit per seconds.
+            config_path: str
+                Path to the configuration file containing the flow field parameters.
         """
         # Name of the axis for the device mesh
         shard_keys = "keys"
@@ -149,6 +153,9 @@ class SyntheticImageSampler:
             raise ValueError("flow_field_size must be a tuple of two positive numbers.")
         self.flow_field_size = flow_field_size
 
+        # Use the scheduler to get the flow field shape
+        flow_field_shape = scheduler.get_flow_fields_shape()
+        flow_field_shape = (flow_field_shape[0], flow_field_shape[1])
         if len(flow_field_shape) != 2 or not all(
             isinstance(s, int) and s > 0 for s in flow_field_shape
         ):
@@ -221,6 +228,36 @@ class SyntheticImageSampler:
                 f" per flow field."
             )
 
+        if not isinstance(config_path, str):
+            raise ValueError("config_path must be a string.")
+        if not config_path.endswith(".yaml"):
+            raise ValueError("config_path must be a .yaml file.")
+        if not os.path.exists(config_path):
+            raise ValueError("config_path does not exist.")
+
+        # Check if there are min and max speeds in the config file
+        if (
+            not isinstance(max_speed_x, (int, float))
+            or not isinstance(max_speed_y, (int, float))
+            or not isinstance(min_speed_x, (int, float))
+            or not isinstance(min_speed_y, (int, float))
+        ):
+            logger.warning(
+                "max_speed_x, max_speed_y, min_speed_x and min_speed_y are not set. "
+                "Trying to get them from the config file."
+            )
+            try:
+                speeds = missing_speeds_panel(config_path=config_path)
+                max_speed_x, max_speed_y, min_speed_x, min_speed_y = speeds
+                logger.info(
+                    "Speeds retrieved successfully."
+                    f" max_speed_x: {max_speed_x}, max_speed_y: {max_speed_y}, "
+                    f"min_speed_x: {min_speed_x}, min_speed_y: {min_speed_y}"
+                )
+            except Exception as e:
+                logger.error(e)
+                sys.exit(1)
+
         if not isinstance(max_speed_x, (int, float)):
             raise ValueError("max_speed_x must be a number.")
         if not isinstance(max_speed_y, (int, float)):
@@ -244,6 +281,10 @@ class SyntheticImageSampler:
             min_speed_x = 0.0
             min_speed_y = 0.0
 
+        logger.info(
+            f"max_speed_x: {max_speed_x}, max_speed_y: {max_speed_y}, "
+            f"min_speed_x: {min_speed_x}, min_speed_y: {min_speed_y}"
+        )
         # Calculate the position bounds offset in length measure unit
         position_bounds_offset = (
             img_offset[0] - max_speed_y * dt,
@@ -257,6 +298,8 @@ class SyntheticImageSampler:
             image_shape[1] / resolution + max_speed_x * dt - min_speed_x * dt,
         )
 
+        logger.debug(position_bounds_offset)
+        logger.debug(position_bounds)
         # Check if the position bounds offset is negative or if the position bounds
         # exceed the flow field size
         if position_bounds_offset[0] <= 0 or position_bounds_offset[1] <= 0:
@@ -289,13 +332,13 @@ class SyntheticImageSampler:
         self.flow_field_res_y = flow_field_shape[0] / flow_field_size[0]
         self.flow_field_res_x = flow_field_shape[1] / flow_field_size[1]
 
-        if not logger.isEnabledFor(logging.DEBUG):
+        if not DEBUG_JIT:
             self.img_gen_fn_jit = jax.jit(
                 shard_map(
                     lambda key, flow: img_gen_fn(
                         key=key,
                         flow_field=flow,
-                        position_bounds=self.flow_field_size,
+                        position_bounds=self.position_bounds,
                         image_shape=self.image_shape,
                         img_offset=self.img_offset,
                         num_images=self.batch_size // num_devices,
@@ -318,7 +361,7 @@ class SyntheticImageSampler:
             self.img_gen_fn_jit = lambda key, flow: img_gen_fn(
                 key=key,
                 flow_field=flow,
-                position_bounds=self.flow_field_size,
+                position_bounds=self.position_bounds,
                 image_shape=self.image_shape,
                 img_offset=self.img_offset,
                 num_images=self.batch_size // num_devices,
@@ -355,6 +398,7 @@ class SyntheticImageSampler:
         logger.debug(f"Max speed y: {max_speed_y}")
         logger.debug(f"Min speed x: {min_speed_x}")
         logger.debug(f"Min speed y: {min_speed_y}")
+        logger.debug(f"Config path: {config_path}")
 
         self._rng = jax.random.PRNGKey(seed)
         self._current_flow = None
@@ -419,7 +463,7 @@ class SyntheticImageSampler:
         logger.debug(f"Current flow field type: {type(self._current_flow)}")
         logger.debug(f"Current random key: {keys}")
 
-        if logger.isEnabledFor(logging.DEBUG):
+        if DEBUG_JIT:
             input_check_gen_img_from_flow(
                 key=keys[0],
                 flow_field=self._current_flow,

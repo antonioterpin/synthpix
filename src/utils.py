@@ -1,5 +1,6 @@
 """Utility functions for the vision module."""
 
+import collections
 import logging
 import os
 import signal
@@ -8,11 +9,12 @@ from typing import Union
 import h5py
 import jax
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 from tqdm import tqdm
 
-DEBUG = False
+DEBUG = True
 DEBUG_JIT = False
 
 # Create a logger instance
@@ -247,6 +249,76 @@ def generate_array_flow_field(flow_f, grid_shape: tuple[int, int]) -> jnp.ndarra
     return arr
 
 
+def missing_speeds_panel(config_path) -> tuple[float, float, float, float]:
+    """Check for missing speeds in the configuration file.
+
+    Args:
+        config_path: str
+            The path to the configuration file.
+
+    Returns:
+        speeds: tuple[float, float, float, float]
+            The maximum and minimum speeds in the x and y directions.
+    """
+    # Load the configuration file
+    config = load_configuration(config_path)
+
+    missing_speeds = []
+    for key in ["max_speed_x", "max_speed_y", "min_speed_x", "min_speed_y"]:
+        if key not in config or not isinstance(config[key], (int, float)):
+            missing_speeds.append(key)
+
+    if missing_speeds:
+        print(
+            "[WARNING]: The following speed values are missing or invalid in the "
+            f"configuration file: {', '.join(missing_speeds)}"
+        )
+        choice = input(
+            "Would you like to "
+            "(1) run a script to calculate them (it might take some time) or"
+            " (2) stop and add them manually? Enter 1 or 2: "
+        )
+
+        if choice == "1":
+            calculated_speeds = calculate_min_and_max_speeds(config["scheduler_files"])
+            config.update(calculated_speeds)
+            update_config_file(config_path, calculated_speeds)
+            print("Calculated values:")
+            for key, value in calculated_speeds.items():
+                print(f"{key}: {value}")
+            advance = input(
+                "Do you want to continue with the updated configuration? (y/n): "
+            )
+            if advance.lower() == "y":
+                speeds = (
+                    calculated_speeds["max_speed_x"],
+                    calculated_speeds["max_speed_y"],
+                    calculated_speeds["min_speed_x"],
+                    calculated_speeds["min_speed_y"],
+                )
+
+                return speeds
+            else:
+                raise RuntimeError("Exiting the script.")
+        elif choice == "2":
+            print(
+                "Please add the missing values to the configuration file"
+                " and re-run the script."
+            )
+            raise RuntimeError("Exiting the script.")
+        else:
+            print("[WARNING]: Invalid choice. Exiting.")
+            raise RuntimeError("Exiting the script.")
+    else:
+        logger.info("All required speed values are present in the configuration file.")
+        return (
+            config["max_speed_x"],
+            config["max_speed_y"],
+            config["min_speed_x"],
+            config["min_speed_y"],
+        )
+
+
 def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
     """Calculate the missing speeds for a list of files.
 
@@ -274,11 +346,10 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
         if not file_path.endswith(".h5"):
             raise ValueError(f"File {file_path} is not a .h5 file.")
 
-    # Initialize lists to store the min and max speeds for each file
-    max_speeds_x = []
-    max_speeds_y = []
-    min_speeds_x = []
-    min_speeds_y = []
+    running_max_speed_x = float("-inf")
+    running_max_speed_y = float("-inf")
+    running_min_speed_x = float("inf")
+    running_min_speed_y = float("inf")
     # Wrap the file list with tqdm for a loading bar
     for file in tqdm(file_list, desc="Processing files"):
         with h5py.File(file, "r") as f:
@@ -286,43 +357,102 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
             dataset_name = list(f.keys())[0]
             data = f[dataset_name][:]
 
+            # TODO: set to 1, left to 2 for test
             # Find the min and max speeds along each axis
-            max_speeds_x.append(np.max(data[:, :, :, 0]))
-            max_speeds_y.append(
-                np.max(data[:, :, :, 2])
-            )  # TODO: set to 1, left to 2 for test
-            min_speeds_x.append(np.min(data[:, :, :, 0]))
-            min_speeds_y.append(np.min(data[:, :, :, 2]))
-
-    min_speed_x = np.min(min_speeds_x)
-    max_speed_x = np.max(max_speeds_x)
-    min_speed_y = np.min(min_speeds_y)
-    max_speed_y = np.max(max_speeds_y)
+            running_max_speed_x = max(running_max_speed_x, np.max(data[:, :, :, 0]))
+            running_max_speed_y = max(running_max_speed_y, np.max(data[:, :, :, 2]))
+            running_min_speed_x = min(running_min_speed_x, np.min(data[:, :, :, 0]))
+            running_min_speed_y = min(running_min_speed_y, np.min(data[:, :, :, 2]))
 
     return {
-        "min_speed_x": min_speed_x,
-        "max_speed_x": max_speed_x,
-        "min_speed_y": min_speed_y,
-        "max_speed_y": max_speed_y,
+        "min_speed_x": running_min_speed_x,
+        "max_speed_x": running_max_speed_x,
+        "min_speed_y": running_min_speed_y,
+        "max_speed_y": running_max_speed_y,
     }
 
 
 def update_config_file(config_path: str, updated_values: dict):
-    """Update the YAML configuration file with new values.
-
-    Args:
-        config_path: str
-            Path to the configuration file.
-        updated_values: dict
-            Dictionary containing the updated values.
-    """
+    """Update the YAML configuration file with new values."""
     with open(config_path, "r") as file:
         config_data = yaml.safe_load(file)
 
-    # Convert all values in updated_values to standard Python types
-    updated_values = {key: float(value) for key, value in updated_values.items()}
+    # Convert to OrderedDict to preserve order
+    config_data = collections.OrderedDict(config_data)
 
-    config_data.update(updated_values)
+    # Convert all values in config_data to standard Python types
+    def convert_to_standard_type(value):
+        if isinstance(value, (np.floating)):
+            return float(value)
+        elif isinstance(value, (np.integer, jnp.integer)):
+            return int(value)
+        elif isinstance(value, (np.ndarray, jnp.ndarray)):
+            return value.tolist()
+        return value
+
+    # Convert all values in config_data to standard Python types
+    config_data = collections.OrderedDict(
+        {key: convert_to_standard_type(value) for key, value in config_data.items()}
+    )
+
+    # Add new keys at the end
+    for key, value in updated_values.items():
+        config_data[key] = convert_to_standard_type(value)
+
+    # Handle scheduler_files separately
+    scheduler_files = config_data.pop("scheduler_files", [])
 
     with open(config_path, "w") as file:
-        yaml.safe_dump(config_data, file)
+        for key, value in config_data.items():
+            file.write(f"{key}: {value}\n")
+        if scheduler_files:
+            file.write("scheduler_files:\n")
+            for item in scheduler_files:
+                file.write(f"  - {item}\n")
+
+
+def visualize_and_save(batch, output_dir="output_images", num_images_to_display=5):
+    """Visualizes and saves a specified number of images from a batch.
+
+    Args:
+        batch: Tuple containing (images1, images2, flow_field).
+        output_dir: Directory to save the images.
+        num_images_to_display: Number of images to display and save from each batch.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    images1, images2, flow_field = batch
+
+    for i in range(min(num_images_to_display, len(images1))):
+        # Extract flow field
+        flow_x = flow_field[..., 0]
+        flow_y = flow_field[..., 1]
+        # Create a grid for the quiver plot
+        y, x = np.mgrid[0 : flow_x.shape[0], 0 : flow_x.shape[1]]
+
+        # Save individual images and flow field
+        plt.imsave(
+            os.path.join(output_dir, f"batch_{i}_image1.png"), images1[i], cmap="gray"
+        )
+        plt.imsave(
+            os.path.join(output_dir, f"batch_{i}_image2.png"), images2[i], cmap="gray"
+        )
+
+        # Save the quiver plot as a separate image
+        quiver_fig, quiver_ax = plt.subplots(figsize=(7, 7))
+        step = 1
+        quiver_ax.quiver(
+            x[::step, ::step],
+            y[::step, ::step],
+            flow_x[::step, ::step],
+            flow_y[::step, ::step],
+            pivot="mid",
+            color="blue",
+        )
+        quiver_ax.set_aspect("equal")
+        quiver_fig.savefig(os.path.join(output_dir, f"batch_{i}_quiver.png"))
+        plt.close(quiver_fig)
+
+    logger.info(
+        f"Saved {min(num_images_to_display, len(images1))} images to {output_dir}"
+    )

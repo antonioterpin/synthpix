@@ -1,33 +1,22 @@
 batch_size: 256
-diameter_range:
-- 0.1
-- 1.0
-dt: 2.6e-2
-flow_field_size:
-- 1536
-- 2048
-image_shape:
-- 256
-- 128
+diameter_range: [0.1, 1.0] # tunable, adimensional
+dt: 0.026 #in seconds
+flow_field_size: [1536, 2048] # in length measure units (e.g. mm, m, ft)
+image_shape: [256, 256] # in pixels
 images_per_field: 1000
-img_offset:
-- 2.5e-2
-- 5.0e-2
-intensity_range:
-- 50
-- 200
-max_speed_x: 1.3489508628845215
-max_speed_y: 0.501191258430481
-min_speed_x: -0.10241036862134933
-min_speed_y: -0.45968499779701233
+img_offset: [0.025, 0.05] # in length measure units
+intensity_range: [50, 200] # in range(0, 255)
 num_particles: 40000
-p_hide_img1: 0.01
-p_hide_img2: 0.01
-resolution: 1
-rho_range:
-- -0.99
-- 0.99
-scheduler_files:
-- /shared/fluids/channel_full_ts_0004.h5
-- /shared/fluids/channel_full_ts_0008.h5
+p_hide_img1: 0.01 # probability of hiding particles in the first image
+p_hide_img2: 0.01 # probability of hiding particles in the second image
+resolution: 1 # in pixels per length measure unit
+rho_range: [-0.99, 0.99] # in range(-1, 1)
 seed: 0
+velocities_per_pixel: 1.0 # in output flow field grid steps per pixel
+min_speed_x: -0.10241036862134933 # in length measure units per second
+max_speed_x: 1.3489508628845215 # in length measure units per second
+min_speed_y: -0.45968499779701233 # in length measure units per second
+max_speed_y: 0.501191258430481 # in length measure units per second
+scheduler_files:
+  - /shared/fluids/channel_full_ts_0004.h5
+  - /shared/fluids/channel_full_ts_0008.h5

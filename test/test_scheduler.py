@@ -1,6 +1,7 @@
 import os
 import timeit
 
+import h5py
 import numpy as np
 import pytest
 
@@ -63,6 +64,22 @@ def test_non_hdf5_file(temp_txt_file):
         HDF5FlowFieldScheduler(file_list=temp_txt_file)
 
 
+def test_hdf5_shape(temp_file):
+    """Test that the HDF5 file has the correct shape."""
+    scheduler = HDF5FlowFieldScheduler(file_list=[temp_file])
+    with h5py.File(temp_file, "r") as file:
+        temp_file_key = list(file.keys())[0]
+        expected_shape = (
+            file[temp_file_key].shape[0],
+            file[temp_file_key].shape[2] // 2,
+            2,
+        )
+    actual_shape = scheduler.get_flow_fields_shape()
+    assert (
+        actual_shape == expected_shape
+    ), f"Expected {expected_shape}, got {actual_shape}"
+
+
 # ============================
 # Abstract Behavior Tests
 # ============================
@@ -77,6 +94,9 @@ class DummyScheduler(BaseFlowFieldScheduler):
 
     def get_next_slice(self):
         return self._cached_data[:, self._slice_idx, :, :][:, :, :2]
+
+    def get_flow_fields_shape(self):
+        return self._cached_data.shape[0], self._cached_data.shape[2] // 2, 2
 
 
 def test_abstract_scheduler_iteration(generate_hdf5_file):

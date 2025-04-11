@@ -89,7 +89,7 @@ class BaseFlowFieldScheduler(ABC):
             random.shuffle(self.file_list)
         logger.info("Scheduler state has been reset.")
 
-    def __next__(self):
+    def __next__(self) -> np.ndarray:
         """Returns the next flow field slice from the dataset.
 
         Returns:
@@ -138,7 +138,7 @@ class BaseFlowFieldScheduler(ABC):
 
         raise StopIteration
 
-    def get_batch(self, batch_size):
+    def get_batch(self, batch_size) -> list:
         """Retrieves a batch of flow fields.
 
         Args:
@@ -195,6 +195,15 @@ class BaseFlowFieldScheduler(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_flow_fields_shape(self):
+        """Returns the shape of the flow field.
+
+        Returns:
+            tuple: Shape of the flow field.
+        """
+        pass
+
 
 class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
     """Scheduler for loading flow field data from HDF5 files.
@@ -209,7 +218,7 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         if not all(file_path.endswith(".h5") for file_path in file_list):
             raise ValueError("All files must be HDF5 files with .h5 extension.")
 
-    def load_file(self, file_path):
+    def load_file(self, file_path) -> np.ndarray:
         """Loads the dataset from the HDF5 file.
 
         Args:
@@ -229,7 +238,7 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
             # the dataset structure in the first place.
         return data
 
-    def get_next_slice(self):
+    def get_next_slice(self) -> np.ndarray:
         """Retrieves a flow field slice (x and z components) for the current y index.
 
         Returns:
@@ -239,3 +248,18 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         flow_field_x = data_slice[:, :, 0]
         flow_field_z = data_slice[:, :, 2]
         return np.stack([flow_field_x, flow_field_z], axis=2)
+
+    def get_flow_fields_shape(self) -> tuple:
+        """Returns the shape of all the flow fields.
+
+        It is assumed that all the flow fields have the same shape.
+
+        Returns:
+            tuple: Shape of all the flow fields.
+        """
+        file_path = self.file_list[0]
+        with h5py.File(file_path, "r") as file:
+            dataset_key = list(file)[0]
+            dset = file[dataset_key]
+            shape = dset.shape[0], dset.shape[2] // 2, 2
+        return shape
