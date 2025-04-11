@@ -13,10 +13,10 @@ resolution: 50
 rho_range: [-0.2, 0.2]
 seed: 0
 velocities_per_pixel: 1.0
-min_speed_x:
-max_speed_x:
-min_speed_y:
-max_speed_y:
+min_speed_x: -0.10241036862134933
+max_speed_x: 1.3489508628845215
+min_speed_y: -0.45968499779701233
+max_speed_y: 0.501191258430481
 scheduler_files:
   - /shared/fluids/channel_full_ts_0004.h5
   - /shared/fluids/channel_full_ts_0008.h5

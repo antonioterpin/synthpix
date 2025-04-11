@@ -14,7 +14,7 @@ import numpy as np
 import yaml
 from tqdm import tqdm
 
-DEBUG = False
+DEBUG = True
 DEBUG_JIT = False
 
 

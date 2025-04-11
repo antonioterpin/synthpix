@@ -543,7 +543,7 @@ def test_invalid_flow_field_size_and_img_offset(
 
 @pytest.mark.parametrize(
     "batch_size, images_per_field, image_shape",
-    [(4, 16, (8, 8)), (2, 8, (8, 8)), (1, 5, (8, 8))],
+    [(4, 16, (256, 256)), (2, 8, (256, 256)), (1, 5, (256, 256))],
 )
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
