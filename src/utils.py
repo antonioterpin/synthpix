@@ -4,7 +4,7 @@ import collections
 import logging
 import os
 import signal
-from typing import Union
+from typing import Tuple, Union
 
 import h5py
 import jax
@@ -16,6 +16,7 @@ from tqdm import tqdm
 
 DEBUG = True
 DEBUG_JIT = False
+
 
 # Create a logger instance
 logger = logging.getLogger(__name__)
@@ -224,7 +225,9 @@ class GracefulShutdown:
         pass
 
 
-def generate_array_flow_field(flow_f, grid_shape: tuple[int, int]) -> jnp.ndarray:
+def generate_array_flow_field(
+    flow_f, grid_shape: tuple[int, int] = (128, 128)
+) -> jnp.ndarray:
     """Generate a array flow field from a flow field function.
 
     Args:
@@ -456,3 +459,84 @@ def visualize_and_save(batch, output_dir="output_images", num_images_to_display=
     logger.info(
         f"Saved {min(num_images_to_display, len(images1))} images to {output_dir}"
     )
+
+
+def flow_field_adapter(
+    flow_field: jnp.ndarray, new_flow_field_shape: Tuple[int, int] = (256, 256)
+):
+    """Adapter to convert flow field to one with a different resolution.
+
+    Args:
+        flow_field: jnp.ndarray
+            The original flow field to be adapted.
+        new_flow_field_shape: Tuple[int, int]
+            The desired shape of the new flow field.
+
+    Returns:
+        jnp.ndarray: The adapted flow field with the new shape.
+    """
+    original_shape = flow_field.shape[:2]
+
+    # Create a 2D grid of coordinates for the new shape
+    x = jnp.linspace(0, original_shape[1] - 1, new_flow_field_shape[1])
+    y = jnp.linspace(0, original_shape[0] - 1, new_flow_field_shape[0])
+    x_new, y_new = jnp.meshgrid(x, y)
+
+    # Vectorize over the columns
+    interp_over_cols = jax.vmap(
+        lambda x_coord, y_coord: bilinear_interpolate(
+            flow_field[..., 0],
+            x_coord,
+            y_coord,
+        ),
+        in_axes=(0, 0),
+    )
+
+    # Now vectorize over the rows
+    new_flow_field_x = jax.vmap(
+        lambda xs, ys: interp_over_cols(xs, ys), in_axes=(0, 0)
+    )(x_new, y_new)
+
+    # Repeat for the second channel
+    interp_over_cols_y = jax.vmap(
+        lambda x_coord, y_coord: bilinear_interpolate(
+            flow_field[..., 1],
+            x_coord,
+            y_coord,
+        ),
+        in_axes=(0, 0),
+    )
+    new_flow_field_y = jax.vmap(
+        lambda xs, ys: interp_over_cols_y(xs, ys), in_axes=(0, 0)
+    )(x_new, y_new)
+
+    # Stack the two interpolated channels along the last dimension
+    new_flow_field = jnp.stack([new_flow_field_x, new_flow_field_y], axis=-1)
+    return new_flow_field
+
+
+def input_check_flow_field_adapter(
+    flow_field: jnp.ndarray, new_flow_field_shape: Tuple[int, int] = (256, 256)
+):
+    """Checks the input arguments of the flow field adapter function.
+
+    Args:
+        flow_field: jnp.ndarray
+            The original flow field to be adapted.
+        new_flow_field_shape: Tuple[int, int]
+            The desired shape of the new flow field.
+    """
+    if (
+        not isinstance(flow_field, jnp.ndarray)
+        or len(flow_field.shape) != 3
+        or flow_field.shape[2] != 2
+    ):
+        raise ValueError("Flow_field must be a 3D jnp.ndarray with shape (H, W, 2).")
+    if (
+        not isinstance(new_flow_field_shape, tuple)
+        or len(new_flow_field_shape) != 2
+        or not all(isinstance(s, int) and s > 0 for s in new_flow_field_shape)
+    ):
+        raise ValueError(
+            "new_flow_field_shape must be a tuple of two positive integers."
+        )

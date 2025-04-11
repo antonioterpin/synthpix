@@ -10,8 +10,13 @@ from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, PartitionSpec
 
 from src.sym.data_generate import input_check_gen_img_from_flow
-from src.utils import DEBUG_JIT, logger, missing_speeds_panel
-
+from src.utils import (
+    DEBUG_JIT,
+    flow_field_adapter,
+    input_check_flow_field_adapter,
+    logger,
+    missing_speeds_panel
+)
 
 class SyntheticImageSampler:
     """Iterator class that generates synthetic images from flow fields.
@@ -73,6 +78,8 @@ class SyntheticImageSampler:
                 Shape of the synthetic images.
             resolution: float
                 Resolution of the images in pixels per unit length.
+            velocities_per_pixel: float
+                Number of velocities per pixel in the output flow field.
             img_offset: Tuple[float, float]
                 Distance in the two axes from the top left corner of the flow field
                 and the top left corner of the image a length measure unit.
@@ -172,6 +179,17 @@ class SyntheticImageSampler:
         if not isinstance(resolution, (int, float)) or resolution <= 0:
             raise ValueError("resolution must be a positive number.")
         self.resolution = resolution
+
+        if (
+            not isinstance(velocities_per_pixel, (int, float))
+            or velocities_per_pixel <= 0
+        ):
+            raise ValueError("velocities_per_pixel must be a positive number.")
+        self.velocities_per_pixel = velocities_per_pixel
+        self.output_flow_field_shape = (
+            int(image_shape[0] * velocities_per_pixel),
+            int(image_shape[1] * velocities_per_pixel),
+        )
 
         if len(img_offset) != 2 or not all(
             isinstance(s, (int, float)) and s >= 0 for s in img_offset
@@ -298,8 +316,6 @@ class SyntheticImageSampler:
             image_shape[1] / resolution + max_speed_x * dt - min_speed_x * dt,
         )
 
-        logger.debug(position_bounds_offset)
-        logger.debug(position_bounds)
         # Check if the position bounds offset is negative or if the position bounds
         # exceed the flow field size
         if position_bounds_offset[0] <= 0 or position_bounds_offset[1] <= 0:
@@ -385,6 +401,7 @@ class SyntheticImageSampler:
         logger.debug(f"Flow field size: {self.flow_field_size}")
         logger.debug(f"Image shape: {self.image_shape}")
         logger.debug(f"Resolution: {self.resolution}")
+        logger.debug(f"Velocities per pixel: {velocities_per_pixel}")
         logger.debug(f"Image offset: {self.img_offset}")
         logger.debug(f"Number of particles: {self.num_particles}")
         logger.debug(f"p_hide_img1: {self.p_hide_img1}")
@@ -444,7 +461,7 @@ class SyntheticImageSampler:
             ]
 
             # Cropping the flow field to the image shape
-            self.output_flow_field = _current_flow[
+            flow_field_image_size = _current_flow[
                 int(self.img_offset[0] * self.flow_field_res_y) : int(
                     self.img_offset[0] * self.flow_field_res_y
                     + self.image_shape[0] / self.resolution * self.flow_field_res_y
@@ -454,6 +471,21 @@ class SyntheticImageSampler:
                     + self.image_shape[1] / self.resolution * self.flow_field_res_x
                 ),
             ]
+
+            # Creating the output flow field
+            if not DEBUG_JIT:
+                flow_field_adapter_jit = jax.jit(
+                    flow_field_adapter, static_argnames=["new_flow_field_shape"]
+                )
+            else:
+                input_check_flow_field_adapter(
+                    flow_field_image_size, self.output_flow_field_shape
+                )
+                flow_field_adapter_jit = flow_field_adapter
+
+            self.output_flow_field = flow_field_adapter_jit(
+                flow_field_image_size, self.output_flow_field_shape
+            )
 
         # Generate a new random key for image generation
         self._rng, subkey = jax.random.split(self._rng)
