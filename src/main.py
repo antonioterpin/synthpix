@@ -31,39 +31,34 @@ def visualize_and_save(batch, output_dir="output_images", num_images_to_display=
     images1, images2, flow_field = batch
 
     for i in range(min(num_images_to_display, len(images1))):
-        _, axes = plt.subplots(1, 3, figsize=(15, 5))
-
-        axes[0].imshow(images1[i], cmap="gray")
-        axes[0].set_title("Image 1")
-
-        axes[1].imshow(images2[i], cmap="gray")
-        axes[1].set_title("Image 2")
-
-        # Quiver plot for flow visualization with downsampling
+        # Extract flow field
         flow_x = flow_field[..., 0]
         flow_y = flow_field[..., 1]
-
-        # Downsample the flow field for better visualization
-        # Adjust this factor as needed
-        downsample_factor = 10
-        flow_x_downsampled = flow_x[::downsample_factor, ::downsample_factor]
-        flow_y_downsampled = flow_y[::downsample_factor, ::downsample_factor]
-
+        # Create a grid for the quiver plot
         y, x = np.mgrid[0 : flow_x.shape[0], 0 : flow_x.shape[1]]
-        y_downsampled = y[::downsample_factor, ::downsample_factor]
-        x_downsampled = x[::downsample_factor, ::downsample_factor]
-        axes[2].quiver(
-            x_downsampled,
-            y_downsampled,
-            flow_x_downsampled,
-            flow_y_downsampled,
-            scale=1000,  # TODO: adjust scale for better visualization
-            scale_units="xy",
+
+        # Save individual images and flow field
+        plt.imsave(
+            os.path.join(output_dir, f"batch_{i}_image1.png"), images1[i], cmap="gray"
+        )
+        plt.imsave(
+            os.path.join(output_dir, f"batch_{i}_image2.png"), images2[i], cmap="gray"
+        )
+
+        # Save the quiver plot as a separate image
+        quiver_fig, quiver_ax = plt.subplots(figsize=(7, 7))
+        step = 1
+        quiver_ax.quiver(
+            x[::step, ::step],
+            y[::step, ::step],
+            flow_x[::step, ::step],
+            flow_y[::step, ::step],
+            pivot="mid",
             color="blue",
         )
-        axes[2].set_title("Flow Field (Quiver)")
-
-        plt.savefig(os.path.join(output_dir, f"batch_image_{i}.png"))
+        quiver_ax.set_aspect("equal")
+        quiver_fig.savefig(os.path.join(output_dir, f"batch_{i}_quiver.png"))
+        plt.close(quiver_fig)
 
     logger.info(
         f"Saved {min(num_images_to_display, len(images1))} images to {output_dir}"
@@ -173,7 +168,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="config/JHTDB.yaml",
+        default="config/base_config.yaml",
         help="Configuration file.",
     )
 

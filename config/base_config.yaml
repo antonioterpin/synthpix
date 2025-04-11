@@ -8,7 +8,7 @@ flow_field_size:
 - 2048
 image_shape:
 - 256
-- 256
+- 128
 images_per_field: 1000
 img_offset:
 - 2.5e-2
