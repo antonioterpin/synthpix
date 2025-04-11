@@ -398,6 +398,8 @@ def test_invalid_min_max_speed_x(min_speed_x, max_speed_x, scheduler):
             images_per_field=10,
             min_speed_x=min_speed_x,
             max_speed_x=max_speed_x,
+            max_speed_y=0.0,
+            min_speed_y=0.0,
             seed=0,
         )
 
@@ -418,6 +420,8 @@ def test_invalid_min_max_speed_y(min_speed_y, max_speed_y, scheduler):
             images_per_field=10,
             min_speed_y=min_speed_y,
             max_speed_y=max_speed_y,
+            min_speed_x=0.0,
+            max_speed_x=0.0,
             seed=0,
         )
 

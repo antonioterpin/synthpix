@@ -15,8 +15,9 @@ from src.utils import (
     flow_field_adapter,
     input_check_flow_field_adapter,
     logger,
-    missing_speeds_panel
+    missing_speeds_panel,
 )
+
 
 class SyntheticImageSampler:
     """Iterator class that generates synthetic images from flow fields.
