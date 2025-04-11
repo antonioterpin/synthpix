@@ -277,6 +277,8 @@ class SyntheticImageSampler:
                 logger.error(e)
                 sys.exit(1)
 
+        logger.info(type(max_speed_x))
+
         if not isinstance(max_speed_x, (int, float)):
             raise ValueError("max_speed_x must be a number.")
         if not isinstance(max_speed_y, (int, float)):

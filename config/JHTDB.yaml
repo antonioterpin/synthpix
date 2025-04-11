@@ -1,22 +1,22 @@
 batch_size: 256
-diameter_range: [0.5, 1.5]
+diameter_range: [2.0, 3.5]
 dt: 0.026
 flow_field_size: [9.42, 12.56]
-image_shape: [256, 256]
+image_shape: [1216, 1936]
 images_per_field: 1000
 img_offset: [0.025, 0.05]
 intensity_range: [10, 255]
-num_particles: 1000
+num_particles: 40000
 p_hide_img1: 0.01
 p_hide_img2: 0.01
-resolution: 50
+resolution: 250
 rho_range: [-0.2, 0.2]
 seed: 0
 velocities_per_pixel: 1.0
-min_speed_x:
-max_speed_x:
-min_speed_y:
-max_speed_y:
+min_speed_x: -0.10241036862134933
+max_speed_x: 1.3489508628845215
+min_speed_y: -0.45968499779701233
+max_speed_y: 0.501191258430481
 scheduler_files:
   - /shared/fluids/channel_full_ts_0004.h5
   - /shared/fluids/channel_full_ts_0008.h5

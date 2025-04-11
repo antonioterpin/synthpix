@@ -59,10 +59,11 @@ def main(config_path, visualize, output_dir, num_images_to_display):
         logger.info(f"Image batch 2 shape: {batch[1].shape}")
         logger.info(f"Flow field shape: {batch[2].shape}")
 
-        if visualize and i < num_images_to_display:
+        if visualize and i < num_images_to_display * 5:
+            batch = batch[0][0], batch[1][0], batch[2]
             logger.info(f"Visualizing batch {i + 1}...")
             visualize_and_save(batch, output_dir, num_images_to_display)
-            if i == num_images_to_display - 1:
+            if i == num_images_to_display * 5 - 1:
                 logger.info(
                     f"Visualized {num_images_to_display} batches. Stopping visualization."
                 )
@@ -100,7 +101,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_images_to_display",
         type=int,
-        default=5,
+        default=1,
         help="Number of images to display and save from each batch.",
     )
 

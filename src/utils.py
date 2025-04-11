@@ -14,7 +14,7 @@ import numpy as np
 import yaml
 from tqdm import tqdm
 
-DEBUG = True
+DEBUG = False
 DEBUG_JIT = False
 
 
@@ -294,10 +294,10 @@ def missing_speeds_panel(config_path) -> tuple[float, float, float, float]:
             )
             if advance.lower() == "y":
                 speeds = (
-                    calculated_speeds["max_speed_x"],
-                    calculated_speeds["max_speed_y"],
-                    calculated_speeds["min_speed_x"],
-                    calculated_speeds["min_speed_y"],
+                    float(calculated_speeds["max_speed_x"]),
+                    float(calculated_speeds["max_speed_y"]),
+                    float(calculated_speeds["min_speed_x"]),
+                    float(calculated_speeds["min_speed_y"]),
                 )
 
                 return speeds
@@ -414,19 +414,19 @@ def update_config_file(config_path: str, updated_values: dict):
                 file.write(f"  - {item}\n")
 
 
-def visualize_and_save(batch, output_dir="output_images", num_images_to_display=5):
+def visualize_and_save(batch, output_dir="output_images", num_images_to_display=1):
     """Visualizes and saves a specified number of images from a batch.
 
     Args:
-        batch: Tuple containing (images1, images2, flow_field).
+        batch: Tuple containing (image1, image2, flow_field).
         output_dir: Directory to save the images.
         num_images_to_display: Number of images to display and save from each batch.
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    images1, images2, flow_field = batch
+    image1, image2, flow_field = batch
 
-    for i in range(min(num_images_to_display, len(images1))):
+    for i in range(min(num_images_to_display, len(image1))):
         # Extract flow field
         flow_x = flow_field[..., 0]
         flow_y = flow_field[..., 1]
@@ -435,10 +435,13 @@ def visualize_and_save(batch, output_dir="output_images", num_images_to_display=
 
         # Save individual images and flow field
         plt.imsave(
-            os.path.join(output_dir, f"batch_{i}_image1.png"), images1[i], cmap="gray"
+            os.path.join(output_dir, f"batch_{i}_image1.png"), image1, cmap="gray"
         )
         plt.imsave(
-            os.path.join(output_dir, f"batch_{i}_image2.png"), images2[i], cmap="gray"
+            os.path.join(output_dir, f"batch_{i}_image2.png"), image2, cmap="gray"
+        )
+        plt.imsave(
+            os.path.join(output_dir, f"batch_{i}_quiver.png"), image2, cmap="gray"
         )
 
         # Save the quiver plot as a separate image
@@ -457,7 +460,7 @@ def visualize_and_save(batch, output_dir="output_images", num_images_to_display=
         plt.close(quiver_fig)
 
     logger.info(
-        f"Saved {min(num_images_to_display, len(images1))} images to {output_dir}"
+        f"Saved {min(num_images_to_display, len(image1))} images to {output_dir}"
     )
 
 
@@ -483,7 +486,7 @@ def flow_field_adapter(
     x_new, y_new = jnp.meshgrid(x, y)
 
     # Vectorize over the columns
-    interp_over_cols = jax.vmap(
+    interp_over_cols_x = jax.vmap(
         lambda x_coord, y_coord: bilinear_interpolate(
             flow_field[..., 0],
             x_coord,
@@ -494,7 +497,7 @@ def flow_field_adapter(
 
     # Now vectorize over the rows
     new_flow_field_x = jax.vmap(
-        lambda xs, ys: interp_over_cols(xs, ys), in_axes=(0, 0)
+        lambda xs, ys: interp_over_cols_x(xs, ys), in_axes=(0, 0)
     )(x_new, y_new)
 
     # Repeat for the second channel
