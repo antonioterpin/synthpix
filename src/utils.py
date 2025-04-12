@@ -1,21 +1,32 @@
 """Utility functions for the vision module."""
 
+import collections
 import logging
+import os
 import signal
-from typing import Union
+from typing import Tuple, Union
 
+import h5py
 import jax
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
+import numpy as np
 import yaml
+from tqdm import tqdm
 
+DEBUG = False
+DEBUG_JIT = False
+
+
+# Create a logger instance
+logger = logging.getLogger(__name__)
+
+# Configure the logging format
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.DEBUG if DEBUG else logging.INFO,
     format="[%(levelname)s][%(asctime)s][%(filename)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
-    # filename='app.log',
 )
-
-logger = logging
 
 
 def is_int(val: Union[int, float]) -> bool:
@@ -63,8 +74,10 @@ def particles_per_pixel(image: jnp.ndarray, threshold: float = 0.1) -> float:
     """Estimates the number of particles per pixel in the image.
 
     Args:
-        image (jnp.ndarray): The input image of shape (H, W, 1).
-        threshold (float): The threshold to apply to the image.
+        image: jnp.ndarray
+            The input image of shape (H, W, 1).
+        threshold: float
+            The threshold to apply to the image.
 
     Returns:
         float: The estimated density.
@@ -82,9 +95,12 @@ def bilinear_interpolate(
     """Perform bilinear interpolation of `image` at floating-point pixel coordinates.
 
     Args:
-        image (jnp.ndarray): 2D image to sample from, of shape (H, W).
-        x (jnp.ndarray): 2D array of floating-point x-coordinates
-        y (jnp.ndarray): 2D array of floating-point y-coordinates
+        image: jnp.ndarray
+            2D image to sample from, of shape (H, W).
+        x: jnp.ndarray
+            2D array of floating-point x-coordinates
+        y: jnp.ndarray
+            2D array of floating-point y-coordinates
 
     Returns:
         jnp.ndarray: Interpolated intensities at each (y, x) location, of shape (H, W).
@@ -99,6 +115,7 @@ def bilinear_interpolate(
     y1 = jnp.ceil(y).astype(int)
 
     # Clamp to image boundaries
+    # Note: in this way, the positions need to be within the image boundaries
     x0 = jnp.clip(x0, 0, W - 1)
     x1 = jnp.clip(x1, 0, W - 1)
     y0 = jnp.clip(y0, 0, H - 1)
@@ -129,10 +146,14 @@ def trilinear_interpolate(
     """Perform trilinear interpolation of `volume` at floating-point pixel coordinates.
 
     Args:
-        volume (jnp.ndarray): 3D volume to sample from, of shape (D, H, W).
-        x (jnp.ndarray): Array of floating-point x-coordinates.
-        y (jnp.ndarray): Array of floating-point y-coordinates.
-        z (jnp.ndarray): Array of floating-point z-coordinates.
+        volume: jnp.ndarray
+            3D volume to sample from, of shape (D, H, W).
+        x: jnp.ndarray
+            Array of floating-point x-coordinates.
+        y: jnp.ndarray
+            Array of floating-point y-coordinates.
+        z: jnp.ndarray
+            Array of floating-point z-coordinates.
 
     Returns:
         jnp.ndarray: Interpolated intensities at each (z, y, x) location.
@@ -204,15 +225,20 @@ class GracefulShutdown:
         pass
 
 
-def generate_array_flow_field(flow_f, grid_shape: tuple[int, int]) -> jnp.ndarray:
+def generate_array_flow_field(
+    flow_f, grid_shape: tuple[int, int] = (128, 128)
+) -> jnp.ndarray:
     """Generate a array flow field from a flow field function.
 
     Args:
-        flow_f: The flow field function.
-        grid_shape (tuple[int, int]): The shape of the grid.
+        flow_f:
+            The flow field function.
+        grid_shape: tuple[int, int]
+            The shape of the grid.
 
     Returns:
-        jnp.ndarray: The array flow field.
+        arr: jnp.ndarray
+            The array flow field.
     """
     # Get the image shape
     H, W = grid_shape
@@ -224,3 +250,286 @@ def generate_array_flow_field(flow_f, grid_shape: tuple[int, int]) -> jnp.ndarra
     arr = jax.vmap(lambda i: jax.vmap(lambda j: jnp.array(flow_f(1, i, j)))(cols))(rows)
 
     return arr
+
+
+def missing_speeds_panel(config_path) -> tuple[float, float, float, float]:
+    """Check for missing speeds in the configuration file.
+
+    Args:
+        config_path: str
+            The path to the configuration file.
+
+    Returns:
+        speeds: tuple[float, float, float, float]
+            The maximum and minimum speeds in the x and y directions.
+    """
+    # Load the configuration file
+    config = load_configuration(config_path)
+
+    missing_speeds = []
+    for key in ["max_speed_x", "max_speed_y", "min_speed_x", "min_speed_y"]:
+        if key not in config or not isinstance(config[key], (int, float)):
+            missing_speeds.append(key)
+
+    if missing_speeds:
+        print(
+            "[WARNING]: The following speed values are missing or invalid in the "
+            f"configuration file: {', '.join(missing_speeds)}"
+        )
+        choice = input(
+            "Would you like to "
+            "(1) run a script to calculate them (it might take some time) or"
+            " (2) stop and add them manually? Enter 1 or 2: "
+        )
+
+        if choice == "1":
+            calculated_speeds = calculate_min_and_max_speeds(config["scheduler_files"])
+            config.update(calculated_speeds)
+            update_config_file(config_path, calculated_speeds)
+            print("Calculated values:")
+            for key, value in calculated_speeds.items():
+                print(f"{key}: {value}")
+            advance = input(
+                "Do you want to continue with the updated configuration? (y/n): "
+            )
+            if advance.lower() == "y":
+                speeds = (
+                    float(calculated_speeds["max_speed_x"]),
+                    float(calculated_speeds["max_speed_y"]),
+                    float(calculated_speeds["min_speed_x"]),
+                    float(calculated_speeds["min_speed_y"]),
+                )
+
+                return speeds
+            else:
+                raise RuntimeError("Exiting the script.")
+        elif choice == "2":
+            print(
+                "Please add the missing values to the configuration file"
+                " and re-run the script."
+            )
+            raise RuntimeError("Exiting the script.")
+        else:
+            print("[WARNING]: Invalid choice. Exiting.")
+            raise RuntimeError("Exiting the script.")
+    else:
+        logger.info("All required speed values are present in the configuration file.")
+        return (
+            config["max_speed_x"],
+            config["max_speed_y"],
+            config["min_speed_x"],
+            config["min_speed_y"],
+        )
+
+
+def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
+    """Calculate the missing speeds for a list of files.
+
+    Args:
+        file_list: list[str]
+            The list of files.
+
+    Returns:
+        dict[str, float]: A dictionary containing the minimum and maximum speeds
+            in the x and y directions with keys:
+            - "min_speed_x"
+            - "max_speed_x"
+            - "min_speed_y"
+            - "max_speed_y"
+    """
+    # Input validation
+    if not file_list:
+        raise ValueError("The file_list must not be empty.")
+
+    for file_path in file_list:
+        if not isinstance(file_path, str):
+            raise ValueError("All file paths must be strings.")
+        if not os.path.isfile(file_path):
+            raise ValueError(f"File {file_path} does not exist.")
+        if not file_path.endswith(".h5"):
+            raise ValueError(f"File {file_path} is not a .h5 file.")
+
+    running_max_speed_x = float("-inf")
+    running_max_speed_y = float("-inf")
+    running_min_speed_x = float("inf")
+    running_min_speed_y = float("inf")
+    # Wrap the file list with tqdm for a loading bar
+    for file in tqdm(file_list, desc="Processing files"):
+        with h5py.File(file, "r") as f:
+            # Read the file
+            dataset_name = list(f.keys())[0]
+            data = f[dataset_name][:]
+
+            # TODO: set to 1, left to 2 for test
+            # Find the min and max speeds along each axis
+            running_max_speed_x = max(running_max_speed_x, np.max(data[:, :, :, 0]))
+            running_max_speed_y = max(running_max_speed_y, np.max(data[:, :, :, 2]))
+            running_min_speed_x = min(running_min_speed_x, np.min(data[:, :, :, 0]))
+            running_min_speed_y = min(running_min_speed_y, np.min(data[:, :, :, 2]))
+
+    return {
+        "min_speed_x": running_min_speed_x,
+        "max_speed_x": running_max_speed_x,
+        "min_speed_y": running_min_speed_y,
+        "max_speed_y": running_max_speed_y,
+    }
+
+
+def update_config_file(config_path: str, updated_values: dict):
+    """Update the YAML configuration file with new values."""
+    with open(config_path, "r") as file:
+        config_data = yaml.safe_load(file)
+
+    # Convert to OrderedDict to preserve order
+    config_data = collections.OrderedDict(config_data)
+
+    # Convert all values in config_data to standard Python types
+    def convert_to_standard_type(value):
+        if isinstance(value, (np.floating)):
+            return float(value)
+        elif isinstance(value, (np.integer, jnp.integer)):
+            return int(value)
+        elif isinstance(value, (np.ndarray, jnp.ndarray)):
+            return value.tolist()
+        return value
+
+    # Convert all values in config_data to standard Python types
+    config_data = collections.OrderedDict(
+        {key: convert_to_standard_type(value) for key, value in config_data.items()}
+    )
+
+    # Add new keys at the end
+    for key, value in updated_values.items():
+        config_data[key] = convert_to_standard_type(value)
+
+    # Handle scheduler_files separately
+    scheduler_files = config_data.pop("scheduler_files", [])
+
+    with open(config_path, "w") as file:
+        for key, value in config_data.items():
+            file.write(f"{key}: {value}\n")
+        if scheduler_files:
+            file.write("scheduler_files:\n")
+            for item in scheduler_files:
+                file.write(f"  - {item}\n")
+
+
+def visualize_and_save(name, image1, image2, flow_field, output_dir="output_images"):
+    """Visualizes and saves a specified number of images from a batch.
+
+    Args:
+        name (str): The name of the batch.
+        image1 (jnp.ndarray): The first image to visualize.
+        image2 (jnp.ndarray): The second image to visualize.
+        flow_field (jnp.ndarray): The flow field to visualize.
+        output_dir (str): Directory to save the images.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Extract flow field
+    flow_x = flow_field[..., 0]
+    flow_y = flow_field[..., 1]
+    # Create a grid for the quiver plot
+    y, x = np.mgrid[0 : flow_x.shape[0], 0 : flow_x.shape[1]]
+
+    # Save individual images and flow field
+    plt.imsave(os.path.join(output_dir, f"{name}_image1.png"), image1, cmap="gray")
+    plt.imsave(os.path.join(output_dir, f"{name}_image2.png"), image2, cmap="gray")
+
+    # Save the quiver plot as a separate image
+    quiver_fig, quiver_ax = plt.subplots(figsize=(7, 7))
+    step = 1
+    quiver_ax.quiver(
+        x[::step, ::step],
+        y[::step, ::step],
+        flow_x[::step, ::step],
+        flow_y[::step, ::step],
+        pivot="mid",
+        color="blue",
+    )
+    quiver_ax.set_aspect("equal")
+    quiver_fig.savefig(os.path.join(output_dir, f"{name}_quiver.png"))
+    plt.close(quiver_fig)
+
+    logger.info(f"Saved images for {name} to {output_dir}.")
+
+
+def flow_field_adapter(
+    flow_field: jnp.ndarray, new_flow_field_shape: Tuple[int, int] = (256, 256)
+):
+    """Adapter to convert flow field to one with a different resolution.
+
+    Args:
+        flow_field: jnp.ndarray
+            The original flow field to be adapted.
+        new_flow_field_shape: Tuple[int, int]
+            The desired shape of the new flow field.
+
+    Returns:
+        jnp.ndarray: The adapted flow field with the new shape.
+    """
+    original_shape = flow_field.shape[:2]
+
+    # Create a 2D grid of coordinates for the new shape
+    x = jnp.linspace(0, original_shape[1] - 1, new_flow_field_shape[1])
+    y = jnp.linspace(0, original_shape[0] - 1, new_flow_field_shape[0])
+    x_new, y_new = jnp.meshgrid(x, y)
+
+    # Vectorize over the columns
+    interp_over_cols_x = jax.vmap(
+        lambda x_coord, y_coord: bilinear_interpolate(
+            flow_field[..., 0],
+            x_coord,
+            y_coord,
+        ),
+        in_axes=(0, 0),
+    )
+
+    # Now vectorize over the rows
+    new_flow_field_x = jax.vmap(
+        lambda xs, ys: interp_over_cols_x(xs, ys), in_axes=(0, 0)
+    )(x_new, y_new)
+
+    # Repeat for the second channel
+    interp_over_cols_y = jax.vmap(
+        lambda x_coord, y_coord: bilinear_interpolate(
+            flow_field[..., 1],
+            x_coord,
+            y_coord,
+        ),
+        in_axes=(0, 0),
+    )
+    new_flow_field_y = jax.vmap(
+        lambda xs, ys: interp_over_cols_y(xs, ys), in_axes=(0, 0)
+    )(x_new, y_new)
+
+    # Stack the two interpolated channels along the last dimension
+    new_flow_field = jnp.stack([new_flow_field_x, new_flow_field_y], axis=-1)
+    return new_flow_field
+
+
+def input_check_flow_field_adapter(
+    flow_field: jnp.ndarray, new_flow_field_shape: Tuple[int, int] = (256, 256)
+):
+    """Checks the input arguments of the flow field adapter function.
+
+    Args:
+        flow_field: jnp.ndarray
+            The original flow field to be adapted.
+        new_flow_field_shape: Tuple[int, int]
+            The desired shape of the new flow field.
+    """
+    if (
+        not isinstance(flow_field, jnp.ndarray)
+        or len(flow_field.shape) != 3
+        or flow_field.shape[2] != 2
+    ):
+        raise ValueError("Flow_field must be a 3D jnp.ndarray with shape (H, W, 2).")
+    if (
+        not isinstance(new_flow_field_shape, tuple)
+        or len(new_flow_field_shape) != 2
+        or not all(isinstance(s, int) and s > 0 for s in new_flow_field_shape)
+    ):
+        raise ValueError(
+            "new_flow_field_shape must be a tuple of two positive integers."
+        )

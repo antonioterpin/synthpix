@@ -3,6 +3,7 @@
 
 playground/
 docs/build/
+out/
 
 results/*
 
@@ -174,3 +175,13 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Testing data folder
+testing_data/
+data/
+
+# Workspace
+*.code-workspace
+
+# Output images
+/output_images

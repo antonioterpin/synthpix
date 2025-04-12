@@ -1,0 +1,33 @@
+# Dataset parameters
+seed: 0 # Random seed for reproducibility
+batch_size: 256 # Number of (img1, img2, flow) tuples per batch
+images_per_field: 256 # Number of images generated for each field
+
+# Image generation parameters
+image_shape: [128, 256] # Shape of the images to be generated
+dt: 0.026 # Time step between images
+intensity_range: [10, 255] # Range of intensity values for the particles
+diameter_range: [0.1, 1]  # Diameter of particles in pixels
+seeding_density: 0.01 # Density of particles in the images
+p_hide_img1: 0.01 # Probability of hiding particles in the first image
+p_hide_img2: 0.01 # Probability of hiding particles in the second image
+rho_range: [-0.2, 0.2] # Correlation coefficients for the particles (similarity)
+
+# Flow generation parameters
+velocities_per_pixel: 1.0 # Number of velocities per pixel
+resolution: 1 # Pixels per unit length
+
+# -- Flow parameters --
+# Size of the flow field in normalized units. It can be meters or others,
+# but need to be consistent in the other dependent settings.
+flow_field_size: [1536, 2048]
+img_offset: [0.025, 0.05] # Offset of the area captured in the images in normalized units
+# Speeds bounds in the flow field, used to have particles covering the images
+min_speed_x: -0.10241036862134933 # Minimum speed in the x direction
+max_speed_x: 1.3489508628845215 # Maximum speed in the x direction
+min_speed_y: -0.45968499779701233 # Minimum speed in the y direction
+max_speed_y: 0.501191258430481 # Maximum speed in the y direction
+# Flows files
+scheduler_files:
+  - /shared/fluids/channel_full_ts_0004.h5
+  - /shared/fluids/channel_full_ts_0008.h5
