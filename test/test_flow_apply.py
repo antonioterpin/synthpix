@@ -60,10 +60,10 @@ def test_flow_apply_to_image(image_shape, visualize=False):
 
 
 @pytest.mark.parametrize("selected_flow", ["vertical"])
-@pytest.mark.parametrize("particles_number", [10000])
+@pytest.mark.parametrize("seeding_density", [0.1])
 @pytest.mark.parametrize("image_shape", [(128, 128)])
 def test_particles_flow_apply_array(
-    selected_flow, particles_number, image_shape, visualize=False
+    selected_flow, seeding_density, image_shape, visualize=False
 ):
     """Test that we can apply a flow field as a jax array to random particles."""
 
@@ -71,6 +71,7 @@ def test_particles_flow_apply_array(
     key = jax.random.PRNGKey(0)
     key, subkey = jax.random.split(key, 2)
 
+    particles_number = int(image_shape[0] * image_shape[1] * seeding_density)
     particles = jax.random.uniform(
         subkey, (particles_number, 2), minval=0.0, maxval=jnp.array(image_shape) - 1
     )
@@ -237,9 +238,9 @@ def test_invalid_flow_field_res_z(flow_field_res_z):
     reason="user not connect to the server.",
 )
 @pytest.mark.parametrize("selected_flow", ["horizontal"])
-@pytest.mark.parametrize("particles_number", [40000])
+@pytest.mark.parametrize("seeding_density", [0.016])
 @pytest.mark.parametrize("image_shape", [(1216, 1936)])
-def test_speed_apply_flow_to_particles(particles_number, selected_flow, image_shape):
+def test_speed_apply_flow_to_particles(seeding_density, selected_flow, image_shape):
     """Test that apply_flow_to_particles is faster than a limit time."""
 
     # Name of the axis for the device mesh
@@ -267,6 +268,9 @@ def test_speed_apply_flow_to_particles(particles_number, selected_flow, image_sh
     # 1. Generate random particles
     key = jax.random.PRNGKey(0)
 
+    # Compute the number of particles and round it to the number of devices
+    particles_number = int(image_shape[0] * image_shape[1] * seeding_density)
+    particles_number = (particles_number // num_devices) * num_devices
     particles = jax.random.uniform(
         key, (particles_number, 2), minval=0.0, maxval=jnp.array(image_shape) - 1
     )

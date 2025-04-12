@@ -46,7 +46,7 @@ class SyntheticImageSampler:
         resolution: float = 1.0,
         velocities_per_pixel: float = 1.0,
         img_offset: Tuple[float, float] = (20.0, 20.0),
-        num_particles: int = 40000,
+        seeding_density: int = 0.04,
         p_hide_img1: float = 0.01,
         p_hide_img2: float = 0.01,
         diameter_range: Tuple[float, float] = (0.1, 1.0),
@@ -84,8 +84,8 @@ class SyntheticImageSampler:
             img_offset: Tuple[float, float]
                 Distance in the two axes from the top left corner of the flow field
                 and the top left corner of the image a length measure unit.
-            num_particles: int
-                Number of particles to simulate.
+            seeding_density: float
+                Density of particles in the images.
             p_hide_img1: float
                 Probability of hiding particles in the first image.
             p_hide_img2: float
@@ -196,10 +196,6 @@ class SyntheticImageSampler:
             isinstance(s, (int, float)) and s >= 0 for s in img_offset
         ):
             raise ValueError("img_offset must be a tuple of two non-negative numbers.")
-
-        if not isinstance(num_particles, int) or num_particles <= 0:
-            raise ValueError("num_particles must be a positive integer.")
-        self.num_particles = num_particles
 
         if not (0 <= p_hide_img1 <= 1):
             raise ValueError("p_hide_img1 must be between 0 and 1.")
@@ -337,6 +333,14 @@ class SyntheticImageSampler:
                 f"{position_bounds[1] + position_bounds_offset[1]})."
             )
 
+        if (
+            not isinstance(seeding_density, float)
+            or seeding_density <= 0
+            or seeding_density >= 1
+        ):
+            raise ValueError("seeding_density must be a float between 0 and 1.")
+        self.seeding_density = seeding_density
+
         # Calculate the image offset in pixels
         self.img_offset = (
             int(img_offset[0] * resolution - position_bounds_offset[0] * resolution),
@@ -361,7 +365,7 @@ class SyntheticImageSampler:
                         image_shape=self.image_shape,
                         img_offset=self.img_offset,
                         num_images=self.batch_size // num_devices,
-                        num_particles=self.num_particles,
+                        seeding_density=self.seeding_density,
                         p_hide_img1=self.p_hide_img1,
                         p_hide_img2=self.p_hide_img2,
                         diameter_range=self.diameter_range,
@@ -384,7 +388,7 @@ class SyntheticImageSampler:
                 image_shape=self.image_shape,
                 img_offset=self.img_offset,
                 num_images=self.batch_size // num_devices,
-                num_particles=self.num_particles,
+                seeding_density=seeding_density,
                 p_hide_img1=self.p_hide_img1,
                 p_hide_img2=self.p_hide_img2,
                 diameter_range=self.diameter_range,
@@ -406,7 +410,7 @@ class SyntheticImageSampler:
         logger.debug(f"Resolution: {self.resolution}")
         logger.debug(f"Velocities per pixel: {velocities_per_pixel}")
         logger.debug(f"Image offset: {self.img_offset}")
-        logger.debug(f"Number of particles: {self.num_particles}")
+        logger.debug(f"Seeding density: {self.seeding_density}")
         logger.debug(f"p_hide_img1: {self.p_hide_img1}")
         logger.debug(f"p_hide_img2: {self.p_hide_img2}")
         logger.debug(f"Diameter range: {self.diameter_range}")
@@ -506,7 +510,7 @@ class SyntheticImageSampler:
                 image_shape=self.image_shape,
                 img_offset=self.img_offset,
                 num_images=self.batch_size,
-                num_particles=self.num_particles,
+                seeding_density=self.seeding_density,
                 p_hide_img1=self.p_hide_img1,
                 p_hide_img2=self.p_hide_img2,
                 diameter_range=self.diameter_range,

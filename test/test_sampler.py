@@ -23,7 +23,7 @@ def dummy_img_gen_fn(
     image_shape,
     img_offset,
     num_images,
-    num_particles,
+    seeding_density,
     p_hide_img1,
     p_hide_img2,
     diameter_range,
@@ -201,19 +201,21 @@ def test_invalid_img_offset(img_offset, scheduler):
         )
 
 
-@pytest.mark.parametrize("num_particles", [-1, 0, 1.5])
+@pytest.mark.parametrize("seeding_density", [-1, 0, 1.5])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_num_particles(num_particles, scheduler):
-    """Test that invalid num_particles raises a ValueError."""
-    with pytest.raises(ValueError, match="num_particles must be a positive integer."):
+def test_invalid_seeding_density(seeding_density, scheduler):
+    """Test that invalid seeding_density raises a ValueError."""
+    with pytest.raises(
+        ValueError, match="seeding_density must be a float between 0 and 1."
+    ):
         SyntheticImageSampler(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
             batch_size=2,
             images_per_field=10,
-            num_particles=num_particles,
+            seeding_density=seeding_density,
             seed=0,
         )
 
@@ -592,12 +594,13 @@ def test_sampler_switches_flow_fields(batch_size, images_per_field, scheduler):
 
 
 @pytest.mark.parametrize(
-    "image_shape, num_images, num_particles", [((32, 32), 4, 100), ((64, 64), 4, 200)]
+    "image_shape, num_images, seeding_density",
+    [((32, 32), 4, 0.1), ((64, 64), 4, 0.04)],
 )
 @pytest.mark.parametrize("batch_size", [4])
 @pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
 def test_sampler_with_real_img_gen_fn(
-    image_shape, num_images, num_particles, batch_size, mock_hdf5_files
+    image_shape, num_images, seeding_density, batch_size, mock_hdf5_files
 ):
     files, _ = mock_hdf5_files
     scheduler = HDF5FlowFieldScheduler(files, loop=False)
@@ -606,7 +609,7 @@ def test_sampler_with_real_img_gen_fn(
         scheduler=scheduler,
         img_gen_fn=generate_images_from_flow,
         image_shape=image_shape,
-        num_particles=num_particles,
+        seeding_density=seeding_density,
         images_per_field=num_images,
         batch_size=batch_size,
         seed=0,
@@ -642,12 +645,12 @@ def test_sampler_with_real_img_gen_fn(
 @pytest.mark.parametrize("batch_size", [250])
 @pytest.mark.parametrize("images_per_field", [1000])
 @pytest.mark.parametrize("seed", [0])
-@pytest.mark.parametrize("num_particles", [40000])
+@pytest.mark.parametrize("seeding_density", [0.03])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_speed_sampler_dummy_fn(
-    scheduler, batch_size, images_per_field, seed, num_particles
+    scheduler, batch_size, images_per_field, seed, seeding_density
 ):
     """Test the speed of the sampler with a dummy image generation function."""
     # Define the parameters for the test
@@ -672,7 +675,7 @@ def test_speed_sampler_dummy_fn(
         seed=seed,
         image_shape=image_shape,
         img_offset=img_offset,
-        num_particles=num_particles,
+        seeding_density=seeding_density,
         dt=dt,
         max_speed_x=max_speed_x,
         max_speed_y=max_speed_y,
@@ -706,12 +709,12 @@ def test_speed_sampler_dummy_fn(
 @pytest.mark.parametrize("batch_size", [250])
 @pytest.mark.parametrize("images_per_field", [1000])
 @pytest.mark.parametrize("seed", [0])
-@pytest.mark.parametrize("num_particles", [40000])
+@pytest.mark.parametrize("seeding_density", [0.016])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_speed_sampler_real_fn(
-    batch_size, images_per_field, seed, num_particles, scheduler
+    batch_size, images_per_field, seed, seeding_density, scheduler
 ):
     image_shape = (1216, 1936)
     img_offset = (2.5e-2, 5e-2)
@@ -745,7 +748,7 @@ def test_speed_sampler_real_fn(
         seed=seed,
         image_shape=image_shape,
         img_offset=img_offset,
-        num_particles=num_particles,
+        seeding_density=seeding_density,
         dt=dt,
         max_speed_x=max_speed_x,
         max_speed_y=max_speed_y,

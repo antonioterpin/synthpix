@@ -9,7 +9,7 @@ from src.sym.scheduler import HDF5FlowFieldScheduler
 from src.utils import load_configuration, logger, visualize_and_save
 
 
-def main(config_path, visualize, output_dir, num_images_to_display):
+def main(config_path, output_dir, num_images_to_display):
     """Main function to run the SyntheticImageSampler pipeline.
 
     Args:
@@ -36,7 +36,7 @@ def main(config_path, visualize, output_dir, num_images_to_display):
         resolution=config["resolution"],
         velocities_per_pixel=config["velocities_per_pixel"],
         img_offset=config["img_offset"],
-        num_particles=config["num_particles"],
+        seeding_density=config["seeding_density"],
         p_hide_img1=config["p_hide_img1"],
         p_hide_img2=config["p_hide_img2"],
         diameter_range=tuple(config["diameter_range"]),
@@ -55,22 +55,22 @@ def main(config_path, visualize, output_dir, num_images_to_display):
     logger.info("Starting the SyntheticImageSampler pipeline...")
     for i, batch in enumerate(sampler):
         logger.info(f"Batch {i + 1} generated.")
-        logger.info(f"Image batch 1 shape: {batch[0].shape}")
-        logger.info(f"Image batch 2 shape: {batch[1].shape}")
-        logger.info(f"Flow field shape: {batch[2].shape}")
+        logger.info(f"Image 1 batch shape: {batch[0].shape}")
+        logger.info(f"Image 2 batch shape: {batch[1].shape}")
+        logger.info(f"Flow field batch shape: {batch[2].shape}")
 
-        if visualize and i < num_images_to_display * 5:
-            batch = batch[0][0], batch[1][0], batch[2]
-            logger.info(f"Visualizing batch {i + 1}...")
-            visualize_and_save(batch, output_dir, num_images_to_display)
-            if i == num_images_to_display * 5 - 1:
-                logger.info(
-                    f"Visualized {num_images_to_display} batches. Stopping visualization."
-                )
-                choice = input("Do you want to continue generating images? (y/n): ")
-                if choice.lower() != "y":
-                    logger.info("Stopping the pipeline.")
-                    break
+        for j in range(min(num_images_to_display, batch[0].shape[0])):
+            visualize_and_save(
+                f"batch_{i}_sample_{j}", batch[0][j], batch[1][j], batch[2], output_dir
+            )
+
+        logger.info(
+            f"Saved {num_images_to_display} for batch {i}. Stopping visualization."
+        )
+        choice = input("Do you want to continue generating images? (y/n): ")
+        if choice.lower() != "y":
+            logger.info("Stopping the pipeline.")
+            break
 
 
 if __name__ == "__main__":
@@ -86,12 +86,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--visualize",
-        action="store_true",
-        help="Enable visualization of generated images.",
-    )
-
-    parser.add_argument(
         "--output_dir",
         type=str,
         default="out",
@@ -99,7 +93,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--num_images_to_display",
+        "--visualize",
         type=int,
         default=1,
         help="Number of images to display and save from each batch.",
@@ -119,7 +113,6 @@ if __name__ == "__main__":
 
     main(
         config_path=args.config,
-        visualize=args.visualize,
         output_dir=args.output_dir,
-        num_images_to_display=args.num_images_to_display,
+        num_images_to_display=args.visualize,
     )

@@ -14,7 +14,7 @@ import numpy as np
 import yaml
 from tqdm import tqdm
 
-DEBUG = True
+DEBUG = False
 DEBUG_JIT = False
 
 
@@ -414,54 +414,44 @@ def update_config_file(config_path: str, updated_values: dict):
                 file.write(f"  - {item}\n")
 
 
-def visualize_and_save(batch, output_dir="output_images", num_images_to_display=1):
+def visualize_and_save(name, image1, image2, flow_field, output_dir="output_images"):
     """Visualizes and saves a specified number of images from a batch.
 
     Args:
-        batch: Tuple containing (image1, image2, flow_field).
-        output_dir: Directory to save the images.
-        num_images_to_display: Number of images to display and save from each batch.
+        name (str): The name of the batch.
+        image1 (jnp.ndarray): The first image to visualize.
+        image2 (jnp.ndarray): The second image to visualize.
+        flow_field (jnp.ndarray): The flow field to visualize.
+        output_dir (str): Directory to save the images.
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    image1, image2, flow_field = batch
+    # Extract flow field
+    flow_x = flow_field[..., 0]
+    flow_y = flow_field[..., 1]
+    # Create a grid for the quiver plot
+    y, x = np.mgrid[0 : flow_x.shape[0], 0 : flow_x.shape[1]]
 
-    for i in range(min(num_images_to_display, len(image1))):
-        # Extract flow field
-        flow_x = flow_field[..., 0]
-        flow_y = flow_field[..., 1]
-        # Create a grid for the quiver plot
-        y, x = np.mgrid[0 : flow_x.shape[0], 0 : flow_x.shape[1]]
+    # Save individual images and flow field
+    plt.imsave(os.path.join(output_dir, f"{name}_image1.png"), image1, cmap="gray")
+    plt.imsave(os.path.join(output_dir, f"{name}_image2.png"), image2, cmap="gray")
 
-        # Save individual images and flow field
-        plt.imsave(
-            os.path.join(output_dir, f"batch_{i}_image1.png"), image1, cmap="gray"
-        )
-        plt.imsave(
-            os.path.join(output_dir, f"batch_{i}_image2.png"), image2, cmap="gray"
-        )
-        plt.imsave(
-            os.path.join(output_dir, f"batch_{i}_quiver.png"), image2, cmap="gray"
-        )
-
-        # Save the quiver plot as a separate image
-        quiver_fig, quiver_ax = plt.subplots(figsize=(7, 7))
-        step = 1
-        quiver_ax.quiver(
-            x[::step, ::step],
-            y[::step, ::step],
-            flow_x[::step, ::step],
-            flow_y[::step, ::step],
-            pivot="mid",
-            color="blue",
-        )
-        quiver_ax.set_aspect("equal")
-        quiver_fig.savefig(os.path.join(output_dir, f"batch_{i}_quiver.png"))
-        plt.close(quiver_fig)
-
-    logger.info(
-        f"Saved {min(num_images_to_display, len(image1))} images to {output_dir}"
+    # Save the quiver plot as a separate image
+    quiver_fig, quiver_ax = plt.subplots(figsize=(7, 7))
+    step = 1
+    quiver_ax.quiver(
+        x[::step, ::step],
+        y[::step, ::step],
+        flow_x[::step, ::step],
+        flow_y[::step, ::step],
+        pivot="mid",
+        color="blue",
     )
+    quiver_ax.set_aspect("equal")
+    quiver_fig.savefig(os.path.join(output_dir, f"{name}_quiver.png"))
+    plt.close(quiver_fig)
+
+    logger.info(f"Saved images for {name} to {output_dir}.")
 
 
 def flow_field_adapter(
