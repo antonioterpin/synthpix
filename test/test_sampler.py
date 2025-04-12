@@ -1,3 +1,4 @@
+import re
 import timeit
 
 import jax
@@ -22,13 +23,15 @@ def dummy_img_gen_fn(
     image_shape,
     img_offset,
     num_images,
-    num_particles,
+    seeding_density,
     p_hide_img1,
     p_hide_img2,
     diameter_range,
     intensity_range,
     rho_range,
     dt,
+    flow_field_res_x,
+    flow_field_res_y,
 ):
     """Simulates generating a batch of synthetic images based on a single key."""
     return (
@@ -101,6 +104,25 @@ def test_invalid_images_per_field(images_per_field, scheduler):
         )
 
 
+@pytest.mark.parametrize("flow_field_size", [(-1, 128), (128, -1), (0, 128), (128, 0)])
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_flow_field_size(flow_field_size, scheduler):
+    """Test that invalid flow_field_size raises a ValueError."""
+    with pytest.raises(
+        ValueError, match="flow_field_size must be a tuple of two positive numbers."
+    ):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            flow_field_size=flow_field_size,
+            seed=0,
+        )
+
+
 @pytest.mark.parametrize(
     "image_shape", [(-1, 128), (128, -1), (0, 128), (128, 0), (128.5, 128.5)]
 )
@@ -122,40 +144,78 @@ def test_invalid_image_shape(image_shape, scheduler):
         )
 
 
+@pytest.mark.parametrize("resolution", [-1, 0, "invalid_resolution"])
 @pytest.mark.parametrize(
-    "position_bounds", [(-1, 128), (128, -1), (0, 128), (128, 0), (128.5, 128.5)]
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_resolution(resolution, scheduler):
+    """Test that invalid resolution raises a ValueError."""
+    with pytest.raises(ValueError, match="resolution must be a positive number."):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            resolution=resolution,
+            seed=0,
+        )
+
+
+@pytest.mark.parametrize(
+    "velocities_per_pixel", [-1, 0, "invalid_velocities_per_pixel"]
 )
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_position_bounds(position_bounds, scheduler):
-    """Test that invalid position_bounds raises a ValueError."""
+def test_velocities_per_pixel(velocities_per_pixel, scheduler):
+    """Test that invalid velocities_per_pixel raises a ValueError."""
     with pytest.raises(
-        ValueError, match="position_bounds must be a tuple of two positive integers."
+        ValueError, match="velocities_per_pixel must be a positive number."
     ):
         SyntheticImageSampler(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
             batch_size=2,
             images_per_field=10,
-            position_bounds=position_bounds,
+            velocities_per_pixel=velocities_per_pixel,
             seed=0,
         )
 
 
-@pytest.mark.parametrize("num_particles", [-1, 0, 1.5])
+@pytest.mark.parametrize("img_offset", [(-1, 128), (128, -1)])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_num_particles(num_particles, scheduler):
-    """Test that invalid num_particles raises a ValueError."""
-    with pytest.raises(ValueError, match="num_particles must be a positive integer."):
+def test_invalid_img_offset(img_offset, scheduler):
+    """Test that invalid img_offset raises a ValueError."""
+    with pytest.raises(
+        ValueError, match="img_offset must be a tuple of two non-negative numbers."
+    ):
         SyntheticImageSampler(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
             batch_size=2,
             images_per_field=10,
-            num_particles=num_particles,
+            img_offset=img_offset,
+            seed=0,
+        )
+
+
+@pytest.mark.parametrize("seeding_density", [-1, 0, 1.5])
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_seeding_density(seeding_density, scheduler):
+    """Test that invalid seeding_density raises a ValueError."""
+    with pytest.raises(
+        ValueError, match="seeding_density must be a float between 0 and 1."
+    ):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            seeding_density=seeding_density,
             seed=0,
         )
 
@@ -270,8 +330,222 @@ def test_invalid_dt(dt, scheduler):
 
 
 @pytest.mark.parametrize(
+    "seed", ["invalid_seed", jnp.array([1]), jnp.array([1.0, 2.0])]
+)
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_seed(seed, scheduler):
+    """Test that invalid seed raises a ValueError."""
+    with pytest.raises(ValueError, match="seed must be a positive integer."):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            seed=seed,
+        )
+
+
+@pytest.mark.parametrize("config_path", [None, 0])
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_config_path(config_path, scheduler):
+    """Test that invalid config_path raises a ValueError."""
+    with pytest.raises(ValueError, match="config_path must be a string."):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            config_path=config_path,
+            seed=0,
+        )
+
+    with pytest.raises(ValueError, match="config_path must be a .yaml file."):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            config_path="invalid_config.txt",
+            seed=0,
+        )
+
+    with pytest.raises(ValueError, match="config_path does not exist."):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            config_path="non_existent_file.yaml",
+            seed=0,
+        )
+
+
+@pytest.mark.parametrize("min_speed_x, max_speed_x", [(1, -1), (2, 1)])
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_min_max_speed_x(min_speed_x, max_speed_x, scheduler):
+    """Test that invalid min_speed_x and max_speed_x raises a ValueError."""
+    with pytest.raises(
+        ValueError, match="max_speed_x must be greater than min_speed_x."
+    ):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            min_speed_x=min_speed_x,
+            max_speed_x=max_speed_x,
+            max_speed_y=0.0,
+            min_speed_y=0.0,
+            seed=0,
+        )
+
+
+@pytest.mark.parametrize("min_speed_y, max_speed_y", [(1, -1), (2, 1)])
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_min_max_speed_y(min_speed_y, max_speed_y, scheduler):
+    """Test that invalid min_speed_y and max_speed_y raises a ValueError."""
+    with pytest.raises(
+        ValueError, match="max_speed_y must be greater than min_speed_y."
+    ):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            min_speed_y=min_speed_y,
+            max_speed_y=max_speed_y,
+            min_speed_x=0.0,
+            max_speed_x=0.0,
+            seed=0,
+        )
+
+
+@pytest.mark.parametrize("img_gen_fn", [None, "invalid_img_gen_fn"])
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_img_gen_fn_type(img_gen_fn, scheduler):
+    """Test that invalid img_gen_fn raises a ValueError."""
+    with pytest.raises(ValueError, match="img_gen_fn must be a callable function."):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            seed=0,
+        )
+
+
+@pytest.mark.parametrize(
+    "img_offset, max_speed_x, max_speed_y, dt",
+    [((0, 0), 1.0, 1.0, 1.0), ((0, 0), 0.0, 1.0, 1.0), ((0, 0), 1.0, 0.0, 1.0)],
+)
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_img_offset_and_speed(
+    img_offset, max_speed_x, max_speed_y, dt, scheduler
+):
+    """Test that invalid img_offset and speed raises a ValueError."""
+    expected_message = re.escape(
+        f"The image is too near the flow field left or top edge. "
+        f"The minimum image offset is ({max_speed_y * dt}, {max_speed_x * dt})."
+    )
+    with pytest.raises(ValueError, match=expected_message):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            img_offset=img_offset,
+            max_speed_x=max_speed_x,
+            max_speed_y=max_speed_y,
+            min_speed_x=0.0,
+            min_speed_y=0.0,
+            seed=0,
+        )
+
+
+@pytest.mark.parametrize(
+    "flow_field_size, img_offset, image_shape,"
+    " resolution, max_speed_x, max_speed_y, min_speed_x, min_speed_y, dt",
+    [
+        ((1, 4), (5, 10), (10, 5), 1, 1.0, 1.0, 1.0, -1.0, 0.1),
+        ((2, 5), (5, 5), (5, 10), 1, 1.0, 1.0, 0.0, -1.0, 0.1),
+        ((3, 6), (10, 5), (5, 5), 1, 1.0, 1.0, -1.0, -1.0, 0.1),
+    ],
+)
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_flow_field_size_and_img_offset(
+    flow_field_size,
+    img_offset,
+    image_shape,
+    resolution,
+    max_speed_x,
+    max_speed_y,
+    min_speed_x,
+    min_speed_y,
+    dt,
+    scheduler,
+):
+    """Test that invalid flow_field_size and img_offset raises a ValueError."""
+    if max_speed_x < 0 or max_speed_y < 0:
+        max_speed_x = 0.0
+        max_speed_y = 0.0
+    if min_speed_x > 0 or min_speed_y > 0:
+        min_speed_x = 0.0
+        min_speed_y = 0.0
+
+    position_bounds = (
+        image_shape[0] / resolution + max_speed_y * dt - min_speed_y * dt,
+        image_shape[1] / resolution + max_speed_x * dt - min_speed_x * dt,
+    )
+    position_bounds_offset = (
+        img_offset[0] - max_speed_y * dt,
+        img_offset[1] - max_speed_x * dt,
+    )
+    expected_message = re.escape(
+        f"The size of the flow field is too small."
+        f"it must be at least "
+        f"({position_bounds[0] + position_bounds_offset[0]},"
+        f"{position_bounds[1] + position_bounds_offset[1]})."
+    )
+
+    logger.debug("test: " + str(position_bounds_offset))
+    logger.debug(position_bounds)
+
+    with pytest.raises(ValueError, match=expected_message):
+        SyntheticImageSampler(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            batch_size=2,
+            images_per_field=10,
+            flow_field_size=flow_field_size,
+            img_offset=img_offset,
+            image_shape=image_shape,
+            resolution=resolution,
+            max_speed_x=max_speed_x,
+            max_speed_y=max_speed_y,
+            min_speed_x=min_speed_x,
+            min_speed_y=min_speed_y,
+            dt=dt,
+            seed=0,
+        )
+
+
+@pytest.mark.parametrize(
     "batch_size, images_per_field, image_shape",
-    [(4, 16, (8, 8)), (2, 8, (8, 8)), (1, 5, (8, 8))],
+    [(4, 16, (256, 256)), (2, 8, (256, 256)), (1, 5, (256, 256))],
 )
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
@@ -320,12 +594,13 @@ def test_sampler_switches_flow_fields(batch_size, images_per_field, scheduler):
 
 
 @pytest.mark.parametrize(
-    "image_shape, num_images, num_particles", [((32, 32), 4, 100), ((64, 64), 4, 200)]
+    "image_shape, num_images, seeding_density",
+    [((32, 32), 4, 0.1), ((64, 64), 4, 0.04)],
 )
 @pytest.mark.parametrize("batch_size", [4])
 @pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
 def test_sampler_with_real_img_gen_fn(
-    image_shape, num_images, num_particles, batch_size, mock_hdf5_files
+    image_shape, num_images, seeding_density, batch_size, mock_hdf5_files
 ):
     files, _ = mock_hdf5_files
     scheduler = HDF5FlowFieldScheduler(files, loop=False)
@@ -334,8 +609,7 @@ def test_sampler_with_real_img_gen_fn(
         scheduler=scheduler,
         img_gen_fn=generate_images_from_flow,
         image_shape=image_shape,
-        position_bounds=(image_shape[0] * 2, image_shape[1] * 2),
-        num_particles=num_particles,
+        seeding_density=seeding_density,
         images_per_field=num_images,
         batch_size=batch_size,
         seed=0,
@@ -343,32 +617,70 @@ def test_sampler_with_real_img_gen_fn(
 
     batch = next(sampler)
 
+    image_shape = sampler.image_shape
+    res = sampler.resolution
+    velocities_per_pixel = sampler.velocities_per_pixel
+    output_size = jnp.array(
+        [
+            batch[2].shape[0] / velocities_per_pixel / res,
+            batch[2].shape[1] / velocities_per_pixel / res,
+            batch[2].shape[2],
+        ]
+    )
+
+    expected_size = jnp.array([image_shape[0] / res, image_shape[1] / res, 2])
+
     assert isinstance(batch[0], jnp.ndarray)
+    assert isinstance(batch[1], jnp.ndarray)
+    assert isinstance(batch[2], jnp.ndarray)
     assert batch[0].shape == (batch_size, *image_shape)
     assert batch[1].shape == (batch_size, *image_shape)
+    assert jnp.allclose(output_size, expected_size, atol=0.01)
 
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connect to the server.",
 )
+@pytest.mark.parametrize("batch_size", [250])
+@pytest.mark.parametrize("images_per_field", [1000])
+@pytest.mark.parametrize("seed", [0])
+@pytest.mark.parametrize("seeding_density", [0.03])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_speed_sampler_dummy_fn(scheduler):
-    batch_size = 200
-    images_per_field = 1000
+def test_speed_sampler_dummy_fn(
+    scheduler, batch_size, images_per_field, seed, seeding_density
+):
+    """Test the speed of the sampler with a dummy image generation function."""
+    # Define the parameters for the test
     image_shape = (1216, 1936)
-    position_bounds = (1536, 2048)
+    img_offset = (2.5e-2, 5e-2)
+    flow_field_size = (3 * jnp.pi, 4 * jnp.pi)
+    resolution = 155
+    max_speed_x = 1.37
+    max_speed_y = 0.56
+    min_speed_x = -0.16
+    min_speed_y = -0.72
+    dt = 2.6e-2
 
+    # Create the sampler
     sampler = SyntheticImageSampler(
         scheduler=scheduler,
         img_gen_fn=dummy_img_gen_fn,
-        image_shape=image_shape,
-        position_bounds=position_bounds,
         images_per_field=images_per_field,
         batch_size=batch_size,
-        seed=0,
+        flow_field_size=flow_field_size,
+        resolution=resolution,
+        seed=seed,
+        image_shape=image_shape,
+        img_offset=img_offset,
+        seeding_density=seeding_density,
+        dt=dt,
+        max_speed_x=max_speed_x,
+        max_speed_y=max_speed_y,
+        min_speed_x=min_speed_x,
+        min_speed_y=min_speed_y,
     )
 
     def run_sampler():
@@ -397,27 +709,33 @@ def test_speed_sampler_dummy_fn(scheduler):
 @pytest.mark.parametrize("batch_size", [250])
 @pytest.mark.parametrize("images_per_field", [1000])
 @pytest.mark.parametrize("seed", [0])
-@pytest.mark.parametrize("num_particles", [40000])
+@pytest.mark.parametrize("seeding_density", [0.016])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_speed_sampler_real_fn(
-    batch_size, images_per_field, seed, num_particles, scheduler
+    batch_size, images_per_field, seed, seeding_density, scheduler
 ):
     image_shape = (1216, 1936)
-    position_bounds = (1536, 2048)
-    img_offset = (160, 56)
+    img_offset = (2.5e-2, 5e-2)
+    flow_field_size = (3 * jnp.pi, 4 * jnp.pi)
+    resolution = 155
+    max_speed_x = 1.37
+    max_speed_y = 0.56
+    min_speed_x = -0.16
+    min_speed_y = -0.72
+    dt = 2.6e-2
 
     # Check how many GPUs are available
     num_devices = len(jax.devices())
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 1.5e-1
+        limit_time = 1.45e-1
     elif num_devices == 2:
-        limit_time = 8.5e-2
+        limit_time = 8e-2
     elif num_devices == 4:
-        limit_time = 6e-2
+        limit_time = 5.5e-2
 
     # Create the sampler
     sampler = SyntheticImageSampler(
@@ -425,11 +743,17 @@ def test_speed_sampler_real_fn(
         img_gen_fn=generate_images_from_flow,
         images_per_field=images_per_field,
         batch_size=batch_size,
+        flow_field_size=flow_field_size,
+        resolution=resolution,
         seed=seed,
         image_shape=image_shape,
-        position_bounds=position_bounds,
         img_offset=img_offset,
-        num_particles=num_particles,
+        seeding_density=seeding_density,
+        dt=dt,
+        max_speed_x=max_speed_x,
+        max_speed_y=max_speed_y,
+        min_speed_x=min_speed_x,
+        min_speed_y=min_speed_y,
     )
 
     def run_sampler():

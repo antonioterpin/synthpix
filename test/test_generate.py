@@ -40,7 +40,9 @@ def test_invalid_image_shape(img_gen, image_shape):
 def test_invalid_seeding_density(seeding_density):
     """Test that invalid seeding densities raise a ValueError."""
     key = jax.random.PRNGKey(0)
-    with pytest.raises(ValueError, match="seeding_density must be positive."):
+    with pytest.raises(
+        ValueError, match="seeding_density must be a float between 0 and 1."
+    ):
         img_gen_from_density(key, seeding_density=seeding_density)
 
 
@@ -138,9 +140,9 @@ def test_generate_image(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connect to the server.",
 )
-@pytest.mark.parametrize("particles_number", [40000])
+@pytest.mark.parametrize("seeding_density", [0.016])
 @pytest.mark.parametrize("image_shape", [(1216, 1936)])
-def test_speed_img_gen(particles_number, image_shape):
+def test_speed_img_gen(seeding_density, image_shape):
     """Test that img_gen_from_data is faster than a limit time."""
 
     # Name of the axis for the device mesh
@@ -171,6 +173,7 @@ def test_speed_img_gen(particles_number, image_shape):
     keys = jax.random.split(key, num_devices)
     keys = jnp.stack(keys)
 
+    particles_number = int(image_shape[0] * image_shape[1] * seeding_density)
     particles = jax.random.uniform(
         subkey,
         (particles_number * num_devices, 2),

@@ -181,6 +181,7 @@ testing_data/
 data/
 
 # Workspace
-fluids-estimation.code-workspace
+*.code-workspace
 
+# Output images
 /output_images

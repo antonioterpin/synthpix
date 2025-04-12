@@ -18,13 +18,15 @@ def generate_images_from_flow(
     image_shape: Tuple[int, int] = (256, 256),
     num_images: int = 300,
     img_offset: Tuple[int, int] = (128, 128),
-    num_particles: int = 10000,
+    seeding_density: int = 0.01,
     p_hide_img1: float = 0.01,
     p_hide_img2: float = 0.01,
     diameter_range: Tuple[float, float] = (0.1, 1.0),
     intensity_range: Tuple[float, float] = (50, 200),
     rho_range: Tuple[float, float] = (-0.99, 0.99),
     dt: float = 1.0,
+    flow_field_res_x: float = 1.0,
+    flow_field_res_y: float = 1.0,
 ):
     """Generates a batch of image pairs from a flow field.
 
@@ -42,8 +44,8 @@ def generate_images_from_flow(
             Number of image pairs to generate.
         img_offset: Tuple[int, int]
             Offset to apply to the generated images.
-        num_particles: int
-            Number of particles to generate in each image.
+        seeding_density: float
+            Particle density in the image.
         p_hide_img1: float
             Probability of hiding particles in the first image.
         p_hide_img2: float
@@ -57,6 +59,12 @@ def generate_images_from_flow(
         dt: float
             Time step for the simulation, used to scale the velocity
             to compute the displacement.
+        flow_field_res_x: float
+            Resolution of the flow field in the x direction
+            in grid steps per length measure unit.
+        flow_field_res_y: float
+            Resolution of the flow field in the y direction
+            in grid steps per length measure unit
 
     Returns:
         tuple: Two image batches (num_images, H, W) each.
@@ -64,6 +72,9 @@ def generate_images_from_flow(
     # scale factors for particle positions
     alpha1 = flow_field.shape[0] / position_bounds[0]
     alpha2 = flow_field.shape[1] / position_bounds[1]
+
+    # Calculate the number of particles based on the density
+    num_particles = int(position_bounds[0] * position_bounds[1] * seeding_density)
 
     def bodyfun(i, state):
         first_imgs, second_imgs, key = state
@@ -120,7 +131,11 @@ def generate_images_from_flow(
 
         # Apply flow field to particle positions
         final_positions = apply_flow_to_particles(
-            particle_positions=particle_positions, flow_field=flow_field, dt=dt
+            particle_positions=particle_positions,
+            flow_field=flow_field,
+            dt=dt,
+            flow_field_res_x=flow_field_res_x,
+            flow_field_res_y=flow_field_res_y,
         )
 
         # Rescale the x coordinates back to the original scale
@@ -191,13 +206,15 @@ def input_check_gen_img_from_flow(
     image_shape: Tuple[int, int] = (256, 256),
     img_offset: Tuple[int, int] = (20, 20),
     num_images: int = 300,
-    num_particles: int = 10000,
+    seeding_density: int = 0.01,
     p_hide_img1: float = 0.01,
     p_hide_img2: float = 0.01,
     diameter_range: Tuple[float, float] = (0.1, 1.0),
     intensity_range: Tuple[float, float] = (50, 200),
     rho_range: Tuple[float, float] = (-0.99, 0.99),
     dt: float = 1.0,
+    flow_field_res_x: float = 1.0,
+    flow_field_res_y: float = 1.0,
 ):
     """Check the input arguments for generate_images_from_flow.
 
@@ -215,8 +232,8 @@ def input_check_gen_img_from_flow(
             Number of image pairs to generate.
         img_offset: Tuple[int, int]
             Offset to apply to the generated images.
-        num_particles: int
-            Number of particles to generate in each image.
+        seeding_density: float
+            Density of particles in the image.
         p_hide_img1: float
             Probability of hiding particles in the first image.
         p_hide_img2: float
@@ -230,6 +247,12 @@ def input_check_gen_img_from_flow(
         dt: float
             Time step for the simulation, used to scale the velocity
             to compute the displacement.
+        flow_field_res_x: float
+            Resolution of the flow field in the x direction
+            in grid steps per length measure unit.
+        flow_field_res_y: float
+            Resolution of the flow field in the y direction
+            in grid steps per length measure unit
     """
     # Argument checks using exceptions instead of asserts
     if not isinstance(key, jax.Array) or key.shape != (2,) or key.dtype != jnp.uint32:
@@ -268,20 +291,40 @@ def input_check_gen_img_from_flow(
         raise ValueError("rho_range must be a tuple of two floats between -1 and 1.")
     if not isinstance(num_images, int) or num_images <= 0:
         raise ValueError("num_images must be a positive integer.")
-    if not isinstance(num_particles, int) or num_particles <= 0:
-        raise ValueError("num_particles must be a positive integer.")
     if not (0 <= p_hide_img1 <= 1):
         raise ValueError("p_hide_img1 must be between 0 and 1.")
     if not (0 <= p_hide_img2 <= 1):
         raise ValueError("p_hide_img2 must be between 0 and 1.")
     if not isinstance(dt, (int, float)):
         raise ValueError("dt must be a scalar (int or float)")
+    if not isinstance(flow_field_res_x, (int, float)) or flow_field_res_x <= 0:
+        raise ValueError("flow_field_res_x must be a positive scalar (int or float)")
+    if not isinstance(flow_field_res_y, (int, float)) or flow_field_res_y <= 0:
+        raise ValueError("flow_field_res_y must be a positive scalar (int or float)")
+    if position_bounds[0] < image_shape[0] + img_offset[0]:
+        raise ValueError(
+            "The height of the position_bounds must be greater "
+            "than the height of the image plus the offset."
+        )
+    if position_bounds[1] < image_shape[1] + img_offset[1]:
+        raise ValueError(
+            "The width of the position_bounds must be greater "
+            "than the width of the image plus the offset."
+        )
+    if (
+        not isinstance(seeding_density, (float))
+        or seeding_density <= 0
+        or seeding_density > 1
+    ):
+        raise ValueError("seeding_density must be a float between 0 and 1.")
+    num_particles = int(position_bounds[0] * position_bounds[1] * seeding_density)
 
     logger.debug("Input arguments of generate_images_from_flow are valid.")
     logger.debug(f"Flow field shape: {flow_field.shape}")
     logger.debug(f"Image shape: {image_shape}")
-    logger.debug(f"Big image shape: {position_bounds}")
+    logger.debug(f"Position bounds shape: {position_bounds}")
     logger.debug(f"Number of images: {num_images}")
+    logger.debug(f"Particles density: {seeding_density}")
     logger.debug(f"Number of particles: {num_particles}")
     logger.debug(f"Probability of hiding particles in image 1: {p_hide_img1}")
     logger.debug(f"Probability of hiding particles in image 2: {p_hide_img2}")
@@ -289,3 +332,5 @@ def input_check_gen_img_from_flow(
     logger.debug(f"Intensity range: {intensity_range}")
     logger.debug(f"Correlation coefficient range: {rho_range}")
     logger.debug(f"Time step (dt): {dt}")
+    logger.debug(f"Flow field resolution (x): {flow_field_res_x}")
+    logger.debug(f"Flow field resolution (y): {flow_field_res_y}")

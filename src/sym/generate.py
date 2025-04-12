@@ -124,8 +124,8 @@ def img_gen_from_density(
         or not all(is_int(s) for s in image_shape)
     ):
         raise ValueError("image_shape must be a tuple of two positive integers.")
-    if seeding_density <= 0 or seeding_density > 1:
-        raise ValueError("seeding_density must be positive.")
+    if seeding_density <= 0 or seeding_density >= 1:
+        raise ValueError("seeding_density must be a float between 0 and 1.")
     if len(diameter_range) != 2 or not all(d > 0 for d in diameter_range):
         raise ValueError("diameter_range must be a tuple of two positive floats.")
     if len(intensity_range) != 2 or not all(0 <= i for i in intensity_range):
