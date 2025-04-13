@@ -5,10 +5,10 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from src.sym.data_generate import generate_images_from_flow
-from src.sym.image_sampler import SyntheticImageSampler
-from src.sym.scheduler import HDF5FlowFieldScheduler
-from src.utils import load_configuration, logger
+from src.synthpix.data_generate import generate_images_from_flow
+from src.synthpix.image_sampler import SyntheticImageSampler
+from src.synthpix.scheduler import HDF5FlowFieldScheduler
+from src.synthpix.utils import load_configuration, logger
 
 config = load_configuration("config/testing.yaml")
 

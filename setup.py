@@ -1,0 +1,44 @@
+"""Setup script for the SynthPix package."""
+
+from setuptools import find_packages, setup
+
+from src.synthpix import __version__ as version
+
+setup(
+    name="synthpix",
+    version=version,
+    author="Antonio Terpin",
+    description="Synthetic particle image generator",
+    package_dir={"": "src"},
+    packages=find_packages(where="src"),
+    install_requires=[
+        "jax",
+        "tqdm>=4.67.1",
+        "h5py>=3.13.0",
+        "ruamel.yaml>=0.18.10",
+        "imageio>=2.37.0",
+        "matplotlib>=3.10.1",
+    ],
+    extras_require={
+        "dev": [
+            "snowballstemmer==2.2.0",
+            "pre_commit==4.0.1",
+            "pytest==7.4.4",
+            "Sphinx==7.4.7",
+            "sphinx-copybutton==0.5.2",
+            "sphinx-rtd-theme==2.0.0",
+            "sphinx-tabs==3.4.7",
+            "sphinx-togglebutton==0.3.2",
+            "sphinxcontrib-applehelp==2.0.0",
+            "sphinxcontrib-bibtex==2.6.2",
+            "sphinxcontrib-devhelp==2.0.0",
+            "sphinxcontrib-htmlhelp==2.1.0",
+            "sphinxcontrib-jquery==4.1",
+            "sphinxcontrib-jsmath==1.0.1",
+            "sphinxcontrib-qthelp==2.0.0",
+            "sphinxcontrib-serializinghtml==2.0.0",
+        ],
+        "cuda12_pip": ["jax[cuda12_pip]"],
+    },
+    python_requires=">=3.10",
+)

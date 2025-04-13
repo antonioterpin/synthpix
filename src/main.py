@@ -3,10 +3,10 @@ import argparse
 
 import h5py
 
-from src.sym.data_generate import generate_images_from_flow
-from src.sym.image_sampler import SyntheticImageSampler
-from src.sym.scheduler import HDF5FlowFieldScheduler
-from src.utils import load_configuration, logger, visualize_and_save
+from src.synthpix.data_generate import generate_images_from_flow
+from src.synthpix.image_sampler import SyntheticImageSampler
+from src.synthpix.scheduler import HDF5FlowFieldScheduler
+from src.synthpix.utils import load_configuration, logger, visualize_and_save
 
 
 def main(config_path, output_dir, num_images_to_display):

@@ -7,8 +7,8 @@ import jax.numpy as jnp
 import pytest
 import yaml
 
-from src.sym.example_flows import get_flow_function
-from src.utils import (
+from src.synthpix.example_flows import get_flow_function
+from src.synthpix.utils import (
     bilinear_interpolate,
     calculate_min_and_max_speeds,
     compute_image_scaled_height,
