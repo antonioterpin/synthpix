@@ -6,7 +6,7 @@ import h5py
 import numpy as np
 import pytest
 
-from src.synthpix.scheduler import HDF5FlowFieldScheduler
+from synthpix.scheduler import HDF5FlowFieldScheduler
 
 
 @pytest.fixture(scope="module")

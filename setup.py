@@ -24,6 +24,9 @@ setup(
             "snowballstemmer==2.2.0",
             "pre_commit==4.0.1",
             "pytest==7.4.4",
+        ],
+        "cuda12": ["jax[cuda12_pip]"],
+        "docs": [
             "Sphinx==7.4.7",
             "sphinx-copybutton==0.5.2",
             "sphinx-rtd-theme==2.0.0",
@@ -38,7 +41,6 @@ setup(
             "sphinxcontrib-qthelp==2.0.0",
             "sphinxcontrib-serializinghtml==2.0.0",
         ],
-        "cuda12_pip": ["jax[cuda12_pip]"],
     },
     python_requires=">=3.10",
 )

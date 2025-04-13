@@ -5,8 +5,8 @@ import h5py
 import numpy as np
 import pytest
 
-from src.synthpix.scheduler import BaseFlowFieldScheduler, HDF5FlowFieldScheduler
-from src.synthpix.utils import load_configuration
+from synthpix.scheduler import BaseFlowFieldScheduler, HDF5FlowFieldScheduler
+from synthpix.utils import load_configuration
 
 config = load_configuration("config/testing.yaml")
 
