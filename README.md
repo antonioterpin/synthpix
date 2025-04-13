@@ -3,9 +3,21 @@
 ## Installation
 We will use [conda](https://conda.io/en/latest/user-guide/install/) to handle the virtual environment.
 ```sh
-conda create -n fluids-estimation python=3.10
-conda activate fluids-estimation
+conda create -n synthpix python=3.10
+conda activate synthpix
 pip install pip --upgrade
+```
+Dev with CUDA12:
+```bash
+pip install .[cuda12,dev]
+```
+Dev without CUDA12:
+```bash
+pip install .[dev]
+```
+For docs:
+```bash
+pip install .[cuda12,dev,docs]
 ```
 
 ### JAX CUDA 12 installation
@@ -13,36 +25,13 @@ Please follow the official instructions for
 - [cuda12](https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local).
 - [cudnn](https://developer.nvidia.com/cudnn-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local)
 Note: wheels only available on linux.
-```bash
-pip install "jax[cuda12_pip]"
-```
-You can also install the CPU version:
-```bash
-pip install jax
-```
-
-Then, install all the other requirements:
-```bash
-pip install -r requirements.txt
-```
 
 ## Compiling the documentation with Sphinx
-To compile the documentation using Sphinx, follow these steps:
-
-1. **Install additional required packages**
-
-   Make sure you have Sphinx and any necessary extensions installed:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Building the documentation**
-
-   Next, navigate to the root directory of your project and run the following command to build the HTML documentation:
-   ```bash
-   sphinx-build -b html ./docs ./docs/build/
-   ```
-   This command tells Sphinx to generate HTML files from the source files located in the ./docs directory and place the generated files in the ./docs/build/ directory.
+To compile the documentation using Sphinx, navigate to the root directory of your project and run the following command to build the HTML documentation:
+```bash
+sphinx-build -b html ./docs ./docs/build/
+```
+This command tells Sphinx to generate HTML files from the source files located in the ./docs directory and place the generated files in the ./docs/build/ directory.
 
 The compiled HTML pages will be located in the docs/build directory. You can open the index.html file in your web browser to view the documentation.
 

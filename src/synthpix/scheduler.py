@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 import h5py
 import numpy as np
 
-from src.utils import logger
+from synthpix.utils import logger
 
 
 class BaseFlowFieldScheduler(ABC):
