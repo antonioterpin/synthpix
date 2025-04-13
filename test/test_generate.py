@@ -7,13 +7,13 @@ from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, PartitionSpec
 
-from src.sym.generate import (
+from synthpix.generate import (
     add_noise_to_image,
     img_gen_from_data,
     img_gen_from_density,
     input_check_img_gen_from_data,
 )
-from src.utils import load_configuration
+from synthpix.utils import load_configuration
 
 config = load_configuration("config/testing.yaml")
 

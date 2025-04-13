@@ -11,7 +11,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-import yaml
+from ruamel.yaml import YAML
 from tqdm import tqdm
 
 DEBUG = False
@@ -48,8 +48,9 @@ def is_int(val: Union[int, float]) -> bool:
 
 def load_configuration(file_path: str):
     """Load YAML configuration from file."""
+    yaml = YAML(typ="safe", pure=True)
     with open(file_path, "r", encoding="utf-8") as file:
-        return yaml.safe_load(file)
+        return yaml.load(file)
 
 
 def compute_image_scaled_height(
@@ -377,8 +378,7 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
 
 def update_config_file(config_path: str, updated_values: dict):
     """Update the YAML configuration file with new values."""
-    with open(config_path, "r") as file:
-        config_data = yaml.safe_load(file)
+    config_data = load_configuration(config_path)
 
     # Convert to OrderedDict to preserve order
     config_data = collections.OrderedDict(config_data)

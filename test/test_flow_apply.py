@@ -6,14 +6,14 @@ import pytest
 from jax.experimental import mesh_utils
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
-from src.sym.apply import (
+from synthpix.apply import (
     apply_flow_to_image,
     apply_flow_to_particles,
     input_check_apply_flow,
 )
-from src.sym.example_flows import get_flow_function
-from src.sym.generate import img_gen_from_data, img_gen_from_density
-from src.utils import generate_array_flow_field, load_configuration
+from synthpix.example_flows import get_flow_function
+from synthpix.generate import img_gen_from_data, img_gen_from_density
+from synthpix.utils import generate_array_flow_field, load_configuration
 
 config = load_configuration("config/testing.yaml")
 

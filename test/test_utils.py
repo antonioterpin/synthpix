@@ -7,8 +7,8 @@ import jax.numpy as jnp
 import pytest
 import yaml
 
-from src.sym.example_flows import get_flow_function
-from src.utils import (
+from synthpix.example_flows import get_flow_function
+from synthpix.utils import (
     bilinear_interpolate,
     calculate_min_and_max_speeds,
     compute_image_scaled_height,
@@ -212,8 +212,7 @@ def test_update_config_file():
     tmp_path = tempfile.gettempdir()
     temp_config_path = os.path.join(tmp_path, "temp_config.yaml")
     try:
-        with open(base_config_path, "r") as base_file:
-            base_config = yaml.safe_load(base_file)
+        base_config = load_configuration(base_config_path)
         with open(temp_config_path, "w") as temp_file:
             yaml.safe_dump(base_config, temp_file)
         # Define the updates to be made
@@ -226,8 +225,7 @@ def test_update_config_file():
         # Call the function to update the configuration file
         update_config_file(temp_config_path, updates)
         # Reload the updated configuration file
-        with open(temp_config_path, "r") as updated_file:
-            updated_config = yaml.safe_load(updated_file)
+        updated_config = load_configuration(temp_config_path)
         # Assert that the updates were applied correctly
         for key, value in updates.items():
             assert updated_config[key] == value
