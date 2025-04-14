@@ -8,16 +8,15 @@ import pytest
 import yaml
 
 from synthpix.example_flows import get_flow_function
+from synthpix.sanity import calculate_min_and_max_speeds, update_config_file
 from synthpix.utils import (
     bilinear_interpolate,
-    calculate_min_and_max_speeds,
     flow_field_adapter,
     generate_array_flow_field,
     input_check_flow_field_adapter,
     is_int,
     load_configuration,
     trilinear_interpolate,
-    update_config_file,
 )
 
 config = load_configuration("config/testing.yaml")

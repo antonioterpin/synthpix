@@ -26,29 +26,10 @@ def main(config_path, output_dir, num_images_to_display):
     scheduler = HDF5FlowFieldScheduler(config["scheduler_files"], loop=False)
 
     # Initialize the sampler
-    sampler = SyntheticImageSampler(
+    sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
         img_gen_fn=generate_images_from_flow,
-        images_per_field=config["images_per_field"],
-        batch_size=config["batch_size"],
-        flow_field_size=tuple(config["flow_field_size"]),
-        image_shape=tuple(config["image_shape"]),
-        resolution=config["resolution"],
-        velocities_per_pixel=config["velocities_per_pixel"],
-        img_offset=config["img_offset"],
-        seeding_density=config["seeding_density"],
-        p_hide_img1=config["p_hide_img1"],
-        p_hide_img2=config["p_hide_img2"],
-        diameter_range=tuple(config["diameter_range"]),
-        intensity_range=tuple(config["intensity_range"]),
-        rho_range=tuple(config["rho_range"]),
-        dt=config["dt"],
-        seed=config["seed"],
-        max_speed_x=config["max_speed_x"],
-        max_speed_y=config["max_speed_y"],
-        min_speed_x=config["min_speed_x"],
-        min_speed_y=config["min_speed_y"],
-        config_path=config_path,
+        config=config,
     )
 
     # Run the sampler and print results

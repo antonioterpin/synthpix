@@ -29,5 +29,4 @@ min_speed_y: -0.45968499779701233 # Minimum speed in the y direction
 max_speed_y: 0.501191258430481 # Maximum speed in the y direction
 # Flows files
 scheduler_files:
-  - /shared/fluids/channel_full_ts_0004.h5
-  - /shared/fluids/channel_full_ts_0008.h5
+  - /shared/fluids/files_to_modify/channel_full_ts_0984.h5
