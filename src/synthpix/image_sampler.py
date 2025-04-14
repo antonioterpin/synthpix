@@ -191,6 +191,14 @@ class SyntheticImageSampler:
         ):
             raise ValueError("img_offset must be a tuple of two non-negative numbers.")
 
+        if (
+            not isinstance(seeding_density, float)
+            or seeding_density <= 0
+            or seeding_density >= 1
+        ):
+            raise ValueError("seeding_density must be a float between 0 and 1.")
+        self.seeding_density = seeding_density
+
         if not (0 <= p_hide_img1 <= 1):
             raise ValueError("p_hide_img1 must be between 0 and 1.")
         self.p_hide_img1 = p_hide_img1
@@ -262,15 +270,20 @@ class SyntheticImageSampler:
             min_speed_y = 0.0
 
         logger.info(
-            f"max_speed_x: {max_speed_x}, max_speed_y: {max_speed_y}, "
-            f"min_speed_x: {min_speed_x}, min_speed_y: {min_speed_y}"
+            f"max_speed_x: {max_speed_x},\n max_speed_y: {max_speed_y},\n "
+            f"min_speed_x: {min_speed_x},\n min_speed_y: {min_speed_y}"
         )
+
+        # Calculate the resolution of the flow field
+        # in grid steps per length measure unit
+        self.flow_field_res_y = flow_field_shape[0] / flow_field_size[0]
+        self.flow_field_res_x = flow_field_shape[1] / flow_field_size[1]
+
         # Calculate the position bounds offset in length measure unit
         position_bounds_offset = (
             img_offset[0] - max_speed_y * dt,
             img_offset[1] - max_speed_x * dt,
         )
-        self.position_bounds_offset = position_bounds_offset
 
         # Position bounds in length measure unit
         position_bounds = (
@@ -280,14 +293,14 @@ class SyntheticImageSampler:
 
         # Check if the position bounds offset is negative or if the position bounds
         # exceed the flow field size
-        if position_bounds_offset[0] <= 0 or position_bounds_offset[1] <= 0:
+        if position_bounds_offset[0] < 0 or position_bounds_offset[1] < 0:
             raise ValueError(
                 f"The image is too close the flow field left or top edge. "
                 f"The minimum image offset is {(max_speed_y * dt, max_speed_x * dt)}."
             )
         if (
-            position_bounds[0] + position_bounds_offset[0] >= flow_field_size[0]
-            or position_bounds[1] + position_bounds_offset[1] >= flow_field_size[1]
+            position_bounds[0] + position_bounds_offset[0] > flow_field_size[0]
+            or position_bounds[1] + position_bounds_offset[1] > flow_field_size[1]
         ):
             raise ValueError(
                 f"The size of the flow field is too small."
@@ -296,13 +309,40 @@ class SyntheticImageSampler:
                 f"{position_bounds[1] + position_bounds_offset[1]})."
             )
 
-        if (
-            not isinstance(seeding_density, float)
-            or seeding_density <= 0
-            or seeding_density >= 1
+        # Compute the particle size in length measure unit
+        particle_pixel_radius = int(3 * diameter_range[1] / 2)
+        particle_size = (2 * particle_pixel_radius + 1) / resolution
+
+        # Check if a bigger position bounds is needed
+        if (p_hide_img1 > 0 or p_hide_img2 > 0) and (
+            particle_size > max_speed_x * dt or particle_size > max_speed_y * dt
         ):
-            raise ValueError("seeding_density must be a float between 0 and 1.")
-        self.seeding_density = seeding_density
+            # Compute the extra length of the position bounds
+            extra_length_x = max(0.0, particle_size - max_speed_x * dt)
+            extra_length_y = max(0.0, particle_size - max_speed_y * dt)
+
+            # Calculate the position bounds offset in length measure unit
+            position_bounds_offset = (
+                position_bounds_offset[0] - extra_length_y,
+                position_bounds_offset[1] - extra_length_x,
+            )
+
+            # Position bounds in length measure unit
+            position_bounds = (
+                position_bounds[0] + extra_length_y,
+                position_bounds[1] + extra_length_x,
+            )
+
+        # Compute zero padding in length measure unit
+        zero_padding = tuple(max(0, -x) for x in position_bounds_offset)
+
+        # Compute the zero padding in pixels
+        pad_y = int(jnp.ceil(zero_padding[0] * self.flow_field_res_y))
+        pad_x = int(jnp.ceil(zero_padding[1] * self.flow_field_res_x))
+        self.zero_padding = (pad_y, pad_x)
+
+        # Set the position bounds offset
+        self.position_bounds_offset = tuple(max(0, x) for x in position_bounds_offset)
 
         # Calculate the image offset in pixels
         self.img_offset = (
@@ -312,11 +352,6 @@ class SyntheticImageSampler:
 
         # Calculate the position bounds in pixels
         self.position_bounds = tuple(int(x * resolution) for x in position_bounds)
-
-        # Calculate the resolution of the flow field
-        # in grid steps per length measure unit
-        self.flow_field_res_y = flow_field_shape[0] / flow_field_size[0]
-        self.flow_field_res_x = flow_field_shape[1] / flow_field_size[1]
 
         if not DEBUG_JIT:
             self.img_gen_fn_jit = jax.jit(
@@ -417,6 +452,19 @@ class SyntheticImageSampler:
         ):
             _current_flow = jnp.array(next(self.scheduler))
             self._images_generated = 0
+
+            # Adding zero padding to the flow field
+            _current_flow = jnp.pad(
+                _current_flow,
+                pad_width=(
+                    (self.zero_padding[0], 0),
+                    (self.zero_padding[1], 0),
+                    (0, 0),
+                ),
+                mode="constant",
+                constant_values=0.0,
+            )
+
             # Cropping the flow field to the position bounds
             self._current_flow = _current_flow[
                 int(self.position_bounds_offset[0] * self.flow_field_res_y) : int(
