@@ -23,7 +23,7 @@ def hdf5_test_dims(request):
         "x_dim": 1536 if not CI else 128,
         "y_dim": 100 if not CI else 10,
         "z_dim": 2048 if not CI else 128,
-        "features": 3,
+        "features": 2,
     }
     return default_dims
 

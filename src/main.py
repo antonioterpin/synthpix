@@ -1,8 +1,6 @@
 """Main file to run the SyntheticImageSampler pipeline."""
 import argparse
 
-import h5py
-
 from synthpix.data_generate import generate_images_from_flow
 from synthpix.image_sampler import SyntheticImageSampler
 from synthpix.scheduler import HDF5FlowFieldScheduler
@@ -84,13 +82,6 @@ if __name__ == "__main__":
 
     # Read config file
     config = load_configuration(args.config)
-
-    # Open the first scheduler file and get its shape
-    first_file = config["scheduler_files"][0]
-    with h5py.File(first_file, "r") as f:
-        dataset_name = list(f.keys())[0]
-        data_shape = f[dataset_name].shape
-        flow_field_shape = data_shape[0], data_shape[2] // 2
 
     main(
         config_path=args.config,
