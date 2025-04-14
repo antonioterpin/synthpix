@@ -3,7 +3,6 @@
 import collections
 import logging
 import os
-import signal
 from typing import Tuple, Union
 
 import h5py
@@ -51,43 +50,6 @@ def load_configuration(file_path: str):
     yaml = YAML(typ="safe", pure=True)
     with open(file_path, "r", encoding="utf-8") as file:
         return yaml.load(file)
-
-
-def compute_image_scaled_height(
-    target_width: int, image_width: int, image_height: int
-) -> int:
-    """Computes the height of an image given a target width keeping the aspect ratio.
-
-    Args:
-        target_width (int): The target width.
-        image_width (int): The width of the image.
-        image_height (int): The height of the image.
-
-    Returns:
-        int: The scaled height.
-    """
-    if target_width <= 0 or image_width <= 0 or image_height <= 0:
-        raise ValueError("All dimensions must be positive integers.")
-    return int(image_height * target_width / image_width)
-
-
-def particles_per_pixel(image: jnp.ndarray, threshold: float = 0.1) -> float:
-    """Estimates the number of particles per pixel in the image.
-
-    Args:
-        image: jnp.ndarray
-            The input image of shape (H, W, 1).
-        threshold: float
-            The threshold to apply to the image.
-
-    Returns:
-        float: The estimated density.
-    """
-    # Simple, fast, metric for particle density is the fraction of pixels
-    # above a threshold
-    if not (0 <= threshold <= 255):
-        raise ValueError("threshold must be a float in the range [0, 1].")
-    return float(jnp.sum(image > threshold) / jnp.prod(image.size))
 
 
 def bilinear_interpolate(
@@ -205,25 +167,6 @@ def trilinear_interpolate(
 
     # Compute the weighted sum of the corner intensities
     return Ia * wa + Ib * wb + Ic * wc + Id * wd + Ie * we + If * wf + Ig * wg + Ih * wh
-
-
-class GracefulShutdown:
-    """A context manager for graceful shutdowns."""
-
-    stop = False
-
-    def __enter__(self):
-        """Register the signal handler."""
-
-        def handle_signal(signum, frame):
-            self.stop = True
-
-        signal.signal(signal.SIGINT, handle_signal)
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        """Unregister the signal handler."""
-        pass
 
 
 def generate_array_flow_field(

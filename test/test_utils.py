@@ -11,13 +11,11 @@ from synthpix.example_flows import get_flow_function
 from synthpix.utils import (
     bilinear_interpolate,
     calculate_min_and_max_speeds,
-    compute_image_scaled_height,
     flow_field_adapter,
     generate_array_flow_field,
     input_check_flow_field_adapter,
     is_int,
     load_configuration,
-    particles_per_pixel,
     trilinear_interpolate,
     update_config_file,
 )
@@ -26,57 +24,6 @@ config = load_configuration("config/testing.yaml")
 
 REPETITIONS = config["REPETITIONS"]
 NUMBER_OF_EXECUTIONS = config["EXECUTIONS_UTILS"]
-
-
-@pytest.mark.parametrize(
-    "original_height, original_width, new_width, expected_height",
-    [
-        (200, 400, 800, 400),
-        (100, 400, 800, 200),
-        (50, 200, 100, 25),
-        (300, 600, 900, 450),
-    ],
-)
-def test_compute_image_scaled_height(
-    original_height, original_width, new_width, expected_height
-):
-    """Test the compute_image_scaled_height function with various inputs.
-
-    Args:
-        original_height (int): The original height of the image.
-        original_width (int): The original width of the image.
-        new_width (int): The new width to scale the image to.
-        expected_height (int): The expected height after scaling.
-    """
-    assert (
-        compute_image_scaled_height(original_height, original_width, new_width)
-        == expected_height
-    )
-
-
-@pytest.mark.parametrize(
-    "original_height, original_width, new_width",
-    [
-        (0, 400, 800),
-        (100, 0, 800),
-        (50, 200, 0),
-        (-300, 600, 900),
-        (300, -600, 900),
-        (300, 600, -900),
-    ],
-)
-def test_compute_image_scaled_height_exceptions(
-    original_height, original_width, new_width
-):
-    """Test the compute_image_scaled_height function with invalid inputs.
-
-    Args:
-        original_height (int): The original height of the image.
-        original_width (int): The original width of the image.
-        new_width (int): The new width to scale the image to.
-    """
-    with pytest.raises(ValueError):
-        compute_image_scaled_height(original_height, original_width, new_width)
 
 
 @pytest.mark.parametrize(
@@ -183,26 +130,6 @@ def test_generate_array_flow_field(shape, flow_field_type, expected):
     assert generated_flow_field.shape == expected.shape
     assert jnp.allclose(generated_flow_field, expected, atol=1e-5)
     assert generated_flow_field.dtype == jnp.float32
-
-
-@pytest.mark.parametrize(
-    "image, threshold, expected",
-    [
-        (jnp.array([[0, 1], [2, 3]], dtype=jnp.float32), 1.0, 0.5),
-        (jnp.array([[0, 1], [2, 3]], dtype=jnp.float32), 2.0, 0.25),
-        (jnp.array([[0, 1], [2, 3]], dtype=jnp.float32), 3.0, 0.0),
-    ],
-)
-def test_particles_per_pixel(image, threshold, expected):
-    """Test the particles_per_pixel function with various inputs.
-
-    Args:
-        image (jnp.ndarray): The input image.
-        threshold (float): The threshold to apply to the image.
-        expected (float): The expected density.
-    """
-    # Call the function and check the result
-    assert jnp.isclose(particles_per_pixel(image, threshold), expected, atol=1e-5)
 
 
 def test_update_config_file():
