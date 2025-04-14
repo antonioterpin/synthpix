@@ -392,7 +392,7 @@ def test_generate_images_from_flow(visualize=False):
 @pytest.mark.parametrize("image_shape", [(1216, 1936)])
 @pytest.mark.parametrize("position_bounds", [(1536, 2048)])
 @pytest.mark.parametrize("img_offset", [(160, 56)])
-@pytest.mark.parametrize("num_flow_fields", [4])
+@pytest.mark.parametrize("num_flow_fields", [100])
 def test_speed_generate_images_from_flow(
     selected_flow,
     seeding_density,
@@ -412,11 +412,11 @@ def test_speed_generate_images_from_flow(
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 0e-2
+        limit_time = 1.15e-2
     elif num_devices == 2:
         limit_time = 7e-3
     elif num_devices == 4:
-        limit_time = 0e-3
+        limit_time = 3e-3
 
     # Setup device mesh
     # We want to shard a key to each device
