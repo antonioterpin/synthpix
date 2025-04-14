@@ -270,7 +270,7 @@ def test_speed_apply_flow_to_particles(seeding_density, selected_flow, image_sha
 
     # Compute the number of particles and round it to the number of devices
     particles_number = int(image_shape[0] * image_shape[1] * seeding_density)
-    particles_number = (particles_number // num_devices) * num_devices
+    particles_number = (particles_number // num_devices + 1) * num_devices
     particles = jax.random.uniform(
         key, (particles_number, 2), minval=0.0, maxval=jnp.array(image_shape) - 1
     )

@@ -15,6 +15,8 @@ config = load_configuration("config/testing.yaml")
 REPETITIONS = config["REPETITIONS"]
 NUMBER_OF_EXECUTIONS = config["EXECUTIONS_SAMPLER"]
 
+sampler_config = load_configuration("config/test_data.yaml")
+
 
 def dummy_img_gen_fn(
     key,
@@ -46,12 +48,46 @@ def dummy_img_gen_fn(
 def test_invalid_scheduler(scheduler):
     """Test that invalid scheduler raises a ValueError."""
     with pytest.raises(ValueError, match="scheduler must be an iterable object."):
-        SyntheticImageSampler(
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            seed=0,
+            config=sampler_config,
+        )
+
+
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+@pytest.mark.parametrize(
+    "missing_key",
+    [
+        "batch_size",
+        "images_per_field",
+        "image_shape",
+        "flow_field_size",
+        "resolution",
+        "max_speed_x",
+        "max_speed_y",
+        "min_speed_x",
+        "min_speed_y",
+        "dt",
+        "img_offset",
+        "seeding_density",
+        "p_hide_img1",
+        "p_hide_img2",
+        "diameter_range",
+        "intensity_range",
+        "rho_range",
+        "velocities_per_pixel",
+    ],
+)
+def test_from_config_missing_key_raises(scheduler, missing_key):
+    config = sampler_config.copy()
+    config.pop(missing_key)
+
+    with pytest.raises(KeyError):
+        SyntheticImageSampler.from_config(
+            scheduler=scheduler, img_gen_fn=dummy_img_gen_fn, config=config
         )
 
 
@@ -61,12 +97,10 @@ def test_invalid_scheduler(scheduler):
 def test_invalid_img_gen_fn(scheduler):
     """Test that invalid img_gen_fn raises a ValueError."""
     with pytest.raises(ValueError, match="img_gen_fn must be a callable function."):
-        SyntheticImageSampler(
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=None,
-            batch_size=2,
-            images_per_field=10,
-            seed=0,
+            config=sampler_config,
         )
 
 
@@ -77,12 +111,12 @@ def test_invalid_img_gen_fn(scheduler):
 def test_invalid_batch_size(batch_size, scheduler):
     """Test that invalid batch_size raises a ValueError."""
     with pytest.raises(ValueError, match="batch_size must be a positive integer."):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["batch_size"] = batch_size
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=batch_size,
-            images_per_field=10,
-            seed=0,
+            config=config,
         )
 
 
@@ -95,12 +129,12 @@ def test_invalid_images_per_field(images_per_field, scheduler):
     with pytest.raises(
         ValueError, match="images_per_field must be a positive integer."
     ):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["images_per_field"] = images_per_field
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=images_per_field,
-            seed=0,
+            config=config,
         )
 
 
@@ -113,13 +147,12 @@ def test_invalid_flow_field_size(flow_field_size, scheduler):
     with pytest.raises(
         ValueError, match="flow_field_size must be a tuple of two positive numbers."
     ):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["flow_field_size"] = flow_field_size
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            flow_field_size=flow_field_size,
-            seed=0,
+            config=config,
         )
 
 
@@ -134,13 +167,12 @@ def test_invalid_image_shape(image_shape, scheduler):
     with pytest.raises(
         ValueError, match="image_shape must be a tuple of two positive integers."
     ):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["image_shape"] = image_shape
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            image_shape=image_shape,
-            seed=0,
+            config=config,
         )
 
 
@@ -151,13 +183,12 @@ def test_invalid_image_shape(image_shape, scheduler):
 def test_invalid_resolution(resolution, scheduler):
     """Test that invalid resolution raises a ValueError."""
     with pytest.raises(ValueError, match="resolution must be a positive number."):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["resolution"] = resolution
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            resolution=resolution,
-            seed=0,
+            config=config,
         )
 
 
@@ -172,13 +203,12 @@ def test_velocities_per_pixel(velocities_per_pixel, scheduler):
     with pytest.raises(
         ValueError, match="velocities_per_pixel must be a positive number."
     ):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["velocities_per_pixel"] = velocities_per_pixel
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            velocities_per_pixel=velocities_per_pixel,
-            seed=0,
+            config=config,
         )
 
 
@@ -191,13 +221,12 @@ def test_invalid_img_offset(img_offset, scheduler):
     with pytest.raises(
         ValueError, match="img_offset must be a tuple of two non-negative numbers."
     ):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["img_offset"] = img_offset
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            img_offset=img_offset,
-            seed=0,
+            config=config,
         )
 
 
@@ -210,13 +239,12 @@ def test_invalid_seeding_density(seeding_density, scheduler):
     with pytest.raises(
         ValueError, match="seeding_density must be a float between 0 and 1."
     ):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["seeding_density"] = seeding_density
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            seeding_density=seeding_density,
-            seed=0,
+            config=config,
         )
 
 
@@ -227,13 +255,12 @@ def test_invalid_seeding_density(seeding_density, scheduler):
 def test_invalid_p_hide_img1(p_hide_img1, scheduler):
     """Test that invalid p_hide_img1 raises a ValueError."""
     with pytest.raises(ValueError, match="p_hide_img1 must be between 0 and 1."):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["p_hide_img1"] = p_hide_img1
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            p_hide_img1=p_hide_img1,
-            seed=0,
+            config=config,
         )
 
 
@@ -245,13 +272,12 @@ def test_invalid_p_hide_img2(p_hide_img2, scheduler):
     """Test that invalid p_hide_img2 raises a ValueError."""
 
     with pytest.raises(ValueError, match="p_hide_img2 must be between 0 and 1."):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["p_hide_img2"] = p_hide_img2
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            p_hide_img2=p_hide_img2,
-            seed=0,
+            config=config,
         )
 
 
@@ -264,13 +290,12 @@ def test_invalid_diameter_range(diameter_range, scheduler):
     with pytest.raises(
         ValueError, match="diameter_range must be a tuple of two positive floats."
     ):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["diameter_range"] = diameter_range
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            diameter_range=diameter_range,
-            seed=0,
+            config=config,
         )
 
 
@@ -283,13 +308,12 @@ def test_invalid_intensity_range(intensity_range, scheduler):
     with pytest.raises(
         ValueError, match="intensity_range must be a tuple of two non-negative floats."
     ):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["intensity_range"] = intensity_range
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            intensity_range=intensity_range,
-            seed=0,
+            config=config,
         )
 
 
@@ -302,13 +326,12 @@ def test_invalid_rho_range(rho_range, scheduler):
     with pytest.raises(
         ValueError, match="rho_range must be a tuple of two floats between -1 and 1."
     ):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["rho_range"] = rho_range
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            rho_range=rho_range,
-            seed=0,
+            config=config,
         )
 
 
@@ -319,13 +342,12 @@ def test_invalid_rho_range(rho_range, scheduler):
 def test_invalid_dt(dt, scheduler):
     """Test that invalid dt raises a ValueError."""
     with pytest.raises(ValueError, match="dt must be a scalar \\(int or float\\)"):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["dt"] = dt
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            dt=dt,
-            seed=0,
+            config=config,
         )
 
 
@@ -338,49 +360,12 @@ def test_invalid_dt(dt, scheduler):
 def test_invalid_seed(seed, scheduler):
     """Test that invalid seed raises a ValueError."""
     with pytest.raises(ValueError, match="seed must be a positive integer."):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["seed"] = seed
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            seed=seed,
-        )
-
-
-@pytest.mark.parametrize("config_path", [None, 0])
-@pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": False}], indirect=True
-)
-def test_invalid_config_path(config_path, scheduler):
-    """Test that invalid config_path raises a ValueError."""
-    with pytest.raises(ValueError, match="config_path must be a string."):
-        SyntheticImageSampler(
-            scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            config_path=config_path,
-            seed=0,
-        )
-
-    with pytest.raises(ValueError, match="config_path must be a .yaml file."):
-        SyntheticImageSampler(
-            scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            config_path="invalid_config.txt",
-            seed=0,
-        )
-
-    with pytest.raises(ValueError, match="config_path does not exist."):
-        SyntheticImageSampler(
-            scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            config_path="non_existent_file.yaml",
-            seed=0,
+            config=config,
         )
 
 
@@ -393,16 +378,15 @@ def test_invalid_min_max_speed_x(min_speed_x, max_speed_x, scheduler):
     with pytest.raises(
         ValueError, match="max_speed_x must be greater than min_speed_x."
     ):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["min_speed_x"] = min_speed_x
+        config["max_speed_x"] = max_speed_x
+        config["min_speed_y"] = 0.0
+        config["max_speed_y"] = 0.0
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            min_speed_x=min_speed_x,
-            max_speed_x=max_speed_x,
-            max_speed_y=0.0,
-            min_speed_y=0.0,
-            seed=0,
+            config=config,
         )
 
 
@@ -415,16 +399,15 @@ def test_invalid_min_max_speed_y(min_speed_y, max_speed_y, scheduler):
     with pytest.raises(
         ValueError, match="max_speed_y must be greater than min_speed_y."
     ):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["min_speed_x"] = 0.0
+        config["max_speed_x"] = 0.0
+        config["min_speed_y"] = min_speed_y
+        config["max_speed_y"] = max_speed_y
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            min_speed_y=min_speed_y,
-            max_speed_y=max_speed_y,
-            min_speed_x=0.0,
-            max_speed_x=0.0,
-            seed=0,
+            config=config,
         )
 
 
@@ -435,12 +418,10 @@ def test_invalid_min_max_speed_y(min_speed_y, max_speed_y, scheduler):
 def test_invalid_img_gen_fn_type(img_gen_fn, scheduler):
     """Test that invalid img_gen_fn raises a ValueError."""
     with pytest.raises(ValueError, match="img_gen_fn must be a callable function."):
-        SyntheticImageSampler(
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            seed=0,
+            config=sampler_config,
         )
 
 
@@ -456,21 +437,21 @@ def test_invalid_img_offset_and_speed(
 ):
     """Test that invalid img_offset and speed raises a ValueError."""
     expected_message = re.escape(
-        f"The image is too near the flow field left or top edge. "
+        f"The image is too close the flow field left or top edge. "
         f"The minimum image offset is ({max_speed_y * dt}, {max_speed_x * dt})."
     )
     with pytest.raises(ValueError, match=expected_message):
-        SyntheticImageSampler(
+        config = sampler_config.copy()
+        config["img_offset"] = img_offset
+        config["max_speed_x"] = max_speed_x
+        config["max_speed_y"] = max_speed_y
+        config["min_speed_x"] = 0.0
+        config["min_speed_y"] = 0.0
+        config["dt"] = dt
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            img_offset=img_offset,
-            max_speed_x=max_speed_x,
-            max_speed_y=max_speed_y,
-            min_speed_x=0.0,
-            min_speed_y=0.0,
-            seed=0,
+            config=config,
         )
 
 
@@ -524,22 +505,22 @@ def test_invalid_flow_field_size_and_img_offset(
     logger.debug("test: " + str(position_bounds_offset))
     logger.debug(position_bounds)
 
+    config = sampler_config.copy()
+    config["flow_field_size"] = flow_field_size
+    config["img_offset"] = img_offset
+    config["image_shape"] = image_shape
+    config["resolution"] = resolution
+    config["max_speed_x"] = max_speed_x
+    config["max_speed_y"] = max_speed_y
+    config["min_speed_x"] = min_speed_x
+    config["min_speed_y"] = min_speed_y
+    config["dt"] = dt
+
     with pytest.raises(ValueError, match=expected_message):
-        SyntheticImageSampler(
+        SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            batch_size=2,
-            images_per_field=10,
-            flow_field_size=flow_field_size,
-            img_offset=img_offset,
-            image_shape=image_shape,
-            resolution=resolution,
-            max_speed_x=max_speed_x,
-            max_speed_y=max_speed_y,
-            min_speed_x=min_speed_x,
-            min_speed_y=min_speed_y,
-            dt=dt,
-            seed=0,
+            config=config,
         )
 
 
@@ -553,13 +534,14 @@ def test_invalid_flow_field_size_and_img_offset(
 def test_synthetic_sampler_batches(
     batch_size, images_per_field, image_shape, scheduler
 ):
-    sampler = SyntheticImageSampler(
+    config = sampler_config.copy()
+    config["batch_size"] = batch_size
+    config["images_per_field"] = images_per_field
+    config["image_shape"] = image_shape
+    sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
         img_gen_fn=dummy_img_gen_fn,
-        image_shape=image_shape,
-        images_per_field=images_per_field,
-        batch_size=batch_size,
-        seed=123,
+        config=config,
     )
 
     iterator = iter(sampler)
@@ -579,12 +561,13 @@ def test_synthetic_sampler_batches(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_sampler_switches_flow_fields(batch_size, images_per_field, scheduler):
-    sampler = SyntheticImageSampler(
+    config = sampler_config.copy()
+    config["batch_size"] = batch_size
+    config["images_per_field"] = images_per_field
+    sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
         img_gen_fn=dummy_img_gen_fn,
-        images_per_field=images_per_field,
-        batch_size=batch_size,
-        seed=0,
+        config=config,
     )
 
     batch1 = next(sampler)
@@ -605,14 +588,15 @@ def test_sampler_with_real_img_gen_fn(
     files, _ = mock_hdf5_files
     scheduler = HDF5FlowFieldScheduler(files, loop=False)
 
-    sampler = SyntheticImageSampler(
+    config = sampler_config.copy()
+    config["batch_size"] = batch_size
+    config["images_per_field"] = num_images
+    config["image_shape"] = image_shape
+    config["seeding_density"] = seeding_density
+    sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
         img_gen_fn=generate_images_from_flow,
-        image_shape=image_shape,
-        seeding_density=seeding_density,
-        images_per_field=num_images,
-        batch_size=batch_size,
-        seed=0,
+        config=config,
     )
 
     batch = next(sampler)
@@ -654,33 +638,29 @@ def test_speed_sampler_dummy_fn(
 ):
     """Test the speed of the sampler with a dummy image generation function."""
     # Define the parameters for the test
-    image_shape = (1216, 1936)
-    img_offset = (2.5e-2, 5e-2)
-    flow_field_size = (3 * jnp.pi, 4 * jnp.pi)
-    resolution = 155
-    max_speed_x = 1.37
-    max_speed_y = 0.56
-    min_speed_x = -0.16
-    min_speed_y = -0.72
-    dt = 2.6e-2
+    config = sampler_config.copy()
+    config["batch_size"] = batch_size
+    config["images_per_field"] = images_per_field
+    config["image_shape"] = (1216, 1936)
+    config["seeding_density"] = seeding_density
+    config["img_offset"] = (2.5e-2, 5e-2)
+    config["flow_field_size"] = (3 * jnp.pi, 4 * jnp.pi)
+    config["resolution"] = 155
+    config["max_speed_x"] = 1.37
+    config["max_speed_y"] = 0.56
+    config["min_speed_x"] = -0.16
+    config["min_speed_y"] = -0.72
+    config["dt"] = 2.6e-2
+    config["batch_size"] = batch_size
+    config["images_per_field"] = images_per_field
+    config["seeding_density"] = seeding_density
+    config["seed"] = seed
 
     # Create the sampler
-    sampler = SyntheticImageSampler(
+    sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
         img_gen_fn=dummy_img_gen_fn,
-        images_per_field=images_per_field,
-        batch_size=batch_size,
-        flow_field_size=flow_field_size,
-        resolution=resolution,
-        seed=seed,
-        image_shape=image_shape,
-        img_offset=img_offset,
-        seeding_density=seeding_density,
-        dt=dt,
-        max_speed_x=max_speed_x,
-        max_speed_y=max_speed_y,
-        min_speed_x=min_speed_x,
-        min_speed_y=min_speed_y,
+        config=config,
     )
 
     def run_sampler():
@@ -716,15 +696,20 @@ def test_speed_sampler_dummy_fn(
 def test_speed_sampler_real_fn(
     batch_size, images_per_field, seed, seeding_density, scheduler
 ):
-    image_shape = (1216, 1936)
-    img_offset = (2.5e-2, 5e-2)
-    flow_field_size = (3 * jnp.pi, 4 * jnp.pi)
-    resolution = 155
-    max_speed_x = 1.37
-    max_speed_y = 0.56
-    min_speed_x = -0.16
-    min_speed_y = -0.72
-    dt = 2.6e-2
+    config = sampler_config.copy()
+    config["batch_size"] = batch_size
+    config["images_per_field"] = images_per_field
+    config["seeding_density"] = seeding_density
+    config["seed"] = seed
+    config["image_shape"] = (1216, 1936)
+    config["img_offset"] = (2.5e-2, 5e-2)
+    config["flow_field_size"] = (3 * jnp.pi, 4 * jnp.pi)
+    config["resolution"] = 155
+    config["max_speed_x"] = 1.37
+    config["max_speed_y"] = 0.56
+    config["min_speed_x"] = -0.16
+    config["min_speed_y"] = -0.72
+    config["dt"] = 2.6e-2
 
     # Check how many GPUs are available
     num_devices = len(jax.devices())
@@ -738,22 +723,10 @@ def test_speed_sampler_real_fn(
         limit_time = 5.5e-2
 
     # Create the sampler
-    sampler = SyntheticImageSampler(
+    sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
         img_gen_fn=generate_images_from_flow,
-        images_per_field=images_per_field,
-        batch_size=batch_size,
-        flow_field_size=flow_field_size,
-        resolution=resolution,
-        seed=seed,
-        image_shape=image_shape,
-        img_offset=img_offset,
-        seeding_density=seeding_density,
-        dt=dt,
-        max_speed_x=max_speed_x,
-        max_speed_y=max_speed_y,
-        min_speed_x=min_speed_x,
-        min_speed_y=min_speed_y,
+        config=config,
     )
 
     def run_sampler():

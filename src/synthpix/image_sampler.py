@@ -1,6 +1,4 @@
 """SyntheticImageSampler class for generating synthetic images from flow fields."""
-import os
-import sys
 from typing import Callable, Tuple
 
 import jax
@@ -15,7 +13,6 @@ from synthpix.utils import (
     flow_field_adapter,
     input_check_flow_field_adapter,
     logger,
-    missing_speeds_panel,
 )
 
 
@@ -39,26 +36,25 @@ class SyntheticImageSampler:
         self,
         scheduler,
         img_gen_fn: Callable[..., jnp.ndarray],
-        images_per_field: int = 1000,
-        batch_size: int = 250,
-        flow_field_size: Tuple[float, float] = (1000.0, 1000.0),
-        image_shape: Tuple[int, int] = (256, 256),
-        resolution: float = 1.0,
-        velocities_per_pixel: float = 1.0,
-        img_offset: Tuple[float, float] = (20.0, 20.0),
-        seeding_density: int = 0.04,
-        p_hide_img1: float = 0.01,
-        p_hide_img2: float = 0.01,
-        diameter_range: Tuple[float, float] = (0.1, 1.0),
-        intensity_range: Tuple[float, float] = (50, 200),
-        rho_range: Tuple[float, float] = (-0.99, 0.99),
-        dt: float = 1.0,
-        seed: int = 0,
-        max_speed_x: float = None,
-        max_speed_y: float = None,
-        min_speed_x: float = None,
-        min_speed_y: float = None,
-        config_path: str = "config/base_config.yaml",
+        images_per_field: int,
+        batch_size: int,
+        flow_field_size: Tuple[float, float],
+        image_shape: Tuple[int, int],
+        resolution: float,
+        velocities_per_pixel: float,
+        img_offset: Tuple[float, float],
+        seeding_density: int,
+        p_hide_img1: float,
+        p_hide_img2: float,
+        diameter_range: Tuple[float, float],
+        intensity_range: Tuple[float, float],
+        rho_range: Tuple[float, float],
+        dt: float,
+        seed: int,
+        max_speed_x: float,
+        max_speed_y: float,
+        min_speed_x: float,
+        min_speed_y: float,
     ):
         """Initializes the SyntheticImageSampler.
 
@@ -112,8 +108,6 @@ class SyntheticImageSampler:
             min_speed_y: float
                 Minimum speed in the y-direction for the flow field
                 in length measure unit per seconds.
-            config_path: str
-                Path to the configuration file containing the flow field parameters.
         """
         # Name of the axis for the device mesh
         shard_keys = "keys"
@@ -243,38 +237,7 @@ class SyntheticImageSampler:
                 f" per flow field."
             )
 
-        if not isinstance(config_path, str):
-            raise ValueError("config_path must be a string.")
-        if not config_path.endswith(".yaml"):
-            raise ValueError("config_path must be a .yaml file.")
-        if not os.path.exists(config_path):
-            raise ValueError("config_path does not exist.")
-
-        # Check if there are min and max speeds in the config file
-        if (
-            not isinstance(max_speed_x, (int, float))
-            or not isinstance(max_speed_y, (int, float))
-            or not isinstance(min_speed_x, (int, float))
-            or not isinstance(min_speed_y, (int, float))
-        ):
-            logger.warning(
-                "max_speed_x, max_speed_y, min_speed_x and min_speed_y are not set. "
-                "Trying to get them from the config file."
-            )
-            try:
-                speeds = missing_speeds_panel(config_path=config_path)
-                max_speed_x, max_speed_y, min_speed_x, min_speed_y = speeds
-                logger.info(
-                    "Speeds retrieved successfully."
-                    f" max_speed_x: {max_speed_x}, max_speed_y: {max_speed_y}, "
-                    f"min_speed_x: {min_speed_x}, min_speed_y: {min_speed_y}"
-                )
-            except Exception as e:
-                logger.error(e)
-                sys.exit(1)
-
-        logger.info(type(max_speed_x))
-
+        # Check min and max speeds
         if not isinstance(max_speed_x, (int, float)):
             raise ValueError("max_speed_x must be a number.")
         if not isinstance(max_speed_y, (int, float)):
@@ -319,7 +282,7 @@ class SyntheticImageSampler:
         # exceed the flow field size
         if position_bounds_offset[0] <= 0 or position_bounds_offset[1] <= 0:
             raise ValueError(
-                f"The image is too near the flow field left or top edge. "
+                f"The image is too close the flow field left or top edge. "
                 f"The minimum image offset is {(max_speed_y * dt, max_speed_x * dt)}."
             )
         if (
@@ -422,7 +385,6 @@ class SyntheticImageSampler:
         logger.debug(f"Max speed y: {max_speed_y}")
         logger.debug(f"Min speed x: {min_speed_x}")
         logger.debug(f"Min speed y: {min_speed_y}")
-        logger.debug(f"Config path: {config_path}")
 
         self._rng = jax.random.PRNGKey(seed)
         self._current_flow = None
@@ -536,3 +498,48 @@ class SyntheticImageSampler:
         logger.debug(f"Total images generated so far: {self._images_generated}")
         logger.debug(f"Output flow field shape: {self.output_flow_field.shape}")
         return imgs1, imgs2, self.output_flow_field
+
+    @classmethod
+    def from_config(cls, scheduler, img_gen_fn, config) -> "SyntheticImageSampler":
+        """Creates a SyntheticImageSampler instance from a configuration dictionary.
+
+        Args:
+            scheduler: FlowFieldScheduler
+                An instance of FlowFieldScheduler that provides flow fields.
+            img_gen_fn: Callable[..., jnp.ndarray]
+                JAX-compatible function (flow_field, key, ...) -> batch of images.
+            config: dict
+                Configuration dictionary containing the parameters for the sampler.
+
+        Returns:
+            SyntheticImageSampler: An instance of SyntheticImageSampler.
+        """
+        try:
+            return SyntheticImageSampler(
+                scheduler=scheduler,
+                img_gen_fn=img_gen_fn,
+                images_per_field=config["images_per_field"],
+                batch_size=config["batch_size"],
+                flow_field_size=config["flow_field_size"],
+                image_shape=config["image_shape"],
+                resolution=config["resolution"],
+                velocities_per_pixel=config["velocities_per_pixel"],
+                img_offset=config["img_offset"],
+                seeding_density=config["seeding_density"],
+                p_hide_img1=config["p_hide_img1"],
+                p_hide_img2=config["p_hide_img2"],
+                diameter_range=config["diameter_range"],
+                intensity_range=config["intensity_range"],
+                rho_range=config["rho_range"],
+                dt=config["dt"],
+                seed=config["seed"],
+                max_speed_x=config["max_speed_x"],
+                max_speed_y=config["max_speed_y"],
+                min_speed_x=config["min_speed_x"],
+                min_speed_y=config["min_speed_y"],
+            )
+        except KeyError as e:
+            raise KeyError(
+                f"Missing key in configuration: {e}. "
+                f"Please check the configuration file using the synthpix.sanity script."
+            ) from e

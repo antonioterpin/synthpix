@@ -207,8 +207,8 @@ def test_particles_per_pixel(image, threshold, expected):
 
 def test_update_config_file():
     """Test the update_config_file function."""
-    # Create a temporary configuration file based on base_config.yaml
-    base_config_path = os.path.join("config", "base_config.yaml")
+    # Create a temporary configuration file based on test_data.yaml
+    base_config_path = os.path.join("config", "test_data.yaml")
     tmp_path = tempfile.gettempdir()
     temp_config_path = os.path.join(tmp_path, "temp_config.yaml")
     try:
