@@ -208,7 +208,7 @@ class BaseFlowFieldScheduler(ABC):
 class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
     """Scheduler for loading flow field data from HDF5 files.
 
-    Assumes each file contains a single dataset with shape (T, Y, Z, C),
+    Assumes each file contains a single dataset with shape (X, Y, Z, C),
     and extracts the x and z components (0 and 2) from each y-slice.
     """
 
@@ -231,23 +231,19 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         with h5py.File(file_path, "r") as file:
             dataset_key = list(file)[0]
             dset = file[dataset_key]
-            data = dset[:, :, : dset.shape[2] // 2, :]
-            # TODO: We're not using the full dataset
-            # because the length step along the x axes is
-            # twice as much as the z axis. We need to fix this by changing
-            # the dataset structure in the first place.
+            data = dset[...]
+            logger.debug(f"Loading file {file_path} with shape {data.shape}")
         return data
 
     def get_next_slice(self) -> np.ndarray:
         """Retrieves a flow field slice (x and z components) for the current y index.
 
         Returns:
-            np.ndarray: Flow field with shape (T, Z, 2).
+            np.ndarray: Flow field with shape (X, Z, 2).
         """
         data_slice = self._cached_data[:, self._slice_idx, :, :]
-        flow_field_x = data_slice[:, :, 0]
-        flow_field_z = data_slice[:, :, 2]
-        return np.stack([flow_field_x, flow_field_z], axis=2)
+
+        return data_slice
 
     def get_flow_fields_shape(self) -> tuple:
         """Returns the shape of all the flow fields.
@@ -261,5 +257,6 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         with h5py.File(file_path, "r") as file:
             dataset_key = list(file)[0]
             dset = file[dataset_key]
-            shape = dset.shape[0], dset.shape[2] // 2, 2
+            shape = dset.shape[0], dset.shape[2], 2  # (X, Z, 2)
+            logger.debug(f"Flow field shape: {shape}")
         return shape

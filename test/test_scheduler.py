@@ -71,7 +71,7 @@ def test_hdf5_shape(temp_file):
         temp_file_key = list(file.keys())[0]
         expected_shape = (
             file[temp_file_key].shape[0],
-            file[temp_file_key].shape[2] // 2,
+            file[temp_file_key].shape[2],
             2,
         )
     actual_shape = scheduler.get_flow_fields_shape()
@@ -137,7 +137,7 @@ def test_scheduler_iteration(mock_hdf5_files):
 
     num_flows = 0
     for flow in scheduler:
-        expected_shape = (dims["x_dim"], dims["z_dim"] // 2, 2)
+        expected_shape = (dims["x_dim"], dims["z_dim"], 2)
         assert flow.shape == expected_shape
         num_flows += 1
 
@@ -169,7 +169,7 @@ def test_scheduler_iteration_with_multiple_files(mock_hdf5_files):
         # Validate the shape of each flow
         expected_shape = (
             dims["x_dim"],
-            dims["z_dim"] // 2,
+            dims["z_dim"],
             2,
         )  # Assumes slicing z_dim and selecting 2 features
         assert flow.shape == expected_shape
