@@ -192,7 +192,6 @@ def generate_array_flow_field(
 
     return arr
 
-
 def visualize_and_save(name, image1, image2, flow_field, output_dir="output_images"):
     """Visualizes and saves a specified number of images from a batch.
 
