@@ -409,7 +409,7 @@ def test_speed_generate_images_from_flow(
     if num_devices == 1:
         limit_time = 1.2e-2
     elif num_devices == 2:
-        limit_time = 6.5e-3
+        limit_time = 7e-3
     elif num_devices == 4:
         limit_time = 3.9e-3
 

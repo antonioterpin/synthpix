@@ -245,36 +245,7 @@ class SyntheticImageSampler:
                 f" per flow field."
             )
 
-        if not isinstance(config_path, str):
-            raise ValueError("config_path must be a string.")
-        if not config_path.endswith(".yaml"):
-            raise ValueError("config_path must be a .yaml file.")
-        if not os.path.exists(config_path):
-            raise ValueError("config_path does not exist.")
-
-        # Check if there are min and max speeds in the config file
-        if (
-            not isinstance(max_speed_x, (int, float))
-            or not isinstance(max_speed_y, (int, float))
-            or not isinstance(min_speed_x, (int, float))
-            or not isinstance(min_speed_y, (int, float))
-        ):
-            logger.warning(
-                "max_speed_x, max_speed_y, min_speed_x and min_speed_y are not set. "
-                "Trying to get them from the config file."
-            )
-            try:
-                speeds = missing_speeds_panel(config_path=config_path)
-                max_speed_x, max_speed_y, min_speed_x, min_speed_y = speeds
-                logger.info(
-                    "Speeds retrieved successfully."
-                    f" max_speed_x: {max_speed_x}, max_speed_y: {max_speed_y}, "
-                    f"min_speed_x: {min_speed_x}, min_speed_y: {min_speed_y}"
-                )
-            except Exception as e:
-                logger.error(e)
-                sys.exit(1)
-
+        # Check min and max speeds
         if not isinstance(max_speed_x, (int, float)):
             raise ValueError("max_speed_x must be a number.")
         if not isinstance(max_speed_y, (int, float)):
