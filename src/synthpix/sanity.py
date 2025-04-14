@@ -91,12 +91,11 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
             dataset_name = list(f.keys())[0]
             data = f[dataset_name][:]
 
-            # TODO: set to 1, left to 2 for test
             # Find the min and max speeds along each axis
             running_max_speed_x = max(running_max_speed_x, np.max(data[:, :, :, 0]))
-            running_max_speed_y = max(running_max_speed_y, np.max(data[:, :, :, 2]))
+            running_max_speed_y = max(running_max_speed_y, np.max(data[:, :, :, 1]))
             running_min_speed_x = min(running_min_speed_x, np.min(data[:, :, :, 0]))
-            running_min_speed_y = min(running_min_speed_y, np.min(data[:, :, :, 2]))
+            running_min_speed_y = min(running_min_speed_y, np.min(data[:, :, :, 1]))
 
     return {
         "min_speed_x": running_min_speed_x,
