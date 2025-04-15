@@ -770,9 +770,7 @@ def test_speed_sampler_real_fn(
         # of size batch_size
         for i, batch in enumerate(sampler):
             logger.debug(f"Cached_data shape: {scheduler._cached_data.shape}")
-            # batch[0].block_until_ready()
-            # batch[1].block_until_ready()
-            # batch[2].block_until_ready()
+
             if i >= batches_per_flow_batch:
                 logger.debug(f"Finished iteration {i}")
                 sampler.reset()
@@ -783,6 +781,7 @@ def test_speed_sampler_real_fn(
 
     # Warm up the function
     run_sampler()
+    sampler._images_generated = 0
 
     # Measure the time taken to run the sampler
     total_time = timeit.repeat(
