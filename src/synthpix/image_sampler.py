@@ -44,7 +44,7 @@ class SyntheticImageSampler:
         resolution: float,
         velocities_per_pixel: float,
         img_offset: Tuple[float, float],
-        seeding_density: int,
+        seeding_density_range: Tuple[float, float],
         p_hide_img1: float,
         p_hide_img2: float,
         diameter_range: Tuple[float, float],
@@ -84,8 +84,8 @@ class SyntheticImageSampler:
             img_offset: Tuple[float, float]
                 Distance in the two axes from the top left corner of the flow field
                 and the top left corner of the image a length measure unit.
-            seeding_density: float
-                Density of particles in the images.
+            seeding_density_range: Tuple[float, float]
+                Range of density of particles in the images.
             p_hide_img1: float
                 Probability of hiding particles in the first image.
             p_hide_img2: float
@@ -208,13 +208,15 @@ class SyntheticImageSampler:
         ):
             raise ValueError("img_offset must be a tuple of two non-negative numbers.")
 
-        if (
-            not isinstance(seeding_density, float)
-            or seeding_density <= 0
-            or seeding_density >= 1
+        if len(seeding_density_range) != 2 or not all(
+            isinstance(s, (int, float)) and s >= 0 for s in seeding_density_range
         ):
-            raise ValueError("seeding_density must be a float between 0 and 1.")
-        self.seeding_density = seeding_density
+            raise ValueError(
+                "seeding_density_range must be a tuple of two non-negative numbers."
+            )
+        if seeding_density_range[0] > seeding_density_range[1]:
+            raise ValueError("seeding_density_range must be in the form (min, max).")
+        self.seeding_density_range = seeding_density_range
 
         if not (0 <= p_hide_img1 <= 1):
             raise ValueError("p_hide_img1 must be between 0 and 1.")
@@ -229,6 +231,8 @@ class SyntheticImageSampler:
         ):
             raise ValueError("diameter_range must be a tuple of two positive floats.")
         self.diameter_range = diameter_range
+        if diameter_range[0] > diameter_range[1]:
+            raise ValueError("diameter_range must be in the form (min, max).")
 
         if len(intensity_range) != 2 or not all(
             isinstance(i, (int, float)) and i >= 0 for i in intensity_range
@@ -236,14 +240,18 @@ class SyntheticImageSampler:
             raise ValueError(
                 "intensity_range must be a tuple of two non-negative floats."
             )
+        if intensity_range[0] > intensity_range[1]:
+            raise ValueError("intensity_range must be in the form (min, max).")
         self.intensity_range = intensity_range
 
         if len(rho_range) != 2 or not all(
-            isinstance(r, (int, float)) and -1 <= r <= 1 for r in rho_range
+            isinstance(r, (int, float)) and -1.0 <= r <= 1.0 for r in rho_range
         ):
             raise ValueError(
                 "rho_range must be a tuple of two floats between -1 and 1."
             )
+        if rho_range[0] > rho_range[1]:
+            raise ValueError("rho_range must be in the form (min, max).")
         self.rho_range = rho_range
 
         if not isinstance(dt, (int, float)):
@@ -340,9 +348,11 @@ class SyntheticImageSampler:
         particle_size = (2 * particle_pixel_radius + 1) / resolution
 
         # Check if a bigger position bounds is needed
-        if (p_hide_img1 > 0 or p_hide_img2 > 0) and (
-            particle_size > max_speed_x * dt or particle_size > max_speed_y * dt
-        ):
+        if (
+            p_hide_img1 > 0
+            or p_hide_img2 > 0
+            or seeding_density_range[0] != seeding_density_range[1]
+        ) and (particle_size > max_speed_x * dt or particle_size > max_speed_y * dt):
             # Compute the extra length of the position bounds
             extra_length_x = max(0.0, particle_size - max_speed_x * dt)
             extra_length_y = max(0.0, particle_size - max_speed_y * dt)
@@ -389,7 +399,7 @@ class SyntheticImageSampler:
                         image_shape=self.image_shape,
                         img_offset=self.img_offset,
                         num_images=self.batch_size // num_devices,
-                        seeding_density=self.seeding_density,
+                        seeding_density_range=self.seeding_density_range,
                         p_hide_img1=self.p_hide_img1,
                         p_hide_img2=self.p_hide_img2,
                         diameter_range=self.diameter_range,
@@ -405,6 +415,8 @@ class SyntheticImageSampler:
                         PartitionSpec(self.shard_fields),
                     ),
                     out_specs=(
+                        
+                        PartitionSpec(self.shard_fields),
                         PartitionSpec(self.shard_fields),
                         PartitionSpec(self.shard_fields),
                     ),
@@ -417,7 +429,7 @@ class SyntheticImageSampler:
                 self.image_shape,
                 self.img_offset,
                 num_images=self.batch_size,
-                seeding_density=self.seeding_density,
+                seeding_density_range=self.seeding_density_range,
                 p_hide_img1=self.p_hide_img1,
                 p_hide_img2=self.p_hide_img2,
                 diameter_range=self.diameter_range,
@@ -434,7 +446,7 @@ class SyntheticImageSampler:
                 image_shape=self.image_shape,
                 img_offset=self.img_offset,
                 num_images=self.batch_size // num_devices,
-                seeding_density=seeding_density,
+                seeding_density_range=seeding_density_range,
                 p_hide_img1=self.p_hide_img1,
                 p_hide_img2=self.p_hide_img2,
                 diameter_range=self.diameter_range,
@@ -497,7 +509,7 @@ class SyntheticImageSampler:
         logger.debug(f"Resolution: {self.resolution}")
         logger.debug(f"Velocities per pixel: {velocities_per_pixel}")
         logger.debug(f"Image offset: {self.img_offset}")
-        logger.debug(f"Seeding density: {self.seeding_density}")
+        logger.debug(f"Seeding density Range: {self.seeding_density_range}")
         logger.debug(f"p_hide_img1: {self.p_hide_img1}")
         logger.debug(f"p_hide_img2: {self.p_hide_img2}")
         logger.debug(f"Diameter range: {self.diameter_range}")
@@ -534,7 +546,8 @@ class SyntheticImageSampler:
             StopIteration: Never raised by default, it is thrown by scheduler.
 
         Returns:
-            jnp.ndarray: A batch of synthetic images generated on GPU.
+            jnp.ndarray: A batch of synthetic images and seeding_densities
+            generated on GPU.
         """
         # Check if we need to initialize or switch to a new batch of flow fields
         if (
@@ -549,6 +562,18 @@ class SyntheticImageSampler:
 
             # Shard the flow fields across devices
             _current_flows = jnp.array(_current_flows, device=self.sharding)
+
+            # Adding zero padding to the flow field #TODO move this to the flow field adapter
+            _current_flows = jnp.pad(
+                _current_flows,
+                pad_width=(
+                    (self.zero_padding[0], 0),
+                    (self.zero_padding[1], 0),
+                    (0, 0),
+                ),
+                mode="constant",
+                constant_values=0.0,
+            )
 
             logger.debug(f"Current flow fields sharding: {_current_flows.sharding}")
 
@@ -566,7 +591,7 @@ class SyntheticImageSampler:
         logger.debug(f"Current random keys: {keys}")
 
         # Generate a new batch of images using the current flow fields
-        imgs1, imgs2 = self.img_gen_fn_jit(keys, self._current_flows)
+        imgs1, imgs2, seeding_densities = self.img_gen_fn_jit(keys, self._current_flows)
 
         logger.debug(f"imgs1 location: {imgs1.sharding}")
         logger.debug(f"imgs2 location: {imgs2.sharding}")
@@ -588,7 +613,7 @@ class SyntheticImageSampler:
         )
         self._batches_generated += 1
         self._total_generated_image_couples += self.batch_size
-        return imgs1, imgs2, self.output_flow_fields
+        return imgs1, imgs2, self.output_flow_fields, seeding_densities
 
     @classmethod
     def from_config(cls, scheduler, img_gen_fn, config) -> "SyntheticImageSampler":
@@ -617,7 +642,7 @@ class SyntheticImageSampler:
                 resolution=config["resolution"],
                 velocities_per_pixel=config["velocities_per_pixel"],
                 img_offset=config["img_offset"],
-                seeding_density=config["seeding_density"],
+                seeding_density_range=config["seeding_density_range"],
                 p_hide_img1=config["p_hide_img1"],
                 p_hide_img2=config["p_hide_img2"],
                 diameter_range=config["diameter_range"],

@@ -11,7 +11,7 @@ import numpy as np
 from ruamel.yaml import YAML
 
 DEBUG = False
-DEBUG_JIT = False
+DEBUG_JIT = True
 
 
 # Create a logger instance
