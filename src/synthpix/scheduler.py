@@ -139,39 +139,36 @@ class BaseFlowFieldScheduler(ABC):
         raise StopIteration
 
     def get_batch(self, batch_size) -> list:
-        """Retrieves a batch of flow fields.
+        """Retrieves a batch of flow fields using the current scheduler state.
+
+        This method repeatedly calls `__next__()` to store a batch of flow field slices.
+        It naturally spans across multiple files and Y-slices as needed.
 
         Args:
             batch_size: int
                 Number of flow field slices to retrieve.
 
         Returns:
-            list: A list of flow field slices.
+            list: A list of flow field slices with length `batch_size`.
+
+        Raises:
+            StopIteration: If the dataset is exhausted before reaching the
+                           desired batch size and `loop` is set to False.
         """
-        current_cached_file = self._cached_file
-        current_data = self._cached_data
-        current_epoch = self.epoch
-        current_index = self.index
-        current_slice_idx = self._slice_idx
+        batch = []
+        try:
+            for _ in range(batch_size):
+                batch.append(next(self))
+        except StopIteration:
+            if not self.loop and batch:
+                logger.warning(
+                    f"Only {len(batch)} slices could be loaded before exhaustion."
+                )
+                return np.array(batch)
+            raise
 
-        self._cached_file = None
-        self._cached_data = None
-        self.index = 0
-        self._slice_idx = 0
-        self.epoch = 0
-        if self.randomize:
-            random.shuffle(self.file_list)
-
-        batch = [next(self) for _ in range(batch_size)]
-
-        self._cached_file = current_cached_file
-        self._cached_data = current_data
-        self.epoch = current_epoch
-        self.index = current_index
-        self._slice_idx = current_slice_idx
-
-        logger.debug(f"Loaded batch of {batch_size} flow field slices.")
-        return batch
+        logger.debug(f"Loaded batch of {len(batch)} flow field slices.")
+        return np.array(batch)
 
     @abstractmethod
     def load_file(self, file_path):

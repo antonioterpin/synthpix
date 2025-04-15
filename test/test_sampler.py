@@ -62,7 +62,8 @@ def test_invalid_scheduler(scheduler):
     "missing_key",
     [
         "batch_size",
-        "images_per_field",
+        "images_per_flow_batch",
+        "flow_fields_per_batch",
         "image_shape",
         "flow_field_size",
         "resolution",
@@ -120,17 +121,35 @@ def test_invalid_batch_size(batch_size, scheduler):
         )
 
 
-@pytest.mark.parametrize("images_per_field", [-1, 0, 1.5])
+@pytest.mark.parametrize("images_per_flow_batch", [-1, 0, 1.5])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_images_per_field(images_per_field, scheduler):
-    """Test that invalid images_per_field raises a ValueError."""
+def test_invalid_images_per_flow_batch(images_per_flow_batch, scheduler):
+    """Test that invalid images_per_flow_batch raises a ValueError."""
     with pytest.raises(
-        ValueError, match="images_per_field must be a positive integer."
+        ValueError, match="images_per_flow_batch must be a positive integer."
     ):
         config = sampler_config.copy()
-        config["images_per_field"] = images_per_field
+        config["images_per_flow_batch"] = images_per_flow_batch
+        SyntheticImageSampler.from_config(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            config=config,
+        )
+
+
+@pytest.mark.parametrize("flow_fields_per_batch", [-1, 0, 1.5])
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_flow_fields_per_batch(flow_fields_per_batch, scheduler):
+    """Test that invalid flow_fields_per_batch raises a ValueError."""
+    with pytest.raises(
+        ValueError, match="flow_fields_per_batch must be a positive integer."
+    ):
+        config = sampler_config.copy()
+        config["flow_fields_per_batch"] = flow_fields_per_batch
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
@@ -590,7 +609,7 @@ def test_sampler_with_real_img_gen_fn(
 
     config = sampler_config.copy()
     config["batch_size"] = batch_size
-    config["images_per_field"] = num_images
+    config["images_per_flow_batch"] = num_images
     config["image_shape"] = image_shape
     config["seeding_density"] = seeding_density
     sampler = SyntheticImageSampler.from_config(
@@ -606,9 +625,9 @@ def test_sampler_with_real_img_gen_fn(
     velocities_per_pixel = sampler.velocities_per_pixel
     output_size = jnp.array(
         [
-            batch[2].shape[0] / velocities_per_pixel / res,
             batch[2].shape[1] / velocities_per_pixel / res,
-            batch[2].shape[2],
+            batch[2].shape[2] / velocities_per_pixel / res,
+            batch[2].shape[3],
         ]
     )
 
@@ -687,18 +706,18 @@ def test_speed_sampler_dummy_fn(
     reason="user not connect to the server.",
 )
 @pytest.mark.parametrize("batch_size", [250])
-@pytest.mark.parametrize("images_per_field", [1000])
+@pytest.mark.parametrize("images_per_flow_batch", [50000])
 @pytest.mark.parametrize("seed", [0])
 @pytest.mark.parametrize("seeding_density", [0.016])
 @pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+    "scheduler", [{"randomize": False, "loop": True}], indirect=True
 )
 def test_speed_sampler_real_fn(
-    batch_size, images_per_field, seed, seeding_density, scheduler
+    batch_size, images_per_flow_batch, seed, seeding_density, scheduler
 ):
     config = sampler_config.copy()
     config["batch_size"] = batch_size
-    config["images_per_field"] = images_per_field
+    config["images_per_flow_batch"] = images_per_flow_batch
     config["seeding_density"] = seeding_density
     config["seed"] = seed
     config["image_shape"] = (1216, 1936)
@@ -710,10 +729,9 @@ def test_speed_sampler_real_fn(
     config["min_speed_x"] = -0.16
     config["min_speed_y"] = -0.72
     config["dt"] = 2.6e-2
-
+    config["flow_fields_per_batch"] = 50
     # Check how many GPUs are available
     num_devices = len(jax.devices())
-
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
         limit_time = 1.45e-1
@@ -721,7 +739,6 @@ def test_speed_sampler_real_fn(
         limit_time = 8e-2
     elif num_devices == 4:
         limit_time = 5.5e-2
-
     # Create the sampler
     sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
@@ -733,22 +750,24 @@ def test_speed_sampler_real_fn(
         # Generates images_per_field // batch_size batches
         # of size batch_size
         for i, batch in enumerate(sampler):
-            logger.debug(scheduler._cached_data.shape)
+            logger.debug(f"Cached_data shape: {scheduler._cached_data.shape}")
             batch[0].block_until_ready()
             batch[1].block_until_ready()
             batch[2].block_until_ready()
-            if i >= images_per_field // batch_size:
+            if i >= images_per_flow_batch // batch_size:
+                logger.debug(f"Finished iteration {i}")
+                sampler._images_generated = 0
                 break
 
     # Warm up the function
     run_sampler()
+    sampler._images_generated = 0
 
     # Measure the time taken to run the sampler
     total_time = timeit.repeat(
         stmt=run_sampler, number=NUMBER_OF_EXECUTIONS, repeat=REPETITIONS
     )
     avg_time = min(total_time) / NUMBER_OF_EXECUTIONS
-
     assert (
         avg_time < limit_time
     ), f"The average time is {avg_time}, time limit: {limit_time}"
