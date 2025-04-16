@@ -34,10 +34,10 @@ def generate_images_from_flow(
         key: jax.random.PRNGKey
             Random key for reproducibility.
         flow_field: jnp.ndarray
-            Array of shape (H, W, 2) containing the velocity field
-            at each grid_step, in grid_steps per second.
+            Array of shape (N, H, W, 2) containing N velocity fields
+            with velocities in length measure unit per second.
         position_bounds: Tuple[int, int]
-            (height, width) of the output big image in pixels.
+            (height, width) bounds on the positions of the particles in pixels.
         image_shape: Tuple[int, int]
             (height, width) of the output image in pixels.
         num_images: int
@@ -45,7 +45,7 @@ def generate_images_from_flow(
         img_offset: Tuple[int, int]
             Offset to apply to the generated images.
         seeding_density: float
-            Particle density in the image.
+            Particles' density in the image.
         p_hide_img1: float
             Probability of hiding particles in the first image.
         p_hide_img2: float
@@ -76,8 +76,14 @@ def generate_images_from_flow(
     # Calculate the number of particles based on the density
     num_particles = int(position_bounds[0] * position_bounds[1] * seeding_density)
 
+    # Number of flow fields
+    num_flow_fields = flow_field.shape[0]
+
     def bodyfun(i, state):
         first_imgs, second_imgs, key = state
+
+        # Get the flow field for the current iteration
+        flow_field_i = flow_field[i % num_flow_fields]
 
         # Split the key for randomness
         key_i = jax.random.fold_in(key, i)
@@ -118,7 +124,7 @@ def generate_images_from_flow(
 
         if DEBUG_JIT:
             input_check_apply_flow(
-                particle_positions=particle_positions, flow_field=flow_field, dt=dt
+                particle_positions=particle_positions, flow_field=flow_field_i, dt=dt
             )
 
         # Divide the x coordinates by 2 to match the flow field
@@ -132,7 +138,7 @@ def generate_images_from_flow(
         # Apply flow field to particle positions
         final_positions = apply_flow_to_particles(
             particle_positions=particle_positions,
-            flow_field=flow_field,
+            flow_field=flow_field_i,
             dt=dt,
             flow_field_res_x=flow_field_res_x,
             flow_field_res_y=flow_field_res_y,
@@ -193,7 +199,7 @@ def generate_images_from_flow(
 
     # Generate images using a for loop
     # For some reason, even if the different indices are independent, vmap is slower
-    # TODO: try jax.lax.map
+    # TODO try to use jax.lax.scan
     final_imgs, final_imgs2, _ = jax.lax.fori_loop(0, num_images, bodyfun, init_state)
 
     return final_imgs, final_imgs2
@@ -222,18 +228,18 @@ def input_check_gen_img_from_flow(
         key: jax.random.PRNGKey
             Random key for reproducibility.
         flow_field: jnp.ndarray
-            Array of shape (H, W, 2) containing the velocity field
-            at each grid_step.
+            Array of shape (N, H, W, 2) containing N velocity fields
+            with velocities in length measure unit per second.
         position_bounds: Tuple[int, int]
-            (height, width) of the output big image.
+            (height, width) bounds on the positions of the particles in pixels.
         image_shape: Tuple[int, int]
-            (height, width) of the output image.
+            (height, width) of the output image in pixels.
         num_images: int
             Number of image pairs to generate.
         img_offset: Tuple[int, int]
             Offset to apply to the generated images.
         seeding_density: float
-            Density of particles in the image.
+            Particles' density in the image.
         p_hide_img1: float
             Probability of hiding particles in the first image.
         p_hide_img2: float
@@ -279,10 +285,10 @@ def input_check_gen_img_from_flow(
         raise ValueError("img_offset must be a tuple of two non-negative integers.")
     if (
         not isinstance(flow_field, jnp.ndarray)
-        or flow_field.ndim != 3
-        or flow_field.shape[2] != 2
+        or flow_field.ndim != 4
+        or flow_field.shape[3] != 2
     ):
-        raise ValueError("Flow_field must be a 3D jnp.ndarray with shape (H, W, 2).")
+        raise ValueError("Flow_field must be a 4D jnp.ndarray with shape (N, H, W, 2).")
     if len(diameter_range) != 2 or not all(d > 0 for d in diameter_range):
         raise ValueError("diameter_range must be a tuple of two positive floats.")
     if len(intensity_range) != 2 or not all(i >= 0 for i in intensity_range):
