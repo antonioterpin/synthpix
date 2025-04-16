@@ -472,6 +472,7 @@ class SyntheticImageSampler:
                         position_bounds_offset=self.position_bounds_offset,
                         output_units=self.output_units,
                         dt=self.dt,
+                        zero_padding=self.zero_padding,
                     ),
                     mesh=self.mesh,
                     in_specs=PartitionSpec(self.shard_fields),
@@ -493,6 +494,7 @@ class SyntheticImageSampler:
                 batch_size=self.batch_size // num_devices,
                 output_units=self.output_units,
                 dt=self.dt,
+                zero_padding=self.zero_padding,
             )
             self.flow_field_adapter_jit = flow_field_adapter
 
@@ -561,20 +563,6 @@ class SyntheticImageSampler:
 
             # Shard the flow fields across devices
             _current_flows = jnp.array(_current_flows, device=self.sharding)
-
-            # Adding zero padding to the flow field
-            # TODO move this to the flow field adapter
-            _current_flows = jnp.pad(
-                _current_flows,
-                pad_width=(
-                    (0, 0),
-                    (self.zero_padding[0], 0),
-                    (self.zero_padding[1], 0),
-                    (0, 0),
-                ),
-                mode="constant",
-                constant_values=0.0,
-            )
 
             logger.debug(f"Current flow fields sharding: {_current_flows.sharding}")
 

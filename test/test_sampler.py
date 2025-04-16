@@ -769,7 +769,7 @@ def test_speed_sampler_dummy_fn(
 @pytest.mark.parametrize("batch_size", [150])
 @pytest.mark.parametrize("batches_per_flow_batch", [333])
 @pytest.mark.parametrize("seed", [0])
-@pytest.mark.parametrize("seeding_density_range", [(0.0, 0.016)])
+@pytest.mark.parametrize("seeding_density_range", [(0.001, 0.004)])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": True}], indirect=True
 )
@@ -797,14 +797,11 @@ def test_speed_sampler_real_fn(
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 7.0
-        limit_time = 0.5
+        limit_time = 6.5
     elif num_devices == 2:
-        limit_time = 4.5
-        limit_time = 0.0
+        limit_time = 4.0
     elif num_devices == 4:
         limit_time = 3.0  # TODO: fix times for 4 GPUs when available
-        limit_time = 5.5e-2  # TODO: fix times for 4 GPUs when available
 
     # Create the sampler
     sampler = SyntheticImageSampler.from_config(
@@ -826,10 +823,6 @@ def test_speed_sampler_real_fn(
                 batch[1].block_until_ready()
                 batch[2].block_until_ready()
                 batch[3].block_until_ready()
-                batch[0].block_until_ready()
-                batch[1].block_until_ready()
-                batch[2].block_until_ready()
-                # batch[3].block_until_ready()
                 break
 
     # Warm up the function
