@@ -142,7 +142,6 @@ class BaseFlowFieldScheduler(ABC):
         """Retrieves a batch of flow fields using the current scheduler state.
 
         This method repeatedly calls `__next__()` to store a batch of flow field slices.
-        It naturally spans across multiple files and Y-slices as needed.
 
         Args:
             batch_size: int
