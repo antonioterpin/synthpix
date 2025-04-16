@@ -736,7 +736,7 @@ def test_speed_sampler_real_fn(
     if num_devices == 1:
         limit_time = 1.45e-1
     elif num_devices == 2:
-        limit_time = 8e-2
+        limit_time = 4.2
     elif num_devices == 4:
         limit_time = 5.5e-2
     # Create the sampler
@@ -756,12 +756,11 @@ def test_speed_sampler_real_fn(
             batch[2].block_until_ready()
             if i >= images_per_flow_batch // batch_size:
                 logger.debug(f"Finished iteration {i}")
-                sampler._images_generated = 0
+                sampler.reset()
                 break
 
     # Warm up the function
     run_sampler()
-    sampler._images_generated = 0
 
     # Measure the time taken to run the sampler
     total_time = timeit.repeat(
