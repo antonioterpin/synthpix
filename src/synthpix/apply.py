@@ -10,6 +10,42 @@ from synthpix.utils import bilinear_interpolate, trilinear_interpolate
 
 def apply_flow_to_image(
     image: jnp.ndarray,
+    flow_field: jnp.ndarray,
+    dt: float,
+) -> jnp.ndarray:
+    """Warp a 2D image of particles according to a given flow field.
+
+    For each pixel (y, x) in the output image, we compute a velocity (u, v)
+    from `flow_field[t, y, x]`, then sample from the input image at
+    (y_s, x_s) = (y - v * dt, x - u * dt) via bilinear interpolation.
+
+    Args:
+        image (jnp.ndarray): 2D array (H, W) representing the input particle image.
+        flow_field (jnp.ndarray): 3D array (H, W, 2) representing the velocity field.
+        dt (float): Time step for the backward mapping.
+
+    Returns:
+        jnp.ndarray: A new 2D array of shape (H, W) with the particles displaced.
+    """
+    H, W = image.shape
+    y_grid, x_grid = jnp.indices((H, W))
+
+    # Extract displacements
+    u = flow_field[..., 0]
+    v = flow_field[..., 1]
+
+    # Backward mapping: (x_s, y_s) = (x - u * dt, y - v * dt)
+    # x_grid, y_grid are (H, W)
+    x_s = x_grid - u * dt
+    y_s = y_grid - v * dt
+
+    # Interpolate from the original image at these source coords
+    warped = bilinear_interpolate(image, x_s, y_s)
+    return warped
+
+
+def apply_flow_to_image_callable(
+    image: jnp.ndarray,
     flow_field: Callable[[float, float, float], Tuple[float, float]],
     t: float = 0.0,
     dt: float = 1.0,
@@ -26,8 +62,8 @@ def apply_flow_to_image(
             Function that takes (x, y, t) and returns (u, v) velocity.
                 - x, y: coordinates
                 - t: time parameter (or any scalar)
-        t (float, optional): Time parameter passed to flow_field. Defaults to 0.0.
-        dt (float, optional): Time step for the backward mapping. Defaults to 1.0.
+        t (float): Time parameter passed to flow_field.
+        dt (float): Time step for the backward mapping.
 
     Returns:
         jnp.ndarray: A new 2D array of shape (H, W) with the particles displaced.
@@ -45,19 +81,7 @@ def apply_flow_to_image(
     )
     # shape (H, W, 2)
     uv = flow_field_vmap(y_grid, x_grid)
-
-    # Extract displacements
-    u = uv[..., 0]
-    v = uv[..., 1]
-
-    # Backward mapping: (x_s, y_s) = (x - u * dt, y - v * dt)
-    # x_grid, y_grid are (H, W)
-    x_s = x_grid - u * dt
-    y_s = y_grid - v * dt
-
-    # Interpolate from the original image at these source coords
-    warped = bilinear_interpolate(image, x_s, y_s)
-    return warped
+    return apply_flow_to_image(image, uv, dt)
 
 
 def input_check_apply_flow(

@@ -2,10 +2,11 @@ import timeit
 
 import jax
 import jax.numpy as jnp
+import jax.profiler
 import pytest
 from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
-from jax.sharding import Mesh, PartitionSpec
+from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
 from synthpix.data_generate import (
     generate_images_from_flow,
@@ -35,7 +36,7 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_DATA_GEN"]
 )
 def test_invalid_key(key):
     """Test that invalid PRNG keys raise a TypeError."""
-    flow_field = jnp.zeros((128, 128, 2))
+    flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
         ValueError,
@@ -46,13 +47,14 @@ def test_invalid_key(key):
         )
 
 
-@pytest.mark.parametrize("flow_field", [1, jnp.array([1, 2, 3]), [[[10, 20]]]])
+@pytest.mark.parametrize("flow_field", [1, jnp.array([1, 2, 3]), [[[[10, 20]]]]])
 def test_invalid_flow_field(flow_field):
     """Test that invalid flow_field raise a ValueError."""
     key = jax.random.PRNGKey(0)
     image_shape = (128, 128)
     with pytest.raises(
-        ValueError, match="Flow_field must be a 3D jnp.ndarray with shape \\(H, W, 2\\)"
+        ValueError,
+        match="Flow_field must be a 4D jnp.ndarray with shape \\(N, H, W, 2\\).",
     ):
         input_check_gen_img_from_flow(
             key, flow_field=flow_field, image_shape=image_shape
@@ -65,7 +67,7 @@ def test_invalid_flow_field(flow_field):
 def test_invalid_image_shape(image_shape):
     """Test that invalid image shapes raise a ValueError."""
     key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((128, 128, 2))
+    flow_field = jnp.zeros((1, 128, 128, 2))
     with pytest.raises(
         ValueError, match="image_shape must be a tuple of two positive integers."
     ):
@@ -80,7 +82,7 @@ def test_invalid_image_shape(image_shape):
 def test_invalid_position_bounds(position_bounds):
     """Test that invalid position_bounds raises a ValueError."""
     key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((128, 128, 2))
+    flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     img_offset = (0, 0)
     with pytest.raises(
@@ -99,7 +101,7 @@ def test_invalid_position_bounds(position_bounds):
 def test_invalid_seeding_density(seeding_density):
     """Test that invalid seeding_density raise a ValueError."""
     key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((128, 128, 2))
+    flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
         ValueError, match="seeding_density must be a float between 0 and 1."
@@ -116,7 +118,7 @@ def test_invalid_seeding_density(seeding_density):
 def test_invalid_num_images(num_images):
     """Test that invalid num_images raise a ValueError."""
     key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((128, 128, 2))
+    flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(ValueError, match="num_images must be a positive integer."):
         input_check_gen_img_from_flow(
@@ -130,7 +132,7 @@ def test_invalid_num_images(num_images):
 def test_invalid_img_offset(img_offset):
     """Test that invalid img_offset raises a ValueError."""
     key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((128, 128, 2))
+    flow_field = jnp.zeros((1, 128, 128, 2))
     position_bounds = (256, 256)
     image_shape = (128, 128)
     with pytest.raises(
@@ -149,7 +151,7 @@ def test_invalid_img_offset(img_offset):
 def test_invalid_p_hide_img1(p_hide_img1):
     """Test that invalid p_hide_img1 raise a ValueError."""
     key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((128, 128, 2))
+    flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(ValueError, match="p_hide_img1 must be between 0 and 1."):
         input_check_gen_img_from_flow(
@@ -161,7 +163,7 @@ def test_invalid_p_hide_img1(p_hide_img1):
 def test_invalid_p_hide_img2(p_hide_img2):
     """Test that invalid p_hide_img2 raise a ValueError."""
     key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((128, 128, 2))
+    flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(ValueError, match="p_hide_img2 must be between 0 and 1."):
         input_check_gen_img_from_flow(
@@ -173,7 +175,7 @@ def test_invalid_p_hide_img2(p_hide_img2):
 def test_invalid_diameter_range(diameter_range):
     """Test that invalid diameter ranges raise a ValueError."""
     key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((128, 128, 2))
+    flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
         ValueError, match="diameter_range must be a tuple of two positive floats."
@@ -190,7 +192,7 @@ def test_invalid_diameter_range(diameter_range):
 def test_invalid_intensity_range(intensity_range):
     """Test that invalid intensity ranges raise a ValueError."""
     key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((128, 128, 2))
+    flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(ValueError):
         input_check_gen_img_from_flow(
@@ -205,7 +207,7 @@ def test_invalid_intensity_range(intensity_range):
 def test_invalid_rho_range(rho_range):
     """Test that invalid rho ranges raise a ValueError."""
     key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((128, 128, 2))
+    flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
         ValueError, match="rho_range must be a tuple of two floats between -1 and 1."
@@ -221,7 +223,7 @@ def test_invalid_rho_range(rho_range):
 def test_invalid_dt(dt):
     """Test that invalid dt raise a ValueError."""
     key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((128, 128, 2))
+    flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(ValueError, match="dt must be a scalar \\(int or float\\)"):
         input_check_gen_img_from_flow(
@@ -236,7 +238,7 @@ def test_invalid_dt(dt):
 def test_invalid_flow_field_res_x(flow_field_res_x):
     """Test that invalid flow_field_res_x raise a ValueError."""
     key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((128, 128, 2))
+    flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
         ValueError,
@@ -257,7 +259,7 @@ def test_invalid_flow_field_res_x(flow_field_res_x):
 def test_invalid_flow_field_res_y(flow_field_res_y):
     """Test that invalid flow_field_res_y raise a ValueError."""
     key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((128, 128, 2))
+    flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
         ValueError,
@@ -309,7 +311,7 @@ def test_incoherent_image_shape_and_position_bounds(
 ):
     """Test that incoherent image_shape and position_bounds raise a ValueError."""
     key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((128, 128, 2))
+    flow_field = jnp.zeros((1, 128, 128, 2))
     with pytest.raises(
         ValueError,
         match=error_message,
@@ -344,6 +346,7 @@ def test_generate_images_from_flow(visualize=False):
     flow_field = generate_array_flow_field(
         get_flow_function(selected_flow, image_shape), image_shape
     )
+    flow_field = jnp.expand_dims(flow_field, axis=0)
 
     # 3. apply the flow field to the particles
     img, img_warped = generate_images_from_flow(
@@ -389,6 +392,7 @@ def test_generate_images_from_flow(visualize=False):
 @pytest.mark.parametrize("image_shape", [(1216, 1936)])
 @pytest.mark.parametrize("position_bounds", [(1536, 2048)])
 @pytest.mark.parametrize("img_offset", [(160, 56)])
+@pytest.mark.parametrize("num_flow_fields", [100])
 def test_speed_generate_images_from_flow(
     selected_flow,
     seeding_density,
@@ -396,30 +400,31 @@ def test_speed_generate_images_from_flow(
     image_shape,
     position_bounds,
     img_offset,
+    num_flow_fields,
 ):
     """Test that generate_images_from_flow is faster than a limit time."""
 
     # Name of the axis for the device mesh
-    shard_keys = "keys"
+    shard_fields = "fields"
 
     # Check how many GPUs are available
     num_devices = len(jax.devices())
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 1.2e-2
+        limit_time = 1.15e-2
     elif num_devices == 2:
-        limit_time = 6.5e-3
+        limit_time = 7e-3
     elif num_devices == 4:
-        limit_time = 3.9e-3
+        limit_time = 3e-3
 
     # Setup device mesh
     # We want to shard a key to each device
-    # and duplicate the flow field.
+    # and give different flow fields to each device.
     # The idea is that each device will generate a num_images images
     # and then stack it with the images generated by the other GPUs.
     devices = mesh_utils.create_device_mesh((num_devices,))
-    mesh = Mesh(devices, axis_names=(shard_keys))
+    mesh = Mesh(devices, axis_names=(shard_fields))
 
     # 1. Generate key
     key = jax.random.PRNGKey(0)
@@ -428,12 +433,24 @@ def test_speed_generate_images_from_flow(
     flow_field = generate_array_flow_field(
         get_flow_function(selected_flow, position_bounds), position_bounds
     )
+    flow_field = jnp.expand_dims(flow_field, axis=0)
+    flow_field = jnp.repeat(flow_field, num_flow_fields, axis=0)
 
-    # 3. Setup the random keys
+    # 3. Shard the flow field
+    flow_field_sharded = jax.device_put(
+        flow_field, NamedSharding(mesh, PartitionSpec(shard_fields))
+    )
+
+    # 4. Setup the random keys
     keys = jax.random.split(key, num_devices)
     keys = jnp.stack(keys)
 
-    # 4. Create the jit function
+    # 5. Shard the keys
+    keys_sharded = jax.device_put(
+        keys, NamedSharding(mesh, PartitionSpec(shard_fields))
+    )
+
+    # 6. Create the jit function
     jit_generate_images = jax.jit(
         shard_map(
             lambda key, flow: generate_images_from_flow(
@@ -446,13 +463,13 @@ def test_speed_generate_images_from_flow(
                 num_images=num_images,
             ),
             mesh=mesh,
-            in_specs=(PartitionSpec(shard_keys), PartitionSpec()),
-            out_specs=(PartitionSpec(shard_keys), PartitionSpec(shard_keys)),
+            in_specs=(PartitionSpec(shard_fields), PartitionSpec(shard_fields)),
+            out_specs=(PartitionSpec(shard_fields), PartitionSpec(shard_fields)),
         )
     )
 
     def run_generate_jit():
-        imgs1, imgs2 = jit_generate_images(keys, flow_field)
+        imgs1, imgs2 = jit_generate_images(keys_sharded, flow_field_sharded)
         imgs1.block_until_ready()
         imgs2.block_until_ready()
 

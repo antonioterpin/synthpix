@@ -7,7 +7,7 @@ from jax.experimental import mesh_utils
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
 from synthpix.apply import (
-    apply_flow_to_image,
+    apply_flow_to_image_callable,
     apply_flow_to_particles,
     input_check_apply_flow,
 )
@@ -40,7 +40,7 @@ def test_flow_apply_to_image(image_shape, visualize=False):
     def flow_f(_t, _x, _y):
         return 1.0, 0.0
 
-    img_warped = apply_flow_to_image(img, flow_f, t=0.0)
+    img_warped = apply_flow_to_image_callable(img, flow_f, t=0.0)
     if visualize:
         import matplotlib.pyplot as plt
         import numpy as np

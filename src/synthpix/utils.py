@@ -233,82 +233,261 @@ def visualize_and_save(name, image1, image2, flow_field, output_dir="output_imag
     logger.info(f"Saved images for {name} to {output_dir}.")
 
 
-def flow_field_adapter(
-    flow_field: jnp.ndarray, new_flow_field_shape: Tuple[int, int] = (256, 256)
+def interp_channel(
+    channel, row_floor, row_ceil, col_floor, col_ceil, row_lerp, col_lerp
 ):
-    """Adapter to convert flow field to one with a different resolution.
+    """Perform bilinear interpolation on a single 2D channel."""
+    I00 = channel[row_floor[:, None], col_floor[None, :]]
+    I01 = channel[row_floor[:, None], col_ceil[None, :]]
+    I10 = channel[row_ceil[:, None], col_floor[None, :]]
+    I11 = channel[row_ceil[:, None], col_ceil[None, :]]
+
+    top = I00 * (1 - col_lerp) + I01 * col_lerp
+    bottom = I10 * (1 - col_lerp) + I11 * col_lerp
+    return top * (1 - row_lerp) + bottom * row_lerp
+
+
+def flow_field_adapter(
+    flow_fields: jnp.ndarray,
+    new_flow_field_shape: Tuple[int, int] = (256, 256),
+    image_shape: Tuple[int, int] = (256, 256),
+    img_offset: Tuple[int, int] = (0, 0),
+    resolution: float = 1.0,
+    res_x: float = 1.0,
+    res_y: float = 1.0,
+    position_bounds: Tuple[int, int] = (256, 256),
+    position_bounds_offset: Tuple[int, int] = (0, 0),
+    batch_size: int = 1,
+    output_units: str = "pixels",
+    dt: float = 1.0,
+    zero_padding: Tuple[int, int] = (0, 0),
+):
+    """Adapts a batch of flow fields to a new shape and resolution.
 
     Args:
         flow_field: jnp.ndarray
-            The original flow field to be adapted.
+            The original flow field batch to be adapted.
         new_flow_field_shape: Tuple[int, int]
-            The desired shape of the new flow field.
+            The desired shape of the new flow fields.
+        image_shape: Tuple[int, int]
+            The shape of the images.
+        img_offset: Tuple[int, int]
+            The offset of the images.
+        resolution: float
+            Resolution of the images in pixels per unit length.
+        res_x: float
+            Flow field resolution in the x direction [grid steps/length measure units].
+        res_y: float
+            Flow field resolution in the y direction [grid steps/length measure units].
+        position_bounds: Tuple[int, int]
+            The bounds of the flow field in the x and y directions.
+        position_bounds_offset: Tuple[int, int]
+            The offset of the flow field in the x and y directions.
+        batch_size: int
+            The desired batch size of the output flow fields.
+        output_units: str
+            The units of the output flow fields.
+            Can be "pixels" or "measure units per second".
+        dt: float
+            The time step for the flow field adaptation.
+        zero_padding: Tuple[int, int]
+            The amount of zero-padding to apply to the
+            top and left edges of the flow field.
 
     Returns:
-        jnp.ndarray: The adapted flow field with the new shape.
+        jnp.ndarray: The adapted flow fields of shape (batch_size, new_h, new_w, 2).
+        jnp.ndarray: The cropped flow field region of position bounds.
     """
-    original_shape = flow_field.shape[:2]
+    new_h, new_w = new_flow_field_shape
 
-    # Create a 2D grid of coordinates for the new shape
-    x = jnp.linspace(0, original_shape[1] - 1, new_flow_field_shape[1])
-    y = jnp.linspace(0, original_shape[0] - 1, new_flow_field_shape[0])
-    x_new, y_new = jnp.meshgrid(x, y)
+    def process_single(flow):
+        # Apply zero-padding
+        pad_y, pad_x = zero_padding
+        flow = jnp.pad(
+            flow,
+            pad_width=((pad_y, 0), (pad_x, 0), (0, 0)),
+            mode="constant",
+            constant_values=0.0,
+        )
 
-    # Vectorize over the columns
-    interp_over_cols_x = jax.vmap(
-        lambda x_coord, y_coord: bilinear_interpolate(
-            flow_field[..., 0],
-            x_coord,
-            y_coord,
-        ),
-        in_axes=(0, 0),
-    )
+        # Crop by position bounds
+        y_start = int(position_bounds_offset[0] * res_y)
+        y_end = y_start + int(position_bounds[0] / resolution * res_y)
+        x_start = int(position_bounds_offset[1] * res_x)
+        x_end = x_start + int(position_bounds[1] / resolution * res_x)
+        flow_position_bounds = flow[y_start:y_end, x_start:x_end]
 
-    # Now vectorize over the rows
-    new_flow_field_x = jax.vmap(
-        lambda xs, ys: interp_over_cols_x(xs, ys), in_axes=(0, 0)
-    )(x_new, y_new)
+        # Crop to image offset
+        y_img_start = int(img_offset[0] * res_y)
+        y_img_end = y_img_start + int(image_shape[0] / resolution * res_y)
+        x_img_start = int(img_offset[1] * res_x)
+        x_img_end = x_img_start + int(image_shape[1] / resolution * res_x)
+        flow_image_crop = flow_position_bounds[
+            y_img_start:y_img_end, x_img_start:x_img_end
+        ]
 
-    # Repeat for the second channel
-    interp_over_cols_y = jax.vmap(
-        lambda x_coord, y_coord: bilinear_interpolate(
-            flow_field[..., 1],
-            x_coord,
-            y_coord,
-        ),
-        in_axes=(0, 0),
-    )
-    new_flow_field_y = jax.vmap(
-        lambda xs, ys: interp_over_cols_y(xs, ys), in_axes=(0, 0)
-    )(x_new, y_new)
+        # Generate grid for interpolation
+        crop_h, crop_w, _ = flow_image_crop.shape
+        row_coords = jnp.linspace(0, crop_h - 1, new_h)
+        col_coords = jnp.linspace(0, crop_w - 1, new_w)
+        row_floor = jnp.floor(row_coords).astype(jnp.int32)
+        col_floor = jnp.floor(col_coords).astype(jnp.int32)
+        row_ceil = jnp.clip(row_floor + 1, 0, crop_h - 1)
+        col_ceil = jnp.clip(col_floor + 1, 0, crop_w - 1)
+        row_lerp = (row_coords - row_floor).reshape((new_h, 1))
+        col_lerp = (col_coords - col_floor).reshape((1, new_w))
 
-    # Stack the two interpolated channels along the last dimension
-    new_flow_field = jnp.stack([new_flow_field_x, new_flow_field_y], axis=-1)
-    return new_flow_field
+        # Interpolate x and y channels
+        flow_x = interp_channel(
+            flow_image_crop[..., 0],
+            row_floor,
+            row_ceil,
+            col_floor,
+            col_ceil,
+            row_lerp,
+            col_lerp,
+        )
+        flow_y = interp_channel(
+            flow_image_crop[..., 1],
+            row_floor,
+            row_ceil,
+            col_floor,
+            col_ceil,
+            row_lerp,
+            col_lerp,
+        )
+        flow_interp = jnp.stack([flow_x, flow_y], axis=-1)
+
+        if output_units == "pixels":
+            flow_interp *= resolution * dt
+
+        return flow_interp, flow_position_bounds
+
+    adapted_flows, flow_bounds = jax.vmap(process_single)(flow_fields)
+
+    n = adapted_flows.shape[0]
+    repeats = (batch_size + n - 1) // n
+    tiled = jnp.tile(adapted_flows, (repeats, 1, 1, 1))
+
+    return tiled[:batch_size], flow_bounds
 
 
 def input_check_flow_field_adapter(
-    flow_field: jnp.ndarray, new_flow_field_shape: Tuple[int, int] = (256, 256)
+    flow_field: jnp.ndarray,
+    new_flow_field_shape: Tuple[int, int],
+    image_shape: Tuple[int, int],
+    img_offset: Tuple[int, int],
+    resolution: float,
+    res_x: float,
+    res_y: float,
+    position_bounds: Tuple[int, int],
+    position_bounds_offset: Tuple[int, int],
+    batch_size: int,
+    output_units: str,
+    dt: float,
+    zero_padding: Tuple[int, int],
 ):
     """Checks the input arguments of the flow field adapter function.
 
     Args:
         flow_field: jnp.ndarray
-            The original flow field to be adapted.
+            The original flow field batch to be adapted.
         new_flow_field_shape: Tuple[int, int]
-            The desired shape of the new flow field.
+            The desired shape of the new flow fields.
+        image_shape: Tuple[int, int]
+            The shape of the images.
+        img_offset: Tuple[int, int]
+            The offset of the images.
+        resolution: float
+            Resolution of the images in pixels per unit length.
+        res_x: float
+            Flow field resolution in the x direction [grid steps/length measure units].
+        res_y: float
+            Flow field resolution in the y direction [grid steps/length measure units].
+        position_bounds: Tuple[int, int]
+            The bounds of the flow field in the x and y directions.
+        position_bounds_offset: Tuple[int, int]
+            The offset of the flow field in the x and y directions.
+        batch_size: int
+            The desired batch size of the output flow fields.
+        output_units: str
+            The units of the output flow fields.
+            Can be "pixels" or "measure units per second".
+        dt: float
+            The time step for the flow field adaptation.
+        zero_padding: Tuple[int, int]
+            The amount of zero-padding to apply to the
+            top and left edges of the flow field.
     """
-    if (
-        not isinstance(flow_field, jnp.ndarray)
-        or len(flow_field.shape) != 3
-        or flow_field.shape[2] != 2
-    ):
-        raise ValueError("Flow_field must be a 3D jnp.ndarray with shape (H, W, 2).")
-    if (
-        not isinstance(new_flow_field_shape, tuple)
-        or len(new_flow_field_shape) != 2
-        or not all(isinstance(s, int) and s > 0 for s in new_flow_field_shape)
-    ):
+    if not isinstance(flow_field, jnp.ndarray):
+        raise ValueError("flow_field must be a jnp.ndarray.")
+    if flow_field.ndim != 4:
+        raise ValueError("flow_field must be a 4D jnp.ndarray with shape (N, H, W, 2).")
+    if flow_field.shape[-1] != 2:
+        raise ValueError(
+            "flow_field must have shape (N, H, W, 2) in the last dimension."
+        )
+
+    if not isinstance(new_flow_field_shape, tuple) or len(new_flow_field_shape) != 2:
         raise ValueError(
             "new_flow_field_shape must be a tuple of two positive integers."
         )
+    if not all(isinstance(s, int) and s > 0 for s in new_flow_field_shape):
+        raise ValueError("new_flow_field_shape must contain two positive integers.")
+
+    if not isinstance(image_shape, tuple) or len(image_shape) != 2:
+        raise ValueError("image_shape must be a tuple of two positive integers.")
+    if not all(isinstance(s, int) and s > 0 for s in image_shape):
+        raise ValueError("image_shape must contain two positive integers.")
+
+    if not isinstance(img_offset, tuple) or len(img_offset) != 2:
+        raise ValueError("img_offset must be a tuple of two non-negative numbers.")
+    if not all(isinstance(s, (int, float)) and s >= 0 for s in img_offset):
+        raise ValueError("img_offset must contain two non-negative numbers.")
+
+    if not isinstance(resolution, (int, float)) or resolution <= 0:
+        raise ValueError("resolution must be a positive number.")
+
+    if not isinstance(res_x, (int, float)) or res_x <= 0:
+        raise ValueError("res_x must be a positive number.")
+
+    if not isinstance(res_y, (int, float)) or res_y <= 0:
+        raise ValueError("res_y must be a positive number.")
+
+    if not isinstance(position_bounds, tuple) or len(position_bounds) != 2:
+        raise ValueError("position_bounds must be a tuple of two positive numbers.")
+    if not all(isinstance(s, (int, float)) and s > 0 for s in position_bounds):
+        raise ValueError("position_bounds must contain two positive numbers.")
+
+    if (
+        not isinstance(position_bounds_offset, tuple)
+        or len(position_bounds_offset) != 2
+    ):
+        raise ValueError(
+            "position_bounds_offset must be a tuple of two non-negative numbers."
+        )
+    if not all(isinstance(s, (int, float)) and s >= 0 for s in position_bounds_offset):
+        raise ValueError(
+            "position_bounds_offset must contain two non-negative numbers."
+        )
+
+    if not isinstance(batch_size, int) or batch_size <= 0:
+        raise ValueError("batch_size must be a positive integer.")
+
+    if not isinstance(output_units, str) or output_units not in [
+        "pixels",
+        "measure units per second",
+    ]:
+        raise ValueError(
+            "output_units must be either 'pixels' or 'measure units per second'."
+        )
+
+    if not isinstance(dt, (int, float)) or dt <= 0:
+        raise ValueError("dt must be a positive number.")
+
+    if (
+        not isinstance(zero_padding, tuple)
+        or len(zero_padding) != 2
+        or not all(isinstance(s, int) and s >= 0 for s in zero_padding)
+    ):
+        raise ValueError("zero_padding must be a tuple of two non-negative integers.")

@@ -6,6 +6,9 @@ import jax
 import jax.numpy as jnp
 import pytest
 import yaml
+from jax.experimental import mesh_utils
+from jax.experimental.shard_map import shard_map
+from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
 from synthpix.example_flows import get_flow_function
 from synthpix.sanity import calculate_min_and_max_speeds, update_config_file
@@ -191,32 +194,311 @@ def test_calculate_min_and_max_speeds(mock_hdf5_files):
         calculate_min_and_max_speeds(["nonexistent_file.h5"])  # Nonexistent file
 
 
-@pytest.mark.parametrize("new_flow_field_shape", [(-128, 128), (256, 256.0), "invalid"])
-def test_invalid_new_flow_field_shape(new_flow_field_shape):
-    """Test that invalid new_flow_field_shape raises a ValueError."""
-    flow_field = jnp.ones((256, 256, 2))
+# Mock valid inputs
+valid_flow_field = jnp.ones((1, 256, 256, 2))
+valid_shape = (256, 256)
+valid_offset = (0, 0)
+valid_resolution = 1.0
+valid_position_bounds = (256, 256)
+valid_position_offset = (0, 0)
+valid_batch_size = 1
+valid_dt = 1.0
+valid_zero_padding = (0, 0)
+
+
+@pytest.mark.parametrize("image_shape", [(256,), "invalid"])
+def test_invalid_image_shape_format(image_shape):
     with pytest.raises(
-        ValueError,
-        match="new_flow_field_shape must be a tuple of two positive integers.",
+        ValueError, match="image_shape must be a tuple of two positive integers."
     ):
         input_check_flow_field_adapter(
-            flow_field=flow_field,
-            new_flow_field_shape=new_flow_field_shape,
+            flow_field=valid_flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=image_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
+        )
+
+
+@pytest.mark.parametrize("image_shape", [(0, 256), (-1, 256), (256, "256")])
+def test_invalid_image_shape_values(image_shape):
+    with pytest.raises(
+        ValueError, match="image_shape must contain two positive integers."
+    ):
+        input_check_flow_field_adapter(
+            flow_field=valid_flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=image_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
+        )
+
+
+@pytest.mark.parametrize("img_offset", [(256,), "invalid"])
+def test_invalid_img_offset_format(img_offset):
+    with pytest.raises(
+        ValueError, match="img_offset must be a tuple of two non-negative numbers."
+    ):
+        input_check_flow_field_adapter(
+            flow_field=valid_flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=img_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
+        )
+
+
+@pytest.mark.parametrize("img_offset", [(256, -1), ("0", 0)])
+def test_invalid_img_offset_values(img_offset):
+    with pytest.raises(
+        ValueError, match="img_offset must contain two non-negative numbers."
+    ):
+        input_check_flow_field_adapter(
+            flow_field=valid_flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=img_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
         )
 
 
 @pytest.mark.parametrize(
-    "flow_field", [(256, 256), jnp.ones((256, 256)), jnp.ones((256, 256, 3)), "invalid"]
+    "value,param_name",
+    [
+        (-1.0, "resolution"),
+        ("1.0", "resolution"),
+        (0.0, "resolution"),
+        (-1.0, "res_x"),
+        (None, "res_x"),
+        (0, "res_y"),
+        (-0.1, "res_y"),
+    ],
 )
-def test_invalid_flow_field(flow_field):
-    """Test that invalid flow_field raises a ValueError."""
-    new_flow_field_shape = (256, 256)
+def test_invalid_resolutions(value, param_name):
+    args = {
+        "flow_field": valid_flow_field,
+        "new_flow_field_shape": valid_shape,
+        "image_shape": valid_shape,
+        "img_offset": valid_offset,
+        "resolution": valid_resolution,
+        "res_x": valid_resolution,
+        "res_y": valid_resolution,
+        "position_bounds": valid_position_bounds,
+        "position_bounds_offset": valid_position_offset,
+        "batch_size": valid_batch_size,
+        "output_units": "pixels",
+        "dt": valid_dt,
+        "zero_padding": valid_zero_padding,
+    }
+    args[param_name] = value
+    with pytest.raises(ValueError, match=f"{param_name} must be a positive number."):
+        input_check_flow_field_adapter(**args)
+
+
+@pytest.mark.parametrize("position_bounds", [(256,), "invalid"])
+def test_invalid_position_bounds_format(position_bounds):
     with pytest.raises(
-        ValueError,
-        match="Flow_field must be a 3D jnp.ndarray with shape \\(H, W, 2\\).",
+        ValueError, match="position_bounds must be a tuple of two positive numbers."
     ):
         input_check_flow_field_adapter(
-            flow_field=flow_field, new_flow_field_shape=new_flow_field_shape
+            flow_field=valid_flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
+        )
+
+
+@pytest.mark.parametrize("position_bounds", [(-1, 256), ("a", 256)])
+def test_invalid_position_bounds_values(position_bounds):
+    with pytest.raises(
+        ValueError, match="position_bounds must contain two positive numbers."
+    ):
+        input_check_flow_field_adapter(
+            flow_field=valid_flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
+        )
+
+
+@pytest.mark.parametrize("position_bounds_offset", [(256,), "invalid"])
+def test_invalid_position_bounds_offset_format(position_bounds_offset):
+    with pytest.raises(
+        ValueError,
+        match="position_bounds_offset must be a tuple of two non-negative numbers.",
+    ):
+        input_check_flow_field_adapter(
+            flow_field=valid_flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=position_bounds_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
+        )
+
+
+@pytest.mark.parametrize("position_bounds_offset", [(-1, 0), ("0", 0)])
+def test_invalid_position_bounds_offset_values(position_bounds_offset):
+    with pytest.raises(
+        ValueError,
+        match="position_bounds_offset must contain two non-negative numbers.",
+    ):
+        input_check_flow_field_adapter(
+            flow_field=valid_flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=position_bounds_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
+        )
+
+
+@pytest.mark.parametrize("batch_size", [-1, 0, "1", 1.5])
+def test_invalid_batch_size(batch_size):
+    with pytest.raises(ValueError, match="batch_size must be a positive integer."):
+        input_check_flow_field_adapter(
+            flow_field=valid_flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=batch_size,
+            output_units="pixels",
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
+        )
+
+
+@pytest.mark.parametrize("output_units", [None, "invalid", 1.0])
+def test_invalid_output_units(output_units, scheduler):
+    with pytest.raises(
+        ValueError,
+        match="output_units must be either 'pixels' or 'measure units per second'.",
+    ):
+        input_check_flow_field_adapter(
+            flow_field=valid_flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units=output_units,
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
+        )
+
+
+@pytest.mark.parametrize("dt", [None, "invalid", -1.0, 0.0])
+def test_invalid_dt(dt):
+    with pytest.raises(ValueError, match="dt must be a positive number."):
+        input_check_flow_field_adapter(
+            flow_field=valid_flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=dt,
+            zero_padding=valid_zero_padding,
+        )
+
+
+@pytest.mark.parametrize("zero_padding", [(1,), "invalid", (-1, 0), (0, -1)])
+def test_invalid_zero_padding(zero_padding):
+    with pytest.raises(
+        ValueError, match="zero_padding must be a tuple of two non-negative integers."
+    ):
+        input_check_flow_field_adapter(
+            flow_field=valid_flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=valid_dt,
+            zero_padding=zero_padding,
         )
 
 
@@ -240,15 +522,17 @@ def test_flow_field_adapter_shape(
     # Generate a flow field based on the selected flow type
     flow_function = get_flow_function(flow_field)
     flow_field = generate_array_flow_field(flow_function, flow_field_shape)
+    num_flows = 4
+    flow_fields = jnp.tile(flow_field, (num_flows, 1, 1, 1))
 
     # Call the adapter function
     new_flow_field = flow_field_adapter(
-        flow_field=flow_field,
+        flow_fields=flow_fields,
         new_flow_field_shape=new_flow_field_shape,
     )
 
     # Check the shape of the adapted flow field
-    assert new_flow_field.shape == expected_shape
+    assert new_flow_field[0][0].shape == expected_shape
 
     # Check the first vector of the adapted flow field
     assert jnp.allclose(new_flow_field[0][0], expected_first_vector)
@@ -276,59 +560,91 @@ def test_flow_field_adapter_shape(
 )
 def test_flow_field_adapter(flow_field, new_flow_field_shape, expected):
     """Test that flow_field_adapter returns the correct central vector."""
+    num_flows = 4
+    flow_fields = jnp.tile(flow_field, (num_flows, 1, 1, 1))
 
     # Call the adapter function
     new_flow_field = flow_field_adapter(
-        flow_field=flow_field,
+        flow_fields=flow_fields,
         new_flow_field_shape=new_flow_field_shape,
     )
 
     # Check the flow field
-    assert jnp.allclose(new_flow_field[1, 1], expected)
+    assert jnp.allclose(new_flow_field[0][0][1, 1], expected)
 
 
-# skipif is used to skip the test if the user is not connected to the server
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connect to the server.",
 )
 @pytest.mark.parametrize("selected_flow", ["horizontal"])
-@pytest.mark.parametrize("flow_field_shape", [(1216, 1936)])
-@pytest.mark.parametrize("new_flow_field_shape", [(256, 256)])
-def test_speed_flow_field_adapter(
-    selected_flow, flow_field_shape, new_flow_field_shape
+@pytest.mark.parametrize("flow_field_shape", [(1536, 1024)])
+@pytest.mark.parametrize("new_flow_field_shape", [(1216, 1936)])
+@pytest.mark.parametrize("batch_size", [128])
+def test_speed_flow_fields_adapter(
+    selected_flow, flow_field_shape, new_flow_field_shape, batch_size
 ):
     """Test that flow_field_adapter is faster than a limit time."""
 
-    # Limit time in seconds (depends on the number of GPUs)
-    limit_time = 3.5e-5
+    # Check how many GPUs are available
+    num_devices = len(jax.devices())
 
-    # Create a flow field
+    # Limit time in seconds (depends on the number of GPUs)
+    if num_devices == 1:
+        limit_time = 7e-3
+    elif num_devices == 2:
+        limit_time = 4.5e-3
+    elif num_devices == 4:
+        limit_time = 0.0  # TODO: fix times for 4 GPUs when available
+
+    # Name of the axis for the device mesh
+    shard_fields = "fields"
+    num_devices = len(jax.devices())
+    devices = mesh_utils.create_device_mesh((num_devices,))
+    mesh = Mesh(devices, axis_names=(shard_fields))
+
+    sharding = NamedSharding(mesh, PartitionSpec(shard_fields))
+
+    # Generate a flow field with shape (N, H, W, 2)
     flow_field = generate_array_flow_field(
         get_flow_function(selected_flow, flow_field_shape), flow_field_shape
     )
+    flow_fields = jnp.tile(flow_field, (batch_size // num_devices, 1, 1, 1))
 
-    # Create the jit function
+    flow_fields = jax.device_put(flow_fields, sharding)
+
     flow_field_adapter_jit = jax.jit(
-        flow_field_adapter, static_argnames=["new_flow_field_shape"]
+        shard_map(
+            lambda flow: flow_field_adapter(
+                flow,
+                new_flow_field_shape=new_flow_field_shape,
+                image_shape=(1216, 1936),
+                img_offset=(0, 0),
+                resolution=1.0,
+                res_x=1.0,
+                res_y=1.0,
+                batch_size=batch_size // num_devices,
+            ),
+            mesh=mesh,
+            in_specs=(PartitionSpec(shard_fields)),
+            out_specs=(PartitionSpec(shard_fields), PartitionSpec(shard_fields)),
+        )
     )
 
     def run_flow_field_adapter_jit():
-        result = flow_field_adapter_jit(
-            flow_field=flow_field, new_flow_field_shape=new_flow_field_shape
-        )
-        result.block_until_ready()
+        result = flow_field_adapter_jit(flow_fields)
+        result[0].block_until_ready()
+        result[1].block_until_ready()
 
-    # Warm up the function
+    # Warm up
     run_flow_field_adapter_jit()
 
-    # Measure the time of the jit function
+    # Time the JIT-ed function
     total_time_jit = timeit.repeat(
         stmt=run_flow_field_adapter_jit, number=NUMBER_OF_EXECUTIONS, repeat=REPETITIONS
     )
     average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
 
-    # Check if the time is less than the limit
     assert (
         average_time_jit < limit_time
     ), f"The average time is {average_time_jit}, time limit: {limit_time}"
