@@ -36,7 +36,7 @@ class SyntheticImageSampler:
         self,
         scheduler,
         img_gen_fn: Callable[..., jnp.ndarray],
-        images_per_flow_batch: int,
+        batches_per_flow_batch: int,
         batch_size: int,
         flow_fields_per_batch: int,
         flow_field_size: Tuple[float, float],
@@ -56,6 +56,7 @@ class SyntheticImageSampler:
         max_speed_y: float,
         min_speed_x: float,
         min_speed_y: float,
+        output_units: str,
     ):
         """Initializes the SyntheticImageSampler.
 
@@ -63,8 +64,8 @@ class SyntheticImageSampler:
             scheduler: An instance of FlowFieldScheduler that provides flow fields.
             img_gen_fn: Callable[..., jnp.ndarray]
                 JAX-compatible function (flow_field, key, ...) -> batch of images.
-            images_per_flow_batch: int
-                Number of synthetic images to generate per flow field batch.
+            batches_per_flow_batch: int
+                Number of batches of (imgs1, imgs2, flows) tuples per flow field batch.
             batch_size: int
                 Number of synthetic image couples per batch.
             flow_fields_per_batch: int
@@ -111,6 +112,8 @@ class SyntheticImageSampler:
             min_speed_y: float
                 Minimum speed in the y-direction for the flow field
                 in length measure unit per seconds.
+            output_units: str
+                Units of the output flow field. Can be 'pixels' or 'measure units'.
         """
         # Name of the axis for the device mesh
         self.shard_fields = "fields"
@@ -144,9 +147,9 @@ class SyntheticImageSampler:
         if not callable(img_gen_fn):
             raise ValueError("img_gen_fn must be a callable function.")
 
-        if not isinstance(images_per_flow_batch, int) or images_per_flow_batch <= 0:
-            raise ValueError("images_per_flow_batch must be a positive integer.")
-        self.images_per_flow_batch = images_per_flow_batch
+        if not isinstance(batches_per_flow_batch, int) or batches_per_flow_batch <= 0:
+            raise ValueError("batches_per_flow_batch must be a positive integer.")
+        self.batches_per_flow_batch = batches_per_flow_batch
 
         if not isinstance(flow_fields_per_batch, int) or flow_fields_per_batch <= 0:
             raise ValueError("flow_fields_per_batch must be a positive integer.")
@@ -247,17 +250,23 @@ class SyntheticImageSampler:
             raise ValueError("dt must be a scalar (int or float)")
         self.dt = dt
 
+        if not isinstance(output_units, str) or output_units not in [
+            "pixels",
+            "measure units",
+        ]:
+            raise ValueError("output_units must be 'pixels' or 'measure units'.")
+        self.output_units = output_units
+
         if not isinstance(seed, int) or seed < 0:
             raise ValueError("seed must be a positive integer.")
         self.seed = seed
 
-        if images_per_flow_batch % batch_size != 0:
-            extra = (
-                images_per_flow_batch // batch_size + 1
-            ) * batch_size - images_per_flow_batch
+        if batch_size % flow_fields_per_batch != 0:
+            extra_batch_size = batch_size % flow_fields_per_batch
             logger.warning(
-                f"images_per_flow_batch was not divisible by the batch size. "
-                f"Generating an extra {extra} images per flow field."
+                f"batch_size was not divisible by number of flows per batch. "
+                f"There will be one more sample for the first {extra_batch_size}"
+                f" flow fields of each batch."
             )
 
         # Check min and max speeds
@@ -448,6 +457,8 @@ class SyntheticImageSampler:
                         batch_size=self.batch_size // num_devices,
                         position_bounds=self.position_bounds,
                         position_bounds_offset=self.position_bounds_offset,
+                        output_units=self.output_units,
+                        dt=self.dt,
                     ),
                     mesh=self.mesh,
                     in_specs=PartitionSpec(self.shard_fields),
@@ -464,13 +475,15 @@ class SyntheticImageSampler:
                 res_x=self.flow_field_res_x,
                 res_y=self.flow_field_res_y,
                 batch_size=self.batch_size,
+                output_units=self.output_units,
+                dt=self.dt,
             )
             self.flow_field_adapter_jit = flow_field_adapter
 
         logger.debug("Input arguments of SyntheticImageSampler are valid.")
         logger.debug(f"Flow field scheduler: {self.scheduler}")
         logger.debug(f"Image generation function: {img_gen_fn}")
-        logger.debug(f"Images per flow batch: {self.images_per_flow_batch}")
+        logger.debug(f"Batches per flow batch: {self.batches_per_flow_batch}")
         logger.debug(f"Batch size: {self.batch_size}")
         logger.debug(f"Flow fields per batch: {flow_fields_per_batch}")
         logger.debug(f"Flow field shape: {flow_field_shape}")
@@ -491,10 +504,11 @@ class SyntheticImageSampler:
         logger.debug(f"Max speed y: {max_speed_y}")
         logger.debug(f"Min speed x: {min_speed_x}")
         logger.debug(f"Min speed y: {min_speed_y}")
-
+        logger.debug(f"Output units: {self.output_units}")
         self._rng = jax.random.PRNGKey(seed)
         self._current_flows = None
-        self._images_generated = 0
+        self._batches_generated = 0
+        self._total_generated_image_couples = 0
 
     def __iter__(self):
         """Returns the iterator instance itself."""
@@ -504,7 +518,7 @@ class SyntheticImageSampler:
         """Resets the state variables to their initial values."""
         self._rng = jax.random.PRNGKey(self.seed)
         self._current_flows = None
-        self._images_generated = 0
+        self._batches_generated = 0
         self.scheduler.reset()
         logger.debug("Sampler state has been reset.")
 
@@ -520,41 +534,10 @@ class SyntheticImageSampler:
         # Check if we need to initialize or switch to a new batch of flow fields
         if (
             self._current_flows is None
-            or self._images_generated >= self.images_per_flow_batch
+            or self._batches_generated >= self.batches_per_flow_batch
         ):
-            # Reset the image counter
-            self._images_generated = 0
-            # Get the next batch of flow fields from the scheduler
-            _current_flows = self.scheduler.get_batch(self.flow_fields_per_batch)
-
-            # Shard the flow fields across devices
-            _current_flows = jnp.array(_current_flows, device=self.sharding)
-
-            logger.debug(f"Current flow fields sharding: {_current_flows.sharding}")
-
-            # Adding zero padding to the flow field
-            _current_flow = jnp.pad(
-                _current_flow,
-                pad_width=(
-                    (self.zero_padding[0], 0),
-                    (self.zero_padding[1], 0),
-                    (0, 0),
-                ),
-                mode="constant",
-                constant_values=0.0,
-            )
-
-            # Cropping the flow field to the position bounds
-            self._current_flow = _current_flow[
-                int(self.position_bounds_offset[0] * self.flow_field_res_y) : int(
-                    self.position_bounds_offset[0] * self.flow_field_res_y
-                    + self.position_bounds[0] / self.resolution * self.flow_field_res_y
-                ),
-                int(self.position_bounds_offset[1] * self.flow_field_res_x) : int(
-                    self.position_bounds_offset[1] * self.flow_field_res_x
-                    + self.position_bounds[1] / self.resolution * self.flow_field_res_x
-                ),
-            ]
+            # Reset the batch counter
+            self._batches_generated = 0
 
             # Get the next batch of flow fields from the scheduler
             _current_flows = self.scheduler.get_batch(self.flow_fields_per_batch)
@@ -594,9 +577,12 @@ class SyntheticImageSampler:
             imgs2.shape[0] == self.batch_size
         ), f"Expected {self.batch_size} images but got {imgs2.shape[0]}"
 
-        logger.debug(f"Generated {self.batch_size} couples of images")
-        self._images_generated += self.batch_size
-        logger.debug(f"Total images generated so far: {self._images_generated}")
+        logger.debug(f"Generated {self._batches_generated} couples of images")
+        logger.debug(
+            f"Generated {self._batches_generated * self.batch_size} " "image couples"
+        )
+        self._batches_generated += 1
+        self._total_generated_image_couples += self.batch_size
         return imgs1, imgs2, self.output_flow_fields
 
     @classmethod
@@ -618,7 +604,7 @@ class SyntheticImageSampler:
             return SyntheticImageSampler(
                 scheduler=scheduler,
                 img_gen_fn=img_gen_fn,
-                images_per_flow_batch=config["images_per_flow_batch"],
+                batches_per_flow_batch=config["batches_per_flow_batch"],
                 batch_size=config["batch_size"],
                 flow_fields_per_batch=config["flow_fields_per_batch"],
                 flow_field_size=config["flow_field_size"],
@@ -638,6 +624,7 @@ class SyntheticImageSampler:
                 max_speed_y=config["max_speed_y"],
                 min_speed_x=config["min_speed_x"],
                 min_speed_y=config["min_speed_y"],
+                output_units=config["output_units"],
             )
         except KeyError as e:
             raise KeyError(

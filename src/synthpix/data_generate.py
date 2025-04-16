@@ -37,7 +37,7 @@ def generate_images_from_flow(
             Array of shape (N, H, W, 2) containing N velocity fields
             with velocities in length measure unit per second.
         position_bounds: Tuple[int, int]
-            (height, width) of the output big image in pixels.
+            (height, width) bounds on the positions of the particles in pixels.
         image_shape: Tuple[int, int]
             (height, width) of the output image in pixels.
         num_images: int
@@ -45,7 +45,7 @@ def generate_images_from_flow(
         img_offset: Tuple[int, int]
             Offset to apply to the generated images.
         seeding_density: float
-            Particle density in the image.
+            Particles' density in the image.
         p_hide_img1: float
             Probability of hiding particles in the first image.
         p_hide_img2: float
@@ -231,7 +231,7 @@ def input_check_gen_img_from_flow(
             Array of shape (N, H, W, 2) containing N velocity fields
             with velocities in length measure unit per second.
         position_bounds: Tuple[int, int]
-            (height, width) of the output big image in pixels.
+            (height, width) bounds on the positions of the particles in pixels.
         image_shape: Tuple[int, int]
             (height, width) of the output image in pixels.
         num_images: int
@@ -239,7 +239,7 @@ def input_check_gen_img_from_flow(
         img_offset: Tuple[int, int]
             Offset to apply to the generated images.
         seeding_density: float
-            Particle density in the image.
+            Particles' density in the image.
         p_hide_img1: float
             Probability of hiding particles in the first image.
         p_hide_img2: float

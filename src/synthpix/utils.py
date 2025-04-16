@@ -244,6 +244,8 @@ def flow_field_adapter(
     position_bounds: Tuple[int, int] = (256, 256),
     position_bounds_offset: Tuple[int, int] = (0, 0),
     batch_size: int = 1,
+    output_units: str = "pixels",
+    dt: float = 1.0,
 ):
     """Adapter to convert a flow field batch to one with a different resolution.
 
@@ -268,6 +270,10 @@ def flow_field_adapter(
             The offset of the flow field in the x and y directions.
         batch_size: int
             The desired batch size of the output flow fields.
+        output_units: str
+            The units of the output flow fields. Can be "pixels" or "measure units".
+        dt: float
+            The time step for the flow field adaptation.
 
     Returns:
         jnp.ndarray: The adapted flow fields with the new shape.
@@ -335,6 +341,9 @@ def flow_field_adapter(
         # Stack the two interpolated channels along the last dimension
         new_flow_field = jnp.stack([new_flow_field_x, new_flow_field_y], axis=-1)
 
+        if output_units == "pixels":
+            new_flow_field = new_flow_field * resolution * dt
+
         return new_flow_field, flow_field_position_bounds
 
     range = jnp.arange(flow_fields.shape[0])
@@ -364,6 +373,8 @@ def input_check_flow_field_adapter(
     position_bounds: Tuple[int, int],
     position_bounds_offset: Tuple[int, int],
     batch_size: int,
+    output_units: str,
+    dt: float,
 ):
     """Checks the input arguments of the flow field adapter function.
 
@@ -388,6 +399,10 @@ def input_check_flow_field_adapter(
             The offset of the flow field in the x and y directions.
         batch_size: int
             The desired batch size of the output flow fields.
+        output_units: str
+            The units of the output flow fields. Can be "pixels" or "measure units".
+        dt: float
+            The time step for the flow field adaptation.
     """
     if not isinstance(flow_field, jnp.ndarray):
         raise ValueError("flow_field must be a jnp.ndarray.")
@@ -443,3 +458,12 @@ def input_check_flow_field_adapter(
 
     if not isinstance(batch_size, int) or batch_size <= 0:
         raise ValueError("batch_size must be a positive integer.")
+
+    if not isinstance(output_units, str) or output_units not in [
+        "pixels",
+        "measure units",
+    ]:
+        raise ValueError("output_units must be either 'pixels' or 'measure units'.")
+
+    if not isinstance(dt, (int, float)) or dt <= 0:
+        raise ValueError("dt must be a positive number.")

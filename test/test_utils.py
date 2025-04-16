@@ -220,6 +220,8 @@ def test_invalid_image_shape_format(image_shape):
             position_bounds=valid_position_bounds,
             position_bounds_offset=valid_position_offset,
             batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=1.0,
         )
 
 
@@ -239,6 +241,8 @@ def test_invalid_image_shape_values(image_shape):
             position_bounds=valid_position_bounds,
             position_bounds_offset=valid_position_offset,
             batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=1.0,
         )
 
 
@@ -258,6 +262,8 @@ def test_invalid_img_offset_format(img_offset):
             position_bounds=valid_position_bounds,
             position_bounds_offset=valid_position_offset,
             batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=1.0,
         )
 
 
@@ -277,6 +283,8 @@ def test_invalid_img_offset_values(img_offset):
             position_bounds=valid_position_bounds,
             position_bounds_offset=valid_position_offset,
             batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=1.0,
         )
 
 
@@ -304,6 +312,8 @@ def test_invalid_resolutions(value, param_name):
         "position_bounds": valid_position_bounds,
         "position_bounds_offset": valid_position_offset,
         "batch_size": valid_batch_size,
+        "output_units": "pixels",
+        "dt": 1.0,
     }
     args[param_name] = value
     with pytest.raises(ValueError, match=f"{param_name} must be a positive number."):
@@ -326,6 +336,8 @@ def test_invalid_position_bounds_format(position_bounds):
             position_bounds=position_bounds,
             position_bounds_offset=valid_position_offset,
             batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=1.0,
         )
 
 
@@ -345,6 +357,8 @@ def test_invalid_position_bounds_values(position_bounds):
             position_bounds=position_bounds,
             position_bounds_offset=valid_position_offset,
             batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=1.0,
         )
 
 
@@ -365,6 +379,8 @@ def test_invalid_position_bounds_offset_format(position_bounds_offset):
             position_bounds=valid_position_bounds,
             position_bounds_offset=position_bounds_offset,
             batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=1.0,
         )
 
 
@@ -385,6 +401,8 @@ def test_invalid_position_bounds_offset_values(position_bounds_offset):
             position_bounds=valid_position_bounds,
             position_bounds_offset=position_bounds_offset,
             batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=1.0,
         )
 
 
@@ -402,6 +420,48 @@ def test_invalid_batch_size(batch_size):
             position_bounds=valid_position_bounds,
             position_bounds_offset=valid_position_offset,
             batch_size=batch_size,
+            output_units="pixels",
+            dt=1.0,
+        )
+
+
+@pytest.mark.parametrize("output_units", [None, "invalid", 1.0])
+def test_invalid_output_units(output_units, scheduler):
+    with pytest.raises(
+        ValueError, match="output_units must be either 'pixels' or 'measure units'."
+    ):
+        input_check_flow_field_adapter(
+            flow_field=valid_flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units=output_units,
+            dt=1.0,
+        )
+
+
+@pytest.mark.parametrize("dt", [None, "invalid", -1.0, 0.0])
+def test_invalid_dt(dt):
+    with pytest.raises(ValueError, match="dt must be a positive number."):
+        input_check_flow_field_adapter(
+            flow_field=valid_flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=dt,
         )
 
 
