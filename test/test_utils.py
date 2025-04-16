@@ -202,6 +202,8 @@ valid_resolution = 1.0
 valid_position_bounds = (256, 256)
 valid_position_offset = (0, 0)
 valid_batch_size = 1
+valid_dt = 1.0
+valid_zero_padding = (0, 0)
 
 
 @pytest.mark.parametrize("image_shape", [(256,), "invalid"])
@@ -221,7 +223,8 @@ def test_invalid_image_shape_format(image_shape):
             position_bounds_offset=valid_position_offset,
             batch_size=valid_batch_size,
             output_units="pixels",
-            dt=1.0,
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
         )
 
 
@@ -242,7 +245,8 @@ def test_invalid_image_shape_values(image_shape):
             position_bounds_offset=valid_position_offset,
             batch_size=valid_batch_size,
             output_units="pixels",
-            dt=1.0,
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
         )
 
 
@@ -263,7 +267,8 @@ def test_invalid_img_offset_format(img_offset):
             position_bounds_offset=valid_position_offset,
             batch_size=valid_batch_size,
             output_units="pixels",
-            dt=1.0,
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
         )
 
 
@@ -284,7 +289,8 @@ def test_invalid_img_offset_values(img_offset):
             position_bounds_offset=valid_position_offset,
             batch_size=valid_batch_size,
             output_units="pixels",
-            dt=1.0,
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
         )
 
 
@@ -313,7 +319,8 @@ def test_invalid_resolutions(value, param_name):
         "position_bounds_offset": valid_position_offset,
         "batch_size": valid_batch_size,
         "output_units": "pixels",
-        "dt": 1.0,
+        "dt": valid_dt,
+        "zero_padding": valid_zero_padding,
     }
     args[param_name] = value
     with pytest.raises(ValueError, match=f"{param_name} must be a positive number."):
@@ -337,7 +344,8 @@ def test_invalid_position_bounds_format(position_bounds):
             position_bounds_offset=valid_position_offset,
             batch_size=valid_batch_size,
             output_units="pixels",
-            dt=1.0,
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
         )
 
 
@@ -358,7 +366,8 @@ def test_invalid_position_bounds_values(position_bounds):
             position_bounds_offset=valid_position_offset,
             batch_size=valid_batch_size,
             output_units="pixels",
-            dt=1.0,
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
         )
 
 
@@ -380,7 +389,8 @@ def test_invalid_position_bounds_offset_format(position_bounds_offset):
             position_bounds_offset=position_bounds_offset,
             batch_size=valid_batch_size,
             output_units="pixels",
-            dt=1.0,
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
         )
 
 
@@ -402,7 +412,8 @@ def test_invalid_position_bounds_offset_values(position_bounds_offset):
             position_bounds_offset=position_bounds_offset,
             batch_size=valid_batch_size,
             output_units="pixels",
-            dt=1.0,
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
         )
 
 
@@ -421,14 +432,16 @@ def test_invalid_batch_size(batch_size):
             position_bounds_offset=valid_position_offset,
             batch_size=batch_size,
             output_units="pixels",
-            dt=1.0,
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
         )
 
 
 @pytest.mark.parametrize("output_units", [None, "invalid", 1.0])
 def test_invalid_output_units(output_units, scheduler):
     with pytest.raises(
-        ValueError, match="output_units must be either 'pixels' or 'measure units'."
+        ValueError,
+        match="output_units must be either 'pixels' or 'measure units per second'.",
     ):
         input_check_flow_field_adapter(
             flow_field=valid_flow_field,
@@ -442,7 +455,8 @@ def test_invalid_output_units(output_units, scheduler):
             position_bounds_offset=valid_position_offset,
             batch_size=valid_batch_size,
             output_units=output_units,
-            dt=1.0,
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
         )
 
 
@@ -462,6 +476,29 @@ def test_invalid_dt(dt):
             batch_size=valid_batch_size,
             output_units="pixels",
             dt=dt,
+            zero_padding=valid_zero_padding,
+        )
+
+
+@pytest.mark.parametrize("zero_padding", [(1,), "invalid", (-1, 0), (0, -1)])
+def test_invalid_zero_padding(zero_padding):
+    with pytest.raises(
+        ValueError, match="zero_padding must be a tuple of two non-negative integers."
+    ):
+        input_check_flow_field_adapter(
+            flow_field=valid_flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=valid_dt,
+            zero_padding=zero_padding,
         )
 
 
@@ -549,21 +586,30 @@ def test_speed_flow_fields_adapter(
 ):
     """Test that flow_field_adapter is faster than a limit time."""
 
-    limit_time = 0.007
+    # Check how many GPUs are available
+    num_devices = len(jax.devices())
 
-    # Define the sharding
-    shard_keys = "keys"
+    # Limit time in seconds (depends on the number of GPUs)
+    if num_devices == 1:
+        limit_time = 7e-3
+    elif num_devices == 2:
+        limit_time = 4.5e-3
+    elif num_devices == 4:
+        limit_time = 0.0  # TODO: fix times for 4 GPUs when available
+
+    # Name of the axis for the device mesh
+    shard_fields = "fields"
     num_devices = len(jax.devices())
     devices = mesh_utils.create_device_mesh((num_devices,))
-    mesh = Mesh(devices, axis_names=(shard_keys))
+    mesh = Mesh(devices, axis_names=(shard_fields))
 
-    sharding = NamedSharding(mesh, PartitionSpec(shard_keys))
+    sharding = NamedSharding(mesh, PartitionSpec(shard_fields))
 
-    # Generate a flow field with shape (n, H, W, 2)
+    # Generate a flow field with shape (N, H, W, 2)
     flow_field = generate_array_flow_field(
         get_flow_function(selected_flow, flow_field_shape), flow_field_shape
     )
-    flow_fields = jnp.tile(flow_field, (batch_size // 4, 1, 1, 1))
+    flow_fields = jnp.tile(flow_field, (batch_size // num_devices, 1, 1, 1))
 
     flow_fields = jax.device_put(flow_fields, sharding)
 
@@ -577,11 +623,11 @@ def test_speed_flow_fields_adapter(
                 resolution=1.0,
                 res_x=1.0,
                 res_y=1.0,
-                batch_size=batch_size,
+                batch_size=batch_size // num_devices,
             ),
             mesh=mesh,
-            in_specs=(PartitionSpec(shard_keys)),
-            out_specs=(PartitionSpec(shard_keys)),
+            in_specs=(PartitionSpec(shard_fields)),
+            out_specs=(PartitionSpec(shard_fields), PartitionSpec(shard_fields)),
         )
     )
 

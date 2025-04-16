@@ -252,9 +252,11 @@ class SyntheticImageSampler:
 
         if not isinstance(output_units, str) or output_units not in [
             "pixels",
-            "measure units",
+            "measure units per second",
         ]:
-            raise ValueError("output_units must be 'pixels' or 'measure units'.")
+            raise ValueError(
+                "output_units must be 'pixels' or 'measure units per second'."
+            )
         self.output_units = output_units
 
         if not isinstance(seed, int) or seed < 0:
@@ -462,7 +464,10 @@ class SyntheticImageSampler:
                     ),
                     mesh=self.mesh,
                     in_specs=PartitionSpec(self.shard_fields),
-                    out_specs=PartitionSpec(self.shard_fields),
+                    out_specs=(
+                        PartitionSpec(self.shard_fields),
+                        PartitionSpec(self.shard_fields),
+                    ),
                 )
             )
         else:
@@ -474,7 +479,7 @@ class SyntheticImageSampler:
                 resolution=self.resolution,
                 res_x=self.flow_field_res_x,
                 res_y=self.flow_field_res_y,
-                batch_size=self.batch_size,
+                batch_size=self.batch_size // num_devices,
                 output_units=self.output_units,
                 dt=self.dt,
             )

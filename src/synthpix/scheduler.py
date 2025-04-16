@@ -149,7 +149,7 @@ class BaseFlowFieldScheduler(ABC):
                 Number of flow field slices to retrieve.
 
         Returns:
-            list: A list of flow field slices with length `batch_size`.
+            np.ndarray: A np.ndarray of flow field slices with length `batch_size`.
 
         Raises:
             StopIteration: If the dataset is exhausted before reaching the

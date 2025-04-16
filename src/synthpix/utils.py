@@ -233,6 +233,20 @@ def visualize_and_save(name, image1, image2, flow_field, output_dir="output_imag
     logger.info(f"Saved images for {name} to {output_dir}.")
 
 
+def interp_channel(
+    channel, row_floor, row_ceil, col_floor, col_ceil, row_lerp, col_lerp
+):
+    """Perform bilinear interpolation on a single 2D channel."""
+    I00 = channel[row_floor[:, None], col_floor[None, :]]
+    I01 = channel[row_floor[:, None], col_ceil[None, :]]
+    I10 = channel[row_ceil[:, None], col_floor[None, :]]
+    I11 = channel[row_ceil[:, None], col_ceil[None, :]]
+
+    top = I00 * (1 - col_lerp) + I01 * col_lerp
+    bottom = I10 * (1 - col_lerp) + I11 * col_lerp
+    return top * (1 - row_lerp) + bottom * row_lerp
+
+
 def flow_field_adapter(
     flow_fields: jnp.ndarray,
     new_flow_field_shape: Tuple[int, int] = (256, 256),
@@ -246,11 +260,12 @@ def flow_field_adapter(
     batch_size: int = 1,
     output_units: str = "pixels",
     dt: float = 1.0,
+    zero_padding: Tuple[int, int] = (0, 0),
 ):
-    """Adapter to convert a flow field batch to one with a different resolution.
+    """Adapts a batch of flow fields to a new shape and resolution.
 
     Args:
-        flow_fields: jnp.ndarray
+        flow_field: jnp.ndarray
             The original flow field batch to be adapted.
         new_flow_field_shape: Tuple[int, int]
             The desired shape of the new flow fields.
@@ -271,95 +286,90 @@ def flow_field_adapter(
         batch_size: int
             The desired batch size of the output flow fields.
         output_units: str
-            The units of the output flow fields. Can be "pixels" or "measure units".
+            The units of the output flow fields.
+            Can be "pixels" or "measure units per second".
         dt: float
             The time step for the flow field adaptation.
+        zero_padding: Tuple[int, int]
+            The amount of zero-padding to apply to the
+            top and left edges of the flow field.
 
     Returns:
-        jnp.ndarray: The adapted flow fields with the new shape.
+        jnp.ndarray: The adapted flow fields of shape (batch_size, new_h, new_w, 2).
+        jnp.ndarray: The cropped flow field region of position bounds.
     """
+    new_h, new_w = new_flow_field_shape
 
-    def bodyfun(index, image_shape, img_offset, resolution, res_x, res_y):
-        original_shape = flow_fields.shape[1:3]
-        flow_field = flow_fields[index]
-
-        # Cropping the flow fields to the position bounds
-        flow_field_position_bounds = flow_field[
-            int(position_bounds_offset[0] * res_y) : int(
-                position_bounds_offset[0] * res_y
-                + position_bounds[0] / resolution * res_y
-            ),
-            int(position_bounds_offset[1] * res_x) : int(
-                position_bounds_offset[1] * res_x
-                + position_bounds[1] / resolution * res_x
-            ),
-        ]
-
-        # Cropping the flow field to the image shape
-        flow_field_image_size = flow_field_position_bounds[
-            int(img_offset[0] * res_y) : int(
-                img_offset[0] * res_y + image_shape[0] / resolution * res_y
-            ),
-            int(img_offset[1] * res_x) : int(
-                img_offset[1] * res_x + image_shape[1] / resolution * res_x
-            ),
-        ]
-
-        # Create a 2D grid of coordinates for the new shape
-        x = jnp.linspace(0, original_shape[1] - 1, new_flow_field_shape[1])
-        y = jnp.linspace(0, original_shape[0] - 1, new_flow_field_shape[0])
-        x_new, y_new = jnp.meshgrid(x, y)
-
-        # Vectorize over the columns
-        interp_over_cols_x = jax.vmap(
-            lambda x_coord, y_coord: bilinear_interpolate(
-                flow_field_image_size[..., 0],
-                x_coord,
-                y_coord,
-            ),
-            in_axes=(0, 0),
+    def process_single(flow):
+        # Apply zero-padding
+        pad_y, pad_x = zero_padding
+        flow = jnp.pad(
+            flow,
+            pad_width=((pad_y, 0), (pad_x, 0), (0, 0)),
+            mode="constant",
+            constant_values=0.0,
         )
 
-        # Now vectorize over the rows
-        new_flow_field_x = jax.vmap(
-            lambda xs, ys: interp_over_cols_x(xs, ys), in_axes=(0, 0)
-        )(x_new, y_new)
+        # Crop by position bounds
+        y_start = int(position_bounds_offset[0] * res_y)
+        y_end = y_start + int(position_bounds[0] / resolution * res_y)
+        x_start = int(position_bounds_offset[1] * res_x)
+        x_end = x_start + int(position_bounds[1] / resolution * res_x)
+        flow_position_bounds = flow[y_start:y_end, x_start:x_end]
 
-        # Repeat for the second channel
-        interp_over_cols_y = jax.vmap(
-            lambda x_coord, y_coord: bilinear_interpolate(
-                flow_field_image_size[..., 1],
-                x_coord,
-                y_coord,
-            ),
-            in_axes=(0, 0),
+        # Crop to image offset
+        y_img_start = int(img_offset[0] * res_y)
+        y_img_end = y_img_start + int(image_shape[0] / resolution * res_y)
+        x_img_start = int(img_offset[1] * res_x)
+        x_img_end = x_img_start + int(image_shape[1] / resolution * res_x)
+        flow_image_crop = flow_position_bounds[
+            y_img_start:y_img_end, x_img_start:x_img_end
+        ]
+
+        # Generate grid for interpolation
+        crop_h, crop_w, _ = flow_image_crop.shape
+        row_coords = jnp.linspace(0, crop_h - 1, new_h)
+        col_coords = jnp.linspace(0, crop_w - 1, new_w)
+        row_floor = jnp.floor(row_coords).astype(jnp.int32)
+        col_floor = jnp.floor(col_coords).astype(jnp.int32)
+        row_ceil = jnp.clip(row_floor + 1, 0, crop_h - 1)
+        col_ceil = jnp.clip(col_floor + 1, 0, crop_w - 1)
+        row_lerp = (row_coords - row_floor).reshape((new_h, 1))
+        col_lerp = (col_coords - col_floor).reshape((1, new_w))
+
+        # Interpolate x and y channels
+        flow_x = interp_channel(
+            flow_image_crop[..., 0],
+            row_floor,
+            row_ceil,
+            col_floor,
+            col_ceil,
+            row_lerp,
+            col_lerp,
         )
-        new_flow_field_y = jax.vmap(
-            lambda xs, ys: interp_over_cols_y(xs, ys), in_axes=(0, 0)
-        )(x_new, y_new)
-
-        # Stack the two interpolated channels along the last dimension
-        new_flow_field = jnp.stack([new_flow_field_x, new_flow_field_y], axis=-1)
+        flow_y = interp_channel(
+            flow_image_crop[..., 1],
+            row_floor,
+            row_ceil,
+            col_floor,
+            col_ceil,
+            row_lerp,
+            col_lerp,
+        )
+        flow_interp = jnp.stack([flow_x, flow_y], axis=-1)
 
         if output_units == "pixels":
-            new_flow_field = new_flow_field * resolution * dt
+            flow_interp *= resolution * dt
 
-        return new_flow_field, flow_field_position_bounds
+        return flow_interp, flow_position_bounds
 
-    range = jnp.arange(flow_fields.shape[0])
+    adapted_flows, flow_bounds = jax.vmap(process_single)(flow_fields)
 
-    # Parallelize the function over the batch dimension
-    adapted_flow_fields, flow_fields_position_bounds = jax.vmap(
-        bodyfun,
-        in_axes=(0, None, None, None, None, None),
-    )(range, image_shape, img_offset, resolution, res_x, res_y)
+    n = adapted_flows.shape[0]
+    repeats = (batch_size + n - 1) // n
+    tiled = jnp.tile(adapted_flows, (repeats, 1, 1, 1))
 
-    # Repeat and slice (static slicing)
-    n_original = adapted_flow_fields.shape[0]
-    repeats = (batch_size + n_original - 1) // n_original
-    tiled = jnp.tile(adapted_flow_fields, (repeats, 1, 1, 1))
-
-    return tiled[:batch_size], flow_fields_position_bounds
+    return tiled[:batch_size], flow_bounds
 
 
 def input_check_flow_field_adapter(
@@ -375,6 +385,7 @@ def input_check_flow_field_adapter(
     batch_size: int,
     output_units: str,
     dt: float,
+    zero_padding: Tuple[int, int],
 ):
     """Checks the input arguments of the flow field adapter function.
 
@@ -400,9 +411,13 @@ def input_check_flow_field_adapter(
         batch_size: int
             The desired batch size of the output flow fields.
         output_units: str
-            The units of the output flow fields. Can be "pixels" or "measure units".
+            The units of the output flow fields.
+            Can be "pixels" or "measure units per second".
         dt: float
             The time step for the flow field adaptation.
+        zero_padding: Tuple[int, int]
+            The amount of zero-padding to apply to the
+            top and left edges of the flow field.
     """
     if not isinstance(flow_field, jnp.ndarray):
         raise ValueError("flow_field must be a jnp.ndarray.")
@@ -461,9 +476,18 @@ def input_check_flow_field_adapter(
 
     if not isinstance(output_units, str) or output_units not in [
         "pixels",
-        "measure units",
+        "measure units per second",
     ]:
-        raise ValueError("output_units must be either 'pixels' or 'measure units'.")
+        raise ValueError(
+            "output_units must be either 'pixels' or 'measure units per second'."
+        )
 
     if not isinstance(dt, (int, float)) or dt <= 0:
         raise ValueError("dt must be a positive number.")
+
+    if (
+        not isinstance(zero_padding, tuple)
+        or len(zero_padding) != 2
+        or not all(isinstance(s, int) and s >= 0 for s in zero_padding)
+    ):
+        raise ValueError("zero_padding must be a tuple of two non-negative integers.")
