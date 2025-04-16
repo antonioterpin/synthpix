@@ -99,9 +99,7 @@ def generate_images_from_flow(
 
         # Split the key for randomness
         key_i = jax.random.fold_in(key, i)
-        subkey1, subkey2, subkey3, subkey4, subkey5 = jax.random.split(
-            key_i, 6
-        )
+        subkey1, subkey2, subkey3, subkey4, subkey5 = jax.random.split(key_i, 5)
 
         # Calculate the number of particles for this couple of images
         current_num_particles = jnp.floor(
@@ -130,7 +128,10 @@ def generate_images_from_flow(
 
         if DEBUG_JIT:
             input_check_img_gen_from_data(
-                particle_positions=particle_positions,
+                key=subkey4,
+                particle_positions=particle_positions
+                * mask_img1[:, None]
+                * mixed[:, None],
                 image_shape=position_bounds,
                 diameter_range=diameter_range,
                 intensity_range=intensity_range,
@@ -149,7 +150,11 @@ def generate_images_from_flow(
 
         if DEBUG_JIT:
             input_check_apply_flow(
-                particle_positions=particle_positions, flow_field=flow_field_i, dt=dt
+                particle_positions=particle_positions,
+                flow_field=flow_field_i,
+                dt=dt,
+                flow_field_res_x=flow_field_res_x,
+                flow_field_res_y=flow_field_res_y,
             )
 
         # Rescale the particle positions to match the flow field resolution
@@ -163,7 +168,6 @@ def generate_images_from_flow(
         # Apply flow field to particle positions
         final_positions = apply_flow_to_particles(
             particle_positions=particle_positions,
-            flow_field=flow_field_i,
             flow_field=flow_field_i,
             dt=dt,
             flow_field_res_x=flow_field_res_x,
@@ -180,7 +184,10 @@ def generate_images_from_flow(
 
         if DEBUG_JIT:
             input_check_img_gen_from_data(
-                particle_positions=final_positions,
+                key=subkey5,
+                particle_positions=final_positions
+                * mask_img2[:, None]
+                * mixed[:, None],
                 image_shape=position_bounds,
                 diameter_range=diameter_range,
                 intensity_range=intensity_range,

@@ -655,12 +655,16 @@ def test_sampler_switches_flow_fields(batch_size, batches_per_flow_batch, schedu
 
 @pytest.mark.parametrize(
     "image_shape, batches_per_flow_batch, seeding_density_range",
-    [((32, 32), 4, 0.1), ((64, 64), 4, (0.0, 0.04))],
+    [((32, 32), 4, (0.1, 0.1)), ((64, 64), 4, (0.0, 0.04))],
 )
 @pytest.mark.parametrize("batch_size", [4])
 @pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
 def test_sampler_with_real_img_gen_fn(
-    image_shape, batches_per_flow_batch, seeding_density_range, batch_size, mock_hdf5_files
+    image_shape,
+    batches_per_flow_batch,
+    seeding_density_range,
+    batch_size,
+    mock_hdf5_files,
 ):
     files, _ = mock_hdf5_files
     scheduler = HDF5FlowFieldScheduler(files, loop=False)
@@ -787,15 +791,21 @@ def test_speed_sampler_real_fn(
     config["min_speed_y"] = -0.72
     config["dt"] = 2.6e-2
     config["flow_fields_per_batch"] = 50
+
     # Check how many GPUs are available
     num_devices = len(jax.devices())
+
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
         limit_time = 7.0
+        limit_time = 0.5
     elif num_devices == 2:
         limit_time = 4.5
+        limit_time = 0.0
     elif num_devices == 4:
         limit_time = 3.0  # TODO: fix times for 4 GPUs when available
+        limit_time = 5.5e-2  # TODO: fix times for 4 GPUs when available
+
     # Create the sampler
     sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
@@ -809,7 +819,6 @@ def test_speed_sampler_real_fn(
         for i, batch in enumerate(sampler):
             logger.debug(f"Cached_data shape: {scheduler._cached_data.shape}")
 
-            
             if i >= batches_per_flow_batch:
                 logger.debug(f"Finished iteration {i}")
                 sampler.reset()
@@ -817,6 +826,10 @@ def test_speed_sampler_real_fn(
                 batch[1].block_until_ready()
                 batch[2].block_until_ready()
                 batch[3].block_until_ready()
+                batch[0].block_until_ready()
+                batch[1].block_until_ready()
+                batch[2].block_until_ready()
+                # batch[3].block_until_ready()
                 break
 
     # Warm up the function

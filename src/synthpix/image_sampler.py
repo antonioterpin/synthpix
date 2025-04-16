@@ -415,7 +415,6 @@ class SyntheticImageSampler:
                         PartitionSpec(self.shard_fields),
                     ),
                     out_specs=(
-                        
                         PartitionSpec(self.shard_fields),
                         PartitionSpec(self.shard_fields),
                         PartitionSpec(self.shard_fields),
@@ -563,10 +562,12 @@ class SyntheticImageSampler:
             # Shard the flow fields across devices
             _current_flows = jnp.array(_current_flows, device=self.sharding)
 
-            # Adding zero padding to the flow field #TODO move this to the flow field adapter
+            # Adding zero padding to the flow field
+            # TODO move this to the flow field adapter
             _current_flows = jnp.pad(
                 _current_flows,
                 pad_width=(
+                    (0, 0),
                     (self.zero_padding[0], 0),
                     (self.zero_padding[1], 0),
                     (0, 0),
