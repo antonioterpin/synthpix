@@ -781,7 +781,6 @@ def test_speed_sampler_real_fn(
 
     # Warm up the function
     run_sampler()
-    sampler._images_generated = 0
 
     # Measure the time taken to run the sampler
     total_time = timeit.repeat(
