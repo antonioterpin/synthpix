@@ -25,7 +25,7 @@ def dummy_img_gen_fn(
     image_shape,
     img_offset,
     num_images,
-    seeding_density,
+    seeding_density_range,
     p_hide_img1,
     p_hide_img2,
     diameter_range,
@@ -41,6 +41,7 @@ def dummy_img_gen_fn(
         * (jnp.sum(flow_field) + jnp.sum(key)),
         jnp.ones((num_images, image_shape[0], image_shape[1]))
         * (jnp.sum(flow_field) + jnp.sum(key)),
+        jnp.ones((num_images,)),
     )
 
 
@@ -73,7 +74,7 @@ def test_invalid_scheduler(scheduler):
         "min_speed_y",
         "dt",
         "img_offset",
-        "seeding_density",
+        "seeding_density_range",
         "p_hide_img1",
         "p_hide_img2",
         "diameter_range",
@@ -249,17 +250,35 @@ def test_invalid_img_offset(img_offset, scheduler):
         )
 
 
-@pytest.mark.parametrize("seeding_density", [-1, 0, 1.5])
+@pytest.mark.parametrize(
+    "seeding_density_range, expected_message",
+    [
+        (
+            (-1.0, 1.0),
+            "seeding_density_range must be a tuple of two non-negative numbers.",
+        ),
+        (
+            (0.0, -1.0),
+            "seeding_density_range must be a tuple of two non-negative numbers.",
+        ),
+        (
+            (-0.5, -0.5),
+            "seeding_density_range must be a tuple of two non-negative numbers.",
+        ),
+        ((1.0, 0.5), "seeding_density_range must be in the form \\(min, max\\)."),
+        ((0.5, 0.1), "seeding_density_range must be in the form \\(min, max\\)."),
+    ],
+)
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_seeding_density(seeding_density, scheduler):
-    """Test that invalid seeding_density raises a ValueError."""
-    with pytest.raises(
-        ValueError, match="seeding_density must be a float between 0 and 1."
-    ):
+def test_invalid_seeding_density_range(
+    seeding_density_range, expected_message, scheduler
+):
+    """Test that invalid seeding_density_range raises a ValueError."""
+    with pytest.raises(ValueError, match=expected_message):
         config = sampler_config.copy()
-        config["seeding_density"] = seeding_density
+        config["seeding_density_range"] = seeding_density_range
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
@@ -300,15 +319,22 @@ def test_invalid_p_hide_img2(p_hide_img2, scheduler):
         )
 
 
-@pytest.mark.parametrize("diameter_range", [(0, 1), (1, 0), (-1, 1)])
+@pytest.mark.parametrize(
+    "diameter_range, expected_message",
+    [
+        ((-1.0, 1.0), "diameter_range must be a tuple of two positive floats."),
+        ((0.0, -1.0), "diameter_range must be a tuple of two positive floats."),
+        ((-0.5, -0.5), "diameter_range must be a tuple of two positive floats."),
+        ((1.0, 0.5), "diameter_range must be in the form \\(min, max\\)."),
+        ((0.5, 0.1), "diameter_range must be in the form \\(min, max\\)."),
+    ],
+)
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_diameter_range(diameter_range, scheduler):
+def test_invalid_diameter_range(diameter_range, expected_message, scheduler):
     """Test that invalid diameter_range raises a ValueError."""
-    with pytest.raises(
-        ValueError, match="diameter_range must be a tuple of two positive floats."
-    ):
+    with pytest.raises(ValueError, match=expected_message):
         config = sampler_config.copy()
         config["diameter_range"] = diameter_range
         SyntheticImageSampler.from_config(
@@ -318,15 +344,22 @@ def test_invalid_diameter_range(diameter_range, scheduler):
         )
 
 
-@pytest.mark.parametrize("intensity_range", [(-1, 200), (50, -1)])
+@pytest.mark.parametrize(
+    "intensity_range, expected_message",
+    [
+        ((-1.0, 1.0), "intensity_range must be a tuple of two non-negative floats."),
+        ((0.0, -1.0), "intensity_range must be a tuple of two non-negative floats."),
+        ((-0.5, -0.5), "intensity_range must be a tuple of two non-negative floats."),
+        ((1.0, 0.5), "intensity_range must be in the form \\(min, max\\)."),
+        ((0.5, 0.1), "intensity_range must be in the form \\(min, max\\)."),
+    ],
+)
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_intensity_range(intensity_range, scheduler):
+def test_invalid_intensity_range(intensity_range, expected_message, scheduler):
     """Test that invalid intensity_range raises a ValueError."""
-    with pytest.raises(
-        ValueError, match="intensity_range must be a tuple of two non-negative floats."
-    ):
+    with pytest.raises(ValueError, match=expected_message):
         config = sampler_config.copy()
         config["intensity_range"] = intensity_range
         SyntheticImageSampler.from_config(
@@ -336,15 +369,21 @@ def test_invalid_intensity_range(intensity_range, scheduler):
         )
 
 
-@pytest.mark.parametrize("rho_range", [(-1.1, 1), (1, -1.1)])
+@pytest.mark.parametrize(
+    "rho_range, expected_message",
+    [
+        ((-1.1, 1.0), "rho_range must be a tuple of two floats between -1 and 1."),
+        ((0.0, 1.1), "rho_range must be a tuple of two floats between -1 and 1."),
+        ((1.0, 0.5), "rho_range must be in the form \\(min, max\\)."),
+        ((0.5, 0.1), "rho_range must be in the form \\(min, max\\)."),
+    ],
+)
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_rho_range(rho_range, scheduler):
+def test_invalid_rho_range(rho_range, expected_message, scheduler):
     """Test that invalid rho_range raises a ValueError."""
-    with pytest.raises(
-        ValueError, match="rho_range must be a tuple of two floats between -1 and 1."
-    ):
+    with pytest.raises(ValueError, match=expected_message):
         config = sampler_config.copy()
         config["rho_range"] = rho_range
         SyntheticImageSampler.from_config(
@@ -615,13 +654,17 @@ def test_sampler_switches_flow_fields(batch_size, batches_per_flow_batch, schedu
 
 
 @pytest.mark.parametrize(
-    "image_shape, batches_per_flow_batch, seeding_density",
-    [((32, 32), 4, 0.1), ((64, 64), 4, 0.04)],
+    "image_shape, batches_per_flow_batch, seeding_density_range",
+    [((32, 32), 4, (0.1, 0.1)), ((64, 64), 4, (0.0, 0.04))],
 )
 @pytest.mark.parametrize("batch_size", [4])
 @pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
 def test_sampler_with_real_img_gen_fn(
-    image_shape, batches_per_flow_batch, seeding_density, batch_size, mock_hdf5_files
+    image_shape,
+    batches_per_flow_batch,
+    seeding_density_range,
+    batch_size,
+    mock_hdf5_files,
 ):
     files, _ = mock_hdf5_files
     scheduler = HDF5FlowFieldScheduler(files, loop=False)
@@ -630,7 +673,7 @@ def test_sampler_with_real_img_gen_fn(
     config["batch_size"] = batch_size
     config["batches_per_flow_batch"] = batches_per_flow_batch
     config["image_shape"] = image_shape
-    config["seeding_density"] = seeding_density
+    config["seeding_density_range"] = seeding_density_range
     sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
         img_gen_fn=generate_images_from_flow,
@@ -667,12 +710,12 @@ def test_sampler_with_real_img_gen_fn(
 @pytest.mark.parametrize("batch_size", [250])
 @pytest.mark.parametrize("images_per_field", [1000])
 @pytest.mark.parametrize("seed", [0])
-@pytest.mark.parametrize("seeding_density", [0.03])
+@pytest.mark.parametrize("seeding_density_range", [(0.0, 0.03)])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_speed_sampler_dummy_fn(
-    scheduler, batch_size, images_per_field, seed, seeding_density
+    scheduler, batch_size, images_per_field, seed, seeding_density_range
 ):
     """Test the speed of the sampler with a dummy image generation function."""
     # Define the parameters for the test
@@ -680,7 +723,7 @@ def test_speed_sampler_dummy_fn(
     config["batch_size"] = batch_size
     config["images_per_field"] = images_per_field
     config["image_shape"] = (1216, 1936)
-    config["seeding_density"] = seeding_density
+    config["seeding_density_range"] = seeding_density_range
     config["img_offset"] = (2.5e-2, 5e-2)
     config["flow_field_size"] = (3 * jnp.pi, 4 * jnp.pi)
     config["resolution"] = 155
@@ -691,7 +734,6 @@ def test_speed_sampler_dummy_fn(
     config["dt"] = 2.6e-2
     config["batch_size"] = batch_size
     config["images_per_field"] = images_per_field
-    config["seeding_density"] = seeding_density
     config["seed"] = seed
 
     # Create the sampler
@@ -727,17 +769,17 @@ def test_speed_sampler_dummy_fn(
 @pytest.mark.parametrize("batch_size", [150])
 @pytest.mark.parametrize("batches_per_flow_batch", [333])
 @pytest.mark.parametrize("seed", [0])
-@pytest.mark.parametrize("seeding_density", [0.016])
+@pytest.mark.parametrize("seeding_density_range", [(0.001, 0.004)])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": True}], indirect=True
 )
 def test_speed_sampler_real_fn(
-    batch_size, batches_per_flow_batch, seed, seeding_density, scheduler
+    batch_size, batches_per_flow_batch, seed, seeding_density_range, scheduler
 ):
     config = sampler_config.copy()
     config["batch_size"] = batch_size
     config["batches_per_flow_batch"] = batches_per_flow_batch
-    config["seeding_density"] = seeding_density
+    config["seeding_density_range"] = seeding_density_range
     config["seed"] = seed
     config["image_shape"] = (1216, 1936)
     config["img_offset"] = (2.5e-2, 5e-2)
@@ -749,15 +791,18 @@ def test_speed_sampler_real_fn(
     config["min_speed_y"] = -0.72
     config["dt"] = 2.6e-2
     config["flow_fields_per_batch"] = 50
+
     # Check how many GPUs are available
     num_devices = len(jax.devices())
+
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 7.0
+        limit_time = 6.5
     elif num_devices == 2:
-        limit_time = 4.5
+        limit_time = 4.0
     elif num_devices == 4:
         limit_time = 3.0  # TODO: fix times for 4 GPUs when available
+
     # Create the sampler
     sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
@@ -770,15 +815,14 @@ def test_speed_sampler_real_fn(
         # of size batch_size
         for i, batch in enumerate(sampler):
             logger.debug(f"Cached_data shape: {scheduler._cached_data.shape}")
-            # batch[0].block_until_ready()
-            # batch[1].block_until_ready()
-            # batch[2].block_until_ready()
+
             if i >= batches_per_flow_batch:
                 logger.debug(f"Finished iteration {i}")
                 sampler.reset()
                 batch[0].block_until_ready()
                 batch[1].block_until_ready()
                 batch[2].block_until_ready()
+                batch[3].block_until_ready()
                 break
 
     # Warm up the function

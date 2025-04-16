@@ -18,7 +18,7 @@ def generate_images_from_flow(
     image_shape: Tuple[int, int] = (256, 256),
     num_images: int = 300,
     img_offset: Tuple[int, int] = (128, 128),
-    seeding_density: int = 0.01,
+    seeding_density_range: Tuple[float, float] = (0.01, 0.02),
     p_hide_img1: float = 0.01,
     p_hide_img2: float = 0.01,
     diameter_range: Tuple[float, float] = (0.1, 1.0),
@@ -44,8 +44,8 @@ def generate_images_from_flow(
             Number of image pairs to generate.
         img_offset: Tuple[int, int]
             Offset to apply to the generated images.
-        seeding_density: float
-            Particles' density in the image.
+        seeding_density_range: Tuple[float, float]
+            Range of density of particles in the images.
         p_hide_img1: float
             Probability of hiding particles in the first image.
         p_hide_img2: float
@@ -69,27 +69,50 @@ def generate_images_from_flow(
     Returns:
         tuple: Two image batches (num_images, H, W) each.
     """
-    # scale factors for particle positions
-    alpha1 = flow_field.shape[0] / position_bounds[0]
-    alpha2 = flow_field.shape[1] / position_bounds[1]
+    # Fix the key shape
+    key = jnp.reshape(key, (-1, key.shape[-1]))[0]
 
-    # Calculate the number of particles based on the density
-    num_particles = int(position_bounds[0] * position_bounds[1] * seeding_density)
+    # scale factors for particle positions
+    alpha1 = flow_field.shape[1] / position_bounds[0]
+    alpha2 = flow_field.shape[2] / position_bounds[1]
+
+    # Calculate the number of particles based on the max density
+    num_particles = int(
+        position_bounds[0] * position_bounds[1] * seeding_density_range[1]
+    )
 
     # Number of flow fields
     num_flow_fields = flow_field.shape[0]
 
-    def bodyfun(i, state):
-        first_imgs, second_imgs, key = state
+    # Pre-sample seeding densities
+    key, density_key = jax.random.split(key)
+    seeding_densities = jax.random.uniform(
+        density_key,
+        shape=(num_images,),
+        minval=seeding_density_range[0],
+        maxval=seeding_density_range[1],
+    )
 
-        # Get the flow field for the current iteration
-        flow_field_i = flow_field[i % num_flow_fields]
+    def scan_body(carry, inputs):
+        (key,) = carry
+        i, seeding_density = inputs
 
         # Split the key for randomness
         key_i = jax.random.fold_in(key, i)
         subkey1, subkey2, subkey3, subkey4, subkey5 = jax.random.split(key_i, 5)
 
-        # generate random masks
+        # Calculate the number of particles for this couple of images
+        current_num_particles = jnp.floor(
+            position_bounds[0] * position_bounds[1] * seeding_density
+        )
+
+        # Make visible only the particles that are in the current image
+        mixed = jax.lax.iota(jnp.int32, num_particles) < current_num_particles
+
+        # Get the flow field for the current iteration
+        flow_field_i = flow_field[i % num_flow_fields]
+
+        # Generate random masks
         mask_img1 = jax.random.bernoulli(
             subkey1, 1.0 - p_hide_img1, shape=(num_particles,)
         )
@@ -97,15 +120,18 @@ def generate_images_from_flow(
             subkey2, 1.0 - p_hide_img2, shape=(num_particles,)
         )
 
-        H, W = position_bounds
         # Generate random particle positions
+        H, W = position_bounds
         particle_positions = jax.random.uniform(
-            subkey3, (num_particles, 2), minval=0.0, maxval=1.0
+            subkey3, (num_particles, 2)
         ) * jnp.array([H, W])
 
         if DEBUG_JIT:
             input_check_img_gen_from_data(
-                particle_positions=particle_positions,
+                key=subkey4,
+                particle_positions=particle_positions
+                * mask_img1[:, None]
+                * mixed[:, None],
                 image_shape=position_bounds,
                 diameter_range=diameter_range,
                 intensity_range=intensity_range,
@@ -115,7 +141,7 @@ def generate_images_from_flow(
         # First image generation
         first_img = img_gen_from_data(
             key=subkey4,
-            particle_positions=particle_positions * mask_img1[:, None],
+            particle_positions=particle_positions * mask_img1[:, None] * mixed[:, None],
             image_shape=position_bounds,
             diameter_range=diameter_range,
             intensity_range=intensity_range,
@@ -124,10 +150,14 @@ def generate_images_from_flow(
 
         if DEBUG_JIT:
             input_check_apply_flow(
-                particle_positions=particle_positions, flow_field=flow_field_i, dt=dt
+                particle_positions=particle_positions,
+                flow_field=flow_field_i,
+                dt=dt,
+                flow_field_res_x=flow_field_res_x,
+                flow_field_res_y=flow_field_res_y,
             )
 
-        # Divide the x coordinates by 2 to match the flow field
+        # Rescale the particle positions to match the flow field resolution
         particle_positions = jnp.array(
             [
                 particle_positions[:, 0] * alpha1,
@@ -144,7 +174,7 @@ def generate_images_from_flow(
             flow_field_res_y=flow_field_res_y,
         )
 
-        # Rescale the x coordinates back to the original scale
+        # Rescale the coordinates back to the original scale
         final_positions = jnp.array(
             [
                 final_positions[:, 0] / alpha1,
@@ -154,7 +184,10 @@ def generate_images_from_flow(
 
         if DEBUG_JIT:
             input_check_img_gen_from_data(
-                particle_positions=final_positions,
+                key=subkey5,
+                particle_positions=final_positions
+                * mask_img2[:, None]
+                * mixed[:, None],
                 image_shape=position_bounds,
                 diameter_range=diameter_range,
                 intensity_range=intensity_range,
@@ -164,7 +197,7 @@ def generate_images_from_flow(
         # Second image generation
         second_img = img_gen_from_data(
             key=subkey5,
-            particle_positions=final_positions * mask_img2[:, None],
+            particle_positions=final_positions * mask_img2[:, None] * mixed[:, None],
             image_shape=position_bounds,
             diameter_range=diameter_range,
             intensity_range=intensity_range,
@@ -181,28 +214,23 @@ def generate_images_from_flow(
             img_offset[1] : image_shape[1] + img_offset[1],
         ]
 
-        # Update the images
-        first_imgs = first_imgs.at[i].set(first_img)
-        second_imgs = second_imgs.at[i].set(second_img)
+        outputs = (first_img, second_img)
+        new_carry = (key,)
+        return new_carry, outputs
 
-        return first_imgs, second_imgs, key
+    # Prepare scan inputs
+    indices = jnp.arange(num_images)
+    scan_inputs = (indices, seeding_densities)
 
-    # Initialize state: empty arrays to collect images and the RNG key
-    first_imgs = jnp.zeros((num_images, *image_shape))
-    second_imgs = jnp.zeros((num_images, *image_shape))
-
-    # fix the key shape
-    key = jnp.reshape(key, (-1, key.shape[-1]))[0]
-
-    # Initialize the state
-    init_state = (first_imgs, second_imgs, key)
-
-    # Generate images using a for loop
+    # Generate images using a lax.scan loop
     # For some reason, even if the different indices are independent, vmap is slower
-    # TODO try to use jax.lax.scan
-    final_imgs, final_imgs2, _ = jax.lax.fori_loop(0, num_images, bodyfun, init_state)
+    _, (first_imgs, second_imgs) = jax.lax.scan(
+        scan_body,
+        (key,),
+        scan_inputs,
+    )
 
-    return final_imgs, final_imgs2
+    return first_imgs, second_imgs, seeding_densities
 
 
 def input_check_gen_img_from_flow(
@@ -210,9 +238,9 @@ def input_check_gen_img_from_flow(
     flow_field: jnp.ndarray,
     position_bounds: Tuple[int, int] = (512, 512),
     image_shape: Tuple[int, int] = (256, 256),
-    img_offset: Tuple[int, int] = (20, 20),
     num_images: int = 300,
-    seeding_density: int = 0.01,
+    img_offset: Tuple[int, int] = (128, 128),
+    seeding_density_range: Tuple[float, float] = (0.01, 0.02),
     p_hide_img1: float = 0.01,
     p_hide_img2: float = 0.01,
     diameter_range: Tuple[float, float] = (0.1, 1.0),
@@ -238,8 +266,8 @@ def input_check_gen_img_from_flow(
             Number of image pairs to generate.
         img_offset: Tuple[int, int]
             Offset to apply to the generated images.
-        seeding_density: float
-            Particles' density in the image.
+        seeding_density_range: Tuple[float, float]
+            Range of density of particles in the images.
         p_hide_img1: float
             Probability of hiding particles in the first image.
         p_hide_img2: float
@@ -291,10 +319,16 @@ def input_check_gen_img_from_flow(
         raise ValueError("Flow_field must be a 4D jnp.ndarray with shape (N, H, W, 2).")
     if len(diameter_range) != 2 or not all(d > 0 for d in diameter_range):
         raise ValueError("diameter_range must be a tuple of two positive floats.")
+    if diameter_range[0] > diameter_range[1]:
+        raise ValueError("diameter_range must be in the form (min, max).")
     if len(intensity_range) != 2 or not all(i >= 0 for i in intensity_range):
         raise ValueError("intensity_range must be a tuple of two positive floats.")
+    if intensity_range[0] > intensity_range[1]:
+        raise ValueError("intensity_range must be in the form (min, max).")
     if len(rho_range) != 2 or not all(-1 <= i <= 1 for i in rho_range):
         raise ValueError("rho_range must be a tuple of two floats between -1 and 1.")
+    if rho_range[0] > rho_range[1]:
+        raise ValueError("rho_range must be in the form (min, max).")
     if not isinstance(num_images, int) or num_images <= 0:
         raise ValueError("num_images must be a positive integer.")
     if not (0 <= p_hide_img1 <= 1):
@@ -317,20 +351,24 @@ def input_check_gen_img_from_flow(
             "The width of the position_bounds must be greater "
             "than the width of the image plus the offset."
         )
-    if (
-        not isinstance(seeding_density, (float))
-        or seeding_density <= 0
-        or seeding_density > 1
+    if len(seeding_density_range) != 2 or not all(
+        isinstance(s, (int, float)) and s >= 0 for s in seeding_density_range
     ):
-        raise ValueError("seeding_density must be a float between 0 and 1.")
-    num_particles = int(position_bounds[0] * position_bounds[1] * seeding_density)
+        raise ValueError(
+            "seeding_density_range must be a tuple of two non-negative numbers."
+        )
+    if seeding_density_range[0] > seeding_density_range[1]:
+        raise ValueError("seeding_density_range must be in the form (min, max).")
 
+    num_particles = int(
+        position_bounds[0] * position_bounds[1] * seeding_density_range[1]
+    )
     logger.debug("Input arguments of generate_images_from_flow are valid.")
     logger.debug(f"Flow field shape: {flow_field.shape}")
     logger.debug(f"Image shape: {image_shape}")
     logger.debug(f"Position bounds shape: {position_bounds}")
     logger.debug(f"Number of images: {num_images}")
-    logger.debug(f"Particles density: {seeding_density}")
+    logger.debug(f"Particles density range: {seeding_density_range}")
     logger.debug(f"Number of particles: {num_particles}")
     logger.debug(f"Probability of hiding particles in image 1: {p_hide_img1}")
     logger.debug(f"Probability of hiding particles in image 2: {p_hide_img2}")
