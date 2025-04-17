@@ -192,6 +192,7 @@ def input_check_img_gen_from_data(
     diameter_range: Tuple[float, float] = (0.1, 1.0),
     intensity_range: Tuple[float, float] = (50, 200),
     rho_range: Tuple[float, float] = (-0.99, 0.99),
+    clip: bool = True,
 ) -> jnp.ndarray:
     """Check the input arguments for img_gen_from_data.
 
@@ -208,6 +209,8 @@ def input_check_img_gen_from_data(
             Minimum and maximum peak intensity (I0).
         rho_range: Tuple[float, float]
             Minimum and maximum correlation coefficient (rho).
+        clip: bool
+            If True, clip the image values to [0, 255].
     """
     # Argument checks using exceptions instead of asserts
     if not isinstance(key, jax.Array) or key.shape != (2,) or key.dtype != jnp.uint32:
@@ -230,6 +233,8 @@ def input_check_img_gen_from_data(
         raise ValueError("intensity_range must be a tuple of two positive floats")
     if len(rho_range) != 2 or not all(-1 <= r <= 1 for r in rho_range):
         raise ValueError("rho_range must be a tuple of two floats in the range [-1, 1]")
+    if not isinstance(clip, bool):
+        raise ValueError("clip must be a boolean value.")
 
 
 def img_gen_from_data(
@@ -239,6 +244,7 @@ def img_gen_from_data(
     diameter_range: Tuple[float, float] = (0.1, 1.0),
     intensity_range: Tuple[float, float] = (50, 200),
     rho_range: Tuple[float, float] = (-0.99, 0.99),
+    clip: bool = True,
 ) -> jnp.ndarray:
     """Generate a synthetic particle image from particles positions.
 
@@ -264,6 +270,8 @@ def img_gen_from_data(
             Minimum and maximum peak intensity (I0).
         rho_range: Tuple[float, float]
             Minimum and maximum correlation coefficient (rho).
+        clip: bool
+            If True, clip the image values to [0, 255].
 
     Returns:
         jnp.ndarray: Synthetic particle image of shape `image_shape`.
@@ -353,4 +361,9 @@ def img_gen_from_data(
     # Scatter into final image
     image = jnp.zeros((H, W))
     image = image.at[tuple(all_coords.T)].add(all_updates)
+
+    # Clip to image bounds
+    if clip:
+        image = jnp.clip(image, 0, 255)
+
     return image

@@ -93,6 +93,14 @@ def test_invalid_rho_range(rho_range):
         input_check_img_gen_from_data(key, rho_range=rho_range)
 
 
+@pytest.mark.parametrize("clip", [-1, "invalid", 1.1])
+def test_invalid_clip(clip):
+    """Test that invalid clip values raise a ValueError."""
+    key = jax.random.PRNGKey(0)
+    with pytest.raises(ValueError, match="clip must be a boolean value."):
+        input_check_img_gen_from_data(key, clip=clip)
+
+
 @pytest.mark.parametrize("seed", [0, 1, 42])
 @pytest.mark.parametrize("image_shape", [(128, 128)])
 @pytest.mark.parametrize(
