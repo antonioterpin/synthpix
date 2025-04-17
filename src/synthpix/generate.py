@@ -353,4 +353,4 @@ def img_gen_from_data(
     # Scatter into final image
     image = jnp.zeros((H, W))
     image = image.at[tuple(all_coords.T)].add(all_updates)
-    return jnp.clip(image, min=0, max=255)
+    return image

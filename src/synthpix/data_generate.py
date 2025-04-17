@@ -7,7 +7,11 @@ import jax.numpy as jnp
 from synthpix.apply import apply_flow_to_particles, input_check_apply_flow
 
 # Import existing modules
-from synthpix.generate import img_gen_from_data, input_check_img_gen_from_data
+from synthpix.generate import (
+    add_noise_to_image,
+    img_gen_from_data,
+    input_check_img_gen_from_data,
+)
 from synthpix.utils import DEBUG_JIT, is_int, logger
 
 
@@ -27,6 +31,7 @@ def generate_images_from_flow(
     dt: float = 1.0,
     flow_field_res_x: float = 1.0,
     flow_field_res_y: float = 1.0,
+    background_level: float = 0.0,
 ):
     """Generates a batch of image pairs from a flow field.
 
@@ -65,6 +70,8 @@ def generate_images_from_flow(
         flow_field_res_y: float
             Resolution of the flow field in the y direction
             in grid steps per length measure unit
+        background_level: float
+            Background level to add to the images.
 
     Returns:
         tuple: Two image batches (num_images, H, W) each.
@@ -99,7 +106,15 @@ def generate_images_from_flow(
 
         # Split the key for randomness
         key_i = jax.random.fold_in(key, i)
-        subkey1, subkey2, subkey3, subkey4, subkey5 = jax.random.split(key_i, 5)
+        (
+            subkey1,
+            subkey2,
+            subkey3,
+            subkey4,
+            subkey5,
+            subkey6,
+            subkey7,
+        ) = jax.random.split(key_i, 7)
 
         # Calculate the number of particles for this couple of images
         current_num_particles = jnp.floor(
@@ -214,6 +229,14 @@ def generate_images_from_flow(
             img_offset[1] : image_shape[1] + img_offset[1],
         ]
 
+        # Add noise to the images
+        first_img = add_noise_to_image(
+            image=first_img, key=subkey6, background_level=background_level
+        )
+        second_img = add_noise_to_image(
+            image=second_img, key=subkey7, background_level=background_level
+        )
+
         outputs = (first_img, second_img)
         new_carry = (key,)
         return new_carry, outputs
@@ -249,6 +272,7 @@ def input_check_gen_img_from_flow(
     dt: float = 1.0,
     flow_field_res_x: float = 1.0,
     flow_field_res_y: float = 1.0,
+    background_level: float = 0.0,
 ):
     """Check the input arguments for generate_images_from_flow.
 
@@ -287,6 +311,8 @@ def input_check_gen_img_from_flow(
         flow_field_res_y: float
             Resolution of the flow field in the y direction
             in grid steps per length measure unit
+        background_level: float
+            Background level to add to the images.
     """
     # Argument checks using exceptions instead of asserts
     if not isinstance(key, jax.Array) or key.shape != (2,) or key.dtype != jnp.uint32:
@@ -359,6 +385,8 @@ def input_check_gen_img_from_flow(
         )
     if seeding_density_range[0] > seeding_density_range[1]:
         raise ValueError("seeding_density_range must be in the form (min, max).")
+    if not isinstance(background_level, (int, float)) or background_level < 0:
+        raise ValueError("background_level must be a non-negative number.")
 
     num_particles = int(
         position_bounds[0] * position_bounds[1] * seeding_density_range[1]
@@ -378,3 +406,4 @@ def input_check_gen_img_from_flow(
     logger.debug(f"Time step (dt): {dt}")
     logger.debug(f"Flow field resolution (x): {flow_field_res_x}")
     logger.debug(f"Flow field resolution (y): {flow_field_res_y}")
+    logger.debug(f"Background level: {background_level}")

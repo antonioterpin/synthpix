@@ -2,7 +2,6 @@ import timeit
 
 import jax
 import jax.numpy as jnp
-import jax.profiler
 import pytest
 from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
@@ -312,6 +311,26 @@ def test_invalid_flow_field_res_y(flow_field_res_y):
 
 
 @pytest.mark.parametrize(
+    "background_level", [-1, "a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+)
+def test_invalid_background_level(background_level):
+    """Test that invalid background_level raise a ValueError."""
+    key = jax.random.PRNGKey(0)
+    flow_field = jnp.zeros((1, 128, 128, 2))
+    image_shape = (128, 128)
+    with pytest.raises(
+        ValueError,
+        match="background_level must be a non-negative number.",
+    ):
+        input_check_gen_img_from_flow(
+            key,
+            flow_field=flow_field,
+            image_shape=image_shape,
+            background_level=background_level,
+        )
+
+
+@pytest.mark.parametrize(
     "image_shape, img_offset, position_bounds, error_message",
     [
         (
@@ -363,7 +382,7 @@ def test_incoherent_image_shape_and_position_bounds(
         )
 
 
-def test_generate_images_from_flow(visualize=False):
+def test_generate_images_from_flow(visualize=True):
     """Test that we can generate images from a flow field."""
 
     # 1. setup the image parameters
@@ -379,6 +398,7 @@ def test_generate_images_from_flow(visualize=False):
     intensity_range = (50, 250)
     rho_range = (-0.2, 0.2)
     dt = 5.0
+    background_level = 30.0
 
     # 2. create a flow field
     flow_field = generate_array_flow_field(
@@ -401,6 +421,7 @@ def test_generate_images_from_flow(visualize=False):
         intensity_range=intensity_range,
         rho_range=rho_range,
         dt=dt,
+        background_level=background_level,
     )
 
     # 4. fix the shape of the images
@@ -450,7 +471,7 @@ def test_speed_generate_images_from_flow(
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 1.05e-2
+        limit_time = 1e-2
     elif num_devices == 2:
         limit_time = 5.5e-3
     elif num_devices == 4:
