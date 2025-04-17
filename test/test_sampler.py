@@ -34,6 +34,7 @@ def dummy_img_gen_fn(
     dt,
     flow_field_res_x,
     flow_field_res_y,
+    noise_level,
 ):
     """Simulates generating a batch of synthetic images based on a single key."""
     return (
@@ -410,6 +411,24 @@ def test_invalid_dt(dt, scheduler):
 
 
 @pytest.mark.parametrize(
+    "noise_level", [-1, "a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+)
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_noise_level(noise_level, scheduler):
+    """Test that invalid noise_level raises a ValueError."""
+    with pytest.raises(ValueError, match="noise_level must be a non-negative number."):
+        config = sampler_config.copy()
+        config["noise_level"] = noise_level
+        SyntheticImageSampler.from_config(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            config=config,
+        )
+
+
+@pytest.mark.parametrize(
     "seed", ["invalid_seed", jnp.array([1]), jnp.array([1.0, 2.0])]
 )
 @pytest.mark.parametrize(
@@ -732,6 +751,7 @@ def test_speed_sampler_dummy_fn(
     config["min_speed_x"] = -0.16
     config["min_speed_y"] = -0.72
     config["dt"] = 2.6e-2
+    config["noise_level"] = 0.0
     config["batch_size"] = batch_size
     config["images_per_field"] = images_per_field
     config["seed"] = seed
@@ -790,6 +810,7 @@ def test_speed_sampler_real_fn(
     config["min_speed_x"] = -0.16
     config["min_speed_y"] = -0.72
     config["dt"] = 2.6e-2
+    config["noise_level"] = 0.0
     config["flow_fields_per_batch"] = 50
 
     # Check how many GPUs are available
@@ -797,7 +818,7 @@ def test_speed_sampler_real_fn(
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 6.5
+        limit_time = 5.5
     elif num_devices == 2:
         limit_time = 4.0
     elif num_devices == 4:

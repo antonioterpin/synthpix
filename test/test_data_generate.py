@@ -311,22 +311,22 @@ def test_invalid_flow_field_res_y(flow_field_res_y):
 
 
 @pytest.mark.parametrize(
-    "background_level", [-1, "a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+    "noise_level", [-1, "a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
 )
-def test_invalid_background_level(background_level):
-    """Test that invalid background_level raise a ValueError."""
+def test_invalid_noise_level(noise_level):
+    """Test that invalid noise_level raise a ValueError."""
     key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
         ValueError,
-        match="background_level must be a non-negative number.",
+        match="noise_level must be a non-negative number.",
     ):
         input_check_gen_img_from_flow(
             key,
             flow_field=flow_field,
             image_shape=image_shape,
-            background_level=background_level,
+            noise_level=noise_level,
         )
 
 
@@ -382,7 +382,7 @@ def test_incoherent_image_shape_and_position_bounds(
         )
 
 
-def test_generate_images_from_flow(visualize=True):
+def test_generate_images_from_flow(visualize=False):
     """Test that we can generate images from a flow field."""
 
     # 1. setup the image parameters
@@ -398,7 +398,7 @@ def test_generate_images_from_flow(visualize=True):
     intensity_range = (50, 250)
     rho_range = (-0.2, 0.2)
     dt = 5.0
-    background_level = 30.0
+    noise_level = 30.0
 
     # 2. create a flow field
     flow_field = generate_array_flow_field(
@@ -421,7 +421,7 @@ def test_generate_images_from_flow(visualize=True):
         intensity_range=intensity_range,
         rho_range=rho_range,
         dt=dt,
-        background_level=background_level,
+        noise_level=noise_level,
     )
 
     # 4. fix the shape of the images

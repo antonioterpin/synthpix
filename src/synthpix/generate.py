@@ -69,21 +69,21 @@ def gaussian_2d_correlated(
 
 
 def add_noise_to_image(
-    key: jax.random.PRNGKey, image: jnp.ndarray, background_level: float = 5.0
+    key: jax.random.PRNGKey, image: jnp.ndarray, noise_level: float = 5.0
 ):
     """Add noise to an image.
 
     Args:
         key (jax.random.PRNGKey): Random key for reproducibility.
         image (jnp.ndarray): Input image.
-        background_level (float): Constant background level added to the image.
+        noise_level (float): Maximum amplitude of the uniform noise to add.
 
     Returns:
         jnp.ndarray: Noisy image.
     """
     return jnp.clip(
         image
-        + jax.random.uniform(key, shape=image.shape, minval=0, maxval=background_level),
+        + jax.random.uniform(key, shape=image.shape, minval=0, maxval=noise_level),
         min=0,
         max=255,
     )

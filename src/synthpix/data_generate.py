@@ -31,7 +31,7 @@ def generate_images_from_flow(
     dt: float = 1.0,
     flow_field_res_x: float = 1.0,
     flow_field_res_y: float = 1.0,
-    background_level: float = 0.0,
+    noise_level: float = 0.0,
 ):
     """Generates a batch of image pairs from a flow field.
 
@@ -70,8 +70,8 @@ def generate_images_from_flow(
         flow_field_res_y: float
             Resolution of the flow field in the y direction
             in grid steps per length measure unit
-        background_level: float
-            Background level to add to the images.
+        noise_level: float
+            Maximum amplitude of the uniform noise to add.
 
     Returns:
         tuple: Two image batches (num_images, H, W) each.
@@ -161,6 +161,7 @@ def generate_images_from_flow(
             diameter_range=diameter_range,
             intensity_range=intensity_range,
             rho_range=rho_range,
+            clip=False,
         )
 
         if DEBUG_JIT:
@@ -217,6 +218,7 @@ def generate_images_from_flow(
             diameter_range=diameter_range,
             intensity_range=intensity_range,
             rho_range=rho_range,
+            clip=False,
         )
 
         # Crop the images to image_shape
@@ -231,10 +233,10 @@ def generate_images_from_flow(
 
         # Add noise to the images
         first_img = add_noise_to_image(
-            image=first_img, key=subkey6, background_level=background_level
+            image=first_img, key=subkey6, noise_level=noise_level
         )
         second_img = add_noise_to_image(
-            image=second_img, key=subkey7, background_level=background_level
+            image=second_img, key=subkey7, noise_level=noise_level
         )
 
         outputs = (first_img, second_img)
@@ -272,7 +274,7 @@ def input_check_gen_img_from_flow(
     dt: float = 1.0,
     flow_field_res_x: float = 1.0,
     flow_field_res_y: float = 1.0,
-    background_level: float = 0.0,
+    noise_level: float = 0.0,
 ):
     """Check the input arguments for generate_images_from_flow.
 
@@ -311,8 +313,8 @@ def input_check_gen_img_from_flow(
         flow_field_res_y: float
             Resolution of the flow field in the y direction
             in grid steps per length measure unit
-        background_level: float
-            Background level to add to the images.
+        noise_level: float
+            Maximum amplitude of the uniform noise to add.
     """
     # Argument checks using exceptions instead of asserts
     if not isinstance(key, jax.Array) or key.shape != (2,) or key.dtype != jnp.uint32:
@@ -385,8 +387,8 @@ def input_check_gen_img_from_flow(
         )
     if seeding_density_range[0] > seeding_density_range[1]:
         raise ValueError("seeding_density_range must be in the form (min, max).")
-    if not isinstance(background_level, (int, float)) or background_level < 0:
-        raise ValueError("background_level must be a non-negative number.")
+    if not isinstance(noise_level, (int, float)) or noise_level < 0:
+        raise ValueError("noise_level must be a non-negative number.")
 
     num_particles = int(
         position_bounds[0] * position_bounds[1] * seeding_density_range[1]
@@ -406,4 +408,4 @@ def input_check_gen_img_from_flow(
     logger.debug(f"Time step (dt): {dt}")
     logger.debug(f"Flow field resolution (x): {flow_field_res_x}")
     logger.debug(f"Flow field resolution (y): {flow_field_res_y}")
-    logger.debug(f"Background level: {background_level}")
+    logger.debug(f"Background level: {noise_level}")

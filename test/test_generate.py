@@ -111,9 +111,9 @@ def test_invalid_clip(clip):
         (img_gen_from_data, jnp.array([[1, 1], [64, 64], [127, 127], [127, 1]])),
     ],
 )
-@pytest.mark.parametrize("background_level", [0.0, 5.0, 255.0])
+@pytest.mark.parametrize("noise_level", [0.0, 5.0, 255.0])
 def test_generate_image(
-    seed, image_shape, img_gen, input_val, background_level, visualize=False
+    seed, image_shape, img_gen, input_val, noise_level, visualize=False
 ):
     """Test that we can generate a synthetic particle image."""
     key = jax.random.PRNGKey(seed)
@@ -125,7 +125,7 @@ def test_generate_image(
         intensity_range=(500, 500),
     )
 
-    img_background = add_noise_to_image(key, img, background_level=background_level)
+    img_background = add_noise_to_image(key, img, noise_level=noise_level)
 
     if visualize:
         import matplotlib.pyplot as plt
@@ -227,5 +227,5 @@ def test_speed_img_gen(seeding_density, image_shape):
 
 if __name__ == "__main__":
     test_generate_image(
-        seed=0, image_shape=(16, 16), density=0.1, background_level=5.0, visualize=True
+        seed=0, image_shape=(16, 16), density=0.1, noise_level=5.0, visualize=True
     )
