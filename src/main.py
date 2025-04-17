@@ -3,7 +3,7 @@ import argparse
 
 from synthpix.data_generate import generate_images_from_flow
 from synthpix.image_sampler import SyntheticImageSampler
-from synthpix.scheduler import HDF5FlowFieldScheduler
+from synthpix.scheduler import HDF5FlowFieldScheduler, PrefetchingFlowFieldScheduler
 from synthpix.utils import load_configuration, logger, visualize_and_save
 
 
@@ -20,8 +20,13 @@ def main(config_path, output_dir, num_images_to_display):
     config = load_configuration(config_path)
     logger.info("Configuration loaded successfully.")
 
-    # Initialize the scheduler
-    scheduler = HDF5FlowFieldScheduler(config["scheduler_files"], loop=False)
+    # Initialize the scheduler with prefetching
+    base_scheduler = HDF5FlowFieldScheduler(config["scheduler_files"], loop=True)
+    scheduler = PrefetchingFlowFieldScheduler(
+        scheduler=base_scheduler,
+        batch_size=config["flow_fields_per_batch"],
+        buffer_size=4,
+    )
 
     # Initialize the sampler
     sampler = SyntheticImageSampler.from_config(
@@ -33,23 +38,25 @@ def main(config_path, output_dir, num_images_to_display):
     # Run the sampler and print results
     logger.info("Starting the SyntheticImageSampler pipeline...")
     for i, batch in enumerate(sampler):
-        logger.info(f"Batch {i + 1} generated.")
-        logger.info(f"Image 1 batch shape: {batch[0].shape}")
-        logger.info(f"Image 2 batch shape: {batch[1].shape}")
-        logger.info(f"Flow field batch shape: {batch[2].shape}")
+        # logger.info(f"Batch {i + 1} generated.")
+        # logger.info(f"Image 1 batch shape: {batch[0].shape}")
+        # logger.info(f"Image 2 batch shape: {batch[1].shape}")
+        # logger.info(f"Flow field batch shape: {batch[2].shape}")
 
         for j in range(min(num_images_to_display, batch[0].shape[0])):
             visualize_and_save(
                 f"batch_{i}_sample_{j}", batch[0][j], batch[1][j], batch[2], output_dir
             )
 
-        logger.info(
-            f"Saved {num_images_to_display} for batch {i}. Stopping visualization."
-        )
-        choice = input("Do you want to continue generating images? (y/n): ")
-        if choice.lower() != "y":
-            logger.info("Stopping the pipeline.")
-            break
+        # logger.info(
+        #    f"Saved {num_images_to_display} for batch {i}. Stopping visualization."
+        # )
+        if num_images_to_display > 0:
+            # Ask user if they want to continue generating images
+            choice = input("Do you want to continue generating images? (y/n): ")
+            if choice.lower() != "y":
+                logger.info("Stopping the pipeline.")
+                break
 
 
 if __name__ == "__main__":

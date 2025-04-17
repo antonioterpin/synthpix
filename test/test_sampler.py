@@ -7,7 +7,7 @@ import pytest
 
 from synthpix.data_generate import generate_images_from_flow
 from synthpix.image_sampler import SyntheticImageSampler
-from synthpix.scheduler import HDF5FlowFieldScheduler
+from synthpix.scheduler import HDF5FlowFieldScheduler, PrefetchingFlowFieldScheduler
 from synthpix.utils import load_configuration, logger
 
 config = load_configuration("config/testing.yaml")
@@ -790,21 +790,21 @@ def test_sampler_with_real_img_gen_fn(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connect to the server.",
 )
-@pytest.mark.parametrize("batch_size", [250])
-@pytest.mark.parametrize("images_per_field", [1000])
+@pytest.mark.parametrize("batch_size", [128])
+@pytest.mark.parametrize("batches_per_flow_batch", [100])
 @pytest.mark.parametrize("seed", [0])
 @pytest.mark.parametrize("seeding_density_range", [(0.0, 0.03)])
 @pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+    "scheduler", [{"randomize": False, "loop": True}], indirect=True
 )
 def test_speed_sampler_dummy_fn(
-    scheduler, batch_size, images_per_field, seed, seeding_density_range
+    scheduler, batch_size, batches_per_flow_batch, seed, seeding_density_range
 ):
     """Test the speed of the sampler with a dummy image generation function."""
     # Define the parameters for the test
     config = sampler_config.copy()
     config["batch_size"] = batch_size
-    config["images_per_field"] = images_per_field
+    config["flow_fields_per_batch"] = 64
     config["image_shape"] = (1216, 1936)
     config["seeding_density_range"] = seeding_density_range
     config["img_offset"] = (2.5e-2, 5e-2)
@@ -817,41 +817,65 @@ def test_speed_sampler_dummy_fn(
     config["dt"] = 2.6e-2
     config["noise_level"] = 0.0
     config["batch_size"] = batch_size
-    config["images_per_field"] = images_per_field
     config["seed"] = seed
 
+    # Check how many GPUs are available
+    num_devices = len(jax.devices())
+    # Limit time in seconds (depends on the number of GPUs)
+    if num_devices == 1:
+        limit_time = 1.27
+    elif num_devices == 2:
+        limit_time = 1.2
+    elif num_devices == 4:
+        limit_time = 0.91
+
     # Create the sampler
-    sampler = SyntheticImageSampler.from_config(
+    prefetching_scheduler = PrefetchingFlowFieldScheduler(
         scheduler=scheduler,
+        batch_size=config["flow_fields_per_batch"],
+        buffer_size=4,
+    )
+    sampler = SyntheticImageSampler.from_config(
+        scheduler=prefetching_scheduler,
         img_gen_fn=dummy_img_gen_fn,
         config=config,
     )
 
     def run_sampler():
+        # Generates images_per_field // batch_size batches
+        # of size batch_size
         for i, batch in enumerate(sampler):
             batch[0].block_until_ready()
             batch[1].block_until_ready()
-            if i >= images_per_field // batch_size:
+            batch[2].block_until_ready()
+            logger.info(i)
+            if i >= batches_per_flow_batch:
+                sampler.reset(scheduler_reset=False)
                 break
 
-    run_sampler()
-    total_time = timeit.repeat(
-        stmt=run_sampler, number=NUMBER_OF_EXECUTIONS, repeat=REPETITIONS
-    )
-    avg_time = min(total_time) / NUMBER_OF_EXECUTIONS
+    try:
+        # Warm up the function
+        run_sampler()
 
-    num_devices = len(jax.devices())
-    limit_time = 0.5 if num_devices == 1 else 0.11 if num_devices == 2 else 0.07
+        # Measure the time taken to run the sampler
+        total_time = timeit.repeat(
+            stmt=run_sampler, number=NUMBER_OF_EXECUTIONS, repeat=REPETITIONS
+        )
+        avg_time = min(total_time) / NUMBER_OF_EXECUTIONS
+    finally:
+        prefetching_scheduler.shutdown()
 
-    assert avg_time < limit_time
+    assert (
+        avg_time < limit_time
+    ), f"The average time is {avg_time}, time limit: {limit_time}"
 
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connect to the server.",
 )
-@pytest.mark.parametrize("batch_size", [150])
-@pytest.mark.parametrize("batches_per_flow_batch", [333])
+@pytest.mark.parametrize("batch_size", [128])
+@pytest.mark.parametrize("batches_per_flow_batch", [100])
 @pytest.mark.parametrize("seed", [0])
 @pytest.mark.parametrize("seeding_density_range", [(0.001, 0.004)])
 @pytest.mark.parametrize(
@@ -875,49 +899,55 @@ def test_speed_sampler_real_fn(
     config["min_speed_y"] = -0.72
     config["dt"] = 2.6e-2
     config["noise_level"] = 0.0
-    config["flow_fields_per_batch"] = 50
+    config["flow_fields_per_batch"] = 64
 
     # Check how many GPUs are available
     num_devices = len(jax.devices())
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 5.5
+        limit_time = 1.57
     elif num_devices == 2:
-        limit_time = 4.0
+        limit_time = 1.0
     elif num_devices == 4:
-        limit_time = 3.0  # TODO: fix times for 4 GPUs when available
+        limit_time = 0.6
 
     # Create the sampler
-    sampler = SyntheticImageSampler.from_config(
+    prefetching_scheduler = PrefetchingFlowFieldScheduler(
         scheduler=scheduler,
+        batch_size=config["flow_fields_per_batch"],
+        buffer_size=4,
+    )
+    sampler = SyntheticImageSampler.from_config(
+        scheduler=prefetching_scheduler,
         img_gen_fn=generate_images_from_flow,
         config=config,
     )
 
     def run_sampler():
-        # Generates images_per_field // batch_size batches
+        # Generates batches_per_flow_batch batches
         # of size batch_size
         for i, batch in enumerate(sampler):
-            logger.debug(f"Cached_data shape: {scheduler._cached_data.shape}")
-
+            batch[0].block_until_ready()
+            batch[1].block_until_ready()
+            batch[2].block_until_ready()
+            batch[3].block_until_ready()
             if i >= batches_per_flow_batch:
-                logger.debug(f"Finished iteration {i}")
-                sampler.reset()
-                batch[0].block_until_ready()
-                batch[1].block_until_ready()
-                batch[2].block_until_ready()
-                batch[3].block_until_ready()
+                sampler.reset(scheduler_reset=False)
                 break
 
-    # Warm up the function
-    run_sampler()
+    try:
+        # Warm up the function
+        run_sampler()
 
-    # Measure the time taken to run the sampler
-    total_time = timeit.repeat(
-        stmt=run_sampler, number=NUMBER_OF_EXECUTIONS, repeat=REPETITIONS
-    )
-    avg_time = min(total_time) / NUMBER_OF_EXECUTIONS
+        # Measure the time taken to run the sampler
+        total_time = timeit.repeat(
+            stmt=run_sampler, number=NUMBER_OF_EXECUTIONS, repeat=REPETITIONS
+        )
+        avg_time = min(total_time) / NUMBER_OF_EXECUTIONS
+    finally:
+        prefetching_scheduler.shutdown()
+
     assert (
         avg_time < limit_time
     ), f"The average time is {avg_time}, time limit: {limit_time}"
