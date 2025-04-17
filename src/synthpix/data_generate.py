@@ -408,4 +408,4 @@ def input_check_gen_img_from_flow(
     logger.debug(f"Time step (dt): {dt}")
     logger.debug(f"Flow field resolution (x): {flow_field_res_x}")
     logger.debug(f"Flow field resolution (y): {flow_field_res_y}")
-    logger.debug(f"Background level: {noise_level}")
+    logger.debug(f"Noise level: {noise_level}")

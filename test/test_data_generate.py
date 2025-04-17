@@ -382,7 +382,7 @@ def test_incoherent_image_shape_and_position_bounds(
         )
 
 
-def test_generate_images_from_flow(visualize=False):
+def test_generate_images_from_flow(visualize=True):
     """Test that we can generate images from a flow field."""
 
     # 1. setup the image parameters
