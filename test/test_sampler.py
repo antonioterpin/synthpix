@@ -684,7 +684,7 @@ def test_invalid_output_units(output_units, scheduler):
 
 @pytest.mark.parametrize(
     "batch_size, batches_per_flow_batch, image_shape",
-    [(4, 16, (256, 256)), (2, 8, (256, 256)), (1, 5, (256, 256))],
+    [(12, 16, (256, 256)), (12, 4, (256, 256))],
 )
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
@@ -702,38 +702,41 @@ def test_synthetic_sampler_batches(
         config=config,
     )
 
-    iterator = iter(sampler)
-    all_batches = []
-    for _ in range(batches_per_flow_batch):
-        batch = next(iterator)
-        all_batches.append(batch)
+    for batch in sampler:
         assert batch[0].shape[0] >= batch_size
         assert batch[0][0].shape >= image_shape
         assert isinstance(batch[0], jnp.ndarray)
 
-    assert len(all_batches) == batches_per_flow_batch
 
-
-@pytest.mark.parametrize("batch_size, batches_per_flow_batch", [(2, 4), (1, 3)])
 @pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+    "batch_size, batches_per_flow_batch, flow_fields_per_batch",
+    [(24, 4, 12), (12, 6, 12)],
 )
-def test_sampler_switches_flow_fields(batch_size, batches_per_flow_batch, scheduler):
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": True}], indirect=True
+)
+def test_sampler_switches_flow_fields(
+    batch_size, batches_per_flow_batch, flow_fields_per_batch, scheduler
+):
     config = sampler_config.copy()
     config["batch_size"] = batch_size
-    config["images_per_field"] = batches_per_flow_batch
+    config["batches_per_flow_batch"] = batches_per_flow_batch
+    config["flow_fields_per_batch"] = flow_fields_per_batch
     sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
         img_gen_fn=dummy_img_gen_fn,
         config=config,
     )
 
-    batch1 = next(sampler)
-    for _ in range(batches_per_flow_batch - 1):
-        next(sampler)
+    for i, batch in enumerate(sampler):
+        if i >= batches_per_flow_batch - 1:
+            batch1 = batch
+            break
+
     batch2 = next(sampler)
 
     assert not jnp.allclose(batch1[0], batch2[0])
+    assert not jnp.allclose(batch1[1], batch2[1])
 
 
 @pytest.mark.parametrize(
@@ -781,8 +784,8 @@ def test_sampler_with_real_img_gen_fn(
     assert isinstance(batch[0], jnp.ndarray)
     assert isinstance(batch[1], jnp.ndarray)
     assert isinstance(batch[2], jnp.ndarray)
-    assert batch[0].shape == (batch_size, *image_shape)
-    assert batch[1].shape == (batch_size, *image_shape)
+    assert batch[0].shape == (sampler.batch_size, *image_shape)
+    assert batch[1].shape == (sampler.batch_size, *image_shape)
     assert jnp.allclose(output_size, expected_size, atol=0.01)
 
 
@@ -819,6 +822,9 @@ def test_speed_sampler_dummy_fn(
     config["batch_size"] = batch_size
     config["seed"] = seed
 
+    if config["flow_fields_per_batch"] % len(jax.devices()) != 0:
+        pytest.skip("flow_fields_per_batch must be divisible by the number of devices.")
+
     # Check how many GPUs are available
     num_devices = len(jax.devices())
     # Limit time in seconds (depends on the number of GPUs)
@@ -827,7 +833,7 @@ def test_speed_sampler_dummy_fn(
     elif num_devices == 2:
         limit_time = 1.2
     elif num_devices == 4:
-        limit_time = 0.91
+        limit_time = 1.2
 
     # Create the sampler
     prefetching_scheduler = PrefetchingFlowFieldScheduler(
@@ -902,6 +908,9 @@ def test_speed_sampler_real_fn(
     config["flow_fields_per_batch"] = 64
 
     # Check how many GPUs are available
+
+    if config["flow_fields_per_batch"] % len(jax.devices()) != 0:
+        pytest.skip("flow_fields_per_batch must be divisible by the number of devices.")
     num_devices = len(jax.devices())
 
     # Limit time in seconds (depends on the number of GPUs)

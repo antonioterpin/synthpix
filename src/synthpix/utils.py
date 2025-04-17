@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ruamel.yaml import YAML
 
-DEBUG = False
+DEBUG = True
 DEBUG_JIT = False
 
 

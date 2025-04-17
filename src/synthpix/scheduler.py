@@ -112,10 +112,6 @@ class BaseFlowFieldScheduler(ABC):
                     self._cached_data = self.load_file(file_path)
                     self._cached_file = file_path
                     self._slice_idx = 0
-                    # logger.info(
-                    #    f"Prefetched data from {file_path}, "
-                    #    f"shape {self._cached_data.shape}"
-                    # )
 
                 if self._slice_idx >= self._cached_data.shape[1]:
                     self.index += 1

@@ -656,7 +656,6 @@ class SyntheticImageSampler:
             imgs2.shape[0] == self.batch_size
         ), f"Expected {self.batch_size} images but got {imgs2.shape[0]}"
 
-        logger.debug(f"Generated {self._batches_generated} couples of images")
         logger.debug(
             f"Generated {self._batches_generated * self.batch_size} " "image couples"
         )
