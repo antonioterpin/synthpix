@@ -57,6 +57,7 @@ class SyntheticImageSampler:
         min_speed_x: float,
         min_speed_y: float,
         output_units: str,
+        noise_level: float = 0.0,
     ):
         """Initializes the SyntheticImageSampler.
 
@@ -114,6 +115,8 @@ class SyntheticImageSampler:
                 in length measure unit per seconds.
             output_units: str
                 Units of the output flow field. Can be 'pixels' or 'measure units'.
+            noise_level: float
+                Maximum amplitude of the uniform noise to add.
         """
         # Name of the axis for the device mesh
         self.shard_fields = "fields"
@@ -267,6 +270,10 @@ class SyntheticImageSampler:
             )
         self.output_units = output_units
 
+        if not isinstance(noise_level, (int, float)) or noise_level < 0:
+            raise ValueError("noise_level must be a non-negative number.")
+        self.noise_level = noise_level
+
         if not isinstance(seed, int) or seed < 0:
             raise ValueError("seed must be a positive integer.")
         self.seed = seed
@@ -408,6 +415,7 @@ class SyntheticImageSampler:
                         dt=self.dt,
                         flow_field_res_x=self.flow_field_res_x,
                         flow_field_res_y=self.flow_field_res_y,
+                        noise_level=self.noise_level,
                     ),
                     mesh=self.mesh,
                     in_specs=(
@@ -437,6 +445,7 @@ class SyntheticImageSampler:
                 dt=self.dt,
                 flow_field_res_x=self.flow_field_res_x,
                 flow_field_res_y=self.flow_field_res_y,
+                noise_level=self.noise_level,
             )
             self.img_gen_fn_jit = lambda key, flow: img_gen_fn(
                 key=key,
@@ -454,6 +463,7 @@ class SyntheticImageSampler:
                 dt=self.dt,
                 flow_field_res_x=self.flow_field_res_x,
                 flow_field_res_y=self.flow_field_res_y,
+                noise_level=self.noise_level,
             )
 
         if not DEBUG_JIT:
@@ -496,7 +506,21 @@ class SyntheticImageSampler:
                 dt=self.dt,
                 zero_padding=self.zero_padding,
             )
-            self.flow_field_adapter_jit = flow_field_adapter
+            self.flow_field_adapter_jit = lambda flow: flow_field_adapter(
+                flow,
+                new_flow_field_shape=self.output_flow_field_shape,
+                image_shape=self.image_shape,
+                img_offset=self.img_offset,
+                resolution=self.resolution,
+                res_x=self.flow_field_res_x,
+                res_y=self.flow_field_res_y,
+                batch_size=self.batch_size // num_devices,
+                position_bounds=self.position_bounds,
+                position_bounds_offset=self.position_bounds_offset,
+                output_units=self.output_units,
+                dt=self.dt,
+                zero_padding=self.zero_padding,
+            )
 
         logger.debug("Input arguments of SyntheticImageSampler are valid.")
         logger.debug(f"Flow field scheduler: {self.scheduler}")
@@ -523,6 +547,7 @@ class SyntheticImageSampler:
         logger.debug(f"Min speed x: {min_speed_x}")
         logger.debug(f"Min speed y: {min_speed_y}")
         logger.debug(f"Output units: {self.output_units}")
+        logger.debug(f"Background level: {self.noise_level}")
         self._rng = jax.random.PRNGKey(seed)
         self._current_flows = None
         self._batches_generated = 0
@@ -644,6 +669,7 @@ class SyntheticImageSampler:
                 min_speed_x=config["min_speed_x"],
                 min_speed_y=config["min_speed_y"],
                 output_units=config["output_units"],
+                noise_level=config["noise_level"],
             )
         except KeyError as e:
             raise KeyError(

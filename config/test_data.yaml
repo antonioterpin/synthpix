@@ -13,6 +13,7 @@ seeding_density_range: [0.001, 0.01] # Range of density of particles in the imag
 p_hide_img1: 0.01 # Probability of hiding particles in the first image
 p_hide_img2: 0.01 # Probability of hiding particles in the second image
 rho_range: [-0.2, 0.2] # Correlation coefficients for the particles (similarity)
+noise_level: 0.0 # Maximum amplitude of the uniform noise to add.
 
 # Flow generation parameters
 velocities_per_pixel: 1.0 # Number of velocities per pixel
