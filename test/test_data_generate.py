@@ -329,6 +329,57 @@ def test_invalid_noise_level(noise_level):
             noise_level=noise_level,
         )
 
+@pytest.mark.parametrize("diameter_var", ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])])
+def test_invalid_diameter_var(diameter_var):
+    """Test that invalid diameter_var raise a ValueError."""
+    key = jax.random.PRNGKey(0)
+    flow_field = jnp.zeros((1, 128, 128, 2))
+    image_shape = (128, 128)
+    with pytest.raises(
+        ValueError,
+        match="diameter_var must be a non-negative number.",
+    ):
+        input_check_gen_img_from_flow(
+            key,
+            flow_field=flow_field,
+            image_shape=image_shape,
+            diameter_var=diameter_var,
+        )
+
+@pytest.mark.parametrize("intensity_var", ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])])
+def test_invalid_intensity_var(intensity_var):
+    """Test that invalid intensity_var raise a ValueError."""
+    key = jax.random.PRNGKey(0)
+    flow_field = jnp.zeros((1, 128, 128, 2))
+    image_shape = (128, 128)
+    with pytest.raises(
+        ValueError,
+        match="intensity_var must be a non-negative number.",
+    ):
+        input_check_gen_img_from_flow(
+            key,
+            flow_field=flow_field,
+            image_shape=image_shape,
+            intensity_var=intensity_var,
+        )
+
+@pytest.mark.parametrize("rho_var", ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])])
+def test_invalid_rho_var(rho_var):
+    """Test that invalid rho_var raise a ValueError."""
+    key = jax.random.PRNGKey(0)
+    flow_field = jnp.zeros((1, 128, 128, 2))
+    image_shape = (128, 128)
+    with pytest.raises(
+        ValueError,
+        match="rho_var must be a non-negative number.",
+    ):
+        input_check_gen_img_from_flow(
+            key,
+            flow_field=flow_field,
+            image_shape=image_shape,
+            rho_var=rho_var,
+        )
+
 
 @pytest.mark.parametrize(
     "image_shape, img_offset, position_bounds, error_message",
@@ -390,15 +441,18 @@ def test_generate_images_from_flow(visualize=False):
     selected_flow = "horizontal"
     position_bounds = (128, 128)
     image_shape = (128, 128)
-    seeding_density_range = (0.0001, 0.1)
+    seeding_density_range = (0.01, 0.01)
     img_offset = (0, 0)
     p_hide_img1 = 0.0
     p_hide_img2 = 0.0
-    diameter_range = (0.1, 0.5)
+    diameter_range = (1, 2)
+    diameter_var = 0
     intensity_range = (50, 250)
-    rho_range = (-0.2, 0.2)
-    dt = 5.0
-    noise_level = 30.0
+    intensity_var = 0
+    rho_range = (-0.2, 0.2)  # rho cannot be -1 or 1
+    rho_var = 0
+    dt = 0.0
+    noise_level = 0.0
 
     # 2. create a flow field
     flow_field = generate_array_flow_field(
@@ -418,8 +472,11 @@ def test_generate_images_from_flow(visualize=False):
         p_hide_img1=p_hide_img1,
         p_hide_img2=p_hide_img2,
         diameter_range=diameter_range,
+        diameter_var=diameter_var,
         intensity_range=intensity_range,
+        intensity_var=intensity_var,
         rho_range=rho_range,
+        rho_var=rho_var,
         dt=dt,
         noise_level=noise_level,
     )
@@ -475,7 +532,7 @@ def test_speed_generate_images_from_flow(
     elif num_devices == 2:
         limit_time = 5.5e-3
     elif num_devices == 4:
-        limit_time = 3e-3  # TODO test with 4 GPUs
+        limit_time = 3e-3  
 
     # Setup device mesh
     # We want to shard a key to each device
