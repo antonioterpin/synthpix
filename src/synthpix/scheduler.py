@@ -103,7 +103,6 @@ class BaseFlowFieldScheduler(ABC):
         while self.index < len(self.file_list) or self.loop:
             if self.index >= len(self.file_list):
                 self.reset(reset_epoch=False)
-                # logger.info(f"Starting epoch {self.epoch}")
 
             file_path = self.file_list[self.index]
 
@@ -299,7 +298,6 @@ class PrefetchingFlowFieldScheduler:
         """
         try:
             batch = self._queue.get(timeout=30.0)
-            logger.debug(f"Queue size: {self._queue.qsize()}")
             if batch is None:
                 logger.info(
                     "[PrefetchingFlowFieldScheduler] No more data available. "
@@ -339,40 +337,25 @@ class PrefetchingFlowFieldScheduler:
 
     def _worker(self):
         """Background thread that continuously fetches batches from the scheduler."""
-        # Outer prefetch loop to load data from the scheduler
+        # This will run until the stop event is set:
         while not self._stop_event.is_set():
             try:
                 batch = self.scheduler.get_batch(self.batch_size)
-                # Core prefetch loop to put data into the queue
-                while not self._stop_event.is_set():
-                    try:
-                        self._queue.put(batch, timeout=1.0)
-                        break
-                    except queue.Full:
-                        continue
             except StopIteration:
-                try:
-                    self._queue.put(None, timeout=1.0)
-                except queue.Full:
-                    logger.warning(
-                        "[PrefetchingFlowFieldScheduler] Queue full while stopping."
-                    )
-                logger.info(
-                    "[PrefetchingFlowFieldScheduler] No more data available. Stopping."
-                )
-                break
+                # Intended behavior here: if I called get_batch() and ran into a
+                # StopIteration, it means that I don't want the whole batch
+                # i.e. I don't want offsize batches.
+                # Signal end‑of‑stream to consumer
+                self._queue.put(None, block=False)
+                return
+
+            # This will block until there is free space in the queue:
+            # no busy‑waiting needed.
+            try:
+                self._queue.put(batch, block=True)
             except Exception as e:
-                logger.info(
-                    f"[PrefetchingFlowFieldScheduler] Error during prefetch: {e}"
-                )
-                try:
-                    self._queue.put(None, timeout=1.0)
-                except queue.Full:
-                    logger.warning(
-                        "[PrefetchingFlowFieldScheduler] Queue full "
-                        "during error handling."
-                    )
-                break
+                logger.warning(f"[Prefetching] Failed to put batch: {e}")
+                return
 
     def reset(self):
         """Resets the prefetching scheduler and underlying scheduler."""
@@ -389,11 +372,25 @@ class PrefetchingFlowFieldScheduler:
         self._started = False
         self.scheduler.reset()
 
-    def shutdown(self):
+    def shutdown(self, join_timeout=5.0):
         """Gracefully shuts down the background prefetching thread."""
         self._stop_event.set()
+
+        # If producer is stuck on put(), free up one slot
+        try:
+            self._queue.get_nowait()
+        except queue.Empty:
+            pass
+
+        # If consumer is stuck on get(), inject the end-of-stream signal
+        try:
+            self._queue.put(None, block=False)
+        except queue.Full:
+            pass
+
+        # Wait for the thread to finish
         if self._thread.is_alive():
-            self._thread.join()
+            self._thread.join(timeout=join_timeout)
 
     def __del__(self):
         """Gracefully shuts down the scheduler upon deletion."""

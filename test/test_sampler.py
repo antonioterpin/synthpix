@@ -737,6 +737,7 @@ def test_sampler_switches_flow_fields(
 
     assert not jnp.allclose(batch1[0], batch2[0])
     assert not jnp.allclose(batch1[1], batch2[1])
+    assert not jnp.allclose(batch1[2], batch2[2])
 
 
 @pytest.mark.parametrize(

@@ -603,7 +603,7 @@ class SyntheticImageSampler:
         """Generates the next batch of synthetic images.
 
         Raises:
-            StopIteration: Never raised by default, it is thrown by scheduler.
+            StopIteration: can only be thrown by the underlying scheduler.
 
         Returns:
             jnp.ndarray: A batch of synthetic images and seeding_densities

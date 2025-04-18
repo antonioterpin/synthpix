@@ -48,9 +48,6 @@ def main(config_path, output_dir, num_images_to_display):
                 f"batch_{i}_sample_{j}", batch[0][j], batch[1][j], batch[2], output_dir
             )
 
-        # logger.info(
-        #    f"Saved {num_images_to_display} for batch {i}. Stopping visualization."
-        # )
         if num_images_to_display > 0:
             # Ask user if they want to continue generating images
             choice = input("Do you want to continue generating images? (y/n): ")
