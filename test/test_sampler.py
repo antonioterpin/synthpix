@@ -29,8 +29,11 @@ def dummy_img_gen_fn(
     p_hide_img1,
     p_hide_img2,
     diameter_range,
+    diameter_var,
     intensity_range,
+    intensity_var,
     rho_range,
+    rho_var,
     dt,
     flow_field_res_x,
     flow_field_res_y,
@@ -79,8 +82,11 @@ def test_invalid_scheduler(scheduler):
         "p_hide_img1",
         "p_hide_img2",
         "diameter_range",
+        "diameter_var",
         "intensity_range",
+        "intensity_var",
         "rho_range",
+        "rho_var",
         "velocities_per_pixel",
     ],
 )
@@ -219,7 +225,7 @@ def test_invalid_resolution(resolution, scheduler):
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_velocities_per_pixel(velocities_per_pixel, scheduler):
+def test_invalid_velocities_per_pixel(velocities_per_pixel, scheduler):
     """Test that invalid velocities_per_pixel raises a ValueError."""
     with pytest.raises(
         ValueError, match="velocities_per_pixel must be a positive number."
@@ -346,6 +352,25 @@ def test_invalid_diameter_range(diameter_range, expected_message, scheduler):
 
 
 @pytest.mark.parametrize(
+    "diameter_var",
+    [-1, "invalid_diameter_var", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])],
+)
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_diameter_var(diameter_var, scheduler):
+    """Test that invalid diameter_var raises a ValueError."""
+    with pytest.raises(ValueError, match="diameter_var must be a non-negative number."):
+        config = sampler_config.copy()
+        config["diameter_var"] = diameter_var
+        SyntheticImageSampler.from_config(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            config=config,
+        )
+
+
+@pytest.mark.parametrize(
     "intensity_range, expected_message",
     [
         ((-1.0, 1.0), "intensity_range must be a tuple of two non-negative floats."),
@@ -371,11 +396,32 @@ def test_invalid_intensity_range(intensity_range, expected_message, scheduler):
 
 
 @pytest.mark.parametrize(
+    "intensity_var",
+    [-1, "invalid_intensity_var", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])],
+)
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_intensity_var(intensity_var, scheduler):
+    """Test that invalid intensity_var raises a ValueError."""
+    with pytest.raises(
+        ValueError, match="intensity_var must be a non-negative number."
+    ):
+        config = sampler_config.copy()
+        config["intensity_var"] = intensity_var
+        SyntheticImageSampler.from_config(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            config=config,
+        )
+
+
+@pytest.mark.parametrize(
     "rho_range, expected_message",
     [
         ((-1.1, 1.0), "rho_range must be a tuple of two floats between -1 and 1."),
         ((0.0, 1.1), "rho_range must be a tuple of two floats between -1 and 1."),
-        ((1.0, 0.5), "rho_range must be in the form \\(min, max\\)."),
+        ((0.9, 0.5), "rho_range must be in the form \\(min, max\\)."),
         ((0.5, 0.1), "rho_range must be in the form \\(min, max\\)."),
     ],
 )
@@ -387,6 +433,24 @@ def test_invalid_rho_range(rho_range, expected_message, scheduler):
     with pytest.raises(ValueError, match=expected_message):
         config = sampler_config.copy()
         config["rho_range"] = rho_range
+        SyntheticImageSampler.from_config(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            config=config,
+        )
+
+
+@pytest.mark.parametrize(
+    "rho_var", [-1, "invalid_rho_var", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+)
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_rho_var(rho_var, scheduler):
+    """Test that invalid rho_var raises a ValueError."""
+    with pytest.raises(ValueError, match="rho_var must be a non-negative number."):
+        config = sampler_config.copy()
+        config["rho_var"] = rho_var
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,

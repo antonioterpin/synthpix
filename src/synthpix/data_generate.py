@@ -26,8 +26,11 @@ def generate_images_from_flow(
     p_hide_img1: float = 0.01,
     p_hide_img2: float = 0.01,
     diameter_range: Tuple[float, float] = (0.1, 1.0),
+    diameter_var: float = 1.0,
     intensity_range: Tuple[float, float] = (50, 200),
+    intensity_var: float = 1.0,
     rho_range: Tuple[float, float] = (-0.99, 0.99),
+    rho_var: float = 1.0,
     dt: float = 1.0,
     flow_field_res_x: float = 1.0,
     flow_field_res_y: float = 1.0,
@@ -57,10 +60,16 @@ def generate_images_from_flow(
             Probability of hiding particles in the second image.
         diameter_range: Tuple[float, float]
             Minimum and maximum particle diameter in pixels.
+        diameter_var: float
+            Variance of the particle diameter.
         intensity_range: Tuple[float, float]
             Minimum and maximum peak intensity (I0).
+        intensity_var: float
+            Variance of the particle intensity.
         rho_range: Tuple[float, float]
             Minimum and maximum correlation coefficient (rho).
+        rho_var: float
+            Variance of the correlation coefficient.
         dt: float
             Time step for the simulation, used to scale the velocity
             to compute the displacement.
@@ -113,8 +122,7 @@ def generate_images_from_flow(
             subkey4,
             subkey5,
             subkey6,
-            subkey7,
-        ) = jax.random.split(key_i, 7)
+        ) = jax.random.split(key_i, 6)
 
         # Calculate the number of particles for this couple of images
         current_num_particles = jnp.floor(
@@ -141,9 +149,76 @@ def generate_images_from_flow(
             subkey3, (num_particles, 2)
         ) * jnp.array([H, W])
 
+        (
+            key_dx,
+            key_dy,
+            key_rho,
+            key_in,
+            key_noise_dx,
+            key_noise_dy,
+            key_noise_rho,
+            key_noise_in,
+        ) = jax.random.split(subkey4, 8)
+
+        # Sample random parameters for the particles
+        # Diameters in the specified range, then convert to sigma = diameter / 2
+        diameters_x1 = jax.random.uniform(
+            key_dx,
+            shape=(num_particles,),
+            minval=diameter_range[0],
+            maxval=diameter_range[1],
+        )
+        diameters_y1 = jax.random.uniform(
+            key_dy,
+            shape=(num_particles,),
+            minval=diameter_range[0],
+            maxval=diameter_range[1],
+        )
+
+        # Sample theta in the specified range
+        rho1 = jax.random.uniform(
+            key_rho,
+            shape=(num_particles,),
+            minval=rho_range[0],
+            maxval=rho_range[1],
+        )
+
+        # Peak intensities
+        intensities1 = jax.random.uniform(
+            key_in,
+            shape=(num_particles,),
+            minval=intensity_range[0],
+            maxval=intensity_range[1],
+        )
+
+        # Generate Gaussian noise with mean 0 and standard deviation = sqrt(variance)
+        noise_dx = jax.random.normal(key_noise_dx, shape=(num_particles,)) * jnp.sqrt(
+            diameter_var
+        )
+        noise_dy = jax.random.normal(key_noise_dy, shape=(num_particles,)) * jnp.sqrt(
+            diameter_var
+        )
+        noise_rho = jax.random.normal(key_noise_rho, shape=(num_particles,)) * jnp.sqrt(
+            rho_var
+        )
+        noise_i = jax.random.normal(key_noise_in, shape=(num_particles,)) * jnp.sqrt(
+            intensity_var
+        )
+
+        # Add noise to the original values
+        diameters_x2 = diameters_x1 + noise_dx
+        diameters_y2 = diameters_y1 + noise_dy
+        rho2 = rho1 + noise_rho
+        intensities2 = intensities1 + noise_i
+
+        # Clip the noisy values to their respective ranges
+        diameters_x2 = jnp.clip(diameters_x2, diameter_range[0], diameter_range[1])
+        diameters_y2 = jnp.clip(diameters_y2, diameter_range[0], diameter_range[1])
+        rho2 = jnp.clip(rho2, rho_range[0], rho_range[1])
+        intensities2 = jnp.clip(intensities2, intensity_range[0], intensity_range[1])
+
         if DEBUG_JIT:
             input_check_img_gen_from_data(
-                key=subkey4,
                 particle_positions=particle_positions
                 * mask_img1[:, None]
                 * mixed[:, None],
@@ -155,12 +230,13 @@ def generate_images_from_flow(
 
         # First image generation
         first_img = img_gen_from_data(
-            key=subkey4,
             particle_positions=particle_positions * mask_img1[:, None] * mixed[:, None],
             image_shape=position_bounds,
-            diameter_range=diameter_range,
-            intensity_range=intensity_range,
-            rho_range=rho_range,
+            max_diameter=diameter_range[1],
+            diameters_x=diameters_x1,
+            diameters_y=diameters_y1,
+            intensities=intensities1,
+            rho=rho1,
             clip=False,
         )
 
@@ -200,7 +276,6 @@ def generate_images_from_flow(
 
         if DEBUG_JIT:
             input_check_img_gen_from_data(
-                key=subkey5,
                 particle_positions=final_positions
                 * mask_img2[:, None]
                 * mixed[:, None],
@@ -212,12 +287,13 @@ def generate_images_from_flow(
 
         # Second image generation
         second_img = img_gen_from_data(
-            key=subkey5,
             particle_positions=final_positions * mask_img2[:, None] * mixed[:, None],
             image_shape=position_bounds,
-            diameter_range=diameter_range,
-            intensity_range=intensity_range,
-            rho_range=rho_range,
+            max_diameter=diameter_range[1],
+            diameters_x=diameters_x2,
+            diameters_y=diameters_y2,
+            intensities=intensities2,
+            rho=rho2,
             clip=False,
         )
 
@@ -233,10 +309,10 @@ def generate_images_from_flow(
 
         # Add noise to the images
         first_img = add_noise_to_image(
-            image=first_img, key=subkey6, noise_level=noise_level
+            image=first_img, key=subkey5, noise_level=noise_level
         )
         second_img = add_noise_to_image(
-            image=second_img, key=subkey7, noise_level=noise_level
+            image=second_img, key=subkey6, noise_level=noise_level
         )
 
         outputs = (first_img, second_img)
@@ -269,8 +345,11 @@ def input_check_gen_img_from_flow(
     p_hide_img1: float = 0.01,
     p_hide_img2: float = 0.01,
     diameter_range: Tuple[float, float] = (0.1, 1.0),
+    diameter_var: float = 1.0,
     intensity_range: Tuple[float, float] = (50, 200),
+    intensity_var: float = 1.0,
     rho_range: Tuple[float, float] = (-0.99, 0.99),
+    rho_var: float = 1.0,
     dt: float = 1.0,
     flow_field_res_x: float = 1.0,
     flow_field_res_y: float = 1.0,
@@ -300,10 +379,16 @@ def input_check_gen_img_from_flow(
             Probability of hiding particles in the second image.
         diameter_range: Tuple[float, float]
             Minimum and maximum particle diameter in pixels.
+        diameter_var: float
+            Variance of the particle diameter.
         intensity_range: Tuple[float, float]
             Minimum and maximum peak intensity (I0).
+        intensity_var: float
+            Variance of the particle intensity.
         rho_range: Tuple[float, float]
             Minimum and maximum correlation coefficient (rho).
+        rho_var: float
+            Variance of the correlation coefficient.
         dt: float
             Time step for the simulation, used to scale the velocity
             to compute the displacement.
@@ -353,7 +438,7 @@ def input_check_gen_img_from_flow(
         raise ValueError("intensity_range must be a tuple of two positive floats.")
     if intensity_range[0] > intensity_range[1]:
         raise ValueError("intensity_range must be in the form (min, max).")
-    if len(rho_range) != 2 or not all(-1 <= i <= 1 for i in rho_range):
+    if len(rho_range) != 2 or not all(-1 < i < 1 for i in rho_range):
         raise ValueError("rho_range must be a tuple of two floats between -1 and 1.")
     if rho_range[0] > rho_range[1]:
         raise ValueError("rho_range must be in the form (min, max).")
@@ -390,6 +475,13 @@ def input_check_gen_img_from_flow(
     if not isinstance(noise_level, (int, float)) or noise_level < 0:
         raise ValueError("noise_level must be a non-negative number.")
 
+    if not isinstance(diameter_var, (int, float)) or diameter_var < 0:
+        raise ValueError("diameter_var must be a non-negative number.")
+    if not isinstance(intensity_var, (int, float)) or intensity_var < 0:
+        raise ValueError("intensity_var must be a non-negative number.")
+    if not isinstance(rho_var, (int, float)) or rho_var < 0:
+        raise ValueError("rho_var must be a non-negative number.")
+
     num_particles = int(
         position_bounds[0] * position_bounds[1] * seeding_density_range[1]
     )
@@ -408,4 +500,4 @@ def input_check_gen_img_from_flow(
     logger.debug(f"Time step (dt): {dt}")
     logger.debug(f"Flow field resolution (x): {flow_field_res_x}")
     logger.debug(f"Flow field resolution (y): {flow_field_res_y}")
-    logger.debug(f"Background level: {noise_level}")
+    logger.debug(f"Noise level: {noise_level}")
