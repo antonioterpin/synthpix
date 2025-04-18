@@ -186,35 +186,36 @@ def img_gen_from_density(
 
 
 def input_check_img_gen_from_data(
-    key: jax.random.PRNGKey,
     image_shape: Tuple[int, int] = (256, 256),
     particle_positions: jnp.ndarray = None,
-    diameter_range: Tuple[float, float] = (0.1, 1.0),
-    intensity_range: Tuple[float, float] = (50, 200),
-    rho_range: Tuple[float, float] = (-0.99, 0.99),
+    max_diameter: float = 1.0,
+    diameters_x: jnp.ndarray = None,
+    diameters_y: jnp.ndarray = None,
+    intensities: jnp.ndarray = None,
+    rho: jnp.ndarray = None,
     clip: bool = True,
-) -> jnp.ndarray:
+):
     """Check the input arguments for img_gen_from_data.
 
     Args:
-        key: jax.random.PRNGKey
-            Random key for reproducibility.
         image_shape: Tuple[int, int]
             (height, width) of the output image.
         particle_positions: jnp.ndarray
-            Optional array of particle positions (x, y) in pixels.
-        diameter_range: Tuple[float, float]
-            Minimum and maximum particle diameter in pixels.
-        intensity_range: Tuple[float, float]
-            Minimum and maximum peak intensity (I0).
-        rho_range: Tuple[float, float]
-            Minimum and maximum correlation coefficient (rho).
+            Array of particle positions (y, x) in pixels.
+        max_diameter: float
+            Maximum particle diameter in pixels.
+        diameters_x: jnp.ndarray
+            Array of particle diameters in the x-direction.
+        diameters_y: jnp.ndarray
+            Array of particle diameters in the y-direction.
+        intensities: jnp.ndarray
+            Array of peak intensities (I0).
+        rho: jnp.ndarray
+            Array of correlation coefficients (rho).
         clip: bool
             If True, clip the image values to [0, 255].
     """
     # Argument checks using exceptions instead of asserts
-    if not isinstance(key, jax.Array) or key.shape != (2,) or key.dtype != jnp.uint32:
-        raise ValueError("Key must be a jax.Array of shape (2,) and type jnp.uint32.")
     if (
         len(image_shape) != 2
         or not all(s > 0 for s in image_shape)
@@ -227,23 +228,32 @@ def input_check_img_gen_from_data(
         or particle_positions.shape[1] != 2
     ):
         raise ValueError("Particle positions must be a 2D array with shape (N, 2)")
-    if len(diameter_range) != 2 or not all(d > 0 for d in diameter_range):
-        raise ValueError("diameter_range must be a tuple of two positive floats.")
-    if len(intensity_range) != 2 or not all(i >= 0 for i in intensity_range):
-        raise ValueError("intensity_range must be a tuple of two positive floats")
-    if len(rho_range) != 2 or not all(-1 <= r <= 1 for r in rho_range):
-        raise ValueError("rho_range must be a tuple of two floats in the range [-1, 1]")
+    
+    if not isinstance(max_diameter, (int, float)) or max_diameter <= 0:
+        raise ValueError("max_diameter must be a positive number.")
+    
+    if not isinstance(diameters_x, jnp.ndarray) or diameters_x.ndim != 1 or diameters_x.shape[0] != particle_positions.shape[0]:
+        raise ValueError("diameters_x must be a 1D array with the same length as particle_positions.")
+    if not isinstance(diameters_y, jnp.ndarray) or diameters_y.ndim != 1 or diameters_y.shape[0] != particle_positions.shape[0]:
+        raise ValueError("diameters_y must be a 1D array with the same length as particle_positions.")
+    if not isinstance(intensities, jnp.ndarray) or intensities.ndim != 1 or intensities.shape[0] != particle_positions.shape[0]:
+        raise ValueError("intensities must be a 1D array with the same length as particle_positions.")
+    if not isinstance(rho, jnp.ndarray) or rho.ndim != 1 or rho.shape[0] != particle_positions.shape[0]:
+        raise ValueError("rho must be a 1D array with the same length as particle_positions.")
+   
     if not isinstance(clip, bool):
         raise ValueError("clip must be a boolean value.")
 
 
+
 def img_gen_from_data(
-    key: jax.random.PRNGKey,
     image_shape: Tuple[int, int] = (256, 256),
     particle_positions: jnp.ndarray = None,
-    diameter_range: Tuple[float, float] = (0.1, 1.0),
-    intensity_range: Tuple[float, float] = (50, 200),
-    rho_range: Tuple[float, float] = (-0.99, 0.99),
+    max_diameter: float = 1.0,
+    diameters_x: jnp.ndarray = None,
+    diameters_y: jnp.ndarray = None,
+    intensities: jnp.ndarray = None,
+    rho: jnp.ndarray = None,
     clip: bool = True,
 ) -> jnp.ndarray:
     """Generate a synthetic particle image from particles positions.
@@ -258,18 +268,20 @@ def img_gen_from_data(
         - Out-of-bounds particles are clipped to ensure valid rendering.
 
     Args:
-        key: jax.random.PRNGKey
-            Random key for reproducibility.
         image_shape: Tuple[int, int]
             (height, width) of the output image.
         particle_positions: jnp.ndarray
             Array of particle positions (y, x) in pixels.
-        diameter_range: Tuple[float, float]
-            Minimum and maximum particle diameter in pixels.
-        intensity_range: Tuple[float, float]
-            Minimum and maximum peak intensity (I0).
-        rho_range: Tuple[float, float]
-            Minimum and maximum correlation coefficient (rho).
+        max_diameter: float
+            Maximum particle diameter in pixels.
+        diameters_x: jnp.ndarray
+            Array of particle diameters in the x-direction.
+        diameters_y: jnp.ndarray
+            Array of particle diameters in the y-direction.
+        intensities: jnp.ndarray
+            Array of peak intensities (I0).
+        rho: jnp.ndarray
+            Array of correlation coefficients (rho).
         clip: bool
             If True, clip the image values to [0, 255].
 
@@ -278,12 +290,8 @@ def img_gen_from_data(
     """
     H, W = image_shape
 
-    # # To make key.shape = (2,)
-    key = jnp.reshape(key, (-1, key.shape[-1]))[0]
-    key_dx, key_dy, key_rho, key_i = jax.random.split(key, 4)
-
     # The radius of the patch that contains the particle
-    patch_radius = int(3 * diameter_range[1] / 2)
+    patch_radius = int(3 * max_diameter / 2)
     patch_size = 2 * patch_radius + 1
 
     # Precompute a (patch_size x patch_size) Gaussian kernel centered at (0,0)
@@ -295,7 +303,6 @@ def img_gen_from_data(
     int_pos = jnp.round(
         jnp.reshape(particle_positions, (-1, particle_positions.shape[-1]))
     ).astype(int)
-    num_particles = len(int_pos[:, 0])
 
     def single_particle_scatter(pos, diameter_x, diameter_y, rho, amp):
         y0, x0 = pos[0], pos[1]
@@ -321,35 +328,6 @@ def img_gen_from_data(
         kernel = gaussian_2d_correlated(X, Y, 0, 0, sigma_x, sigma_y, rho, amp)
         updates = kernel.flatten()
         return coords, updates
-
-    # Sample random parameters
-    # Diameters in the specified range, then convert to sigma = diameter / 2
-    diameters_x = jax.random.uniform(
-        key_dx,
-        shape=(num_particles,),
-        minval=diameter_range[0],
-        maxval=diameter_range[1],
-    )
-    diameters_y = jax.random.uniform(
-        key_dy,
-        shape=(num_particles,),
-        minval=diameter_range[0],
-        maxval=diameter_range[1],
-    )
-    # Correlation coefficient (rho)
-    rho = jax.random.uniform(
-        key_rho,
-        shape=(num_particles,),
-        minval=rho_range[0],
-        maxval=rho_range[1],
-    )
-    # Peak intensities
-    intensities = jax.random.uniform(
-        key_i,
-        shape=(num_particles,),
-        minval=intensity_range[0],
-        maxval=intensity_range[1],
-    )
 
     # Vectorized scatter prep
     coords_updates = jax.vmap(single_particle_scatter)(
