@@ -5,6 +5,7 @@ import tempfile
 import h5py
 import numpy as np
 import pytest
+from PIL import Image
 
 from synthpix.scheduler import HDF5FlowFieldScheduler
 
@@ -106,3 +107,38 @@ def scheduler(temp_file, request):
         [temp_file], randomize=randomize, loop=loop
     )
     return scheduler_instance
+
+
+@pytest.fixture(scope="module")
+def pivlab_test_dims():
+    """Fixture to provide default dimensions for PIVLab files."""
+    return {"height": 64, "width": 64}
+
+
+@pytest.fixture(scope="module")
+def generate_pivlab_file():
+    """Fixture to generate a temporary PIVLab file with random data."""
+
+    def _generate(folder, t, dims):
+        h, w = dims["height"], dims["width"]
+
+        for img_index in [t - 1, t]:
+            img = np.random.randint(0, 255, size=(h, w, 3), dtype=np.uint8)
+            Image.fromarray(img).save(os.path.join(folder, f"img_{img_index}.jpg"))
+
+        flow = np.random.rand(h, w, 2).astype(np.float32)
+        np.save(os.path.join(folder, f"flow_{t}.npy"), flow)
+
+    return _generate
+
+
+@pytest.fixture
+def mock_pivlab_files(tmp_path, generate_pivlab_file, pivlab_test_dims, request):
+    """Fixture to create multiple PIVLab files for testing."""
+    num_files = request.param if hasattr(request, "param") else 2
+
+    for t in range(1, num_files + 1):
+        generate_pivlab_file(tmp_path, t, pivlab_test_dims)
+
+    file_paths = [tmp_path / f"flow_{t}.npy" for t in range(1, num_files + 1)]
+    return [str(p) for p in file_paths], pivlab_test_dims

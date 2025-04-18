@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 
 import h5py
 import numpy as np
+from PIL import Image
 
 from synthpix.utils import logger
 
@@ -256,3 +257,110 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
             shape = dset.shape[0], dset.shape[2], 2  # (X, Z, 2)
             logger.debug(f"Flow field shape: {shape}")
         return shape
+
+
+class PIVLabFlowFieldScheduler(BaseFlowFieldScheduler):
+    """Scheduler for loading flow fields from .npy files and .jpg image pairs.
+
+    Each .npy file is expected to be named as 'flow_t.npy' and is associated with:
+        - 'img_{t-1}.jpg'
+        - 'img_{t}.jpg'
+    """
+
+    def __init__(self, file_list, randomize=False, loop=False):
+        """Initializes the PIVLab scheduler."""
+        super().__init__(file_list, randomize, loop)
+        if not all(file_path.endswith((".npy", ".jpg")) for file_path in file_list):
+            raise ValueError(
+                "All files must be either '.npy' (flow) or '.jpg' (image) files."
+            )
+
+    def load_file(self, file_path: str):
+        """Load the flow field from a .npy file and locate the associated image files.
+
+        Returns:
+            A tuple (flow_array, img_prev_path, img_next_path)
+        """
+        # Extract frame index t from the filename: assumes format like flow_1.npy
+        filename = os.path.basename(file_path)
+        t_str = filename.replace("flow_", "").replace(".npy", "")
+        try:
+            t = int(t_str)
+        except ValueError:
+            raise ValueError(
+                f"Filename {filename} does not match expected 'flow_<int>.npy' pattern."
+            )
+
+        # Build associated image paths
+        folder = os.path.dirname(file_path)
+        img_prev_path = os.path.join(folder, f"img_{t - 1}.jpg")
+        img_next_path = os.path.join(folder, f"img_{t}.jpg")
+
+        if not (os.path.isfile(img_prev_path) and os.path.isfile(img_next_path)):
+            raise FileNotFoundError(
+                f"Missing images for flow_{t}: {img_prev_path}, {img_next_path}"
+            )
+
+        # Load .npy flow file
+        flow = np.load(file_path)
+
+        # Store all 3 in a dict for get_next_slice to consume
+        return (flow, img_prev_path, img_next_path)
+
+    def get_next_slice(self):
+        """Retrieve the next flow field slice and associated images.
+
+        Returns:
+            dict: A dictionary containing the flow field and associated images.
+        """
+        flow, img_prev_path, img_next_path = self._cached_data
+
+        img_prev = np.array(Image.open(img_prev_path).convert("RGB"))
+        img_next = np.array(Image.open(img_next_path).convert("RGB"))
+
+        return {"flow": flow, "img_prev": img_prev, "img_next": img_next}
+
+    def get_flow_fields_shape(self):
+        """Returns the shape of all the flow fields.
+
+        It is assumed that all the flow fields have the same shape.
+
+        Returns:
+            tuple: Shape of all the flow fields.
+        """
+        file_path = self.file_list[0]
+        flow = np.load(file_path)
+        return flow.shape
+
+    def __next__(self):
+        """Returns the next flow field slice from the dataset."""
+        while self.index < len(self.file_list) or self.loop:
+            if self.index >= len(self.file_list):
+                self.reset(reset_epoch=False)
+
+            file_path = self.file_list[self.index]
+
+            try:
+                if self._cached_file != file_path:
+                    self._cached_data = self.load_file(file_path)
+                    self._cached_file = file_path
+                    self._slice_idx = 0
+
+                sample = self.get_next_slice()
+
+                # Advance to next file
+                self.index += 1
+                self._cached_file = None
+                self._cached_data = None
+                self._slice_idx = 0
+
+                return sample
+
+            except Exception as e:
+                print(f"[ERROR] Skipping file {file_path}: {e}")
+                self.index += 1
+                self._cached_file = None
+                self._cached_data = None
+                continue
+
+        raise StopIteration
