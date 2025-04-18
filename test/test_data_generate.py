@@ -239,7 +239,7 @@ def test_invalid_intensity_range(intensity_range, expected_message):
     [
         ((-1.1, 1.0), "rho_range must be a tuple of two floats between -1 and 1."),
         ((0.0, 1.1), "rho_range must be a tuple of two floats between -1 and 1."),
-        ((1.0, 0.5), "rho_range must be in the form \\(min, max\\)."),
+        ((0.9, 0.5), "rho_range must be in the form \\(min, max\\)."),
         ((0.5, 0.1), "rho_range must be in the form \\(min, max\\)."),
     ],
 )
@@ -329,7 +329,10 @@ def test_invalid_noise_level(noise_level):
             noise_level=noise_level,
         )
 
-@pytest.mark.parametrize("diameter_var", ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])])
+
+@pytest.mark.parametrize(
+    "diameter_var", ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+)
 def test_invalid_diameter_var(diameter_var):
     """Test that invalid diameter_var raise a ValueError."""
     key = jax.random.PRNGKey(0)
@@ -346,7 +349,10 @@ def test_invalid_diameter_var(diameter_var):
             diameter_var=diameter_var,
         )
 
-@pytest.mark.parametrize("intensity_var", ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])])
+
+@pytest.mark.parametrize(
+    "intensity_var", ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+)
 def test_invalid_intensity_var(intensity_var):
     """Test that invalid intensity_var raise a ValueError."""
     key = jax.random.PRNGKey(0)
@@ -363,7 +369,10 @@ def test_invalid_intensity_var(intensity_var):
             intensity_var=intensity_var,
         )
 
-@pytest.mark.parametrize("rho_var", ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])])
+
+@pytest.mark.parametrize(
+    "rho_var", ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+)
 def test_invalid_rho_var(rho_var):
     """Test that invalid rho_var raise a ValueError."""
     key = jax.random.PRNGKey(0)
@@ -532,7 +541,7 @@ def test_speed_generate_images_from_flow(
     elif num_devices == 2:
         limit_time = 5.5e-3
     elif num_devices == 4:
-        limit_time = 3e-3  
+        limit_time = 3e-3
 
     # Setup device mesh
     # We want to shard a key to each device

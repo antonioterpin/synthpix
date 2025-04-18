@@ -48,8 +48,11 @@ class SyntheticImageSampler:
         p_hide_img1: float,
         p_hide_img2: float,
         diameter_range: Tuple[float, float],
+        diameter_var: float,
         intensity_range: Tuple[float, float],
+        intensity_var: float,
         rho_range: Tuple[float, float],
+        rho_var: float,
         dt: float,
         seed: int,
         max_speed_x: float,
@@ -57,7 +60,7 @@ class SyntheticImageSampler:
         min_speed_x: float,
         min_speed_y: float,
         output_units: str,
-        noise_level: float = 0.0,
+        noise_level: float,
     ):
         """Initializes the SyntheticImageSampler.
 
@@ -93,10 +96,16 @@ class SyntheticImageSampler:
                 Probability of hiding particles in the second image.
             diameter_range: Tuple[float, float]
                 Range of diameters for particles.
+            diameter_var: float
+                Variance of the diameters for particles.
             intensity_range: Tuple[float, float]
                 Range of intensities for particles.
+            intensity_var: float
+                Variance of the intensities for particles.
             rho_range: Tuple[float, float]
                 Range of correlation coefficients for particles.
+            rho_var: float
+                Variance of the correlation coefficients for particles.
             dt: float
                 Time step for the simulation.
             seed: int
@@ -233,9 +242,13 @@ class SyntheticImageSampler:
             isinstance(d, (int, float)) and d > 0 for d in diameter_range
         ):
             raise ValueError("diameter_range must be a tuple of two positive floats.")
-        self.diameter_range = diameter_range
         if diameter_range[0] > diameter_range[1]:
             raise ValueError("diameter_range must be in the form (min, max).")
+        self.diameter_range = diameter_range
+
+        if not isinstance(diameter_var, (int, float)) or diameter_var < 0:
+            raise ValueError("diameter_var must be a non-negative number.")
+        self.diameter_var = diameter_var
 
         if len(intensity_range) != 2 or not all(
             isinstance(i, (int, float)) and i >= 0 for i in intensity_range
@@ -247,8 +260,12 @@ class SyntheticImageSampler:
             raise ValueError("intensity_range must be in the form (min, max).")
         self.intensity_range = intensity_range
 
+        if not isinstance(intensity_var, (int, float)) or intensity_var < 0:
+            raise ValueError("intensity_var must be a non-negative number.")
+        self.intensity_var = intensity_var
+
         if len(rho_range) != 2 or not all(
-            isinstance(r, (int, float)) and -1.0 <= r <= 1.0 for r in rho_range
+            isinstance(r, (int, float)) and -1.0 < r < 1.0 for r in rho_range
         ):
             raise ValueError(
                 "rho_range must be a tuple of two floats between -1 and 1."
@@ -256,6 +273,10 @@ class SyntheticImageSampler:
         if rho_range[0] > rho_range[1]:
             raise ValueError("rho_range must be in the form (min, max).")
         self.rho_range = rho_range
+
+        if not isinstance(rho_var, (int, float)) or rho_var < 0:
+            raise ValueError("rho_var must be a non-negative number.")
+        self.rho_var = rho_var
 
         if not isinstance(dt, (int, float)):
             raise ValueError("dt must be a scalar (int or float)")
@@ -410,8 +431,11 @@ class SyntheticImageSampler:
                         p_hide_img1=self.p_hide_img1,
                         p_hide_img2=self.p_hide_img2,
                         diameter_range=self.diameter_range,
+                        diameter_var=self.diameter_var,
                         intensity_range=self.intensity_range,
+                        intensity_var=self.intensity_var,
                         rho_range=self.rho_range,
+                        rho_var=self.rho_var,
                         dt=self.dt,
                         flow_field_res_x=self.flow_field_res_x,
                         flow_field_res_y=self.flow_field_res_y,
@@ -440,8 +464,11 @@ class SyntheticImageSampler:
                 p_hide_img1=self.p_hide_img1,
                 p_hide_img2=self.p_hide_img2,
                 diameter_range=self.diameter_range,
+                diameter_var=self.diameter_var,
                 intensity_range=self.intensity_range,
+                intensity_var=self.intensity_var,
                 rho_range=self.rho_range,
+                rho_var=self.rho_var,
                 dt=self.dt,
                 flow_field_res_x=self.flow_field_res_x,
                 flow_field_res_y=self.flow_field_res_y,
@@ -458,8 +485,11 @@ class SyntheticImageSampler:
                 p_hide_img1=self.p_hide_img1,
                 p_hide_img2=self.p_hide_img2,
                 diameter_range=self.diameter_range,
+                diameter_var=self.diameter_var,
                 intensity_range=self.intensity_range,
+                intensity_var=self.intensity_var,
                 rho_range=self.rho_range,
+                rho_var=self.rho_var,
                 dt=self.dt,
                 flow_field_res_x=self.flow_field_res_x,
                 flow_field_res_y=self.flow_field_res_y,
@@ -538,8 +568,11 @@ class SyntheticImageSampler:
         logger.debug(f"p_hide_img1: {self.p_hide_img1}")
         logger.debug(f"p_hide_img2: {self.p_hide_img2}")
         logger.debug(f"Diameter range: {self.diameter_range}")
+        logger.debug(f"Diameter var: {self.diameter_var}")
         logger.debug(f"Intensity range: {self.intensity_range}")
+        logger.debug(f"Intensity var: {self.intensity_var}")
         logger.debug(f"Rho range: {self.rho_range}")
+        logger.debug(f"Rho var: {self.rho_var}")
         logger.debug(f"dt: {self.dt}")
         logger.debug(f"Seed: {self.seed}")
         logger.debug(f"Max speed x: {max_speed_x}")
@@ -660,8 +693,11 @@ class SyntheticImageSampler:
                 p_hide_img1=config["p_hide_img1"],
                 p_hide_img2=config["p_hide_img2"],
                 diameter_range=config["diameter_range"],
+                diameter_var=config["diameter_var"],
                 intensity_range=config["intensity_range"],
+                intensity_var=config["intensity_var"],
                 rho_range=config["rho_range"],
+                rho_var=config["rho_var"],
                 dt=config["dt"],
                 seed=config["seed"],
                 max_speed_x=config["max_speed_x"],

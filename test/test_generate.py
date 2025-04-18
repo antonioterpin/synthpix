@@ -21,7 +21,6 @@ REPETITIONS = config["REPETITIONS"]
 NUMBER_OF_EXECUTIONS = config["EXECUTIONS_IMG_GEN"]
 
 
-
 @pytest.mark.parametrize(
     "image_shape", [(-1, 128), (128, -1), (0, 128), (128, 0), (128.2, 128.2)]
 )
@@ -43,7 +42,6 @@ def test_invalid_image_shape_img_gen_from_data(image_shape):
         ValueError, match="image_shape must be a tuple of two positive integers."
     ):
         input_check_img_gen_from_data(image_shape=image_shape)
-
 
 
 @pytest.mark.parametrize("seeding_density", [-0.1, 0, 1.1])
@@ -90,23 +88,41 @@ def test_invalid_max_diameter(max_diameter):
     """Test that invalid max_diameter values raise a ValueError."""
     particle_positions = jnp.ones((2, 2))
     with pytest.raises(ValueError, match="max_diameter must be a positive number."):
-        input_check_img_gen_from_data(particle_positions=particle_positions, max_diameter=max_diameter)
+        input_check_img_gen_from_data(
+            particle_positions=particle_positions, max_diameter=max_diameter
+        )
 
 
 @pytest.mark.parametrize("diameters_x", [1, jnp.array([1]), jnp.array([1, 1, 1])])
 def test_invalid_diameters_x(diameters_x):
     """Test that invalid diameters_x values raise a ValueError."""
     particle_positions = jnp.ones((2, 2))
-    with pytest.raises(ValueError, match="diameters_x must be a 1D array with the same length as particle_positions."):
-        input_check_img_gen_from_data(particle_positions=particle_positions, diameters_x=diameters_x)
+    with pytest.raises(
+        ValueError,
+        match="diameters_x must be a 1D array "
+        "with the same length as particle_positions.",
+    ):
+        input_check_img_gen_from_data(
+            particle_positions=particle_positions, diameters_x=diameters_x
+        )
+
 
 @pytest.mark.parametrize("diameters_y", [1, jnp.array([1]), jnp.array([1, 1, 1])])
 def test_invalid_diameters_y(diameters_y):
     """Test that invalid diameters_y values raise a ValueError."""
     particle_positions = jnp.ones((2, 2))
     diameters_x = jnp.ones(particle_positions.shape[0])
-    with pytest.raises(ValueError, match="diameters_y must be a 1D array with the same length as particle_positions."):
-        input_check_img_gen_from_data(particle_positions=particle_positions, diameters_x=diameters_x, diameters_y=diameters_y)
+    with pytest.raises(
+        ValueError,
+        match="diameters_y must be a 1D array "
+        "with the same length as particle_positions.",
+    ):
+        input_check_img_gen_from_data(
+            particle_positions=particle_positions,
+            diameters_x=diameters_x,
+            diameters_y=diameters_y,
+        )
+
 
 @pytest.mark.parametrize("intensities", [1, jnp.array([1]), jnp.array([1, 1, 1])])
 def test_invalid_intensities(intensities):
@@ -114,8 +130,18 @@ def test_invalid_intensities(intensities):
     particle_positions = jnp.ones((2, 2))
     diameters_x = jnp.ones(particle_positions.shape[0])
     diameters_y = jnp.ones(particle_positions.shape[0])
-    with pytest.raises(ValueError, match="intensities must be a 1D array with the same length as particle_positions."):
-        input_check_img_gen_from_data(particle_positions=particle_positions, diameters_x=diameters_x, diameters_y=diameters_y, intensities=intensities)
+    with pytest.raises(
+        ValueError,
+        match="intensities must be a 1D array "
+        "with the same length as particle_positions.",
+    ):
+        input_check_img_gen_from_data(
+            particle_positions=particle_positions,
+            diameters_x=diameters_x,
+            diameters_y=diameters_y,
+            intensities=intensities,
+        )
+
 
 @pytest.mark.parametrize("rho", [1, jnp.array([1]), jnp.array([1, 1, 1])])
 def test_invalid_rho(rho):
@@ -124,8 +150,17 @@ def test_invalid_rho(rho):
     diameters_x = jnp.ones(particle_positions.shape[0])
     diameters_y = jnp.ones(particle_positions.shape[0])
     intensities = jnp.ones(particle_positions.shape[0])
-    with pytest.raises(ValueError, match="rho must be a 1D array with the same length as particle_positions."):
-        input_check_img_gen_from_data(particle_positions=particle_positions, diameters_x=diameters_x, diameters_y=diameters_y, intensities=intensities, rho=rho)
+    with pytest.raises(
+        ValueError,
+        match="rho must be a 1D array with the same length as particle_positions.",
+    ):
+        input_check_img_gen_from_data(
+            particle_positions=particle_positions,
+            diameters_x=diameters_x,
+            diameters_y=diameters_y,
+            intensities=intensities,
+            rho=rho,
+        )
 
 
 @pytest.mark.parametrize("clip", [-1, "invalid", 1.1])
@@ -137,7 +172,14 @@ def test_invalid_clip(clip):
     intensities = jnp.ones(particle_positions.shape[0])
     rho = jnp.ones(particle_positions.shape[0])
     with pytest.raises(ValueError, match="clip must be a boolean value."):
-        input_check_img_gen_from_data(clip=clip, particle_positions=particle_positions, diameters_x=diameters_x, diameters_y=diameters_y, intensities=intensities, rho=rho)
+        input_check_img_gen_from_data(
+            clip=clip,
+            particle_positions=particle_positions,
+            diameters_x=diameters_x,
+            diameters_y=diameters_y,
+            intensities=intensities,
+            rho=rho,
+        )
 
 
 @pytest.mark.parametrize("seed", [0, 1, 42])
@@ -189,9 +231,7 @@ def test_generate_image_from_data(
 
 @pytest.mark.parametrize("seed", [0, 1, 42])
 @pytest.mark.parametrize("image_shape", [(128, 128)])
-@pytest.mark.parametrize(
-    "seeding_density", [0.06, 0.99]
-)
+@pytest.mark.parametrize("seeding_density", [0.06, 0.99])
 @pytest.mark.parametrize("noise_level", [0.0, 5.0, 255.0])
 def test_generate_image_from_density(
     seed, image_shape, seeding_density, noise_level, visualize=False
@@ -234,7 +274,9 @@ def test_generate_image_from_density(
 @pytest.mark.parametrize("diameter_range", [(0.5, 3.5)])
 @pytest.mark.parametrize("intensity_range", [(0, 250)])
 @pytest.mark.parametrize("rho_range", [(-0.5, 0.5)])
-def test_speed_img_gen(seeding_density, image_shape, diameter_range, intensity_range, rho_range):
+def test_speed_img_gen(
+    seeding_density, image_shape, diameter_range, intensity_range, rho_range
+):
     """Test that img_gen_from_data is faster than a limit time."""
 
     # Name of the axis for the device mesh
@@ -252,17 +294,16 @@ def test_speed_img_gen(seeding_density, image_shape, diameter_range, intensity_r
         limit_time = 2e-5
 
     # Setup device mesh
-    # We want to shard the particles along the first axis
-    # and send a key to each device.
+    # We want to shard the particles and their characteristics
+    # across the GPUs.
     # The idea is that each device will generate a image
     # and then stack it with the images generated by the other GPUs.
     devices = mesh_utils.create_device_mesh((num_devices,))
     mesh = Mesh(devices, axis_names=(shard_particles))
 
-    # 1. Generate random particles and keys
+    # 1. Generate random particles and their characteristics
     key = jax.random.PRNGKey(0)
     subkey1, subkey2, subkey3, subkey4, subkey5 = jax.random.split(key, 5)
-    
 
     particles_number = int(image_shape[0] * image_shape[1] * seeding_density)
     particles = jax.random.uniform(
@@ -297,25 +338,45 @@ def test_speed_img_gen(seeding_density, image_shape, diameter_range, intensity_r
     )
 
     # Sending the variables to the devices
-    particles = jax.device_put(particles, NamedSharding(mesh, PartitionSpec(shard_particles)))
-    diameters_x = jax.device_put(diameters_x, NamedSharding(mesh, PartitionSpec(shard_particles)))
-    diameters_y = jax.device_put(diameters_y, NamedSharding(mesh, PartitionSpec(shard_particles)))
-    intensities = jax.device_put(intensities, NamedSharding(mesh, PartitionSpec(shard_particles)))
+    # To make the test also consider the time of sending the variables to the devices
+    # comment the next lines
+    particles = jax.device_put(
+        particles, NamedSharding(mesh, PartitionSpec(shard_particles))
+    )
+    diameters_x = jax.device_put(
+        diameters_x, NamedSharding(mesh, PartitionSpec(shard_particles))
+    )
+    diameters_y = jax.device_put(
+        diameters_y, NamedSharding(mesh, PartitionSpec(shard_particles))
+    )
+    intensities = jax.device_put(
+        intensities, NamedSharding(mesh, PartitionSpec(shard_particles))
+    )
     rho = jax.device_put(rho, NamedSharding(mesh, PartitionSpec(shard_particles)))
+
+    _img_gen_fun = (
+        lambda particles, diameters_x, diameters_y, intensities, rho: img_gen_from_data(
+            image_shape=image_shape,
+            particle_positions=particles,
+            diameters_x=diameters_x,
+            diameters_y=diameters_y,
+            intensities=intensities,
+            rho=rho,
+        )
+    )
 
     # 2. Create the jit function
     img_gen_from_data_jit = jax.jit(
         shard_map(
-            lambda particles, diameters_x, diameters_y, intensities, rho: img_gen_from_data(
-                image_shape=image_shape,
-                particle_positions=particles,
-                diameters_x=diameters_x,
-                diameters_y=diameters_y,
-                intensities=intensities,
-                rho=rho,
-            ),
+            _img_gen_fun,
             mesh=mesh,
-            in_specs=(PartitionSpec(shard_particles), PartitionSpec(shard_particles), PartitionSpec(shard_particles), PartitionSpec(shard_particles), PartitionSpec(shard_particles)),
+            in_specs=(
+                PartitionSpec(shard_particles),
+                PartitionSpec(shard_particles),
+                PartitionSpec(shard_particles),
+                PartitionSpec(shard_particles),
+                PartitionSpec(shard_particles),
+            ),
             out_specs=PartitionSpec(shard_particles),
         )
     )

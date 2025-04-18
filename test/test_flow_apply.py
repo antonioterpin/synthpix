@@ -62,28 +62,64 @@ def test_flow_apply_to_image(image_shape, visualize=False):
 @pytest.mark.parametrize("selected_flow", ["vertical"])
 @pytest.mark.parametrize("seeding_density", [0.1])
 @pytest.mark.parametrize("image_shape", [(128, 128)])
+@pytest.mark.parametrize("diameter_range", [(0.1, 1.0)])
+@pytest.mark.parametrize("intensity_range", [(50, 200)])
+@pytest.mark.parametrize("rho_range", [(-0.5, 0.5)])
 def test_particles_flow_apply_array(
-    selected_flow, seeding_density, image_shape, visualize=False
+    selected_flow,
+    seeding_density,
+    image_shape,
+    diameter_range,
+    intensity_range,
+    rho_range,
+    visualize=False,
 ):
     """Test that we can apply a flow field as a jax array to random particles."""
 
-    # 1. Generate random particles
+    # 1. Generate random particles and their characteristics
     key = jax.random.PRNGKey(0)
-    key, subkey = jax.random.split(key, 2)
+    subkey1, subkey2, subkey3, subkey4, subkey5 = jax.random.split(key, 5)
 
     particles_number = int(image_shape[0] * image_shape[1] * seeding_density)
     particles = jax.random.uniform(
-        subkey, (particles_number, 2), minval=0.0, maxval=jnp.array(image_shape) - 1
+        subkey1,
+        (particles_number, 2),
+        minval=0.0,
+        maxval=jnp.array(image_shape) - 1,
+    )
+    diameters_x = jax.random.uniform(
+        subkey2,
+        (particles_number,),
+        minval=diameter_range[0],
+        maxval=diameter_range[1],
+    )
+    diameters_y = jax.random.uniform(
+        subkey3,
+        (particles_number,),
+        minval=diameter_range[0],
+        maxval=diameter_range[1],
+    )
+    intensities = jax.random.uniform(
+        subkey4,
+        (particles_number,),
+        minval=intensity_range[0],
+        maxval=intensity_range[1],
+    )
+    rho = jax.random.uniform(
+        subkey5,
+        (particles_number,),
+        minval=rho_range[0],
+        maxval=rho_range[1],
     )
 
     # 2. create a synthetic image
     img = img_gen_from_data(
-        key,
         image_shape=image_shape,
         particle_positions=particles,
-        diameter_range=(2, 3.5),
-        intensity_range=(10, 255),
-        rho_range=(-0.1, 0.1),
+        diameters_x=diameters_x,
+        diameters_y=diameters_y,
+        intensities=intensities,
+        rho=rho,
     )
 
     # 3. create a flow field
@@ -96,12 +132,12 @@ def test_particles_flow_apply_array(
 
     # 5. create a synthetic image with the new particles
     img_warped = img_gen_from_data(
-        key,
         image_shape=image_shape,
         particle_positions=new_particles,
-        diameter_range=(2, 3.5),
-        intensity_range=(10, 250),
-        rho_range=(-0.5, 0.5),
+        diameters_x=diameters_x,
+        diameters_y=diameters_y,
+        intensities=intensities,
+        rho=rho,
     )
 
     if visualize:
@@ -251,11 +287,11 @@ def test_speed_apply_flow_to_particles(seeding_density, selected_flow, image_sha
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 4e-5
+        limit_time = 3e-5
     elif num_devices == 2:
-        limit_time = 7e-5
+        limit_time = 6e-5
     elif num_devices == 4:
-        limit_time = 8e-4
+        limit_time = 7.5e-5
 
     # Setup device mesh
     # We want to shard the particles along the first axis
@@ -276,8 +312,10 @@ def test_speed_apply_flow_to_particles(seeding_density, selected_flow, image_sha
     )
 
     # 2. Send the particles to the devices
+    # To make the test also consider the time of sending the variables to the devices
+    # comment the next lines
     sharding_particles = NamedSharding(mesh, PartitionSpec(shard_particles))
-    particles_sharded = jax.device_put(particles, sharding_particles)
+    particles = jax.device_put(particles, sharding_particles)
 
     # 3. Create a flow field
     flow_field = generate_array_flow_field(
@@ -292,7 +330,7 @@ def test_speed_apply_flow_to_particles(seeding_density, selected_flow, image_sha
     apply_flow_to_particles_jit = jax.jit(apply_flow_to_particles)
 
     def run_apply_jit():
-        result = apply_flow_to_particles_jit(particles_sharded, flow_field_replicated)
+        result = apply_flow_to_particles_jit(particles, flow_field_replicated)
         result.block_until_ready()
 
     # Warm up the function

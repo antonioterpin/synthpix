@@ -14,6 +14,7 @@ from synthpix.generate import (
 )
 from synthpix.utils import DEBUG_JIT, is_int, logger
 
+
 def generate_images_from_flow(
     key: jax.random.PRNGKey,
     flow_field: jnp.ndarray,
@@ -437,7 +438,7 @@ def input_check_gen_img_from_flow(
         raise ValueError("intensity_range must be a tuple of two positive floats.")
     if intensity_range[0] > intensity_range[1]:
         raise ValueError("intensity_range must be in the form (min, max).")
-    if len(rho_range) != 2 or not all(-1 <= i <= 1 for i in rho_range):
+    if len(rho_range) != 2 or not all(-1 < i < 1 for i in rho_range):
         raise ValueError("rho_range must be a tuple of two floats between -1 and 1.")
     if rho_range[0] > rho_range[1]:
         raise ValueError("rho_range must be in the form (min, max).")
@@ -473,7 +474,7 @@ def input_check_gen_img_from_flow(
         raise ValueError("seeding_density_range must be in the form (min, max).")
     if not isinstance(noise_level, (int, float)) or noise_level < 0:
         raise ValueError("noise_level must be a non-negative number.")
-    
+
     if not isinstance(diameter_var, (int, float)) or diameter_var < 0:
         raise ValueError("diameter_var must be a non-negative number.")
     if not isinstance(intensity_var, (int, float)) or intensity_var < 0:

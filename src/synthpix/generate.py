@@ -228,22 +228,45 @@ def input_check_img_gen_from_data(
         or particle_positions.shape[1] != 2
     ):
         raise ValueError("Particle positions must be a 2D array with shape (N, 2)")
-    
+
     if not isinstance(max_diameter, (int, float)) or max_diameter <= 0:
         raise ValueError("max_diameter must be a positive number.")
-    
-    if not isinstance(diameters_x, jnp.ndarray) or diameters_x.ndim != 1 or diameters_x.shape[0] != particle_positions.shape[0]:
-        raise ValueError("diameters_x must be a 1D array with the same length as particle_positions.")
-    if not isinstance(diameters_y, jnp.ndarray) or diameters_y.ndim != 1 or diameters_y.shape[0] != particle_positions.shape[0]:
-        raise ValueError("diameters_y must be a 1D array with the same length as particle_positions.")
-    if not isinstance(intensities, jnp.ndarray) or intensities.ndim != 1 or intensities.shape[0] != particle_positions.shape[0]:
-        raise ValueError("intensities must be a 1D array with the same length as particle_positions.")
-    if not isinstance(rho, jnp.ndarray) or rho.ndim != 1 or rho.shape[0] != particle_positions.shape[0]:
-        raise ValueError("rho must be a 1D array with the same length as particle_positions.")
-   
+
+    if (
+        not isinstance(diameters_x, jnp.ndarray)
+        or diameters_x.ndim != 1
+        or diameters_x.shape[0] != particle_positions.shape[0]
+    ):
+        raise ValueError(
+            "diameters_x must be a 1D array with the same length as particle_positions."
+        )
+    if (
+        not isinstance(diameters_y, jnp.ndarray)
+        or diameters_y.ndim != 1
+        or diameters_y.shape[0] != particle_positions.shape[0]
+    ):
+        raise ValueError(
+            "diameters_y must be a 1D array with the same length as particle_positions."
+        )
+    if (
+        not isinstance(intensities, jnp.ndarray)
+        or intensities.ndim != 1
+        or intensities.shape[0] != particle_positions.shape[0]
+    ):
+        raise ValueError(
+            "intensities must be a 1D array with the same length as particle_positions."
+        )
+    if (
+        not isinstance(rho, jnp.ndarray)
+        or rho.ndim != 1
+        or rho.shape[0] != particle_positions.shape[0]
+    ):
+        raise ValueError(
+            "rho must be a 1D array with the same length as particle_positions."
+        )
+
     if not isinstance(clip, bool):
         raise ValueError("clip must be a boolean value.")
-
 
 
 def img_gen_from_data(
@@ -260,8 +283,6 @@ def img_gen_from_data(
 
     This function creates an image where each particle
     is rendered as a 2D Gaussian kernel.
-    Diameter, correlation (rho), and intensity
-    are randomly sampled for each particle.
 
     Notes:
         - Particle positions are rounded to the nearest integer pixel locations.
