@@ -1,6 +1,8 @@
 """FlowFieldScheduler to load the flow field data from files."""
 import os
+import queue
 import random
+import threading
 from abc import ABC, abstractmethod
 
 import h5py
@@ -101,7 +103,6 @@ class BaseFlowFieldScheduler(ABC):
         while self.index < len(self.file_list) or self.loop:
             if self.index >= len(self.file_list):
                 self.reset(reset_epoch=False)
-                logger.info(f"Starting epoch {self.epoch}")
 
             file_path = self.file_list[self.index]
 
@@ -110,10 +111,6 @@ class BaseFlowFieldScheduler(ABC):
                     self._cached_data = self.load_file(file_path)
                     self._cached_file = file_path
                     self._slice_idx = 0
-                    logger.info(
-                        f"Prefetched data from {file_path}, "
-                        f"shape {self._cached_data.shape}"
-                    )
 
                 if self._slice_idx >= self._cached_data.shape[1]:
                     self.index += 1
@@ -256,3 +253,145 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
             shape = dset.shape[0], dset.shape[2], 2  # (X, Z, 2)
             logger.debug(f"Flow field shape: {shape}")
         return shape
+
+
+class PrefetchingFlowFieldScheduler:
+    """Prefetching Wrapper around a FlowFieldScheduler.
+
+    It asynchronously prefetches batches of flow fields using a
+    background thread to keep the GPU fed.
+    """
+
+    def __init__(self, scheduler, batch_size: int, buffer_size: int = 8):
+        """Initializes the prefetching scheduler.
+
+        Args:
+            scheduler:
+                The underlying flow field scheduler.
+            batch_size: int
+                Flow field slices per batch, must match the underlying scheduler.
+            buffer_size: int
+                Number of batches to prefetch.
+        """
+        self.scheduler = scheduler
+        self.batch_size = batch_size
+        self.buffer_size = buffer_size
+
+        self._queue = queue.Queue(maxsize=buffer_size)
+        self._stop_event = threading.Event()
+        self._thread = threading.Thread(target=self._worker, daemon=True)
+
+        self._started = False
+
+    def __iter__(self):
+        """Returns the iterator instance itself and starts the background thread."""
+        if not self._started:
+            self._started = True
+            self._thread.start()
+        return self
+
+    def __next__(self):
+        """Returns the next batch of flow fields from the prefetch queue.
+
+        Raises:
+            StopIteration: If the queue is empty or no more data is available.
+        """
+        try:
+            batch = self._queue.get(timeout=30.0)
+            if batch is None:
+                logger.info(
+                    "[PrefetchingFlowFieldScheduler] No more data available. "
+                    "Stopping."
+                )
+                raise StopIteration
+            return batch
+        except queue.Empty:
+            logger.info(
+                "[PrefetchingFlowFieldScheduler] Prefetch queue is empty. "
+                "Waiting for data."
+            )
+            raise StopIteration
+
+    def get_batch(self, batch_size):
+        """Return the next batch from the prefetch queue, matching scheduler interface.
+
+        Returns:
+            np.ndarray: A preloaded batch of flow fields.
+        """
+        if batch_size != self.batch_size:
+            raise ValueError(
+                f"Batch size {batch_size} does not match the "
+                f"prefetching batch size {self.batch_size}."
+            )
+        if not self._started:
+            self.__iter__()
+        return next(self)
+
+    def get_flow_fields_shape(self):
+        """Return the shape of the flow fields from the underlying scheduler.
+
+        Returns:
+            tuple: Shape of the flow fields as returned by the underlying scheduler.
+        """
+        return self.scheduler.get_flow_fields_shape()
+
+    def _worker(self):
+        """Background thread that continuously fetches batches from the scheduler."""
+        # This will run until the stop event is set:
+        while not self._stop_event.is_set():
+            try:
+                batch = self.scheduler.get_batch(self.batch_size)
+            except StopIteration:
+                # Intended behavior here: if I called get_batch() and ran into a
+                # StopIteration, it means that I don't want the whole batch
+                # i.e. I don't want offsize batches.
+                # Signal end‑of‑stream to consumer
+                self._queue.put(None, block=False)
+                return
+
+            # This will block until there is free space in the queue:
+            # no busy‑waiting needed.
+            try:
+                self._queue.put(batch, block=True)
+            except Exception as e:
+                logger.warning(f"[Prefetching] Failed to put batch: {e}")
+                return
+
+    def reset(self):
+        """Resets the prefetching scheduler and underlying scheduler."""
+        # Stop the background thread and clear the queue
+        self._stop_event.set()
+        if self._thread.is_alive():
+            self._thread.join()
+        self._queue.queue.clear()
+
+        # Reinitialize the scheduler and start the thread
+        self._stop_event.clear()
+        self._queue = queue.Queue(maxsize=self.buffer_size)
+        self._thread = threading.Thread(target=self._worker, daemon=True)
+        self._started = False
+        self.scheduler.reset()
+
+    def shutdown(self, join_timeout=5.0):
+        """Gracefully shuts down the background prefetching thread."""
+        self._stop_event.set()
+
+        # If producer is stuck on put(), free up one slot
+        try:
+            self._queue.get_nowait()
+        except queue.Empty:
+            pass
+
+        # If consumer is stuck on get(), inject the end-of-stream signal
+        try:
+            self._queue.put(None, block=False)
+        except queue.Full:
+            pass
+
+        # Wait for the thread to finish
+        if self._thread.is_alive():
+            self._thread.join(timeout=join_timeout)
+
+    def __del__(self):
+        """Gracefully shuts down the scheduler upon deletion."""
+        self.shutdown()

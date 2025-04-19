@@ -5,7 +5,11 @@ import h5py
 import numpy as np
 import pytest
 
-from synthpix.scheduler import BaseFlowFieldScheduler, HDF5FlowFieldScheduler
+from synthpix.scheduler import (
+    BaseFlowFieldScheduler,
+    HDF5FlowFieldScheduler,
+    PrefetchingFlowFieldScheduler,
+)
 from synthpix.utils import load_configuration
 
 config = load_configuration("config/testing.yaml")
@@ -202,3 +206,63 @@ def test_scheduler_time(randomize, mock_hdf5_files):
     )
     average_time = min(total_time) / NUMBER_OF_EXECUTIONS
     assert average_time < time_limit, f"Scheduler took too long: {average_time:.2f}s"
+
+
+# ============================
+# Prefetching Scheduler Tests
+# ============================
+
+
+@pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
+def test_prefetch_batch_shapes(mock_hdf5_files):
+    files, dims = mock_hdf5_files
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
+    prefetch = PrefetchingFlowFieldScheduler(
+        scheduler=scheduler, batch_size=3, buffer_size=2
+    )
+
+    batch = prefetch.get_batch(3)
+    expected_shape = (3, dims["x_dim"], dims["z_dim"], 2)
+    assert batch.shape == expected_shape
+    prefetch.shutdown()
+
+
+@pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
+def test_prefetch_batch_size_validation(mock_hdf5_files):
+    files, _ = mock_hdf5_files
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
+    prefetch = PrefetchingFlowFieldScheduler(scheduler=scheduler, batch_size=4)
+
+    with pytest.raises(ValueError, match="Batch size .* does not match"):
+        prefetch.get_batch(8)
+    prefetch.shutdown()
+
+
+@pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
+def test_prefetch_scheduler_exhaustion(mock_hdf5_files):
+    files, _ = mock_hdf5_files
+    scheduler = HDF5FlowFieldScheduler(files, loop=False)
+    prefetch = PrefetchingFlowFieldScheduler(
+        scheduler=scheduler, batch_size=2, buffer_size=2
+    )
+
+    results = []
+    try:
+        while True:
+            results.append(prefetch.get_batch(2))
+    except StopIteration:
+        print("Scheduler exhausted, stopping iteration.")
+        pass
+
+    assert len(results) > 0
+    prefetch.shutdown()
+
+
+@pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
+def test_prefetch_scheduler_shutdown(mock_hdf5_files):
+    files, _ = mock_hdf5_files
+    scheduler = HDF5FlowFieldScheduler(files, loop=True)
+    prefetch = PrefetchingFlowFieldScheduler(scheduler=scheduler, batch_size=2)
+    prefetch.get_batch(2)
+    prefetch.shutdown()
+    assert not prefetch._thread.is_alive()
