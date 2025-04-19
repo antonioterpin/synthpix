@@ -20,7 +20,7 @@ noise_level: 0.0 # Maximum amplitude of the uniform noise to add.
 
 # Flow generation parameters
 velocities_per_pixel: 1.0 # Number of velocities per pixel
-resolution: 1 # Pixels per unit length
+resolution: 200 # Pixels per unit length
 
 # -- Flow parameters --
 # Size of the flow field in normalized units. It can be meters or others,
