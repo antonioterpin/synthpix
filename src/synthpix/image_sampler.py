@@ -590,19 +590,20 @@ class SyntheticImageSampler:
         """Returns the iterator instance itself."""
         return self
 
-    def reset(self):
+    def reset(self, scheduler_reset: bool = True):
         """Resets the state variables to their initial values."""
         self._rng = jax.random.PRNGKey(self.seed)
         self._current_flows = None
         self._batches_generated = 0
-        self.scheduler.reset()
+        if scheduler_reset:
+            self.scheduler.reset()
         logger.debug("Sampler state has been reset.")
 
     def __next__(self):
         """Generates the next batch of synthetic images.
 
         Raises:
-            StopIteration: Never raised by default, it is thrown by scheduler.
+            StopIteration: can only be thrown by the underlying scheduler.
 
         Returns:
             jnp.ndarray: A batch of synthetic images and seeding_densities
@@ -622,6 +623,7 @@ class SyntheticImageSampler:
             # Shard the flow fields across devices
             _current_flows = jnp.array(_current_flows, device=self.sharding)
 
+            # logger.info("Flow fields have been successfully loaded and sharded.")
             logger.debug(f"Current flow fields sharding: {_current_flows.sharding}")
 
             # Creating the output flow field
@@ -654,12 +656,14 @@ class SyntheticImageSampler:
             imgs2.shape[0] == self.batch_size
         ), f"Expected {self.batch_size} images but got {imgs2.shape[0]}"
 
-        logger.debug(f"Generated {self._batches_generated} couples of images")
         logger.debug(
             f"Generated {self._batches_generated * self.batch_size} " "image couples"
         )
         self._batches_generated += 1
         self._total_generated_image_couples += self.batch_size
+        logger.debug(
+            f"Generated {self._total_generated_image_couples} image couples so far."
+        )
         return imgs1, imgs2, self.output_flow_fields, seeding_densities
 
     @classmethod

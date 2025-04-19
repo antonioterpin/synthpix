@@ -1,7 +1,7 @@
 # Dataset parameters
 seed: 0 # Random seed for reproducibility
-batch_size: 4 # Number of (img1, img2, flow) tuples per batch
-flow_fields_per_batch: 2 # Number of flow fields used for each batch
+batch_size: 12 # Number of (img1, img2, flow) tuples per batch
+flow_fields_per_batch: 12 # Number of flow fields used for each batch
 batches_per_flow_batch: 40 # Number of batches of (imgs1, imgs2, flows) tuples per flow batch
 
 # Image generation parameters

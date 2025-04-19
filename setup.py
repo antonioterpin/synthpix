@@ -12,7 +12,7 @@ setup(
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     install_requires=[
-        "jax",
+        "jax==0.5.3",
         "tqdm>=4.67.1",
         "h5py>=3.13.0",
         "ruamel.yaml>=0.18.10",

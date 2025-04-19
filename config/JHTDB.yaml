@@ -1,11 +1,11 @@
 # Dataset parameters
 seed: 0 # Random seed for reproducibility
-batch_size: 4 # Number of (img1, img2, flow) tuples per batch
-flow_fields_per_batch: 2 # Number of flow fields used for each batch
-batches_per_flow_batch: 40 # Number of batches of (imgs1, imgs2, flows) tuples per flow batch
+batch_size: 128 # Number of (img1, img2, flow) tuples per batch
+flow_fields_per_batch: 64 # Number of flow fields used for each batch
+batches_per_flow_batch: 500 # Number of batches of (imgs1, imgs2, flows) tuples per flow batch
 
 # Image generation parameters
-image_shape: [128, 256] # Shape of the images to be generated
+image_shape: [1216, 1936] # Shape of the images to be generated
 dt: 0.026 # Time step between images
 seeding_density_range: [0.001, 0.01] # Range of density of particles in the images
 p_hide_img1: 0.01 # Probability of hiding particles in the first image
@@ -25,7 +25,7 @@ resolution: 1 # Pixels per unit length
 # -- Flow parameters --
 # Size of the flow field in normalized units. It can be meters or others,
 # but need to be consistent in the other dependent settings.
-flow_field_size: [1536, 2048]
+flow_field_size: [9.42477796, 12.56637061]
 img_offset: [0.025, 0.05] # Offset of the area captured in the images in normalized units
 # Speeds bounds in the flow field, used to have particles covering the images
 min_speed_x: -0.10241036862134933 # Minimum speed in the x direction
@@ -36,7 +36,6 @@ max_speed_y: 0.501191258430481 # Maximum speed in the y direction
 output_units: "measure units per second"
 # Flows files
 scheduler_files:
-  - /shared/fluids/files_to_modify/channel_full_ts_0984.h5
   - /shared/fluids/files_to_modify/split_files/channel_full_ts_0984_part1.h5
   - /shared/fluids/files_to_modify/split_files/channel_full_ts_0984_part2.h5
   - /shared/fluids/files_to_modify/split_files/channel_full_ts_0988_part1.h5
