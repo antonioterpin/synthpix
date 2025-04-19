@@ -272,7 +272,7 @@ def flow_field_adapter(
         image_shape: Tuple[int, int]
             The shape of the images.
         img_offset: Tuple[int, int]
-            The offset of the images.
+            The offset of the images from the position bounds in pixels.
         resolution: float
             Resolution of the images in pixels per unit length.
         res_x: float
@@ -282,7 +282,7 @@ def flow_field_adapter(
         position_bounds: Tuple[int, int]
             The bounds of the flow field in the x and y directions.
         position_bounds_offset: Tuple[int, int]
-            The offset of the flow field in the x and y directions.
+            The offset of the position bounds in length measure units.
         batch_size: int
             The desired batch size of the output flow fields.
         output_units: str
@@ -318,9 +318,9 @@ def flow_field_adapter(
         flow_position_bounds = flow[y_start:y_end, x_start:x_end]
 
         # Crop to image offset
-        y_img_start = int(img_offset[0] * res_y)
+        y_img_start = int(img_offset[0] / resolution * res_y)
         y_img_end = y_img_start + int(image_shape[0] / resolution * res_y)
-        x_img_start = int(img_offset[1] * res_x)
+        x_img_start = int(img_offset[1] / resolution * res_x)
         x_img_end = x_img_start + int(image_shape[1] / resolution * res_x)
         flow_image_crop = flow_position_bounds[
             y_img_start:y_img_end, x_img_start:x_img_end
