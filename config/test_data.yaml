@@ -34,6 +34,7 @@ min_speed_y: -0.45968499779701233 # Minimum speed in the y direction
 max_speed_y: 0.501191258430481 # Maximum speed in the y direction
 # Units of the output flow field. Can be "measure units per second" or "pixels"
 output_units: "measure units per second"
-# Flows files
+# Flows files: can be either a list of files or a directory
+# If a directory is provided, all the .h5 files in the directory will be used
 scheduler_files:
   - /shared/fluids/files_to_modify/channel_full_ts_0984.h5
