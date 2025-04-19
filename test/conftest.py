@@ -110,14 +110,14 @@ def scheduler(temp_file, request):
 
 
 @pytest.fixture(scope="module")
-def pivlab_test_dims():
-    """Fixture to provide default dimensions for PIVLab files."""
+def numpy_test_dims():
+    """Fixture to provide default dimensions for Numpy files."""
     return {"height": 64, "width": 64}
 
 
 @pytest.fixture(scope="module")
-def generate_pivlab_file():
-    """Fixture to generate a temporary PIVLab file with random data."""
+def generate_numpy_file():
+    """Fixture to generate a temporary Numpy file with random data."""
 
     def _generate(folder, t, dims):
         h, w = dims["height"], dims["width"]
@@ -133,12 +133,12 @@ def generate_pivlab_file():
 
 
 @pytest.fixture
-def mock_pivlab_files(tmp_path, generate_pivlab_file, pivlab_test_dims, request):
-    """Fixture to create multiple PIVLab files for testing."""
+def mock_numpy_files(tmp_path, generate_numpy_file, numpy_test_dims, request):
+    """Fixture to create multiple Numpy files for testing."""
     num_files = request.param if hasattr(request, "param") else 2
 
     for t in range(1, num_files + 1):
-        generate_pivlab_file(tmp_path, t, pivlab_test_dims)
+        generate_numpy_file(tmp_path, t, numpy_test_dims)
 
     file_paths = [tmp_path / f"flow_{t}.npy" for t in range(1, num_files + 1)]
-    return [str(p) for p in file_paths], pivlab_test_dims
+    return [str(p) for p in file_paths], numpy_test_dims

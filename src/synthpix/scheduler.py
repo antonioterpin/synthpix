@@ -1,6 +1,8 @@
 """FlowFieldScheduler to load the flow field data from files."""
+import glob
 import os
 import random
+import re
 from abc import ABC, abstractmethod
 
 import h5py
@@ -17,6 +19,8 @@ class BaseFlowFieldScheduler(ABC):
     Subclasses must implement file-specific loading and y-slice extraction logic.
     """
 
+    _file_pattern = "*"
+
     def __init__(self, file_list, randomize=False, loop=False):
         """Initializes the scheduler.
 
@@ -28,6 +32,13 @@ class BaseFlowFieldScheduler(ABC):
             loop: bool
                 If True, loop over the dataset indefinitely.
         """
+        # Check if file_list is a directory or a list of files
+        if isinstance(file_list, str) and os.path.isdir(file_list):
+            pattern = os.path.join(file_list, self._file_pattern)
+            file_list = sorted(glob.glob(pattern))
+        elif isinstance(file_list, str) and os.path.isfile(file_list):
+            file_list = [file_list]
+
         if not file_list:
             raise ValueError("The file_list must not be empty.")
 
@@ -209,6 +220,8 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
     and extracts the x and z components (0 and 2) from each y-slice.
     """
 
+    _file_pattern = "*.h5"
+
     def __init__(self, file_list, randomize=False, loop=False):
         """Initializes the HDF5 scheduler."""
         super().__init__(file_list, randomize, loop)
@@ -259,108 +272,103 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         return shape
 
 
-class PIVLabFlowFieldScheduler(BaseFlowFieldScheduler):
-    """Scheduler for loading flow fields from .npy files and .jpg image pairs.
+class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
+    """Scheduler for loading flow fields from .npy files, with optional image pairing.
 
-    Each .npy file is expected to be named as 'flow_t.npy' and is associated with:
-        - 'img_{t-1}.jpg'
-        - 'img_{t}.jpg'
+    Each .npy file must be named 'flow_<t>.npy' and, if images are enabled,
+    will be paired with 'img_<t-1>.jpg' and 'img_<t>.jpg' in the same folder.
     """
 
-    def __init__(self, file_list, randomize=False, loop=False):
-        """Initializes the PIVLab scheduler."""
+    # instruct base class to glob only the flow_*.npy files
+    _file_pattern = "flow_*.npy"
+
+    def __init__(
+        self, file_list, randomize=False, loop=False, include_images: bool = False
+    ):
+        """Initializes the Numpy scheduler.
+
+        This scheduler loads flow fields from .npy files and can optionally
+        validate and return paired JPEG images.
+        The .npy files must be named 'flow_<t>.npy' and the images must be
+        named 'img_<t-1>.jpg' and 'img_<t>.jpg' in the same folder.
+
+        Args:
+            file_list: str or list of str
+                A directory, single .npy file, or list of .npy paths.
+            randomize: bool
+                If True, shuffle file order per epoch.
+            loop: bool
+                If True, cycle indefinitely.
+            include_images: bool
+                If True, validate and return paired JPEG images.
+        """
+        self.include_images = include_images
         super().__init__(file_list, randomize, loop)
-        if not all(file_path.endswith((".npy", ".jpg")) for file_path in file_list):
-            raise ValueError(
-                "All files must be either '.npy' (flow) or '.jpg' (image) files."
-            )
+
+        # ensure all supplied files are .npy
+        if not all(fp.endswith(".npy") for fp in self.file_list):
+            raise ValueError("All files must be numpy files with '.npy' extension")
+
+        # validate image pairs only if requested
+        if self.include_images:
+            for flow_path in self.file_list:
+                mb = re.match(r"flow_(\d+)\.npy$", os.path.basename(flow_path))
+                if not mb:
+                    raise ValueError(f"Bad filename: {flow_path}")
+                t = int(mb.group(1))
+                folder = os.path.dirname(flow_path)
+                prev_img = os.path.join(folder, f"img_{t-1}.jpg")
+                next_img = os.path.join(folder, f"img_{t}.jpg")
+                if not (os.path.isfile(prev_img) and os.path.isfile(next_img)):
+                    raise FileNotFoundError(
+                        f"Missing images for frame {t}: {prev_img}, {next_img}"
+                    )
 
     def load_file(self, file_path: str):
-        """Load the flow field from a .npy file and locate the associated image files.
-
-        Returns:
-            A tuple (flow_array, img_prev_path, img_next_path)
-        """
-        # Extract frame index t from the filename: assumes format like flow_1.npy
-        filename = os.path.basename(file_path)
-        t_str = filename.replace("flow_", "").replace(".npy", "")
-        try:
-            t = int(t_str)
-        except ValueError:
-            raise ValueError(
-                f"Filename {filename} does not match expected 'flow_<int>.npy' pattern."
-            )
-
-        # Build associated image paths
-        folder = os.path.dirname(file_path)
-        img_prev_path = os.path.join(folder, f"img_{t - 1}.jpg")
-        img_next_path = os.path.join(folder, f"img_{t}.jpg")
-
-        if not (os.path.isfile(img_prev_path) and os.path.isfile(img_next_path)):
-            raise FileNotFoundError(
-                f"Missing images for flow_{t}: {img_prev_path}, {img_next_path}"
-            )
-
-        # Load .npy flow file
-        flow = np.load(file_path)
-
-        # Store all 3 in a dict for get_next_slice to consume
-        return (flow, img_prev_path, img_next_path)
+        """Load the raw flow array from .npy."""
+        return np.load(file_path)
 
     def get_next_slice(self):
-        """Retrieve the next flow field slice and associated images.
+        """Return either the flow array or, if enabled, flow plus images."""
+        flow = self._cached_data
+        if not self.include_images:
+            return flow
 
-        Returns:
-            dict: A dictionary containing the flow field and associated images.
-        """
-        flow, img_prev_path, img_next_path = self._cached_data
-
-        img_prev = np.array(Image.open(img_prev_path).convert("RGB"))
-        img_next = np.array(Image.open(img_next_path).convert("RGB"))
-
-        return {"flow": flow, "img_prev": img_prev, "img_next": img_next}
+        # load images on-demand
+        mb = re.match(r"flow_(\d+)\.npy$", os.path.basename(self._cached_file))
+        t = int(mb.group(1))
+        folder = os.path.dirname(self._cached_file)
+        prev = np.array(
+            Image.open(os.path.join(folder, f"img_{t-1}.jpg")).convert("RGB")
+        )
+        nxt = np.array(Image.open(os.path.join(folder, f"img_{t}.jpg")).convert("RGB"))
+        return {"flow": flow, "img_prev": prev, "img_next": nxt}
 
     def get_flow_fields_shape(self):
-        """Returns the shape of all the flow fields.
-
-        It is assumed that all the flow fields have the same shape.
-
-        Returns:
-            tuple: Shape of all the flow fields.
-        """
-        file_path = self.file_list[0]
-        flow = np.load(file_path)
-        return flow.shape
+        """Return the shape of a single flow array."""
+        return np.load(self.file_list[0]).shape
 
     def __next__(self):
-        """Returns the next flow field slice from the dataset."""
+        """Iterate over .npy files, returning flow or flow+images."""
         while self.index < len(self.file_list) or self.loop:
             if self.index >= len(self.file_list):
                 self.reset(reset_epoch=False)
+                logger.info(f"Starting epoch {self.epoch}")
 
-            file_path = self.file_list[self.index]
-
+            path = self.file_list[self.index]
             try:
-                if self._cached_file != file_path:
-                    self._cached_data = self.load_file(file_path)
-                    self._cached_file = file_path
-                    self._slice_idx = 0
+                # load and cache
+                self._cached_file = path
+                self._cached_data = self.load_file(path)
 
+                # extract and return
                 sample = self.get_next_slice()
-
-                # Advance to next file
                 self.index += 1
-                self._cached_file = None
-                self._cached_data = None
-                self._slice_idx = 0
-
                 return sample
 
             except Exception as e:
-                print(f"[ERROR] Skipping file {file_path}: {e}")
+                logger.error(f"Skipping {path}: {e}")
                 self.index += 1
-                self._cached_file = None
-                self._cached_data = None
                 continue
 
         raise StopIteration

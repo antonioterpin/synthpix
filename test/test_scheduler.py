@@ -8,7 +8,7 @@ import pytest
 from synthpix.scheduler import (
     BaseFlowFieldScheduler,
     HDF5FlowFieldScheduler,
-    PIVLabFlowFieldScheduler,
+    NumpyFlowFieldScheduler,
 )
 from synthpix.utils import load_configuration
 
@@ -84,47 +84,79 @@ def test_hdf5_shape(temp_file):
     ), f"Expected {expected_shape}, got {actual_shape}"
 
 
-@pytest.mark.parametrize("mock_pivlab_files", [2], indirect=True)
-def test_pivlab_scheduler_iteration(mock_pivlab_files):
-    files, dims = mock_pivlab_files
-    scheduler = PIVLabFlowFieldScheduler(files, randomize=False, loop=False)
+@pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
+def test_numpy_scheduler_iteration(mock_numpy_files):
+    files, dims = mock_numpy_files
+    scheduler = NumpyFlowFieldScheduler(files, randomize=False, loop=False)
 
     count = 0
-    for sample in scheduler:
-        assert isinstance(sample, dict)
-        assert "flow" in sample and "img_prev" in sample and "img_next" in sample
-        assert sample["flow"].shape == (dims["height"], dims["width"], 2)
-        assert sample["img_prev"].shape == (dims["height"], dims["width"], 3)
-        assert sample["img_next"].shape == (dims["height"], dims["width"], 3)
+    for flow in scheduler:
+        assert isinstance(flow, np.ndarray)
+        assert flow.shape == (dims["height"], dims["width"], 2)
         count += 1
 
     assert count == 2
 
 
-def test_pivlab_scheduler_shape(mock_pivlab_files):
-    files, dims = mock_pivlab_files
-    scheduler = PIVLabFlowFieldScheduler(files)
+def test_numpy_scheduler_shape(mock_numpy_files):
+    files, dims = mock_numpy_files
+    scheduler = NumpyFlowFieldScheduler(files)
     shape = scheduler.get_flow_fields_shape()
     assert shape == (dims["height"], dims["width"], 2)
 
 
-def test_pivlab_scheduler_init_flags(mock_pivlab_files):
-    files, _ = mock_pivlab_files
-    scheduler = PIVLabFlowFieldScheduler(files, randomize=True, loop=True)
+@pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
+def test_numpy_scheduler_init_flags(mock_numpy_files):
+    files, _ = mock_numpy_files
+    scheduler = NumpyFlowFieldScheduler(files, randomize=True, loop=True)
 
     assert scheduler.randomize is True
     assert scheduler.loop is True
     assert scheduler.epoch == 0
     assert scheduler.index == 0
-    assert scheduler._slice_idx == 0
 
 
-def test_pivlab_scheduler_invalid_ext(tmp_path):
+def test_numpy_scheduler_invalid_ext(tmp_path):
     bad_file = tmp_path / "invalid.txt"
     bad_file.write_text("invalid content")
 
-    with pytest.raises(ValueError, match="All files must be either '.npy'"):
-        PIVLabFlowFieldScheduler([str(bad_file)])
+    with pytest.raises(
+        ValueError, match="All files must be numpy files " "with '.npy' extension"
+    ):
+        NumpyFlowFieldScheduler([str(bad_file)])
+
+
+@pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
+def test_numpy_scheduler_get_batch(mock_numpy_files):
+    files, dims = mock_numpy_files
+    scheduler = NumpyFlowFieldScheduler(files)
+
+    batch_size = len(files)
+    batch = scheduler.get_batch(batch_size)
+    assert isinstance(batch, np.ndarray)
+    assert batch.shape == (batch_size, dims["height"], dims["width"], 2)
+
+
+@pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
+def test_numpy_scheduler_with_images(mock_numpy_files):
+    files, dims = mock_numpy_files
+    scheduler = NumpyFlowFieldScheduler(files, include_images=True)
+
+    # when including images, iteration returns dicts with flow and images
+    for output in scheduler:
+        assert isinstance(output, dict)
+        assert set(output.keys()) == {"flow", "img_prev", "img_next"}
+
+        flow = output["flow"]
+        img_prev = output["img_prev"]
+        img_next = output["img_next"]
+
+        assert isinstance(flow, np.ndarray)
+        assert flow.shape == (dims["height"], dims["width"], 2)
+        assert isinstance(img_prev, np.ndarray)
+        assert img_prev.shape == (dims["height"], dims["width"], 3)
+        assert isinstance(img_next, np.ndarray)
+        assert img_next.shape == (dims["height"], dims["width"], 3)
 
 
 # ============================
