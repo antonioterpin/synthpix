@@ -45,7 +45,11 @@ def main(config_path, output_dir, num_images_to_display):
 
         for j in range(min(num_images_to_display, batch[0].shape[0])):
             visualize_and_save(
-                f"batch_{i}_sample_{j}", batch[0][j], batch[1][j], batch[2], output_dir
+                f"batch_{i}_sample_{j}",
+                batch[0][j],
+                batch[1][j],
+                batch[2][j],
+                output_dir,
             )
 
         if num_images_to_display > 0:
