@@ -276,7 +276,7 @@ def generate_images_from_flow(
                 final_positions[:, 0] / alpha1,
                 final_positions[:, 1] / alpha2,
             ]
-        )
+        ).T
 
         if DEBUG_JIT:
             input_check_img_gen_from_data(
