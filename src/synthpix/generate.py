@@ -320,20 +320,25 @@ def img_gen_from_data(
     x = jnp.arange(-patch_radius, patch_radius + 1)
     Y, X = jnp.meshgrid(y, x, indexing="ij")
 
-    # Round positions to nearest integers for indexing
-    int_pos = jnp.round(
-        jnp.reshape(particle_positions, (-1, particle_positions.shape[-1]))
-    ).astype(int)
+    # Flatten positions
+    float_pos = jnp.reshape(particle_positions, (-1, 2))
 
     def single_particle_scatter(pos, diameter_x, diameter_y, rho, amp):
         y0, x0 = pos[0], pos[1]
 
         # Clip to image bounds
-        y0 = jnp.clip(y0, patch_radius, H - patch_radius - 1)
-        x0 = jnp.clip(x0, patch_radius, W - patch_radius - 1)
+        y0 = jnp.clip(y0, patch_radius, H - patch_radius - 1e-6)
+        x0 = jnp.clip(x0, patch_radius, W - patch_radius - 1e-6)
 
         # Compute top-left corner of the patch
-        top_left = (y0 - patch_radius, x0 - patch_radius)
+        top_left = (
+            jnp.floor(y0 - patch_radius).astype(int),
+            jnp.floor(x0 - patch_radius).astype(int),
+        )
+
+        # fractional offset of the true center within that patch
+        frac_y = y0 - (top_left[0] + patch_radius)
+        frac_x = x0 - (top_left[1] + patch_radius)
 
         # Create indices for scatter_add
         yy_patch = jnp.arange(patch_size) + top_left[0]
@@ -346,13 +351,15 @@ def img_gen_from_data(
         # Flatten kernel and scatter
         sigma_x = diameter_x / 2.0
         sigma_y = diameter_y / 2.0
-        kernel = gaussian_2d_correlated(X, Y, 0, 0, sigma_x, sigma_y, rho, amp)
+        kernel = gaussian_2d_correlated(
+            X - frac_x, Y - frac_y, 0, 0, sigma_x, sigma_y, rho, amp
+        )
         updates = kernel.flatten()
         return coords, updates
 
     # Vectorized scatter prep
     coords_updates = jax.vmap(single_particle_scatter)(
-        int_pos, diameters_x, diameters_y, rho, intensities
+        float_pos, diameters_x, diameters_y, rho, intensities
     )
     all_coords = coords_updates[0].reshape(-1, 2)
     all_updates = coords_updates[1].reshape(-1)
