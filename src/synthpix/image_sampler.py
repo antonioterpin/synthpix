@@ -410,8 +410,8 @@ class SyntheticImageSampler:
 
         # Calculate the image offset in pixels
         self.img_offset = (
-            int(img_offset[0] * resolution - position_bounds_offset[0] * resolution),
-            int(img_offset[1] * resolution - position_bounds_offset[1] * resolution),
+            int((img_offset[0] - position_bounds_offset[0]) * resolution),
+            int((img_offset[1] - position_bounds_offset[1]) * resolution),
         )
 
         # Calculate the position bounds in pixels

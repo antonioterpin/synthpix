@@ -306,8 +306,7 @@ def flow_field_adapter(
         flow = jnp.pad(
             flow,
             pad_width=((pad_y, 0), (pad_x, 0), (0, 0)),
-            mode="constant",
-            constant_values=0.0,
+            mode="edge",
         )
 
         # Crop by position bounds
@@ -317,51 +316,23 @@ def flow_field_adapter(
         x_end = x_start + int(position_bounds[1] / resolution * res_x)
         flow_position_bounds = flow[y_start:y_end, x_start:x_end]
 
-        # Crop to image offset
-        y_img_start = int(img_offset[0] / resolution * res_y)
-        y_img_end = y_img_start + int(image_shape[0] / resolution * res_y)
-        x_img_start = int(img_offset[1] / resolution * res_x)
-        x_img_end = x_img_start + int(image_shape[1] / resolution * res_x)
-        flow_image_crop = flow_position_bounds[
-            y_img_start:y_img_end, x_img_start:x_img_end
+        # Downsample the flow field to position bounds
+        flow_resized = jax.image.resize(
+            flow_position_bounds,
+            shape=position_bounds,
+            method="linear",
+        )
+
+        # Crop flow_resized to the image offset and shape
+        flow_resized = flow_resized[
+            img_offset[0] : img_offset[0] + image_shape[0],
+            img_offset[1] : img_offset[1] + image_shape[1]
         ]
 
-        # Generate grid for interpolation
-        crop_h, crop_w, _ = flow_image_crop.shape
-        row_coords = jnp.linspace(0, crop_h - 1, new_h)
-        col_coords = jnp.linspace(0, crop_w - 1, new_w)
-        row_floor = jnp.floor(row_coords).astype(jnp.int32)
-        col_floor = jnp.floor(col_coords).astype(jnp.int32)
-        row_ceil = jnp.clip(row_floor + 1, 0, crop_h - 1)
-        col_ceil = jnp.clip(col_floor + 1, 0, crop_w - 1)
-        row_lerp = (row_coords - row_floor).reshape((new_h, 1))
-        col_lerp = (col_coords - col_floor).reshape((1, new_w))
-
-        # Interpolate x and y channels
-        flow_x = interp_channel(
-            flow_image_crop[..., 0],
-            row_floor,
-            row_ceil,
-            col_floor,
-            col_ceil,
-            row_lerp,
-            col_lerp,
-        )
-        flow_y = interp_channel(
-            flow_image_crop[..., 1],
-            row_floor,
-            row_ceil,
-            col_floor,
-            col_ceil,
-            row_lerp,
-            col_lerp,
-        )
-        flow_interp = jnp.stack([flow_x, flow_y], axis=-1)
-
         if output_units == "pixels":
-            flow_interp *= resolution * dt
+            flow_resized *= resolution * dt
 
-        return flow_interp, flow_position_bounds
+        return flow_resized, flow_position_bounds
 
     adapted_flows, flow_bounds = jax.vmap(process_single)(flow_fields)
 
