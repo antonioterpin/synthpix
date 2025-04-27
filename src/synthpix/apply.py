@@ -28,49 +28,52 @@ def apply_flow_to_image_forward(
         jnp.ndarray: A new 2D array of shape (H, W) with the particles displaced.
     """
     H, W = image.shape
-    # source coordinates
-    y_src, x_src = jnp.indices((H, W))
+    y_grid, x_grid = jnp.indices((H, W))
+   
     u = flow_field[..., 0]
     v = flow_field[..., 1]
-
-    # destination floating‐point coords
-    x_d = x_src + u * dt
-    y_d = y_src + v * dt
-
-    # clamp so splatting stays in bounds
-    x_d = jnp.clip(x_d, 0.0, W - 1.0)
-    y_d = jnp.clip(y_d, 0.0, H - 1.0)
-
-    # integer neighbors
-    x0 = jnp.floor(x_d).astype(jnp.int32)
-    x1 = jnp.clip(x0 + 1, 0, W - 1)
-    y0 = jnp.floor(y_d).astype(jnp.int32)
-    y1 = jnp.clip(y0 + 1, 0, H - 1)
-
-    # bilinear splat weights
-    w00 = (x1 - x_d) * (y1 - y_d)
-    w01 = (x1 - x_d) * (y_d - y0)
-    w10 = (x_d - x0) * (y1 - y_d)
-    w11 = (x_d - x0) * (y_d - y0)
-
-    # flatten everything so we can do one big scatter
-    def flatten(arr):
-        return arr.reshape(-1)
-
-    ys = jnp.concatenate([flatten(y0), flatten(y1), flatten(y0), flatten(y1)])
-    xs = jnp.concatenate([flatten(x0), flatten(x0), flatten(x1), flatten(x1)])
-    vals = jnp.concatenate([
-        flatten(w00 * image),
-        flatten(w01 * image),
-        flatten(w10 * image),
-        flatten(w11 * image),
-    ])
-
-    # accumulate into destination image
-    out = jnp.zeros_like(image)
-    out = out.at[(ys, xs)].add(vals)
-
-    return out
+   
+    # Forward mapping: (x_d, y_d) = (x + u * dt, y + v * dt)
+    x_d = x_grid + u * dt
+    y_d = y_grid + v * dt
+   
+    new_image = jnp.zeros_like(image)
+   
+    def deposit_pixel(new_image, x_src, y_src, val):
+        x0 = jnp.floor(x_src).astype(int)
+        y0 = jnp.floor(y_src).astype(int)
+       
+        wx = x_src - x0
+        wy = y_src - y0
+ 
+       
+        def in_bounds(x, y):
+            return (x >= 0) & (x < W) & (y >= 0) & (y < H)
+ 
+        for dx, dy, weight in [
+            (0, 0, (1 - wx) * (1 - wy)),
+            (1, 0, wx * (1 - wy)),
+            (0, 1, (1 - wx) * wy),
+            (1, 1, wx * wy),
+        ]:
+            xi = x0 + dx
+            yi = y0 + dy
+            cond = in_bounds(xi, yi)
+            new_image = jax.lax.cond(
+                cond,
+                lambda img: img.at[yi, xi].add(val * weight),
+                lambda img: img,
+                operand=new_image,
+            )
+        return new_image
+ 
+   
+    def body_fn(i, new_image):
+        y, x = divmod(i, W)
+        return deposit_pixel(new_image, x_d[y, x], y_d[y, x], image[y, x])
+ 
+    new_image = jax.lax.fori_loop(0, H * W, body_fn, new_image)
+    return new_image
 
 def apply_flow_to_image_backward(
     image: jnp.ndarray,
