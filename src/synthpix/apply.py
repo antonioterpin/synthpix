@@ -29,27 +29,26 @@ def apply_flow_to_image_forward(
     """
     H, W = image.shape
     y_grid, x_grid = jnp.indices((H, W))
-   
+
     u = flow_field[..., 0]
     v = flow_field[..., 1]
-   
+
     # Forward mapping: (x_d, y_d) = (x + u * dt, y + v * dt)
     x_d = x_grid + u * dt
     y_d = y_grid + v * dt
-   
+
     new_image = jnp.zeros_like(image)
-   
+
     def deposit_pixel(new_image, x_src, y_src, val):
         x0 = jnp.floor(x_src).astype(int)
         y0 = jnp.floor(y_src).astype(int)
-       
+
         wx = x_src - x0
         wy = y_src - y0
- 
-       
+
         def in_bounds(x, y):
             return (x >= 0) & (x < W) & (y >= 0) & (y < H)
- 
+
         for dx, dy, weight in [
             (0, 0, (1 - wx) * (1 - wy)),
             (1, 0, wx * (1 - wy)),
@@ -66,14 +65,14 @@ def apply_flow_to_image_forward(
                 operand=new_image,
             )
         return new_image
- 
-   
+
     def body_fn(i, new_image):
         y, x = divmod(i, W)
         return deposit_pixel(new_image, x_d[y, x], y_d[y, x], image[y, x])
- 
+
     new_image = jax.lax.fori_loop(0, H * W, body_fn, new_image)
     return new_image
+
 
 def apply_flow_to_image_backward(
     image: jnp.ndarray,
