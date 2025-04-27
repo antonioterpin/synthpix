@@ -365,8 +365,8 @@ class SyntheticImageSampler:
             or position_bounds[1] + position_bounds_offset[1] > flow_field_size[1]
         ):
             raise ValueError(
-                f"The size of the flow field is too small."
-                f"it must be at least "
+                f"The size of the flow field is too small. "
+                f"It must be at least "
                 f"({position_bounds[0] + position_bounds_offset[0]},"
                 f"{position_bounds[1] + position_bounds_offset[1]})."
             )
