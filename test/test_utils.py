@@ -560,13 +560,16 @@ def test_flow_field_adapter_shape(
 )
 def test_flow_field_adapter(flow_field, new_flow_field_shape, expected):
     """Test that flow_field_adapter returns the correct central vector."""
-    num_flows = 4
+    num_flows = 1
     flow_fields = jnp.tile(flow_field, (num_flows, 1, 1, 1))
 
     # Call the adapter function
     new_flow_field = flow_field_adapter(
         flow_fields=flow_fields,
         new_flow_field_shape=new_flow_field_shape,
+        image_shape=(3, 3),
+        res_x=2 / 3,
+        res_y=2 / 3,
     )
 
     # Check the flow field
