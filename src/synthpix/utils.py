@@ -317,25 +317,27 @@ def flow_field_adapter(
         x_end = x_start + int(position_bounds[1] / resolution * res_x)
         flow_position_bounds = flow[y_start:y_end, x_start:x_end, :]
 
-        # Resize flow position bounds
+        # Resize position bounds to new shape
+        alpha1 = new_h / image_shape[0]
+        alpha2 = new_w / image_shape[1]
+        position_bounds_resized = (
+            position_bounds[0] * alpha1,
+            position_bounds[1] * alpha2,
+        )
         flow_position_bounds_resized = jax.image.resize(
             flow_position_bounds,
-            shape=position_bounds + (2,),
+            shape=(int(position_bounds_resized[0]), int(position_bounds_resized[1]), 2),
             method="linear",
         )
 
         # Crop to image offset
-        flow_image_crop = flow_position_bounds_resized[
-            img_offset[0] : img_offset[0] + image_shape[0],
-            img_offset[1] : img_offset[1] + image_shape[1],
+        y_img_start = int(img_offset[0] * alpha1)
+        y_img_end = y_img_start + new_h
+        x_img_start = int(img_offset[1] * alpha2)
+        x_img_end = x_img_start + new_w
+        flow_resized = flow_position_bounds_resized[
+            y_img_start:y_img_end, x_img_start:x_img_end, :
         ]
-
-        # Resize to new shape
-        flow_resized = jax.image.resize(
-            flow_image_crop,
-            shape=(new_h, new_w, 2),
-            method="linear",
-        )
 
         if output_units == "pixels":
             flow_resized = flow_resized.at[..., 0].multiply(resolution * dt)
