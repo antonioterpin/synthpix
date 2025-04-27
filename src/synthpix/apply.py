@@ -264,8 +264,8 @@ def apply_flow_to_particles(
             # Compute the velocity (u, v) for the given particle
             # with bilinear interpolation.
             # Note: velocity u corresponds to the x-direction and v to y.
-            u = bilinear_interpolate(flow_field[..., 0], y, x) * flow_field_res_x
-            v = bilinear_interpolate(flow_field[..., 1], y, x) * flow_field_res_y
+            u = bilinear_interpolate(flow_field[..., 0], x, y) * flow_field_res_x
+            v = bilinear_interpolate(flow_field[..., 1], x, y) * flow_field_res_y
 
             # Return the new position: (y + v * dt, x + u * dt)
             return jnp.array([y + v * dt, x + u * dt])
