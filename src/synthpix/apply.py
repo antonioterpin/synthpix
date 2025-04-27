@@ -8,7 +8,73 @@ import jax.numpy as jnp
 from synthpix.utils import bilinear_interpolate, trilinear_interpolate
 
 
-def apply_flow_to_image(
+def apply_flow_to_image_forward(
+    image: jnp.ndarray,
+    flow_field: jnp.ndarray,
+    dt: float,
+) -> jnp.ndarray:
+    """Warp a 2D image of particles according to a given flow field.
+
+    For each pixel (y, x) in the output image, we compute a velocity (u, v)
+    from `flow_field[t, y, x]`, then sample from the input image at
+    (y_s, x_s) = (y - v * dt, x - u * dt) via bilinear interpolation.
+
+    Args:
+        image (jnp.ndarray): 2D array (H, W) representing the input particle image.
+        flow_field (jnp.ndarray): 3D array (H, W, 2) representing the velocity field.
+        dt (float): Time step for the backward mapping.
+
+    Returns:
+        jnp.ndarray: A new 2D array of shape (H, W) with the particles displaced.
+    """
+    H, W = image.shape
+    y_grid, x_grid = jnp.indices((H, W))
+
+    u = flow_field[..., 0]
+    v = flow_field[..., 1]
+
+    # Forward mapping: (x_d, y_d) = (x + u * dt, y + v * dt)
+    x_d = x_grid + u * dt
+    y_d = y_grid + v * dt
+
+    new_image = jnp.zeros_like(image)
+
+    def deposit_pixel(new_image, x_src, y_src, val):
+        x0 = jnp.floor(x_src).astype(int)
+        y0 = jnp.floor(y_src).astype(int)
+
+        wx = x_src - x0
+        wy = y_src - y0
+
+        def in_bounds(x, y):
+            return (x >= 0) & (x < W) & (y >= 0) & (y < H)
+
+        for dx, dy, weight in [
+            (0, 0, (1 - wx) * (1 - wy)),
+            (1, 0, wx * (1 - wy)),
+            (0, 1, (1 - wx) * wy),
+            (1, 1, wx * wy),
+        ]:
+            xi = x0 + dx
+            yi = y0 + dy
+            cond = in_bounds(xi, yi)
+            new_image = jax.lax.cond(
+                cond,
+                lambda img: img.at[yi, xi].add(val * weight),
+                lambda img: img,
+                operand=new_image,
+            )
+        return new_image
+
+    def body_fn(i, new_image):
+        y, x = divmod(i, W)
+        return deposit_pixel(new_image, x_d[y, x], y_d[y, x], image[y, x])
+
+    new_image = jax.lax.fori_loop(0, H * W, body_fn, new_image)
+    return new_image
+
+
+def apply_flow_to_image_backward(
     image: jnp.ndarray,
     flow_field: jnp.ndarray,
     dt: float,
@@ -49,6 +115,7 @@ def apply_flow_to_image_callable(
     flow_field: Callable[[float, float, float], Tuple[float, float]],
     t: float = 0.0,
     dt: float = 1.0,
+    forward: bool = False,
 ) -> jnp.ndarray:
     """Warp a 2D image of particles according to a given flow field.
 
@@ -81,7 +148,9 @@ def apply_flow_to_image_callable(
     )
     # shape (H, W, 2)
     uv = flow_field_vmap(y_grid, x_grid)
-    return apply_flow_to_image(image, uv, dt)
+    if forward:
+        return apply_flow_to_image_forward(image, uv, dt)
+    return apply_flow_to_image_backward(image, uv, dt)
 
 
 def input_check_apply_flow(
@@ -167,7 +236,7 @@ def apply_flow_to_particles(
             Array of shape (N, 2) or (N, 3) containing particle coordinates in grid_steps.
         flow_field: jnp.ndarray
             Array of shape (H, W, 2) or (H, W, 3) containing the velocity
-            field at each grid_step.
+            field at each grid_step in length measure unit / s.
         dt: float
             Time step for the simulation, used to scale the velocity
             to compute the displacement. Defaults to 1.0.
@@ -195,8 +264,8 @@ def apply_flow_to_particles(
             # Compute the velocity (u, v) for the given particle
             # with bilinear interpolation.
             # Note: velocity u corresponds to the x-direction and v to y.
-            u = bilinear_interpolate(flow_field[..., 0], y, x) * flow_field_res_x
-            v = bilinear_interpolate(flow_field[..., 1], y, x) * flow_field_res_y
+            u = bilinear_interpolate(flow_field[..., 0], x, y) * flow_field_res_x
+            v = bilinear_interpolate(flow_field[..., 1], x, y) * flow_field_res_y
 
             # Return the new position: (y + v * dt, x + u * dt)
             return jnp.array([y + v * dt, x + u * dt])

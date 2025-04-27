@@ -306,8 +306,7 @@ def flow_field_adapter(
         flow = jnp.pad(
             flow,
             pad_width=((pad_y, 0), (pad_x, 0), (0, 0)),
-            mode="constant",
-            constant_values=0.0,
+            mode="edge",
         )
 
         # Crop by position bounds
@@ -315,25 +314,33 @@ def flow_field_adapter(
         y_end = y_start + int(position_bounds[0] / resolution * res_y)
         x_start = int(position_bounds_offset[1] * res_x)
         x_end = x_start + int(position_bounds[1] / resolution * res_x)
-        flow_position_bounds = flow[y_start:y_end, x_start:x_end]
+        flow_position_bounds = flow[y_start:y_end, x_start:x_end, :]
 
-        # Crop to image offset
-        y_img_start = int(img_offset[0] / resolution * res_y)
-        y_img_end = y_img_start + int(image_shape[0] / resolution * res_y)
-        x_img_start = int(img_offset[1] / resolution * res_x)
-        x_img_end = x_img_start + int(image_shape[1] / resolution * res_x)
-        flow_image_crop = flow_position_bounds[
-            y_img_start:y_img_end, x_img_start:x_img_end
-        ]
-
-        flow_resized = jax.image.resize(
-            flow_image_crop,
-            shape=(new_h, new_w, 2),
+        # Resize position bounds to new shape
+        alpha1 = new_h / image_shape[0]
+        alpha2 = new_w / image_shape[1]
+        position_bounds_resized = (
+            position_bounds[0] * alpha1,
+            position_bounds[1] * alpha2,
+        )
+        flow_position_bounds_resized = jax.image.resize(
+            flow_position_bounds,
+            shape=(int(position_bounds_resized[0]), int(position_bounds_resized[1]), 2),
             method="linear",
         )
 
+        # Crop to image offset
+        y_img_start = int(img_offset[0] * alpha1)
+        y_img_end = y_img_start + new_h
+        x_img_start = int(img_offset[1] * alpha2)
+        x_img_end = x_img_start + new_w
+        flow_resized = flow_position_bounds_resized[
+            y_img_start:y_img_end, x_img_start:x_img_end, :
+        ]
+
         if output_units == "pixels":
-            flow_resized *= resolution * dt
+            flow_resized = flow_resized.at[..., 0].multiply(resolution * dt)
+            flow_resized = flow_resized.at[..., 1].multiply(resolution * dt)
 
         return flow_resized, flow_position_bounds
 
@@ -343,7 +350,7 @@ def flow_field_adapter(
     repeats = (batch_size + n - 1) // n
     tiled = jnp.tile(adapted_flows, (repeats, 1, 1, 1))
 
-    return tiled[:batch_size], flow_bounds
+    return tiled[:batch_size, ...], flow_bounds
 
 
 def input_check_flow_field_adapter(
