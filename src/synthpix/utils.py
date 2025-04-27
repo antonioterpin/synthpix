@@ -323,7 +323,7 @@ def flow_field_adapter(
         x_img_start = int(img_offset[1] / resolution * res_x)
         x_img_end = x_img_start + int(image_shape[1] / resolution * res_x)
         flow_image_crop = flow_position_bounds[
-            y_img_start:y_img_end, x_img_start:x_img_end
+            y_img_start:y_img_end, x_img_start:x_img_end, :
         ]
 
         flow_resized = jax.image.resize(
