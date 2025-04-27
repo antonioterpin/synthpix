@@ -89,10 +89,14 @@ def generate_images_from_flow(
     key = jnp.reshape(key, (-1, key.shape[-1]))[0]
 
     # scale factors for particle positions
+    # position bounds are in pixels, flow field is in grid steps
+    # doing so, our position bounds cover the whole flow field
     alpha1 = flow_field.shape[1] / position_bounds[0]
     alpha2 = flow_field.shape[2] / position_bounds[1]
 
     # Calculate the number of particles based on the max density
+    # Density is given in particles per pixel, so we use
+    # the number of pixels in position bounds
     num_particles = int(
         position_bounds[0] * position_bounds[1] * seeding_density_range[1]
     )
