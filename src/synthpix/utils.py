@@ -333,7 +333,8 @@ def flow_field_adapter(
         )
 
         if output_units == "pixels":
-            flow_resized *= resolution * dt
+            flow_resized[..., 0] *= res_x * resolution * dt
+            flow_resized[..., 1] *= res_y * resolution * dt
 
         return flow_resized, flow_position_bounds
 
