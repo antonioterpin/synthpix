@@ -8,7 +8,71 @@ import jax.numpy as jnp
 from synthpix.utils import bilinear_interpolate, trilinear_interpolate
 
 
-def apply_flow_to_image(
+def apply_flow_to_image_forward(
+    image: jnp.ndarray,
+    flow_field: jnp.ndarray,
+    dt: float,
+) -> jnp.ndarray:
+    """Warp a 2D image of particles according to a given flow field.
+
+    For each pixel (y, x) in the output image, we compute a velocity (u, v)
+    from `flow_field[t, y, x]`, then sample from the input image at
+    (y_s, x_s) = (y - v * dt, x - u * dt) via bilinear interpolation.
+
+    Args:
+        image (jnp.ndarray): 2D array (H, W) representing the input particle image.
+        flow_field (jnp.ndarray): 3D array (H, W, 2) representing the velocity field.
+        dt (float): Time step for the backward mapping.
+
+    Returns:
+        jnp.ndarray: A new 2D array of shape (H, W) with the particles displaced.
+    """
+    H, W = image.shape
+    # source coordinates
+    y_src, x_src = jnp.indices((H, W))
+    u = flow_field[..., 0]
+    v = flow_field[..., 1]
+
+    # destination floating‐point coords
+    x_d = x_src + u * dt
+    y_d = y_src + v * dt
+
+    # clamp so splatting stays in bounds
+    x_d = jnp.clip(x_d, 0.0, W - 1.0)
+    y_d = jnp.clip(y_d, 0.0, H - 1.0)
+
+    # integer neighbors
+    x0 = jnp.floor(x_d).astype(jnp.int32)
+    x1 = jnp.clip(x0 + 1, 0, W - 1)
+    y0 = jnp.floor(y_d).astype(jnp.int32)
+    y1 = jnp.clip(y0 + 1, 0, H - 1)
+
+    # bilinear splat weights
+    w00 = (x1 - x_d) * (y1 - y_d)
+    w01 = (x1 - x_d) * (y_d - y0)
+    w10 = (x_d - x0) * (y1 - y_d)
+    w11 = (x_d - x0) * (y_d - y0)
+
+    # flatten everything so we can do one big scatter
+    def flatten(arr):
+        return arr.reshape(-1)
+
+    ys = jnp.concatenate([flatten(y0), flatten(y1), flatten(y0), flatten(y1)])
+    xs = jnp.concatenate([flatten(x0), flatten(x0), flatten(x1), flatten(x1)])
+    vals = jnp.concatenate([
+        flatten(w00 * image),
+        flatten(w01 * image),
+        flatten(w10 * image),
+        flatten(w11 * image),
+    ])
+
+    # accumulate into destination image
+    out = jnp.zeros_like(image)
+    out = out.at[(ys, xs)].add(vals)
+
+    return out
+
+def apply_flow_to_image_backward(
     image: jnp.ndarray,
     flow_field: jnp.ndarray,
     dt: float,
@@ -49,6 +113,7 @@ def apply_flow_to_image_callable(
     flow_field: Callable[[float, float, float], Tuple[float, float]],
     t: float = 0.0,
     dt: float = 1.0,
+    forward: bool = False,
 ) -> jnp.ndarray:
     """Warp a 2D image of particles according to a given flow field.
 
@@ -81,7 +146,9 @@ def apply_flow_to_image_callable(
     )
     # shape (H, W, 2)
     uv = flow_field_vmap(y_grid, x_grid)
-    return apply_flow_to_image(image, uv, dt)
+    if forward:
+        return apply_flow_to_image_forward(image, uv, dt)
+    return apply_flow_to_image_backward(image, uv, dt)
 
 
 def input_check_apply_flow(
@@ -167,7 +234,7 @@ def apply_flow_to_particles(
             Array of shape (N, 2) or (N, 3) containing particle coordinates in grid_steps.
         flow_field: jnp.ndarray
             Array of shape (H, W, 2) or (H, W, 3) containing the velocity
-            field at each grid_step.
+            field at each grid_step in length measure unit / s.
         dt: float
             Time step for the simulation, used to scale the velocity
             to compute the displacement. Defaults to 1.0.
