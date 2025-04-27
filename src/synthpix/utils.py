@@ -315,7 +315,7 @@ def flow_field_adapter(
         y_end = y_start + int(position_bounds[0] / resolution * res_y)
         x_start = int(position_bounds_offset[1] * res_x)
         x_end = x_start + int(position_bounds[1] / resolution * res_x)
-        flow_position_bounds = flow[y_start:y_end, x_start:x_end]
+        flow_position_bounds = flow[y_start:y_end, x_start:x_end, :]
 
         # Crop to image offset
         y_img_start = int(img_offset[0] / resolution * res_y)
