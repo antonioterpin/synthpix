@@ -306,8 +306,7 @@ def flow_field_adapter(
         flow = jnp.pad(
             flow,
             pad_width=((pad_y, 0), (pad_x, 0), (0, 0)),
-            mode="constant",
-            constant_values=0.0,
+            mode="edge",
         )
 
         # Crop by position bounds
