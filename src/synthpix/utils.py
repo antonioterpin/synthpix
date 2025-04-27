@@ -309,34 +309,70 @@ def flow_field_adapter(
             mode="edge",
         )
 
-        # Crop by position bounds
-        y_start = int(position_bounds_offset[0] * res_y)
-        y_end = y_start + int(position_bounds[0] / resolution * res_y)
-        x_start = int(position_bounds_offset[1] * res_x)
-        x_end = x_start + int(position_bounds[1] / resolution * res_x)
-        flow_position_bounds = flow[y_start:y_end, x_start:x_end, :]
-
-        # Resize position bounds to new shape
-        alpha1 = new_h / image_shape[0]
-        alpha2 = new_w / image_shape[1]
-        position_bounds_resized = (
-            position_bounds[0] * alpha1,
-            position_bounds[1] * alpha2,
+        # flow_resized
+        # Create the grid for interpolation
+        flow_resized_start = (
+            position_bounds_offset[0] * res_y + img_offset[0] / resolution * res_y,
+            position_bounds_offset[1] * res_x + img_offset[1] / resolution * res_x,
         )
-        flow_position_bounds_resized = jax.image.resize(
-            flow_position_bounds,
-            shape=(int(position_bounds_resized[0]), int(position_bounds_resized[1]), 2),
-            method="linear",
+        flow_resized_end = (
+            flow_resized_start[0] + image_shape[0] / resolution * res_y - 1,
+            flow_resized_start[1] + image_shape[1] / resolution * res_x - 1,
         )
 
-        # Crop to image offset
-        y_img_start = int(img_offset[0] * alpha1)
-        y_img_end = y_img_start + new_h
-        x_img_start = int(img_offset[1] * alpha2)
-        x_img_end = x_img_start + new_w
-        flow_resized = flow_position_bounds_resized[
-            y_img_start:y_img_end, x_img_start:x_img_end, :
-        ]
+        flow_resized_vec_y = jnp.linspace(
+            flow_resized_start[0], flow_resized_end[0], new_h
+        )
+        flow_resized_vec_x = jnp.linspace(
+            flow_resized_start[1], flow_resized_end[1], new_w
+        )
+
+        flow_resized_grid_x, flow_resized_grid_y = jnp.meshgrid(
+            flow_resized_vec_x, flow_resized_vec_y
+        )
+
+        flow_resized_x = bilinear_interpolate(
+            flow[..., 0], flow_resized_grid_x, flow_resized_grid_y
+        )
+
+        flow_resized_y = bilinear_interpolate(
+            flow[..., 1], flow_resized_grid_x, flow_resized_grid_y
+        )
+
+        flow_resized = jnp.stack((flow_resized_x, flow_resized_y), axis=-1)
+
+        # flow_position_bounds
+        # Create the grid for interpolation
+        flow_position_bounds_start = (
+            position_bounds_offset[0] * res_y,
+            position_bounds_offset[1] * res_x,
+        )
+        flow_position_bounds_end = (
+            flow_position_bounds_start[0] + position_bounds[0] / resolution * res_y - 1,
+            flow_position_bounds_start[1] + position_bounds[1] / resolution * res_x - 1,
+        )
+        flow_position_bounds_vec_y = jnp.linspace(
+            flow_position_bounds_start[0],
+            flow_position_bounds_end[0],
+            int(position_bounds[0] / resolution * res_y),
+        )
+        flow_position_bounds_vec_x = jnp.linspace(
+            flow_position_bounds_start[1],
+            flow_position_bounds_end[1],
+            int(position_bounds[1] / resolution * res_x),
+        )
+        flow_position_bounds_grid_x, flow_position_bounds_grid_y = jnp.meshgrid(
+            flow_position_bounds_vec_x, flow_position_bounds_vec_y
+        )
+        flow_position_bounds_x = bilinear_interpolate(
+            flow[..., 0], flow_position_bounds_grid_x, flow_position_bounds_grid_y
+        )
+        flow_position_bounds_y = bilinear_interpolate(
+            flow[..., 1], flow_position_bounds_grid_x, flow_position_bounds_grid_y
+        )
+        flow_position_bounds = jnp.stack(
+            (flow_position_bounds_x, flow_position_bounds_y), axis=-1
+        )
 
         if output_units == "pixels":
             flow_resized = flow_resized.at[..., 0].multiply(resolution * dt)
