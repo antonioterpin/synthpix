@@ -280,9 +280,9 @@ def apply_flow_to_particles(
             # Compute the velocity (u, v, w) for the given particle
             # with trilinear interpolation.
             # Note: velocity u corresponds to the x-direction, v to y, and w to z.
-            u = trilinear_interpolate(flow_field[..., 0], z, y, x) * flow_field_res_x
-            v = trilinear_interpolate(flow_field[..., 1], z, y, x) * flow_field_res_y
-            w = trilinear_interpolate(flow_field[..., 2], z, y, x) * flow_field_res_z
+            u = trilinear_interpolate(flow_field[..., 0], x, y, z) * flow_field_res_x
+            v = trilinear_interpolate(flow_field[..., 1], x, y, z) * flow_field_res_y
+            w = trilinear_interpolate(flow_field[..., 2], x, y, z) * flow_field_res_z
 
             # Return the new position: (z + w * dt, y + v * dt, x + u * dt)
             return jnp.array([z + w * dt, y + v * dt, x + u * dt])
