@@ -142,3 +142,44 @@ def mock_numpy_files(tmp_path, generate_numpy_file, numpy_test_dims, request):
 
     file_paths = [tmp_path / f"flow_{t}.npy" for t in range(1, num_files + 1)]
     return [str(p) for p in file_paths], numpy_test_dims
+
+
+@pytest.fixture(scope="module")
+def mat_test_dims():
+    """Fixture to provide default dimensions for .mat files."""
+    return {"height": 64, "width": 64}
+
+
+@pytest.fixture(scope="module")
+def generate_mat_file():
+    """Fixture to generate a .mat file with I0, I1, and V using HDF5 format."""
+
+    def _generate(folder, t, dims):
+        h, w = dims["height"], dims["width"]
+
+        # 2D grayscale images
+        I0 = np.random.randint(0, 255, size=(h, w), dtype=np.uint8)
+        I1 = np.random.randint(0, 255, size=(h, w), dtype=np.uint8)
+
+        # 3D flow field with shape (H, W, 2)
+        V = np.random.rand(h, w, 2).astype(np.float32)
+
+        mat_path = os.path.join(folder, f"flow_{t}.mat")
+        with h5py.File(mat_path, "w") as f:
+            f.create_dataset("I0", data=I0)
+            f.create_dataset("I1", data=I1)
+            f.create_dataset("V", data=V)
+
+    return _generate
+
+
+@pytest.fixture
+def mock_mat_files(tmp_path, generate_mat_file, mat_test_dims, request):
+    """Fixture to create multiple .mat files with I0, I1, and V in HDF5 format."""
+    num_files = request.param if hasattr(request, "param") else 2
+
+    for t in range(1, num_files + 1):
+        generate_mat_file(tmp_path, t, mat_test_dims)
+
+    file_paths = [tmp_path / f"flow_{t}.mat" for t in range(1, num_files + 1)]
+    return [str(p) for p in file_paths], mat_test_dims

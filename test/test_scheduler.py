@@ -8,6 +8,7 @@ import pytest
 from synthpix.scheduler import (
     BaseFlowFieldScheduler,
     HDF5FlowFieldScheduler,
+    MATFlowFieldScheduler,
     NumpyFlowFieldScheduler,
     PrefetchingFlowFieldScheduler,
 )
@@ -158,6 +159,96 @@ def test_numpy_scheduler_with_images(mock_numpy_files):
         assert img_prev.shape == (dims["height"], dims["width"], 3)
         assert isinstance(img_next, np.ndarray)
         assert img_next.shape == (dims["height"], dims["width"], 3)
+
+
+@pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
+def test_mat_scheduler_iteration(mock_mat_files):
+    files, dims = mock_mat_files
+    scheduler = MATFlowFieldScheduler(files, randomize=False, loop=False)
+
+    count = 0
+    for flow in scheduler:
+        assert isinstance(flow, np.ndarray)
+        assert flow.shape == (dims["height"], dims["width"], 2)
+        count += 1
+
+    assert count == 2
+
+
+@pytest.mark.parametrize("mock_mat_files", [1], indirect=True)
+def test_mat_scheduler_shape(mock_mat_files):
+    files, dims = mock_mat_files
+    scheduler = MATFlowFieldScheduler(files)
+    shape = scheduler.get_flow_fields_shape()
+    assert shape == (dims["height"], dims["width"], 2)
+
+
+@pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
+def test_mat_scheduler_init_flags(mock_mat_files):
+    files, _ = mock_mat_files
+    scheduler = MATFlowFieldScheduler(files, randomize=True, loop=True)
+
+    assert scheduler.randomize is True
+    assert scheduler.loop is True
+    assert scheduler.epoch == 0
+    assert scheduler.index == 0
+
+
+def test_mat_scheduler_invalid_ext(tmp_path):
+    bad_file = tmp_path / "invalid.txt"
+    bad_file.write_text("invalid content")
+
+    with pytest.raises(
+        ValueError, match="All files must be MATLAB .mat files with HDF5 format"
+    ):
+        MATFlowFieldScheduler([str(bad_file)])
+
+
+def test_mat_scheduler_file_dir(tmp_path):
+    """Test that the scheduler looks for files in the correct directory.
+
+    This test creates a temporary directory and multiple mock .mat files in it,
+    then checks if the scheduler correctly identifies the files.
+    """
+    mat_file = tmp_path / "test.mat"
+    for i in range(2):
+        with h5py.File(mat_file, "w") as f:
+            f.create_dataset(f"flow_{i}", data=np.random.rand(64, 64, 2))
+
+    scheduler = MATFlowFieldScheduler([str(mat_file)])
+    assert scheduler.file_list == [str(mat_file)]
+
+
+@pytest.mark.parametrize("mock_mat_files", [1], indirect=True)
+def test_mat_scheduler_get_batch(mock_mat_files):
+    files, dims = mock_mat_files
+    scheduler = MATFlowFieldScheduler(files)
+
+    batch_size = len(files)
+    batch = scheduler.get_batch(batch_size)
+    assert isinstance(batch, np.ndarray)
+    assert batch.shape == (batch_size, dims["height"], dims["width"], 2)
+
+
+@pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
+def test_mat_scheduler_with_images(mock_mat_files):
+    files, dims = mock_mat_files
+    scheduler = MATFlowFieldScheduler(files, include_images=True)
+
+    for output in scheduler:
+        assert isinstance(output, dict)
+        assert set(output.keys()) == {"flow", "img_prev", "img_next"}
+
+        flow = output["flow"]
+        img_prev = output["img_prev"]
+        img_next = output["img_next"]
+
+        assert isinstance(flow, np.ndarray)
+        assert flow.shape == (dims["height"], dims["width"], 2)
+        assert isinstance(img_prev, np.ndarray)
+        assert img_prev.shape == (dims["height"], dims["width"])
+        assert isinstance(img_next, np.ndarray)
+        assert img_next.shape == (dims["height"], dims["width"])
 
 
 # ============================

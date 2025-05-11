@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 
 import h5py
 import numpy as np
+import scipy.io
 from PIL import Image
 
 from synthpix.utils import logger
@@ -37,7 +38,7 @@ class BaseFlowFieldScheduler(ABC):
         # Check if file_list is a directory or a list of files
         if isinstance(file_list, str) and os.path.isdir(file_list):
             pattern = os.path.join(file_list, self._file_pattern)
-            file_list = sorted(glob.glob(pattern))
+            file_list = sorted(glob.glob(pattern, recursive=True))
         elif isinstance(file_list, str) and os.path.isfile(file_list):
             file_list = [file_list]
 
@@ -217,7 +218,7 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
     and extracts the x and z components (0 and 2) from each y-slice.
     """
 
-    _file_pattern = "*.h5"
+    _file_pattern = "**/*.h5"
 
     def __init__(self, file_list, randomize=False, loop=False):
         """Initializes the HDF5 scheduler."""
@@ -347,6 +348,159 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
 
     def __next__(self):
         """Iterate over .npy files, returning flow or flow+images."""
+        while self.index < len(self.file_list) or self.loop:
+            if self.index >= len(self.file_list):
+                self.reset(reset_epoch=False)
+                logger.info(f"Starting epoch {self.epoch}")
+
+            path = self.file_list[self.index]
+            try:
+                # load and cache
+                self._cached_file = path
+                self._cached_data = self.load_file(path)
+
+                # extract and return
+                sample = self.get_next_slice()
+                self.index += 1
+                return sample
+
+            except Exception as e:
+                logger.error(f"Skipping {path}: {e}")
+                self.index += 1
+                continue
+
+        raise StopIteration
+
+
+class MATFlowFieldScheduler(BaseFlowFieldScheduler):
+    """Scheduler for loading flow fields from .mat files.
+
+    Assumes each file contains a dataset with three keys:
+    I0: previous image, I1: current image, V: associated flow field.
+
+    The scheduler can extract the flow field data and return it as a numpy array,
+    but can also return the images if requested.
+
+    Notice that the flow field data is expected to be already in pixels,
+    and the images are in the same resolution as the flow fields.
+    The size of the flow fields in the dataset varies is either 256x256, 512x512,
+    or 1024x1024, and the images are in the same resolution as the flow fields.
+    The scheduler will downscale all the data to 256x256.
+    """
+
+    _file_pattern = "**/*.mat"
+
+    def __init__(
+        self, file_list, randomize=False, loop=False, include_images: bool = False
+    ):
+        """Initializes the MAT scheduler."""
+        self.include_images = include_images
+        super().__init__(file_list, randomize, loop)
+        # ensure all supplied files are .mat
+        if not all(file_path.endswith(".mat") for file_path in self.file_list):
+            raise ValueError("All files must be MATLAB .mat files with HDF5 format")
+
+    def load_file(self, file_path: str):
+        """Load any MATLAB .mat file (v4, v5/6/7, or v7.3) and return its data dict.
+
+        Parameters
+        ----------
+        file_path : str
+            Path to the .mat file.
+
+        Returns
+        -------
+        dict
+            Dictionary containing at least 'V' (flow field).  When
+            `self.include_images` is True, it must also hold 'I0' and 'I1'.
+        """
+
+        def recursively_load_hdf5_group(group, prefix=""):
+            """Flatten all datasets in an HDF5 tree into a dict keyed by full path."""
+            out = {}
+            for name, item in group.items():
+                path = f"{prefix}/{name}" if prefix else name
+                if isinstance(item, h5py.Dataset):
+                    out[path] = item[()]
+                elif isinstance(item, h5py.Group):
+                    out.update(recursively_load_hdf5_group(item, path))
+            return out
+
+        # First try SciPy (handles v4-v7.2)
+        try:
+            mat = scipy.io.loadmat(
+                file_path,
+                struct_as_record=False,
+                squeeze_me=True,
+            )  # SciPy raises NotImplementedError for v7.3
+            data = {k: v for k, v in mat.items() if not k.startswith("__")}
+        except NotImplementedError:
+            # v7.3 ⇒ fall back to h5py
+            with h5py.File(file_path, "r") as f:
+                data = recursively_load_hdf5_group(f)
+
+        # Validate the loaded data
+        if "V" not in data:
+            raise ValueError(f"Flow field not found in {file_path} (missing 'V').")
+        if self.include_images and not all(k in data for k in ("I0", "I1")):
+            raise ValueError(
+                f"Image visualization not supported for {file_path}: "
+                "missing required keys 'I0'/'I1'."
+            )
+
+        # Resizing images and flow to 256x256
+        if self.include_images:
+            for key in ("I0", "I1"):
+                img = data[key]
+                if img.shape[:2] != (256, 256):
+                    data[key] = np.asarray(Image.fromarray(img).resize((256, 256)))
+
+        flow = data["V"]
+        if flow.shape[2] != 2:
+            if flow.shape[0] == 2:
+                flow = np.transpose(flow, (1, 2, 0))
+            elif flow.shape[1] == 2:
+                flow = np.transpose(flow, (0, 2, 1))
+            data["V"] = flow
+        if flow.shape[:2] != (256, 256):
+            ratio = 256 / flow.shape[0]
+            flow = np.asarray(Image.fromarray(flow).resize((256, 256))) * ratio
+            data["V"] = flow
+
+        logger.debug("Loaded %s with keys %s", file_path, list(data.keys()))
+        return data
+
+    def get_next_slice(self):
+        """Retrieves the flow field slice and optionally the images.
+
+        Returns:
+            np.ndarray or dict: Flow field with shape (X, Y, Z, 2) or a dict
+            containing the flow field and images.
+        """
+        data = self._cached_data
+        flow_field = data["V"]
+
+        if not self.include_images:
+            return flow_field
+
+        img_prev = data["I0"]
+        img_next = data["I1"]
+        return {"flow": flow_field, "img_prev": img_prev, "img_next": img_next}
+
+    def get_flow_fields_shape(self):
+        """Returns the shape of the flow field.
+
+        Returns:
+            tuple: Shape of the flow field.
+        """
+        file_path = self.file_list[0]
+        data = self.load_file(file_path)
+        shape = data["V"].shape
+        logger.debug(f"Flow field shape: {shape}")
+        return shape
+
+    def __next__(self):
+        """Iterate over .mat files, returning flow or flow+images."""
         while self.index < len(self.file_list) or self.loop:
             if self.index >= len(self.file_list):
                 self.reset(reset_epoch=False)
