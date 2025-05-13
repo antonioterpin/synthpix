@@ -392,10 +392,24 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
     _file_pattern = "**/*.mat"
 
     def __init__(
-        self, file_list, randomize=False, loop=False, include_images: bool = False
+        self,
+        file_list,
+        randomize=False,
+        loop=False,
+        include_images: bool = False,
+        output_shape=(256, 256),
     ):
-        """Initializes the MAT scheduler."""
+        """Initializes the MATFlowFieldScheduler."""
+        if not isinstance(include_images, bool):
+            raise ValueError("include_images must be a boolean value.")
         self.include_images = include_images
+
+        if not isinstance(output_shape, tuple) or len(output_shape) != 2:
+            raise ValueError("output_shape must be a tuple of two integers.")
+        if not all(isinstance(dim, int) and dim > 0 for dim in output_shape):
+            raise ValueError("output_shape must contain positive integers.")
+        self.output_shape = output_shape
+
         super().__init__(file_list, randomize, loop)
         # ensure all supplied files are .mat
         if not all(file_path.endswith(".mat") for file_path in self.file_list):
@@ -461,12 +475,14 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                 "missing required keys 'I0'/'I1'."
             )
 
-        # Resizing images and flow to 256x256
+        # Resizing images and flow to output_shape
         if self.include_images:
             for key in ("I0", "I1"):
                 img = data[key]
-                if img.shape[:2] != (256, 256):
-                    data[key] = np.asarray(Image.fromarray(img).resize((256, 256)))
+                if img.shape[:2] != self.output_shape:
+                    data[key] = np.asarray(
+                        Image.fromarray(img).resize(self.output_shape)
+                    )
 
         flow = data["V"]
         if flow.shape[2] != 2:
@@ -475,13 +491,16 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             elif flow.shape[1] == 2:
                 flow = np.transpose(flow, (0, 2, 1))
             data["V"] = flow
-        if flow.shape[:2] != (256, 256):
-            # Resize flow to 256x256 and scale by the ratio
+        if flow.shape[:2] != self.output_shape:
+            # Resize flow to output_shape and scale by the ratio
             # The original flow is assumed to be in pixels
-            ratio = 256 / flow.shape[0]
-            flow_resized = (
-                cv2.resize(flow, (256, 256), interpolation=cv2.INTER_LINEAR) * ratio
+            ratio_y = self.output_shape[0] / flow.shape[0]
+            ratio_x = self.output_shape[1] / flow.shape[1]
+            flow_resized = cv2.resize(
+                flow, self.output_shape, interpolation=cv2.INTER_LINEAR
             )
+            flow_resized[..., 0] *= ratio_x
+            flow_resized[..., 1] *= ratio_y
             data["V"] = flow_resized
 
         logger.debug("Loaded %s with keys %s", file_path, list(data.keys()))

@@ -233,7 +233,9 @@ def test_mat_scheduler_get_batch(mock_mat_files):
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
 def test_mat_scheduler_with_images(mock_mat_files):
     files, _ = mock_mat_files
-    scheduler = MATFlowFieldScheduler(files, include_images=True)
+    scheduler = MATFlowFieldScheduler(
+        files, include_images=True, output_shape=(256, 256)
+    )
 
     for output in scheduler:
         assert isinstance(output, dict)

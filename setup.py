@@ -18,6 +18,7 @@ setup(
         "ruamel.yaml>=0.18.10",
         "imageio>=2.37.0",
         "matplotlib>=3.10.1",
+        "opencv-python-headless>=4.5.5",
     ],
     extras_require={
         "dev": [
