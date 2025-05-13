@@ -163,13 +163,13 @@ def test_numpy_scheduler_with_images(mock_numpy_files):
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
 def test_mat_scheduler_iteration(mock_mat_files):
-    files, dims = mock_mat_files
+    files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler(files, randomize=False, loop=False)
 
     count = 0
     for flow in scheduler:
         assert isinstance(flow, np.ndarray)
-        assert flow.shape == (dims["height"], dims["width"], 2)
+        assert flow.shape == (256, 256, 2)
         count += 1
 
     assert count == 2
@@ -177,10 +177,10 @@ def test_mat_scheduler_iteration(mock_mat_files):
 
 @pytest.mark.parametrize("mock_mat_files", [1], indirect=True)
 def test_mat_scheduler_shape(mock_mat_files):
-    files, dims = mock_mat_files
+    files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler(files)
     shape = scheduler.get_flow_fields_shape()
-    assert shape == (dims["height"], dims["width"], 2)
+    assert shape == (256, 256, 2)
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
@@ -221,18 +221,18 @@ def test_mat_scheduler_file_dir(tmp_path):
 
 @pytest.mark.parametrize("mock_mat_files", [1], indirect=True)
 def test_mat_scheduler_get_batch(mock_mat_files):
-    files, dims = mock_mat_files
+    files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler(files)
 
     batch_size = len(files)
     batch = scheduler.get_batch(batch_size)
     assert isinstance(batch, np.ndarray)
-    assert batch.shape == (batch_size, dims["height"], dims["width"], 2)
+    assert batch.shape == (batch_size, 256, 256, 2)
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
 def test_mat_scheduler_with_images(mock_mat_files):
-    files, dims = mock_mat_files
+    files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler(files, include_images=True)
 
     for output in scheduler:
@@ -244,11 +244,11 @@ def test_mat_scheduler_with_images(mock_mat_files):
         img_next = output["img_next"]
 
         assert isinstance(flow, np.ndarray)
-        assert flow.shape == (dims["height"], dims["width"], 2)
+        assert flow.shape == (256, 256, 2)
         assert isinstance(img_prev, np.ndarray)
-        assert img_prev.shape == (dims["height"], dims["width"])
+        assert img_prev.shape == (256, 256)
         assert isinstance(img_next, np.ndarray)
-        assert img_next.shape == (dims["height"], dims["width"])
+        assert img_next.shape == (256, 256)
 
 
 # ============================

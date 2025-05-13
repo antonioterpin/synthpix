@@ -1,6 +1,7 @@
 """Conftest.py for Sampler and Scheduler tests."""
 import os
 import tempfile
+from datetime import datetime
 
 import h5py
 import numpy as np
@@ -152,23 +153,33 @@ def mat_test_dims():
 
 @pytest.fixture(scope="module")
 def generate_mat_file():
-    """Fixture to generate a .mat file with I0, I1, and V using HDF5 format."""
+    """Fixture to generate a .mat file with I0, I1, and V using a MATLAB 7.3 header."""
 
     def _generate(folder, t, dims):
         h, w = dims["height"], dims["width"]
-
-        # 2D grayscale images
         I0 = np.random.randint(0, 255, size=(h, w), dtype=np.uint8)
         I1 = np.random.randint(0, 255, size=(h, w), dtype=np.uint8)
-
-        # 3D flow field with shape (H, W, 2)
         V = np.random.rand(h, w, 2).astype(np.float32)
 
         mat_path = os.path.join(folder, f"flow_{t}.mat")
-        with h5py.File(mat_path, "w") as f:
+
+        # Reserve a 512-byte user block (must be ≥116)
+        with h5py.File(mat_path, "w", libver="latest", userblock_size=512) as f:
             f.create_dataset("I0", data=I0)
             f.create_dataset("I1", data=I1)
             f.create_dataset("V", data=V)
+
+        # Now write the MATLAB header into that user block:
+        header_str = (
+            "MATLAB 7.3 MAT-file, Platform: Python-h5py, "
+            f"Created on {datetime.now().strftime('%c')}"
+        )
+        hdr = header_str.encode("ascii")
+        hdr = hdr.ljust(116, b" ")  # pad to exactly 116 bytes
+        hdr = hdr + b" " * (512 - 116)  # pad out the rest of the 512-byte block
+
+        with open(mat_path, "r+b") as fp:
+            fp.write(hdr)
 
     return _generate
 

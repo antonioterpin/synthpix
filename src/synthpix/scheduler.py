@@ -7,6 +7,7 @@ import re
 import threading
 from abc import ABC, abstractmethod
 
+import cv2
 import h5py
 import numpy as np
 import scipy.io
@@ -400,6 +401,13 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         if not all(file_path.endswith(".mat") for file_path in self.file_list):
             raise ValueError("All files must be MATLAB .mat files with HDF5 format")
 
+    @staticmethod
+    def _looks_like_hdf5(path: str) -> bool:
+        try:
+            return h5py.is_hdf5(path)
+        except OSError:
+            return False
+
     def load_file(self, file_path: str):
         """Load any MATLAB .mat file (v4, v5/6/7, or v7.3) and return its data dict.
 
@@ -434,10 +442,15 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                 squeeze_me=True,
             )  # SciPy raises NotImplementedError for v7.3
             data = {k: v for k, v in mat.items() if not k.startswith("__")}
-        except NotImplementedError:
-            # v7.3 ⇒ fall back to h5py
-            with h5py.File(file_path, "r") as f:
-                data = recursively_load_hdf5_group(f)
+        except (NotImplementedError, ValueError):
+            if self._looks_like_hdf5(file_path):
+                # v7.3 ⇒ fall back to h5py
+                try:
+                    with h5py.File(file_path, "r") as f:
+                        data = recursively_load_hdf5_group(f)
+                except Exception as e:
+                    logger.error(f"Skipping {file_path}: {e}")
+                    self.index += 1
 
         # Validate the loaded data
         if "V" not in data:
@@ -463,9 +476,13 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                 flow = np.transpose(flow, (0, 2, 1))
             data["V"] = flow
         if flow.shape[:2] != (256, 256):
+            # Resize flow to 256x256 and scale by the ratio
+            # The original flow is assumed to be in pixels
             ratio = 256 / flow.shape[0]
-            flow = np.asarray(Image.fromarray(flow).resize((256, 256))) * ratio
-            data["V"] = flow
+            flow_resized = (
+                cv2.resize(flow, (256, 256), interpolation=cv2.INTER_LINEAR) * ratio
+            )
+            data["V"] = flow_resized
 
         logger.debug("Loaded %s with keys %s", file_path, list(data.keys()))
         return data
