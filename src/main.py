@@ -3,8 +3,19 @@ import argparse
 
 from synthpix.data_generate import generate_images_from_flow
 from synthpix.image_sampler import SyntheticImageSampler
-from synthpix.scheduler import HDF5FlowFieldScheduler, PrefetchingFlowFieldScheduler
+from synthpix.scheduler import (
+    HDF5FlowFieldScheduler,
+    MATFlowFieldScheduler,
+    NumpyFlowFieldScheduler,
+    PrefetchingFlowFieldScheduler,
+)
 from synthpix.utils import load_configuration, logger, visualize_and_save
+
+SCHEDULERS = {
+    ".h5": HDF5FlowFieldScheduler,
+    ".mat": MATFlowFieldScheduler,
+    ".npy": NumpyFlowFieldScheduler,
+}
 
 
 def main(config_path, output_dir, num_images_to_display):
@@ -20,8 +31,12 @@ def main(config_path, output_dir, num_images_to_display):
     config = load_configuration(config_path)
     logger.info("Configuration loaded successfully.")
 
-    # Initialize the scheduler with prefetching
-    base_scheduler = HDF5FlowFieldScheduler(config["scheduler_files"], loop=True)
+    if config["scheduler_class"] not in SCHEDULERS:
+        raise ValueError(f"Scheduler class {config['scheduler_class']} not found.")
+    scheduler_class = SCHEDULERS.get(config["scheduler_class"])
+    base_scheduler = scheduler_class.from_config(config)
+
+    # Initialize the prefetching
     scheduler = PrefetchingFlowFieldScheduler(
         scheduler=base_scheduler,
         batch_size=config["flow_fields_per_batch"],

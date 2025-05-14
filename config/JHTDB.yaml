@@ -44,3 +44,4 @@ scheduler_files:
   - /shared/fluids/files_to_modify/split_files/channel_full_ts_0992_part2.h5
   - /shared/fluids/files_to_modify/split_files/channel_full_ts_0996_part1.h5
   - /shared/fluids/files_to_modify/split_files/channel_full_ts_0996_part2.h5
+scheduler_class: ".h5"

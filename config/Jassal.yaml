@@ -5,7 +5,7 @@ flow_fields_per_batch: 1 # Number of flow fields used for each batch
 batches_per_flow_batch: 100 # Number of batches of (imgs1, imgs2, flows) tuples per flow batch
 
 # Image generation parameters
-image_shape: [512, 512] # Shape of the images to be generated
+image_shape: [256, 256] # Shape of the images to be generated
 dt: 1 # Time step between images
 seeding_density_range: [0.03, 0.04] # Range of density of particles in the images
 p_hide_img1: 0.0001 # Probability of hiding particles in the first image
@@ -28,7 +28,7 @@ resolution: 1 # Pixels per unit length
 # -- Flow parameters --
 # Size of the flow field in normalized units. It can be meters or others,
 # but need to be consistent in the other dependent settings.
-flow_field_size: [512, 512]
+flow_field_size: [256, 256]
 img_offset: [0, 0] # Offset of the area captured in the images in normalized units
 # Speeds bounds in the flow field, used to have particles covering the images
 min_speed_x: 0 # Minimum speed in the x direction
@@ -36,7 +36,7 @@ max_speed_x: 0 # Maximum speed in the x direction
 min_speed_y: 0 # Minimum speed in the y direction
 max_speed_y: 0 # Maximum speed in the y direction
 # Units of the output flow field. Can be "measure units per second" or "pixels"
-output_units: "measure units per second"
+output_units: "pixels"
 # Flows files
-scheduler_files:
-  - /shared/fluids/eval/source-sink-flow/run_1000.mat
+scheduler_files: /shared/fluids/Jassal/temp_res/buoyancy_mixing
+scheduler_class: ".mat"

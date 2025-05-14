@@ -270,6 +270,23 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
             logger.debug(f"Flow field shape: {shape}")
         return shape
 
+    @staticmethod
+    def from_config(config: dict) -> "HDF5FlowFieldScheduler":
+        """Creates a HDF5FlowFieldScheduler instance from a configuration dictionary.
+
+        Args:
+            config: dict
+                Configuration dictionary containing the scheduler parameters.
+
+        Returns:
+            HDF5FlowFieldScheduler: An instance of the scheduler.
+        """
+        return HDF5FlowFieldScheduler(
+            file_list=config["scheduler_files"],
+            randomize=config.get("randomize", False),
+            loop=config.get("loop", True),
+        )
+
 
 class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
     """Scheduler for loading flow fields from .npy files, with optional image pairing.
@@ -372,6 +389,24 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
 
         raise StopIteration
 
+    @staticmethod
+    def from_config(config: dict) -> "NumpyFlowFieldScheduler":
+        """Creates a NumpyFlowFieldScheduler instance from a configuration dictionary.
+
+        Args:
+            config: dict
+                Configuration dictionary containing the scheduler parameters.
+
+        Returns:
+            NumpyFlowFieldScheduler: An instance of the scheduler.
+        """
+        return NumpyFlowFieldScheduler(
+            file_list=config["scheduler_files"],
+            randomize=config.get("randomize", False),
+            loop=config.get("loop", True),
+            include_images=config.get("include_images", False),
+        )
+
 
 class MATFlowFieldScheduler(BaseFlowFieldScheduler):
     """Scheduler for loading flow fields from .mat files.
@@ -448,7 +483,10 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                     out.update(recursively_load_hdf5_group(item, path))
             return out
 
-        # First try SciPy (handles v4-v7.2)
+        # Guarantee data is always defined
+        data = None
+
+        # First try SciPy (handles MATLAB v4-v7.2)
         try:
             mat = scipy.io.loadmat(
                 file_path,
@@ -458,13 +496,17 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             data = {k: v for k, v in mat.items() if not k.startswith("__")}
         except (NotImplementedError, ValueError):
             if self._looks_like_hdf5(file_path):
-                # v7.3 ⇒ fall back to h5py
+                # MATLAB v7.3 ⇒ fall back to h5py
                 try:
                     with h5py.File(file_path, "r") as f:
                         data = recursively_load_hdf5_group(f)
                 except Exception as e:
-                    logger.error(f"Skipping {file_path}: {e}")
-                    self.index += 1
+                    raise ValueError(
+                        f"Failed to load {file_path} as HDF5 or legacy MATLAB: {e}"
+                    ) from e
+
+        if data is None:
+            raise ValueError(f"Failed to load {file_path} as HDF5 or legacy MATLAB.")
 
         # Validate the loaded data
         if "V" not in data:
@@ -559,6 +601,25 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                 continue
 
         raise StopIteration
+
+    @staticmethod
+    def from_config(config: dict) -> "MATFlowFieldScheduler":
+        """Creates a MATFlowFieldScheduler instance from a configuration dictionary.
+
+        Args:
+            config: dict
+                Configuration dictionary containing the scheduler parameters.
+
+        Returns:
+            MATFlowFieldScheduler: An instance of the scheduler.
+        """
+        return MATFlowFieldScheduler(
+            file_list=config["scheduler_files"],
+            randomize=config.get("randomize", False),
+            loop=config.get("loop", True),
+            include_images=config.get("include_images", False),
+            output_shape=tuple(config.get("output_shape", (256, 256))),
+        )
 
 
 class PrefetchingFlowFieldScheduler:

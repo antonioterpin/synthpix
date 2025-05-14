@@ -210,13 +210,15 @@ def test_mat_scheduler_file_dir(tmp_path):
     This test creates a temporary directory and multiple mock .mat files in it,
     then checks if the scheduler correctly identifies the files.
     """
-    mat_file = tmp_path / "test.mat"
+    mat_files = []
     for i in range(2):
+        mat_file = tmp_path / f"test_{i}.mat"
         with h5py.File(mat_file, "w") as f:
             f.create_dataset(f"flow_{i}", data=np.random.rand(64, 64, 2))
+        mat_files.append(str(mat_file))
 
-    scheduler = MATFlowFieldScheduler([str(mat_file)])
-    assert scheduler.file_list == [str(mat_file)]
+    scheduler = MATFlowFieldScheduler(mat_files)
+    assert scheduler.file_list == mat_files
 
 
 @pytest.mark.parametrize("mock_mat_files", [1], indirect=True)
