@@ -38,8 +38,10 @@ class BaseFlowFieldScheduler(ABC):
         """
         # Check if file_list is a directory or a list of files
         if isinstance(file_list, str) and os.path.isdir(file_list):
+            logger.debug(f"[Base] Searching for files in {file_list}")
             pattern = os.path.join(file_list, self._file_pattern)
             file_list = sorted(glob.glob(pattern, recursive=True))
+            logger.debug(f"[Base] Found {len(file_list)} files in {file_list}")
         elif isinstance(file_list, str) and os.path.isfile(file_list):
             file_list = [file_list]
 
@@ -73,7 +75,7 @@ class BaseFlowFieldScheduler(ABC):
         self._slice_idx = 0
 
         logger.debug(
-            f"BaseFlowFieldScheduler initialized with {len(self.file_list)} files, "
+            f"[Base] initialized with {len(self.file_list)} files, "
             f"randomize={self.randomize}, loop={self.loop}"
         )
 
@@ -103,7 +105,8 @@ class BaseFlowFieldScheduler(ABC):
         self._cached_file = None
         if self.randomize:
             random.shuffle(self.file_list)
-        logger.info("Scheduler state has been reset.")
+        logger.info("[Base] Scheduler state has been reset.")
+        logger.debug("[Base] File list: %s", self.file_list)
 
     def __next__(self) -> np.ndarray:
         """Returns the next flow field slice from the dataset.
@@ -134,7 +137,7 @@ class BaseFlowFieldScheduler(ABC):
 
                 flow_field = self.get_next_slice()
                 logger.debug(
-                    f"Loaded slice y={self._slice_idx} from {file_path}, "
+                    f"[Base] Loaded slice y={self._slice_idx} from {file_path}, "
                     f"shape {flow_field.shape}"
                 )
                 self._slice_idx += 1
@@ -172,12 +175,12 @@ class BaseFlowFieldScheduler(ABC):
         except StopIteration:
             if not self.loop and batch:
                 logger.warning(
-                    f"Only {len(batch)} slices could be loaded before exhaustion."
+                    f"[Base] Only {len(batch)} slices could be loaded before exhaustion."
                 )
                 return np.array(batch)
             raise
 
-        logger.debug(f"Loaded batch of {len(batch)} flow field slices.")
+        logger.debug(f"[Base] Loaded batch of {len(batch)} flow field slices.")
         return np.array(batch)
 
     @abstractmethod
@@ -450,6 +453,9 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         if not all(file_path.endswith(".mat") for file_path in self.file_list):
             raise ValueError("All files must be MATLAB .mat files with HDF5 format")
 
+        logger.debug("[MAT] Initialized with %s files", len(self.file_list))
+        logger.debug("[MAT] File list: %s", self.file_list)
+
     @staticmethod
     def _looks_like_hdf5(path: str) -> bool:
         try:
@@ -545,7 +551,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             flow_resized[..., 1] *= ratio_y
             data["V"] = flow_resized
 
-        logger.debug("Loaded %s with keys %s", file_path, list(data.keys()))
+        logger.debug("[MAT] Loaded %s with keys %s", file_path, list(data.keys()))
         return data
 
     def get_next_slice(self):
@@ -571,11 +577,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         Returns:
             tuple: Shape of the flow field.
         """
-        file_path = self.file_list[0]
-        data = self.load_file(file_path)
-        shape = data["V"].shape
-        logger.debug(f"Flow field shape: {shape}")
-        return shape
+        return self.output_shape
 
     def __next__(self):
         """Iterate over .mat files, returning flow or flow+images."""
@@ -632,6 +634,9 @@ class PrefetchingFlowFieldScheduler:
     def __init__(self, scheduler, batch_size: int, buffer_size: int = 8):
         """Initializes the prefetching scheduler.
 
+        If the underlying scheduler is episodic, it will recognize it and handle
+        moving to the next episode seamlessly.
+
         Args:
             scheduler:
                 The underlying flow field scheduler.
@@ -644,10 +649,14 @@ class PrefetchingFlowFieldScheduler:
         self.batch_size = batch_size
         self.buffer_size = buffer_size
 
+        if hasattr(self.scheduler, "episode_length"):
+            self.episode_length = getattr(self.scheduler, "episode_length")
+
         self._queue = queue.Queue(maxsize=buffer_size)
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._worker, daemon=True)
 
+        self._t_in_episode = 0
         self._started = False
 
     def __iter__(self):
@@ -655,6 +664,7 @@ class PrefetchingFlowFieldScheduler:
         if not self._started:
             self._started = True
             self._thread.start()
+            logger.debug("[Prefetching] Background thread started.")
         return self
 
     def __next__(self):
@@ -664,19 +674,21 @@ class PrefetchingFlowFieldScheduler:
             StopIteration: If the queue is empty or no more data is available.
         """
         try:
-            batch = self._queue.get(timeout=30.0)
+            batch = self._queue.get(timeout=5.0)
+            if hasattr(self.scheduler, "episode_length"):
+                if self._t_in_episode >= self.episode_length:
+                    self._t_in_episode = 0
+                self._t_in_episode += 1
+
             if batch is None:
-                logger.info(
-                    "[PrefetchingFlowFieldScheduler] No more data available. "
-                    "Stopping."
-                )
+                logger.info("[Prefetching] No more data available. " "Stopping.")
                 raise StopIteration
+            logger.debug(f"[Prefetching] Fetched batch of shape {batch.shape}, ")
+            if hasattr(self.scheduler, "episode_length"):
+                logger.debug(f"[Prefetching] t_in_episode = {self._t_in_episode}")
             return batch
         except queue.Empty:
-            logger.info(
-                "[PrefetchingFlowFieldScheduler] Prefetch queue is empty. "
-                "Waiting for data."
-            )
+            logger.info("[Prefetching] Prefetch queue is empty. " "Waiting for data.")
             raise StopIteration
 
     def get_batch(self, batch_size):
@@ -732,12 +744,73 @@ class PrefetchingFlowFieldScheduler:
             self._thread.join()
         self._queue.queue.clear()
 
+        logger.debug("[Prefetching] Prefetching thread stopped, " "queue cleared.")
+
         # Reinitialize the scheduler and start the thread
         self._stop_event.clear()
         self._queue = queue.Queue(maxsize=self.buffer_size)
         self._thread = threading.Thread(target=self._worker, daemon=True)
         self._started = False
         self.scheduler.reset()
+
+        logger.debug(
+            "[Prefetching] Prefetching thread reinitialized, " "scheduler reset."
+        )
+
+    def next_episode(self, join_timeout=5.0):
+        """Flush the remaining items of the current episode and restart.
+
+        This method removes the remaining items from the current episode from
+        the queue but does not inform the underlying scheduler.
+        This implementation works as far as the buffer size is larger than
+        the episode length.
+
+        Args:
+            join_timeout: float
+                Timeout for the thread to join.
+        """
+        if not self._started:
+            self.__iter__()
+        # halt producer thread
+        self._stop_event.set()
+        if self._thread.is_alive():
+            self._thread.join(timeout=join_timeout)
+
+        # drain the part of the queue that belongs to the unfinished episode
+        # discard up to `n_left` batches (may be fewer if queue < n_left)
+        for _ in range(self.steps_remaining()):
+            logger.debug(
+                "[Prefetching] Moving to next episode, "
+                f"of length {self.episode_length}, "
+                f"while {self._t_in_episode} steps have been taken so far"
+            )
+            try:
+                self._queue.get_nowait()
+            except queue.Empty:
+                break
+
+        logger.debug(
+            f"[Prefetching] Flushed {self.steps_remaining()} batches from queue."
+        )
+
+        self._t_in_episode = 0
+        # restart producer thread
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._worker, daemon=True)
+        self._thread.start()
+
+        logger.debug(
+            "[Prefetching] Next episode started, "
+            "remaining items flushed from the queue."
+        )
+
+    def steps_remaining(self) -> int:
+        """Return the number of steps remaining in the current episode.
+
+        Returns:
+            int: Number of steps remaining in the current episode.
+        """
+        return self.episode_length - self._t_in_episode
 
     def shutdown(self, join_timeout=5.0):
         """Gracefully shuts down the background prefetching thread."""
@@ -762,3 +835,264 @@ class PrefetchingFlowFieldScheduler:
     def __del__(self):
         """Gracefully shuts down the scheduler upon deletion."""
         self.shutdown()
+
+
+class EpisodicFlowFieldScheduler:
+    """Wrapper that serves flow-field *episodes* in parallel batches.
+
+    The wrapper rearranges the ``file_list`` of an underlying
+    :class:`BaseFlowFieldScheduler` so that **one call** to
+    :py:meth:`BaseFlowFieldScheduler.get_batch` (or ``next(self)``) returns the
+    *same* time-step for ``batch_size`` independent episodes.
+
+    The data on disk must be organised as::
+
+        root/
+          ├── seq_A/       # leaf directory (no further sub-dirs)
+          │   ├── 0000.mat
+          │   ├── 0001.mat
+          │   └── ...
+          ├── seq_B/
+          │   ├── 0000.mat
+          │   └── ...
+          └── ...
+
+    The files inside each leaf directory must already be in temporal order when
+    sorted alphabetically (e.g. zero-padded integers in the file name).
+
+    Example
+    -------
+    >>> base = MATFlowFieldScheduler("/data/flows")
+    >>> epi  = EpisodicFlowFieldScheduler(
+    ...             scheduler=base,
+    ...             batch_size=16,
+    ...             episode_length=32,
+    ...             seed=42)
+    >>> batch_t0 = next(epi)        # first time-step from 16 episodes
+    >>> batch_t1 = next(epi)        # second time-step
+    >>> epi.reset()                 # start 16 fresh episodes
+
+    Notes
+    -----
+    * The underlying scheduler (and its prefetching thread) are **not** rebuilt
+      on every episode reset—only the order of ``file_list`` is mutated.  This
+      keeps disk I/O sequential and maximises throughput.
+    * The wrapper follows the “vector-environment” pattern popular in Gym,
+      Gymnax and Brax, so your JAX RL loop can `vmap` or `pmap` over the first
+      dimension without shape changes.
+    """
+
+    # ------------------------------------------------------------------ #
+    # Public interface                                                   #
+    # ------------------------------------------------------------------ #
+    def __init__(
+        self,
+        scheduler: BaseFlowFieldScheduler,
+        batch_size: int,
+        episode_length: int,
+        num_episodes: int = 100,
+        seed: int = 0,
+    ) -> None:
+        """Constructs an episodic scheduler wrapper.
+
+        Args:
+            scheduler: Any concrete subclass of :class:`BaseFlowFieldScheduler`
+            (e.g. :class:`MATFlowFieldScheduler`).
+            batch_size: episodes to run in parallel (== first dim of each batch).
+            episode_length: Number of consecutive flow-fields that make up *one* episode.
+            seed: Seed for the internal pseudo-random number generator.  Use a fixed
+            seed for deterministic episode sampling; use different seeds across
+            workers for data-parallel training.
+
+        Raises:
+            ValueError
+                If ``batch_size`` or ``episode_length`` are not positive, or if the
+                dataset does not contain enough distinct starting positions to form
+                at least one complete batch of episodes.
+        """
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+
+        if episode_length <= 0:
+            raise ValueError("episode_length must be positive")
+
+        if num_episodes <= 0:
+            raise ValueError("num_episodes must be positive")
+
+        self.scheduler = scheduler
+        self.batch_size = batch_size
+        self.episode_length = episode_length
+        self.num_episodes = num_episodes + 1  # + 1 to account for initial reset
+
+        self._rng = random.Random(seed)
+        self._t_in_episode = 0
+        self._episode_count = 0
+
+        # Populate the underlying scheduler with an initial file ordering
+        self._rebuild_file_order()
+
+    def __iter__(self) -> "EpisodicFlowFieldScheduler":
+        """Returns self so the object can be used in a ``for`` loop."""
+        self._t_in_episode = 0
+        return self
+
+    def __next__(self):
+        """Return one time-step of shape ``(batch_size, …)``.
+
+        Returns:
+            batch: A `(batch_size, …)` tensor that holds one flow-field per episode.
+        """
+        # If we’ve exhausted the current horizon, start fresh episodes
+        if self._t_in_episode >= self.episode_length:
+            self._episode_count += 1
+            if self._episode_count >= self.num_episodes:
+                logger.info(
+                    "[Episodic] All %d episodes have been served. " "Stopping.",
+                    self.num_episodes,
+                )
+                raise StopIteration
+            self._rebuild_file_order()
+            self._t_in_episode = 0
+
+        self._t_in_episode += 1
+
+        batch = self.scheduler.get_batch(self.batch_size)
+
+        logger.debug(
+            "[Episodic] __next__() called, " "returning batch of shape %s",
+            batch.shape,
+        )
+        logger.debug(f"[Episodic] timestep: {self._t_in_episode}")
+        return batch
+
+    def get_batch(self, batch_size: int):
+        """Return exactly one time-step for `batch_size` parallel episodes.
+
+        *Does not* loop internally – we delegate to the wrapped base
+        scheduler once, because `__next__` already returns a full batch.
+        """
+        if batch_size != self.batch_size:
+            raise ValueError(
+                f"[Episodic] Requested batch_size {batch_size}, "
+                f"but EpisodicFlowFieldScheduler was initialized with "
+                f"{self.batch_size}"
+            )
+        logger.debug(
+            "[Episodic] get_batch() called with batch_size %d",
+            batch_size,
+        )
+        return next(self)
+
+    def __len__(self) -> int:
+        """Return the episode length.
+
+        Returns:
+            int: The length of the episode.
+        """
+        return self.episode_length
+
+    def reset_episode(self):
+        """Start *batch_size* brand-new episodes.
+
+        The call is cheap: it only reshuffles ``file_list`` and resets cursors;
+        the prefetch thread of the underlying scheduler is left intact.
+        """
+        self._rebuild_file_order()
+        self._t_in_episode = 0
+
+    def steps_remaining(self) -> int:
+        """Return the number of steps remaining in the current episode.
+
+        Returns:
+            int: Number of steps remaining in the current episode.
+        """
+        return self.episode_length - self._t_in_episode
+
+    def get_flow_fields_shape(self):
+        """Return the shape of the flow fields from the underlying scheduler.
+
+        Returns:
+            tuple: Shape of the flow fields as returned by the underlying scheduler.
+        """
+        return self.scheduler.get_flow_fields_shape()
+
+    # ------------------------------------------------------------------ #
+    # Internal helpers (private)                                         #
+    # ------------------------------------------------------------------ #
+    def _rebuild_file_order(self):
+        """Create a new interleaved file order and push it into ``scheduler``."""
+        leaf_dirs = self._discover_leaf_dirs(self.scheduler.file_list)
+        dir2files = {d: sorted(glob.glob(os.path.join(d, "*.mat"))) for d in leaf_dirs}
+
+        # Sanity-check: all directories must contain enough frames
+        for d, files in dir2files.items():
+            if len(files) < self.episode_length:
+                raise ValueError(
+                    f"Directory {d} has only {len(files)} files, "
+                    f"but episode_length is {self.episode_length}."
+                )
+
+        # Enumerate every admissible (dir, start_index) combination
+        candidates = []
+        for d, files in dir2files.items():
+            last_start = len(files) - self.episode_length
+            candidates.extend((d, s) for s in range(last_start + 1))
+
+        if len(candidates) < self.batch_size:
+            raise ValueError(
+                f"Only {len(candidates)} distinct start positions available—"
+                f"need at least batch_size = {self.batch_size}."
+            )
+
+        # Randomly choose batch_size starts without replacement
+        starts = self._rng.sample(candidates, self.batch_size)
+
+        # Build individual episode sequences
+        episodes = []
+        for d, s in starts:
+            episodes.append(dir2files[d][s : s + self.episode_length])
+
+        # Interleave “time major” → t0_ep0, t0_ep1, …, t1_ep0, …
+        interleaved = [
+            episodes[ep][t]  # type: ignore[index]
+            for t in range(self.episode_length)
+            for ep in range(self.batch_size)
+        ]
+
+        logger.debug(
+            "[Episodic] Order rebuilt — %d episodes × %d steps = %d files",
+            self.batch_size,
+            self.episode_length,
+            len(interleaved),
+        )
+
+        # Inject new order and reset cursors *without* reshuffling internally
+        self.scheduler.file_list = interleaved
+        self.scheduler.reset(reset_epoch=False)
+
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _discover_leaf_dirs(paths: list[str]) -> list[str]:
+        """Return every directory that contains data but *no* sub-directories.
+
+        Parameters
+        ----------
+        paths
+            Any list of file paths (e.g. ``scheduler.file_list``).
+
+        Returns
+        -------
+        list[str]
+            Deduplicated list of leaf directory paths.
+        """
+        leaf_dirs = set()
+        for path in paths:
+            dir_path = os.path.dirname(path)
+            # A leaf dir has *no* child directories
+            has_subdirs = any(
+                os.path.isdir(os.path.join(dir_path, entry))
+                for entry in os.listdir(dir_path)
+            )
+            if not has_subdirs:
+                leaf_dirs.add(dir_path)
+        return list(leaf_dirs)
