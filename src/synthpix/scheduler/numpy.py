@@ -127,4 +127,3 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
             loop=config.get("loop", True),
             include_images=config.get("include_images", False),
         )
-

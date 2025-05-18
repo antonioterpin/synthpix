@@ -9,7 +9,6 @@ from synthpix.scheduler import BaseFlowFieldScheduler
 from synthpix.utils import logger
 
 
-
 class MATFlowFieldScheduler(BaseFlowFieldScheduler):
     """Scheduler for loading flow fields from .mat files.
 

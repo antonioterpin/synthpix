@@ -5,6 +5,7 @@ import numpy as np
 from synthpix.scheduler import BaseFlowFieldScheduler
 from synthpix.utils import logger
 
+
 class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
     """Scheduler for loading flow field data from HDF5 files.
 

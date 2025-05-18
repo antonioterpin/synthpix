@@ -6,6 +6,7 @@ import random
 from synthpix.scheduler import BaseFlowFieldScheduler
 from synthpix.utils import discover_leaf_dirs, logger
 
+
 class EpisodicFlowFieldScheduler:
     """Wrapper that serves flow-field *episodes* in parallel batches.
 
@@ -112,9 +113,7 @@ class EpisodicFlowFieldScheduler:
 
         batch = self.scheduler.get_batch(self.batch_size)
 
-        logger.debug(
-            "__next__() called, " "returning batch of shape {batch.shape}"
-        )
+        logger.debug("__next__() called, " "returning batch of shape {batch.shape}")
         logger.debug(f"timestep: {self._t}")
         return batch
 

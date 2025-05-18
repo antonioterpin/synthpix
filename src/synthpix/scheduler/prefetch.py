@@ -4,6 +4,7 @@ import threading
 
 from synthpix.utils import logger
 
+
 class PrefetchingFlowFieldScheduler:
     """Prefetching Wrapper around a FlowFieldScheduler.
 
@@ -134,9 +135,7 @@ class PrefetchingFlowFieldScheduler:
         self._started = False
         self.scheduler.reset()
 
-        logger.debug(
-            "Prefetching thread reinitialized, scheduler reset."
-        )
+        logger.debug("Prefetching thread reinitialized, scheduler reset.")
 
     def next_episode(self, join_timeout=5.0):
         """Flush the remaining items of the current episode and restart.
@@ -169,9 +168,7 @@ class PrefetchingFlowFieldScheduler:
                 except queue.Empty:
                     break
 
-            logger.debug(
-                f"Flushed {self.steps_remaining()} batches from queue."
-            )
+            logger.debug(f"Flushed {self.steps_remaining()} batches from queue.")
 
         self._t = 0
         # restart producer thread
@@ -182,10 +179,7 @@ class PrefetchingFlowFieldScheduler:
         self._thread = threading.Thread(target=self._worker, daemon=True)
         self._thread.start()
 
-        logger.debug(
-            "Next episode started, "
-            "remaining items flushed from the queue."
-        )
+        logger.debug("Next episode started, " "remaining items flushed from the queue.")
 
     def steps_remaining(self) -> int:
         """Return the number of steps remaining in the current episode.

@@ -1,9 +1,10 @@
-from .base       import BaseFlowFieldScheduler
-from .hdf5       import HDF5FlowFieldScheduler
-from .numpy      import NumpyFlowFieldScheduler
-from .mat        import MATFlowFieldScheduler
-from .episodic   import EpisodicFlowFieldScheduler
-from .prefetch   import PrefetchingFlowFieldScheduler
+"""Flow field scheduler module."""
+from .base import BaseFlowFieldScheduler
+from .episodic import EpisodicFlowFieldScheduler
+from .hdf5 import HDF5FlowFieldScheduler
+from .mat import MATFlowFieldScheduler
+from .numpy import NumpyFlowFieldScheduler
+from .prefetch import PrefetchingFlowFieldScheduler
 
 __all__ = [
     "BaseFlowFieldScheduler",

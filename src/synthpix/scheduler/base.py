@@ -1,7 +1,6 @@
 """BaseFlowFieldScheduler abstract class."""
 import glob
 import os
-import queue
 import random
 from abc import ABC, abstractmethod
 
