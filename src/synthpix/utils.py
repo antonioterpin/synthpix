@@ -508,3 +508,29 @@ def input_check_flow_field_adapter(
         or not all(isinstance(s, int) and s >= 0 for s in zero_padding)
     ):
         raise ValueError("zero_padding must be a tuple of two non-negative integers.")
+
+
+def discover_leaf_dirs(paths: list[str]) -> list[str]:
+    """Return every directory that contains data but *no* sub-directories.
+
+    Parameters
+    ----------
+    paths
+        Any list of file paths (e.g. ``scheduler.file_list``).
+
+    Returns
+    -------
+    list[str]
+        Deduplicated list of leaf directory paths.
+    """
+    leaf_dirs = set()
+    for path in paths:
+        dir_path = os.path.dirname(path)
+        # A leaf dir has *no* child directories
+        has_subdirs = any(
+            os.path.isdir(os.path.join(dir_path, entry))
+            for entry in os.listdir(dir_path)
+        )
+        if not has_subdirs:
+            leaf_dirs.add(dir_path)
+    return list(leaf_dirs)

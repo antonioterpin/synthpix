@@ -161,7 +161,7 @@ def generate_mat_file():
         I1 = np.random.randint(0, 255, size=(h, w), dtype=np.uint8)
         V = np.random.rand(h, w, 2).astype(np.float32)
 
-        mat_path = os.path.join(folder, f"flow_{t}.mat")
+        mat_path = os.path.join(folder, f"flow_{t:04d}.mat")
 
         # Reserve a 512-byte user block (must be ≥116)
         with h5py.File(mat_path, "w", libver="latest", userblock_size=512) as f:
@@ -192,5 +192,5 @@ def mock_mat_files(tmp_path, generate_mat_file, mat_test_dims, request):
     for t in range(1, num_files + 1):
         generate_mat_file(tmp_path, t, mat_test_dims)
 
-    file_paths = [tmp_path / f"flow_{t}.mat" for t in range(1, num_files + 1)]
+    file_paths = [tmp_path / f"flow_{t:04d}.mat" for t in range(1, num_files + 1)]
     return [str(p) for p in file_paths], mat_test_dims

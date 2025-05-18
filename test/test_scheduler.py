@@ -1,4 +1,5 @@
 import os
+import time
 import timeit
 
 import h5py
@@ -7,6 +8,7 @@ import pytest
 
 from synthpix.scheduler import (
     BaseFlowFieldScheduler,
+    EpisodicFlowFieldScheduler,
     HDF5FlowFieldScheduler,
     MATFlowFieldScheduler,
     NumpyFlowFieldScheduler,
@@ -180,7 +182,7 @@ def test_mat_scheduler_shape(mock_mat_files):
     files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler(files)
     shape = scheduler.get_flow_fields_shape()
-    assert shape == (256, 256, 2)
+    assert shape == (256, 256)
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
@@ -437,3 +439,210 @@ def test_prefetch_scheduler_shutdown(mock_hdf5_files):
     prefetch.get_batch(2)
     prefetch.shutdown()
     assert not prefetch._thread.is_alive()
+
+
+# ============================
+# Episodic Scheduler Tests
+# ============================
+
+
+@pytest.mark.parametrize("mock_mat_files", [64], indirect=True)  # 64 frames
+def test_episode_iteration(mock_mat_files):
+    files, dims = mock_mat_files
+    H, W = dims["height"], dims["width"]
+
+    batch_size = 4
+    episode_length = 8
+
+    base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
+    epi = EpisodicFlowFieldScheduler(
+        scheduler=base, batch_size=batch_size, episode_length=episode_length, seed=123
+    )
+    steps = []
+    for t, (batch) in enumerate(epi):
+        # every batch is (batch_size, H, W, 2)
+        assert isinstance(batch, np.ndarray)
+        assert batch.shape == (batch_size, H, W, 2)
+        steps.append(t)
+        if t == episode_length - 1:  # horizon reached
+            break
+    assert steps == list(range(8))  # exactly one episode
+    assert epi.steps_remaining() == 0
+
+
+@pytest.mark.parametrize("mock_mat_files", [64], indirect=True)  # 64 frames
+def test_reset_episode_resamples(mock_mat_files):
+    files, dims = mock_mat_files
+    H, W = dims["height"], dims["width"]
+
+    batch_size = 4
+    episode_length = 8
+
+    base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
+    epi = EpisodicFlowFieldScheduler(
+        scheduler=base, batch_size=batch_size, episode_length=episode_length, seed=123
+    )
+
+    reordered_files = base.file_list
+    first0 = next(epi)  # t = 0
+    epi.reset_episode()
+    post_reset_files = base.file_list
+    second0 = next(epi)  # new t = 0
+    assert epi.steps_remaining() == episode_length - 1
+    # ensure we didn’t get the exact same files twice
+    assert not np.array_equal(first0, second0)
+
+    # Check which files were used by opening the files
+    # with a regular scheduler
+    base.file_list = reordered_files[:batch_size]
+    base.reset()
+    rightfirst0 = base.get_batch(batch_size)
+    assert np.array_equal(first0, rightfirst0)
+
+    base.file_list = post_reset_files[:batch_size]
+    base.reset()
+    rightsecond0 = base.get_batch(batch_size)
+    assert np.array_equal(second0, rightsecond0)
+
+
+@pytest.mark.parametrize("mock_mat_files", [64], indirect=True)  # 64 frames
+def test_steps_remaining(mock_mat_files):
+    files, dims = mock_mat_files
+    H, W = dims["height"], dims["width"]
+
+    batch_size = 4
+    episode_length = 8
+
+    base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
+    epi = EpisodicFlowFieldScheduler(
+        scheduler=base, batch_size=batch_size, episode_length=episode_length, seed=123
+    )
+
+    assert epi.steps_remaining() == episode_length
+    next(epi)
+    next(epi)
+    assert epi.steps_remaining() == episode_length - 2
+
+
+# ======================================
+# Prefetcher flushes unfinished episode
+# ======================================
+
+
+@pytest.mark.parametrize("mock_mat_files", [12], indirect=True)
+def test_prefetch_next_episode_flush(mock_mat_files):
+    # TODO: this test is very hacky
+
+    files, dims = mock_mat_files
+    H, W = dims["height"], dims["width"]
+
+    batch_size = 2
+    episode_length = 4
+    buffer_size = 8
+
+    base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
+    epi = EpisodicFlowFieldScheduler(
+        base, batch_size=batch_size, episode_length=episode_length
+    )
+    pre = PrefetchingFlowFieldScheduler(
+        epi, batch_size=batch_size, buffer_size=buffer_size
+    )
+
+    # Check that the episodic scheduler hasn't started
+    start = epi.steps_remaining()
+    assert start == episode_length
+
+    # Read two files from the prefetcher
+    for t, _ in enumerate(pre):
+        if t == 1:
+            break
+
+    # wait for prefetching to finish
+    time.sleep(0.1)
+
+    # Manually read the files that are supposed to be the first batch
+    # of the next episode
+    # This is an empirical test, it works only with this episode length
+    new_episode_paths = [files[3], files[2]]
+
+    # early reset
+    pre.next_episode()
+
+    # Get the batch from the prefetcher
+    files = pre.get_batch(batch_size)
+
+    # Compare the files with the expected ones
+    new_base = MATFlowFieldScheduler(new_episode_paths, loop=False, output_shape=(H, W))
+    right_new_episode = new_base.get_batch(batch_size)
+
+    assert np.array_equal(files, right_new_episode)
+
+
+@pytest.mark.parametrize("mock_mat_files", [12], indirect=True)
+def test_prefetch_full_episode(mock_mat_files):
+    files, dims = mock_mat_files
+    H, W = dims["height"], dims["width"]
+
+    batch_size = 2
+    episode_length = 4
+    buffer_size = 8
+
+    base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
+    epi = EpisodicFlowFieldScheduler(
+        base,
+        batch_size=batch_size,
+        episode_length=episode_length,
+    )
+    pre = PrefetchingFlowFieldScheduler(
+        epi, batch_size=batch_size, buffer_size=buffer_size
+    )
+
+    # Exhaust the prefetcher
+    for t, batch in enumerate(pre):
+        print(f"Prefetching batch {t}")
+        if t == episode_length - 1:
+            final_batch = batch
+            break
+
+    pre.shutdown()
+
+    final_files = [files[10], files[9]]
+    print(f"Final files: {final_files}")
+    new_base = MATFlowFieldScheduler(final_files, loop=False, output_shape=(H, W))
+
+    right_new_episode = new_base.get_batch(batch_size)
+    assert np.array_equal(final_batch, right_new_episode)
+
+
+@pytest.mark.parametrize("mock_mat_files", [12], indirect=True)
+def test_prefetch_full_episode_next_episode(mock_mat_files):
+    files, dims = mock_mat_files
+    H, W = dims["height"], dims["width"]
+
+    batch_size = 2
+    episode_length = 4
+    buffer_size = 8
+
+    base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
+    epi = EpisodicFlowFieldScheduler(
+        base,
+        batch_size=batch_size,
+        episode_length=episode_length,
+    )
+    pre = PrefetchingFlowFieldScheduler(
+        epi, batch_size=batch_size, buffer_size=buffer_size
+    )
+
+    # Exhaust the first episode
+    for t, _ in enumerate(pre):
+        if t == episode_length - 1:
+            break
+
+    pre.next_episode()
+
+    new_episode = pre.get_batch(batch_size)
+
+    next_batch_files = [files[3], files[2]]
+    new_base = MATFlowFieldScheduler(next_batch_files, loop=False, output_shape=(H, W))
+    right_new_episode = new_base.get_batch(batch_size)
+    assert np.array_equal(new_episode, right_new_episode)

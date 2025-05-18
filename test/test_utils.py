@@ -14,6 +14,7 @@ from synthpix.example_flows import get_flow_function
 from synthpix.sanity import calculate_min_and_max_speeds, update_config_file
 from synthpix.utils import (
     bilinear_interpolate,
+    discover_leaf_dirs,
     flow_field_adapter,
     generate_array_flow_field,
     input_check_flow_field_adapter,
@@ -651,3 +652,56 @@ def test_speed_flow_fields_adapter(
     assert (
         average_time_jit < limit_time
     ), f"The average time is {average_time_jit}, time limit: {limit_time}"
+
+
+def test__discover_leaf_dirs(tmp_path, generate_mat_file, mat_test_dims):
+    """
+    tmp_path/
+      ├── seq_A/
+      │   ├── flow_0000.mat
+      │   └── flow_0001.mat
+      ├── seq_B/                    # <─ NOT a leaf
+      │   ├── flow_0000.mat
+      │   └── sub_1/
+      │       └── flow_0002.mat
+      └── seq_C/                    # <─ empty, should be ignored
+    """
+    # Build directories
+    seq_A = tmp_path / "seq_A"
+    seq_A.mkdir()
+    seq_B = tmp_path / "seq_B"
+    seq_B.mkdir()
+    sub_1 = seq_B / "sub_1"
+    sub_1.mkdir()
+    str(sub_1)
+    seq_C = tmp_path / "seq_C"
+    seq_C.mkdir()
+
+    # Drop dummy files
+    for t in (0, 1):
+        generate_mat_file(seq_A, t, mat_test_dims)
+    generate_mat_file(seq_B, 0, mat_test_dims)
+    generate_mat_file(sub_1, 2, mat_test_dims)
+
+    filepath_seq_A_0 = os.path.join(seq_A, "flow_0000.mat")
+    filepath_seq_A_1 = os.path.join(seq_A, "flow_0001.mat")
+    filepath_seq_B_0 = os.path.join(seq_B, "flow_0000.mat")
+    filepath_sub_1_2 = os.path.join(sub_1, "flow_0002.mat")
+
+    # Turn the path into a string
+    paths = [
+        str(filepath_seq_A_0),
+        str(filepath_seq_A_1),
+        str(filepath_seq_B_0),
+        str(filepath_sub_1_2),
+    ]
+
+    # What does the static helper think are leaves?
+    leaves = discover_leaf_dirs(paths)
+    leaves = set(map(os.path.abspath, leaves))
+
+    expected = {
+        os.path.abspath(seq_A),
+        os.path.abspath(sub_1),  # leaf even though parent has child dir
+    }
+    assert leaves == expected, f"Expected {expected}, got {leaves}"

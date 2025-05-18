@@ -28,6 +28,9 @@ class SyntheticImageSampler:
     Typical usage involves feeding the resulting batches into a model training loop or
     downstream processing pipeline.
 
+    If the underlying scheduler is an episodic scheduler, it automatically outputs also a
+    done flag to indicate the end of an episode.
+
     Predefined Configurations:
         - JHTDB: Parameters for a specific case using JHTDB data.
     """
@@ -552,6 +555,13 @@ class SyntheticImageSampler:
                 zero_padding=self.zero_padding,
             )
 
+        if hasattr(scheduler, "episode_length"):
+            self._episodic = True
+            logger.info("The underlying scheduler is episodic.")
+        else:
+            self._episodic = False
+            logger.info("The underlying scheduler is not episodic.")
+
         logger.debug("Input arguments of SyntheticImageSampler are valid.")
         logger.debug(f"Flow field scheduler: {self.scheduler}")
         logger.debug(f"Image generation function: {img_gen_fn}")
@@ -606,8 +616,14 @@ class SyntheticImageSampler:
             StopIteration: can only be thrown by the underlying scheduler.
 
         Returns:
-            jnp.ndarray: A batch of synthetic images and seeding_densities
-            generated on GPU.
+            imgs1: jnp.ndarray
+                Batch of previous images.
+            imgs2: jnp.ndarray
+                Batch of current images.
+            output_flow_fields: jnp.ndarray
+                Output flow fields after the adapter.
+            seeding_densities: jnp.ndarray
+                Seeding densities for the images.
         """
         # Check if we need to initialize or switch to a new batch of flow fields
         if (
@@ -618,6 +634,12 @@ class SyntheticImageSampler:
             self._batches_generated = 0
 
             # Get the next batch of flow fields from the scheduler
+            if self._episodic and self.scheduler.steps_remaining() == 0:
+                raise IndexError(
+                    "Episode ended. No more flow fields available."
+                    "Use next_episode() to continue."
+                )
+
             _current_flows = self.scheduler.get_batch(self.flow_fields_per_batch)
 
             # Shard the flow fields across devices
@@ -656,15 +678,54 @@ class SyntheticImageSampler:
             imgs2.shape[0] == self.batch_size
         ), f"Expected {self.batch_size} images but got {imgs2.shape[0]}"
 
+        self._batches_generated += 1
         logger.debug(
             f"Generated {self._batches_generated * self.batch_size} " "image couples"
         )
-        self._batches_generated += 1
         self._total_generated_image_couples += self.batch_size
         logger.debug(
             f"Generated {self._total_generated_image_couples} image couples so far."
         )
-        return imgs1, imgs2, self.output_flow_fields, seeding_densities
+
+        if self._episodic:
+            done = self._make_done()
+            return (imgs1, imgs2, self.output_flow_fields, seeding_densities, done)
+        else:
+            return (
+                imgs1,
+                imgs2,
+                self.output_flow_fields,
+                seeding_densities,
+            )
+
+    def next_episode(self):
+        """Flush the current episode and return the first batch of the next one.
+
+        The underlying scheduler is expected to be the prefetching scheduler.
+
+        Returns:
+            next(self): tuple
+                The first batch of the next episode.
+        """
+        if not hasattr(self.scheduler, "next_episode"):
+            raise AttributeError("Underlying scheduler lacks next_episode()")
+
+        self.scheduler.next_episode()
+
+        return next(self)
+
+    def _make_done(self):
+        """Return a `(batch_size,)` bool array if episodic, else None."""
+        if not self._episodic:
+            raise NotImplementedError("The underlying scheduler is not episodic.")
+
+        is_last_step = self.scheduler.steps_remaining() == 0
+        logger.debug(f"Is last step: {is_last_step}")
+        logger.debug(f"Steps remaining: {self.scheduler.steps_remaining()}")
+        # broadcast identical flag to every episode (synchronous horizons)
+        # implemented like this to make it easier in the future to implement
+        # asynchronous horizons
+        return jnp.full((self.batch_size,), is_last_step, dtype=bool)
 
     @classmethod
     def from_config(cls, scheduler, img_gen_fn, config) -> "SyntheticImageSampler":
