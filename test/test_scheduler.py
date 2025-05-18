@@ -563,7 +563,7 @@ def test_prefetch_next_episode_flush(mock_mat_files):
     # Manually read the files that are supposed to be the first batch
     # of the next episode
     # This is an empirical test, it works only with this episode length
-    new_episode_paths = [files[0], files[4]]
+    new_episode_paths = [files[3], files[2]]
 
     # early reset
     pre.next_episode()
@@ -586,14 +586,12 @@ def test_prefetch_full_episode(mock_mat_files):
     batch_size = 2
     episode_length = 4
     buffer_size = 8
-    num_episodes = 4
 
     base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
     epi = EpisodicFlowFieldScheduler(
         base,
         batch_size=batch_size,
         episode_length=episode_length,
-        num_episodes=num_episodes,
     )
     pre = PrefetchingFlowFieldScheduler(
         epi, batch_size=batch_size, buffer_size=buffer_size
@@ -601,11 +599,15 @@ def test_prefetch_full_episode(mock_mat_files):
 
     # Exhaust the prefetcher
     for t, batch in enumerate(pre):
-        if t == num_episodes * episode_length - 1:
+        print(f"Prefetching batch {t}")
+        if t == episode_length - 1:
             final_batch = batch
-        continue
+            break
 
-    final_files = [files[9], files[7]]
+    pre.shutdown()
+
+    final_files = [files[10], files[9]]
+    print(f"Final files: {final_files}")
     new_base = MATFlowFieldScheduler(final_files, loop=False, output_shape=(H, W))
 
     right_new_episode = new_base.get_batch(batch_size)
@@ -620,14 +622,12 @@ def test_prefetch_full_episode_next_episode(mock_mat_files):
     batch_size = 2
     episode_length = 4
     buffer_size = 8
-    num_episodes = 4
 
     base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
     epi = EpisodicFlowFieldScheduler(
         base,
         batch_size=batch_size,
         episode_length=episode_length,
-        num_episodes=num_episodes,
     )
     pre = PrefetchingFlowFieldScheduler(
         epi, batch_size=batch_size, buffer_size=buffer_size
@@ -642,55 +642,7 @@ def test_prefetch_full_episode_next_episode(mock_mat_files):
 
     new_episode = pre.get_batch(batch_size)
 
-    next_batch_files = [files[0], files[4]]
+    next_batch_files = [files[3], files[2]]
     new_base = MATFlowFieldScheduler(next_batch_files, loop=False, output_shape=(H, W))
     right_new_episode = new_base.get_batch(batch_size)
     assert np.array_equal(new_episode, right_new_episode)
-
-
-def test__discover_leaf_dirs(tmp_path, generate_mat_file, mat_test_dims):
-    """
-    tmp_path/
-      ├── seq_A/
-      │   ├── flow_0000.mat
-      │   └── flow_0001.mat
-      ├── seq_B/                    # <─ NOT a leaf
-      │   ├── flow_0000.mat
-      │   └── sub_1/
-      │       └── flow_0002.mat
-      └── seq_C/                    # <─ empty, should be ignored
-    """
-    # Build directories
-    seq_A = tmp_path / "seq_A"
-    seq_A.mkdir()
-    seq_B = tmp_path / "seq_B"
-    seq_B.mkdir()
-    sub_1 = seq_B / "sub_1"
-    sub_1.mkdir()
-    str(sub_1)
-    seq_C = tmp_path / "seq_C"
-    seq_C.mkdir()
-
-    # Drop dummy files
-    for t in (0, 1):
-        generate_mat_file(seq_A, t, mat_test_dims)
-    generate_mat_file(seq_B, 0, mat_test_dims)
-    generate_mat_file(sub_1, 2, mat_test_dims)
-
-    # Turn the path into a string
-    tmp_path = str(tmp_path)
-
-    H, W = mat_test_dims["height"], mat_test_dims["width"]
-
-    # Point the base scheduler to the *root*; it will glob recursively
-    base = MATFlowFieldScheduler(tmp_path, loop=False, output_shape=(H, W))
-
-    # What does the static helper think are leaves?
-    leaves = EpisodicFlowFieldScheduler._discover_leaf_dirs(base.file_list)
-    leaves = set(map(os.path.abspath, leaves))
-
-    expected = {
-        os.path.abspath(seq_A),
-        os.path.abspath(sub_1),  # leaf even though parent has child dir
-    }
-    assert leaves == expected, f"Expected {expected}, got {leaves}"

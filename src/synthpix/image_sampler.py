@@ -556,10 +556,10 @@ class SyntheticImageSampler:
             )
 
         if hasattr(scheduler, "episode_length"):
-            self._episodic_capable = True
+            self._episodic = True
             logger.info("The underlying scheduler is episodic.")
         else:
-            self._episodic_capable = False
+            self._episodic = False
             logger.info("The underlying scheduler is not episodic.")
 
         logger.debug("Input arguments of SyntheticImageSampler are valid.")
@@ -634,12 +634,11 @@ class SyntheticImageSampler:
             self._batches_generated = 0
 
             # Get the next batch of flow fields from the scheduler
-            if self._episodic_capable:
-                if self.scheduler.steps_remaining() == 0:
-                    raise IndexError(
-                        "Episode ended. No more flow fields available."
-                        "Use next_episode() to continue."
-                    )
+            if self._episodic and self.scheduler.steps_remaining() == 0:
+                raise IndexError(
+                    "Episode ended. No more flow fields available."
+                    "Use next_episode() to continue."
+                )
 
             _current_flows = self.scheduler.get_batch(self.flow_fields_per_batch)
 
@@ -688,17 +687,15 @@ class SyntheticImageSampler:
             f"Generated {self._total_generated_image_couples} image couples so far."
         )
 
-        done = self._maybe_make_done()
-
-        if done is None:
-            return imgs1, imgs2, self.output_flow_fields, seeding_densities
+        if self._episodic:
+            done = self._make_done()
+            return (imgs1, imgs2, self.output_flow_fields, seeding_densities, done)
         else:
             return (
                 imgs1,
                 imgs2,
                 self.output_flow_fields,
                 seeding_densities,
-                done,
             )
 
     def next_episode(self):
@@ -717,10 +714,10 @@ class SyntheticImageSampler:
 
         return next(self)
 
-    def _maybe_make_done(self):
+    def _make_done(self):
         """Return a `(batch_size,)` bool array if episodic, else None."""
-        if not self._episodic_capable:
-            return None
+        if not self._episodic:
+            raise NotImplementedError("The underlying scheduler is not episodic.")
 
         is_last_step = self.scheduler.steps_remaining() == 0
         logger.debug(f"Is last step: {is_last_step}")

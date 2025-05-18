@@ -1022,7 +1022,6 @@ def _build_sampler(mock_mat_files):
         scheduler=base,
         batch_size=BATCH_SIZE,
         episode_length=EPISODE_LENGTH,
-        num_episodes=NUM_EPISODES,
         seed=123,
     )
     pre = PrefetchingFlowFieldScheduler(
@@ -1133,18 +1132,16 @@ def test_stop_after_max_episodes(mock_mat_files):
     H, W = dims["height"], dims["width"]
 
     num_episodes = 2
-    base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
-    epi = EpisodicFlowFieldScheduler(
-        base, batch_size=2, episode_length=2, num_episodes=num_episodes, seed=0
-    )
-    pre = PrefetchingFlowFieldScheduler(epi, batch_size=2, buffer_size=4)
+    base = MATFlowFieldScheduler(files, loop=True, output_shape=(H, W))
+    epi = EpisodicFlowFieldScheduler(base, batch_size=4, episode_length=2, seed=0)
+    pre = PrefetchingFlowFieldScheduler(epi, batch_size=4, buffer_size=90)
 
     sampler = SyntheticImageSampler(
         scheduler=pre,
-        img_gen_fn=_dummy_img_gen_fn,
+        img_gen_fn=dummy_img_gen_fn,
         batches_per_flow_batch=1,
-        batch_size=2,
-        flow_fields_per_batch=2,
+        batch_size=4,
+        flow_fields_per_batch=4,
         flow_field_size=(H, W),
         image_shape=(H, W),
         resolution=1.0,
@@ -1179,14 +1176,15 @@ def test_stop_after_max_episodes(mock_mat_files):
         while not any(done):
             logger.debug(f"episode {i} batch {n_batches}")
             imgs1, imgs2, flows, _, done = next(sampler)
-            assert imgs1.shape[0] == 2
+            assert imgs1.shape[0] == 4
             assert imgs1[0].shape == (H, W)
             assert isinstance(imgs1, jnp.ndarray)
+            print(f"episode {i} batch {n_batches}")
             n_batches += 1
 
     assert (
-        n_batches == num_episodes * 2
-    ), f"Expected {num_episodes * 2} batches, but got {n_batches}"
+        n_batches == epi.episode_length * num_episodes
+    ), f"Expected {epi.episode_length * num_episodes} batches, but got {n_batches}"
 
     # Clean up background thread
     sampler.scheduler.shutdown()
