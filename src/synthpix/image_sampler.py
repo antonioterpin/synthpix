@@ -77,8 +77,6 @@ class SyntheticImageSampler:
                 Number of synthetic image couples per batch.
             flow_fields_per_batch: int
                 Number of flow fields to use per batch.
-            flow_field_shape: Tuple[int, int]
-                Shape of the flow field in grid steps.
             flow_field_size: Tuple[float, float]
                 Area in which the flow field has been calculated
                 in a length measure unit. (e.g in meters, cm, etc.)
@@ -181,8 +179,10 @@ class SyntheticImageSampler:
             )
         self.batch_size = batch_size
 
-        if len(flow_field_size) != 2 or not all(
-            isinstance(s, (int, float)) and s > 0 for s in flow_field_size
+        if (
+            not isinstance(flow_field_size, tuple)
+            or len(flow_field_size) != 2
+            or not all(isinstance(s, (int, float)) and s > 0 for s in flow_field_size)
         ):
             raise ValueError("flow_field_size must be a tuple of two positive numbers.")
         self.flow_field_size = flow_field_size
@@ -190,15 +190,19 @@ class SyntheticImageSampler:
         # Use the scheduler to get the flow field shape
         flow_field_shape = scheduler.get_flow_fields_shape()
         flow_field_shape = (flow_field_shape[0], flow_field_shape[1])
-        if len(flow_field_shape) != 2 or not all(
-            isinstance(s, int) and s > 0 for s in flow_field_shape
+        if (
+            not isinstance(flow_field_shape, tuple)
+            or len(flow_field_shape) != 2
+            or not all(isinstance(s, int) and s > 0 for s in flow_field_shape)
         ):
             raise ValueError(
                 "flow_field_shape must be a tuple of two positive integers."
             )
 
-        if len(image_shape) != 2 or not all(
-            isinstance(s, int) and s > 0 for s in image_shape
+        if (
+            not isinstance(image_shape, tuple)
+            or len(image_shape) != 2
+            or not all(isinstance(s, int) and s > 0 for s in image_shape)
         ):
             raise ValueError("image_shape must be a tuple of two positive integers.")
         self.image_shape = image_shape
@@ -218,13 +222,19 @@ class SyntheticImageSampler:
             int(image_shape[1] * velocities_per_pixel),
         )
 
-        if len(img_offset) != 2 or not all(
-            isinstance(s, (int, float)) and s >= 0 for s in img_offset
+        if (
+            not isinstance(img_offset, tuple)
+            or len(img_offset) != 2
+            or not all(isinstance(s, (int, float)) and s >= 0 for s in img_offset)
         ):
             raise ValueError("img_offset must be a tuple of two non-negative numbers.")
 
-        if len(seeding_density_range) != 2 or not all(
-            isinstance(s, (int, float)) and s >= 0 for s in seeding_density_range
+        if (
+            not isinstance(seeding_density_range, tuple)
+            or len(seeding_density_range) != 2
+            or not all(
+                isinstance(s, (int, float)) and s >= 0 for s in seeding_density_range
+            )
         ):
             raise ValueError(
                 "seeding_density_range must be a tuple of two non-negative numbers."
@@ -241,8 +251,10 @@ class SyntheticImageSampler:
             raise ValueError("p_hide_img2 must be between 0 and 1.")
         self.p_hide_img2 = p_hide_img2
 
-        if len(diameter_range) != 2 or not all(
-            isinstance(d, (int, float)) and d > 0 for d in diameter_range
+        if (
+            not isinstance(diameter_range, tuple)
+            or len(diameter_range) != 2
+            or not all(isinstance(d, (int, float)) and d > 0 for d in diameter_range)
         ):
             raise ValueError("diameter_range must be a tuple of two positive floats.")
         if diameter_range[0] > diameter_range[1]:
@@ -253,8 +265,10 @@ class SyntheticImageSampler:
             raise ValueError("diameter_var must be a non-negative number.")
         self.diameter_var = diameter_var
 
-        if len(intensity_range) != 2 or not all(
-            isinstance(i, (int, float)) and i >= 0 for i in intensity_range
+        if (
+            not isinstance(intensity_range, tuple)
+            or len(intensity_range) != 2
+            or not all(isinstance(i, (int, float)) and i >= 0 for i in intensity_range)
         ):
             raise ValueError(
                 "intensity_range must be a tuple of two non-negative floats."
@@ -267,8 +281,12 @@ class SyntheticImageSampler:
             raise ValueError("intensity_var must be a non-negative number.")
         self.intensity_var = intensity_var
 
-        if len(rho_range) != 2 or not all(
-            isinstance(r, (int, float)) and -1.0 < r < 1.0 for r in rho_range
+        if (
+            not isinstance(rho_range, tuple)
+            or len(rho_range) != 2
+            or not all(
+                isinstance(r, (int, float)) and -1.0 < r < 1.0 for r in rho_range
+            )
         ):
             raise ValueError(
                 "rho_range must be a tuple of two floats between -1 and 1."
@@ -749,19 +767,19 @@ class SyntheticImageSampler:
                 batches_per_flow_batch=config["batches_per_flow_batch"],
                 batch_size=config["batch_size"],
                 flow_fields_per_batch=config["flow_fields_per_batch"],
-                flow_field_size=config["flow_field_size"],
-                image_shape=config["image_shape"],
+                flow_field_size=tuple(config["flow_field_size"]),
+                image_shape=tuple(config["image_shape"]),
                 resolution=config["resolution"],
                 velocities_per_pixel=config["velocities_per_pixel"],
-                img_offset=config["img_offset"],
-                seeding_density_range=config["seeding_density_range"],
+                img_offset=tuple(config["img_offset"]),
+                seeding_density_range=tuple(config["seeding_density_range"]),
                 p_hide_img1=config["p_hide_img1"],
                 p_hide_img2=config["p_hide_img2"],
-                diameter_range=config["diameter_range"],
+                diameter_range=tuple(config["diameter_range"]),
                 diameter_var=config["diameter_var"],
-                intensity_range=config["intensity_range"],
+                intensity_range=tuple(config["intensity_range"]),
                 intensity_var=config["intensity_var"],
-                rho_range=config["rho_range"],
+                rho_range=tuple(config["rho_range"]),
                 rho_var=config["rho_var"],
                 dt=config["dt"],
                 seed=config["seed"],
