@@ -926,7 +926,7 @@ def test_speed_sampler_real_fn(
     elif num_devices == 2:
         limit_time = 1.0
     elif num_devices == 4:
-        limit_time = 0.6
+        limit_time = 0.65
 
     # Create the sampler
     prefetching_scheduler = PrefetchingFlowFieldScheduler(

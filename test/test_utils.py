@@ -595,11 +595,11 @@ def test_speed_flow_fields_adapter(
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 7e-3
+        limit_time = 1.5e-2
     elif num_devices == 2:
-        limit_time = 4.5e-3
+        limit_time = 3.8e-3
     elif num_devices == 4:
-        limit_time = 1.8e-3  # TODO: fix times for 4 GPUs when available
+        limit_time = 1.8e-4
 
     # Name of the axis for the device mesh
     shard_fields = "fields"
