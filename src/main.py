@@ -4,6 +4,7 @@ import argparse
 from synthpix.data_generate import generate_images_from_flow
 from synthpix.image_sampler import SyntheticImageSampler
 from synthpix.scheduler import (
+    FloFlowFieldScheduler,
     HDF5FlowFieldScheduler,
     MATFlowFieldScheduler,
     NumpyFlowFieldScheduler,
@@ -15,6 +16,7 @@ SCHEDULERS = {
     ".h5": HDF5FlowFieldScheduler,
     ".mat": MATFlowFieldScheduler,
     ".npy": NumpyFlowFieldScheduler,
+    ".flo": FloFlowFieldScheduler,
 }
 
 
