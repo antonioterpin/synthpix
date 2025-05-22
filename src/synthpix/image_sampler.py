@@ -166,10 +166,14 @@ class SyntheticImageSampler:
 
         if not isinstance(flow_fields_per_batch, int) or flow_fields_per_batch <= 0:
             raise ValueError("flow_fields_per_batch must be a positive integer.")
-        self.flow_fields_per_batch = flow_fields_per_batch
-
         if not isinstance(batch_size, int) or batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
+        if flow_fields_per_batch > batch_size:
+            raise ValueError(
+                "flow_fields_per_batch must be less than or equal to batch_size."
+            )
+        self.flow_fields_per_batch = flow_fields_per_batch
+
         # Make sure the batch size is divisible by the number of devices
         if batch_size % num_devices != 0:
             batch_size = (batch_size // num_devices + 1) * num_devices

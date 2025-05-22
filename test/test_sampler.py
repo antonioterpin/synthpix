@@ -171,6 +171,26 @@ def test_invalid_flow_fields_per_batch(flow_fields_per_batch, scheduler):
         )
 
 
+@pytest.mark.parametrize("flow_fields_per_batch", [10, 20, 500])
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_more_flows_per_batch_than_batch_size(flow_fields_per_batch, scheduler):
+    """Test that flow_fields_per_batch is less than or equal to batch_size."""
+    with pytest.raises(
+        ValueError,
+        match="flow_fields_per_batch must be less than or equal to batch_size.",
+    ):
+        config = sampler_config.copy()
+        config["flow_fields_per_batch"] = flow_fields_per_batch
+        config["batch_size"] = flow_fields_per_batch - 1
+        SyntheticImageSampler.from_config(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            config=config,
+        )
+
+
 @pytest.mark.parametrize("flow_field_size", [(-1, 128), (128, -1), (0, 128), (128, 0)])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
@@ -764,6 +784,7 @@ def test_sampler_with_real_img_gen_fn(
 
     config = sampler_config.copy()
     config["batch_size"] = batch_size
+    config["flow_fields_per_batch"] = batch_size
     config["batches_per_flow_batch"] = batches_per_flow_batch
     config["image_shape"] = image_shape
     config["seeding_density_range"] = seeding_density_range
