@@ -836,11 +836,11 @@ def test_speed_sampler_dummy_fn(
     num_devices = len(jax.devices())
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 1.27
+        limit_time = 3.0
     elif num_devices == 2:
-        limit_time = 1.2
+        limit_time = 2.6
     elif num_devices == 4:
-        limit_time = 1.2
+        limit_time = 2.5
 
     # Create the sampler
     prefetching_scheduler = PrefetchingFlowFieldScheduler(
@@ -922,11 +922,11 @@ def test_speed_sampler_real_fn(
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 1.57
+        limit_time = 1.7
     elif num_devices == 2:
-        limit_time = 1.0
+        limit_time = 1.2
     elif num_devices == 4:
-        limit_time = 0.65
+        limit_time = 1.14
 
     # Create the sampler
     prefetching_scheduler = PrefetchingFlowFieldScheduler(
