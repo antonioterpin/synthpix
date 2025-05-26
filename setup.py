@@ -25,7 +25,7 @@ setup(
             "pre_commit==4.0.1",
             "pytest==7.4.4",
         ],
-        "cuda12": ["jax[cuda12_pip]>=0.4.3"],
+        "cuda12": ["jax[cuda12]>=0.4.3"],
         "docs": [
             "Sphinx==7.4.7",
             "sphinx-copybutton==0.5.2",
