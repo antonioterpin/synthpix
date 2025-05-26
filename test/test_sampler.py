@@ -992,7 +992,7 @@ def _dummy_img_gen_fn(*, key, flow_field, num_images, image_shape, **_):
 # Global parameters – tweak once here if you change defaults in the code base
 # -----------------------------------------------------------------------------
 
-BATCH_SIZE = 2
+BATCH_SIZE = 4
 EPISODE_LENGTH = 4
 FLOW_BATCH_SIZE = BATCH_SIZE  # one flow‑field per episode step
 BATCHES_PER_FLOW_BATCH = 1  # keep simple: one synthetic batch per step
@@ -1066,7 +1066,7 @@ def _build_sampler(mock_mat_files):
     sampler.scheduler.shutdown()
 
 
-@pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
+@pytest.mark.parametrize("mock_mat_files", [128], indirect=True)
 def test_done_flag_and_horizon(sampler):
     """`done` should be True *exactly* once (the final step of each episode)."""
 
