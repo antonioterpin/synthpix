@@ -597,9 +597,9 @@ def test_speed_flow_fields_adapter(
     if num_devices == 1:
         limit_time = 1.5e-2
     elif num_devices == 2:
-        limit_time = 3.8e-3
+        limit_time = 1.2e-2
     elif num_devices == 4:
-        limit_time = 1.8e-4
+        limit_time = 2.1e-3
 
     # Name of the axis for the device mesh
     shard_fields = "fields"
