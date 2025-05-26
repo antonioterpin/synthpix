@@ -24,6 +24,7 @@ setup(
         "dev": [
             "pre_commit==4.0.1",
             "pytest==7.4.4",
+            "snowballstemmer",
         ],
         "cuda12": ["jax[cuda12]>=0.4.3"],
         "docs": [
