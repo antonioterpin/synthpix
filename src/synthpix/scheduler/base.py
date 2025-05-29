@@ -98,7 +98,8 @@ class BaseFlowFieldScheduler(ABC):
         self._cached_file = None
         if self.randomize:
             random.shuffle(self.file_list)
-        logger.info("Scheduler state has been reset.")
+        if reset_epoch:
+            logger.info("Scheduler state has been reset.")
         logger.debug(f"File list: {self.file_list}")
 
     def __next__(self) -> np.ndarray:

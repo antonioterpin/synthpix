@@ -77,12 +77,12 @@ def apply_flow_to_image_forward(
 def apply_flow_to_image_backward(
     image: jnp.ndarray,
     flow_field: jnp.ndarray,
-    dt: float,
+    dt: float = 1.0,
 ) -> jnp.ndarray:
     """Warp a 2D image of particles according to a given flow field.
 
     For each pixel (y, x) in the output image, we compute a velocity (u, v)
-    from `flow_field[t, y, x]`, then sample from the input image at
+    from `flow_field[y, x]`, then sample from the input image at
     (y_s, x_s) = (y - v * dt, x - u * dt) via bilinear interpolation.
 
     Args:

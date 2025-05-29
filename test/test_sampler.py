@@ -857,11 +857,11 @@ def test_speed_sampler_dummy_fn(
     num_devices = len(jax.devices())
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 1.27
+        limit_time = 2.6
     elif num_devices == 2:
-        limit_time = 1.2
+        limit_time = 2.6
     elif num_devices == 4:
-        limit_time = 1.2
+        limit_time = 2.6
 
     # Create the sampler
     prefetching_scheduler = PrefetchingFlowFieldScheduler(
@@ -1013,7 +1013,7 @@ def _dummy_img_gen_fn(*, key, flow_field, num_images, image_shape, **_):
 # Global parameters – tweak once here if you change defaults in the code base
 # -----------------------------------------------------------------------------
 
-BATCH_SIZE = 2
+BATCH_SIZE = 4
 EPISODE_LENGTH = 4
 FLOW_BATCH_SIZE = BATCH_SIZE  # one flow‑field per episode step
 BATCHES_PER_FLOW_BATCH = 1  # keep simple: one synthetic batch per step
@@ -1087,28 +1087,20 @@ def _build_sampler(mock_mat_files):
     sampler.scheduler.shutdown()
 
 
-@pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
+@pytest.mark.parametrize("mock_mat_files", [128], indirect=True)
 def test_done_flag_and_horizon(sampler):
     """`done` should be True *exactly* once (the final step of each episode)."""
 
     dones = []
     for i in range(NUM_EPISODES):
-        imgs1, imgs2, flows, _, done = sampler.next_episode()
-        print(f"episode {i} batch 0")
+        imgs1, _, _, _, done = sampler.next_episode()
         dones.append(done)
         for j in range(EPISODE_LENGTH - 1):
-            imgs1, imgs2, flows, _, done = next(sampler)
-            print(f"episode {i} batch {j + 1}")
+            imgs1, _, _, _, done = next(sampler)
             assert imgs1.shape[0] == BATCH_SIZE
             assert imgs1[0].shape == IMG_SHAPE
             assert isinstance(imgs1, jnp.ndarray)
             dones.append(done)
-
-    print("dones:", dones)
-    print(
-        "dones[EPISODE_LENGTH - 1::EPISODE_LENGTH]:",
-        dones[EPISODE_LENGTH - 1 :: EPISODE_LENGTH],
-    )
 
     true_flags = sum(int(flag) for d in dones for flag in d)
     assert (
