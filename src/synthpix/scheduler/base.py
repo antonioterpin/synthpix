@@ -146,7 +146,7 @@ class BaseFlowFieldScheduler(ABC):
 
         raise StopIteration
 
-    def get_batch(self, batch_size) -> list:
+    def get_batch(self, batch_size) -> np.ndarray:
         """Retrieves a batch of flow fields using the current scheduler state.
 
         This method repeatedly calls `__next__()` to store a batch of flow field slices.

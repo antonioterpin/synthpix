@@ -202,6 +202,52 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
 
         raise StopIteration
 
+    def get_batch(self, batch_size: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Retrieves a batch of flow fields using the current scheduler state.
+
+        Args:
+            batch_size: int
+                The number of flow fields to retrieve in the batch.
+
+        Returns:
+            tuple[np.ndarray, np.ndarray, np.ndarray]: A batch of flow fields or a tuple
+            containing flow fields and images.
+        """
+        if self.include_images:
+            batch = []
+            try:
+                for _ in range(batch_size):
+                    sample = next(self)
+                    batch.append(
+                        (
+                            sample["flow"],
+                            sample["img_prev"],
+                            sample["img_next"],
+                        )
+                    )
+            except StopIteration:
+                if not self.loop and batch:
+                    logger.warning(
+                        f"Only {len(batch)} slices could be loaded before exhaustion."
+                    )
+                    flows, img_prevs, img_nexts = zip(*batch)
+                    return (
+                        np.array(flows, dtype=np.float32),
+                        np.array(img_prevs, dtype=np.float32),
+                        np.array(img_nexts, dtype=np.float32),
+                    )
+                raise
+            flows, img_prevs, img_nexts = zip(*batch)
+            import jax.numpy as jnp
+
+            return (
+                jnp.array(img_prevs, dtype=jnp.float32),
+                jnp.array(img_nexts, dtype=jnp.float32),
+                jnp.array(flows, dtype=jnp.float32),
+            )
+        else:
+            return super().get_batch(batch_size)
+
     @staticmethod
     def from_config(config: dict) -> "MATFlowFieldScheduler":
         """Creates a MATFlowFieldScheduler instance from a configuration dictionary.
