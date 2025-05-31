@@ -3,21 +3,22 @@
 ## Installation
 We will use [conda](https://conda.io/en/latest/user-guide/install/) to handle the virtual environment.
 ```sh
-conda create -n synthpix python=3.10
+conda create -n synthpix python=3.12
 conda activate synthpix
 pip install pip --upgrade
+pip install uv
 ```
 Dev with CUDA12:
 ```bash
-pip install .[cuda12,dev]
+uv pip install .[cuda12,dev]
 ```
 Dev without CUDA12:
 ```bash
-pip install .[dev]
+uv pip install .[dev]
 ```
 For docs:
 ```bash
-pip install .[cuda12,dev,docs]
+uv pip install .[cuda12,dev,docs]
 ```
 
 ### JAX CUDA 12 installation

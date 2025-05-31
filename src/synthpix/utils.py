@@ -50,54 +50,47 @@ def load_configuration(file_path: str):
 
 
 def bilinear_interpolate(
-    image: jnp.ndarray, x: jnp.ndarray, y: jnp.ndarray
+    image: jnp.ndarray, x_f: jnp.ndarray, y_f: jnp.ndarray
 ) -> jnp.ndarray:
     """Perform bilinear interpolation of `image` at floating-point pixel coordinates.
 
     Args:
-        image: jnp.ndarray
-            2D image to sample from, of shape (H, W).
-        x: jnp.ndarray
-            2D array of floating-point x-coordinates
-        y: jnp.ndarray
-            2D array of floating-point y-coordinates
+        image (jnp.ndarray): 2D image to sample from, of shape (H, W).
+        x (jnp.ndarray): 2D array of floating-point x-coordinates
+        y (jnp.ndarray): 2D array of floating-point y-coordinates
 
     Returns:
         jnp.ndarray: Interpolated intensities at each (y, x) location, of shape (H, W).
     """
     H, W = image.shape
 
-    # Floor of x, y
-    x0 = jnp.floor(x).astype(int)
-    y0 = jnp.floor(y).astype(int)
-    # Ceiling (neighbor) of x, y
-    x1 = jnp.ceil(x).astype(int)
-    y1 = jnp.ceil(y).astype(int)
+    # Clamp x_f and y_f to be within the image bounds
+    x_f_clamped = jnp.clip(x_f, 0.0, W - 1.0)
+    y_f_clamped = jnp.clip(y_f, 0.0, H - 1.0)
 
-    # Clamp to image boundaries
-    # Note: in this way, the positions need to be within the image boundaries
-    x0 = jnp.clip(x0, 0, W - 1)
-    x1 = jnp.clip(x1, 0, W - 1)
-    y0 = jnp.clip(y0, 0, H - 1)
-    y1 = jnp.clip(y1, 0, H - 1)
+    # Integer neighbors & clamping
+    x0 = jnp.clip(jnp.floor(x_f).astype(jnp.int32), 0, W - 1)
+    x1 = jnp.clip(x0 + 1, 0, W - 1)
+    y0 = jnp.clip(jnp.floor(y_f).astype(jnp.int32), 0, H - 1)
+    y1 = jnp.clip(y0 + 1, 0, H - 1)
 
-    # Compute interpolation weights
-    alpha_x = x - jnp.floor(x)
-    alpha_y = y - jnp.floor(y)
+    # Fractional weights
+    wx = x_f_clamped - x0
+    wy = y_f_clamped - y0
 
-    # Gather intensities from the four corners
-    Ia = image[y0, x0]  # top-left
-    Ib = image[y0, x1]  # top-right
-    Ic = image[y1, x0]  # bottom-left
-    Id = image[y1, x1]  # bottom-right
+    # Gather neighboring pixels
+    I00 = image[y0, x0]
+    I10 = image[y0, x1]
+    I01 = image[y1, x0]
+    I11 = image[y1, x1]
 
-    # Bilinear interpolation formula
-    wa = (1.0 - alpha_x) * (1.0 - alpha_y)
-    wb = alpha_x * (1.0 - alpha_y)
-    wc = (1.0 - alpha_x) * alpha_y
-    wd = alpha_x * alpha_y
-
-    return Ia * wa + Ib * wb + Ic * wc + Id * wd
+    # Bilinear
+    return (
+        (1 - wx) * (1 - wy) * I00
+        + wx * (1 - wy) * I10
+        + (1 - wx) * wy * I01
+        + wx * wy * I11
+    )
 
 
 def trilinear_interpolate(
