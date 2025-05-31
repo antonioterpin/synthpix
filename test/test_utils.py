@@ -75,7 +75,8 @@ def test_bilinear_interpolate(image, x, y, expected):
         y (jnp.ndarray): The y-coordinates for interpolation.
         expected (jnp.ndarray): The expected interpolated values.
     """
-    assert bilinear_interpolate(image, x, y) == expected
+    res = bilinear_interpolate(image, x, y)
+    assert res == expected, f"Expected {expected} but got {res}"
 
 
 @pytest.mark.parametrize(

@@ -77,12 +77,12 @@ def apply_flow_to_image_forward(
 def apply_flow_to_image_backward(
     image: jnp.ndarray,
     flow_field: jnp.ndarray,
-    dt: float,
+    dt: float = 1.0,
 ) -> jnp.ndarray:
     """Warp a 2D image of particles according to a given flow field.
 
     For each pixel (y, x) in the output image, we compute a velocity (u, v)
-    from `flow_field[t, y, x]`, then sample from the input image at
+    from `flow_field[y, x]`, then sample from the input image at
     (y_s, x_s) = (y - v * dt, x - u * dt) via bilinear interpolation.
 
     Args:
@@ -94,20 +94,22 @@ def apply_flow_to_image_backward(
         jnp.ndarray: A new 2D array of shape (H, W) with the particles displaced.
     """
     H, W = image.shape
-    y_grid, x_grid = jnp.indices((H, W))
 
-    # Extract displacements
-    u = flow_field[..., 0]
-    v = flow_field[..., 1]
+    # Meshgrid of pixel coordinates
+    ys, xs = jnp.meshgrid(jnp.arange(H), jnp.arange(W), indexing="ij")
 
-    # Backward mapping: (x_s, y_s) = (x - u * dt, y - v * dt)
-    # x_grid, y_grid are (H, W)
-    x_s = x_grid - u * dt
-    y_s = y_grid - v * dt
+    # Real sample locations
+    dx = flow_field[..., 0]
+    dy = flow_field[..., 1]
+    x_f = xs - dx * dt
+    y_f = ys - dy * dt
 
-    # Interpolate from the original image at these source coords
-    warped = bilinear_interpolate(image, x_s, y_s)
-    return warped
+    # Bilinear interpolation to sample the image at (y_f, x_f)
+    return bilinear_interpolate(
+        image,
+        x_f,
+        y_f,
+    )
 
 
 def apply_flow_to_image_callable(

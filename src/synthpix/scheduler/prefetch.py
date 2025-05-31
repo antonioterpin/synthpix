@@ -107,7 +107,12 @@ class PrefetchingFlowFieldScheduler:
                 # StopIteration, it means that I don't want the whole batch
                 # i.e. I don't want offsize batches.
                 # Signal end‑of‑stream to consumer
-                self._queue.put(None, block=False)
+                try:
+                    self._queue.put(None, block=False)
+                except queue.Full:
+                    logger.debug("Queue full when signalling EOS; waiting for space…")
+                    # block until it fits
+                    self._queue.put(None, block=True)
                 return
 
             # This will block until there is free space in the queue:

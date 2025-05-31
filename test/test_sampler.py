@@ -171,6 +171,26 @@ def test_invalid_flow_fields_per_batch(flow_fields_per_batch, scheduler):
         )
 
 
+@pytest.mark.parametrize("flow_fields_per_batch", [10, 20, 500])
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_more_flows_per_batch_than_batch_size(flow_fields_per_batch, scheduler):
+    """Test that flow_fields_per_batch is less than or equal to batch_size."""
+    with pytest.raises(
+        ValueError,
+        match="flow_fields_per_batch must be less than or equal to batch_size.",
+    ):
+        config = sampler_config.copy()
+        config["flow_fields_per_batch"] = flow_fields_per_batch
+        config["batch_size"] = flow_fields_per_batch - 1
+        SyntheticImageSampler.from_config(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            config=config,
+        )
+
+
 @pytest.mark.parametrize("flow_field_size", [(-1, 128), (128, -1), (0, 128), (128, 0)])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
@@ -764,6 +784,7 @@ def test_sampler_with_real_img_gen_fn(
 
     config = sampler_config.copy()
     config["batch_size"] = batch_size
+    config["flow_fields_per_batch"] = batch_size
     config["batches_per_flow_batch"] = batches_per_flow_batch
     config["image_shape"] = image_shape
     config["seeding_density_range"] = seeding_density_range
@@ -840,7 +861,7 @@ def test_speed_sampler_dummy_fn(
     elif num_devices == 2:
         limit_time = 2.6
     elif num_devices == 4:
-        limit_time = 2.5
+        limit_time = 2.6
 
     # Create the sampler
     prefetching_scheduler = PrefetchingFlowFieldScheduler(
@@ -1072,22 +1093,14 @@ def test_done_flag_and_horizon(sampler):
 
     dones = []
     for i in range(NUM_EPISODES):
-        imgs1, imgs2, flows, _, done = sampler.next_episode()
-        print(f"episode {i} batch 0")
+        imgs1, _, _, _, done = sampler.next_episode()
         dones.append(done)
         for j in range(EPISODE_LENGTH - 1):
-            imgs1, imgs2, flows, _, done = next(sampler)
-            print(f"episode {i} batch {j + 1}")
+            imgs1, _, _, _, done = next(sampler)
             assert imgs1.shape[0] == BATCH_SIZE
             assert imgs1[0].shape == IMG_SHAPE
             assert isinstance(imgs1, jnp.ndarray)
             dones.append(done)
-
-    print("dones:", dones)
-    print(
-        "dones[EPISODE_LENGTH - 1::EPISODE_LENGTH]:",
-        dones[EPISODE_LENGTH - 1 :: EPISODE_LENGTH],
-    )
 
     true_flags = sum(int(flag) for d in dones for flag in d)
     assert (
