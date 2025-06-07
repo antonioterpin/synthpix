@@ -51,8 +51,13 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         if not all(file_path.endswith(".mat") for file_path in self.file_list):
             raise ValueError("All files must be MATLAB .mat files with HDF5 format")
 
-        logger.debug(f"Initialized with {len(self.file_list)} files")
-        logger.debug(f"File list: {self.file_list}")
+        logger.debug(
+            f"Initializing MATFlowFieldScheduler with output_shape={self.output_shape}, "
+            f"include_images={self.include_images}, "
+            f"randomize={self.randomize}, loop={self.loop}"
+        )
+
+        logger.debug(f"Found {len(self.file_list)} files")
 
     @staticmethod
     def _path_is_hdf5(path: str) -> bool:
@@ -232,18 +237,16 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                     )
                     flows, img_prevs, img_nexts = zip(*batch)
                     return (
-                        np.array(flows, dtype=np.float32),
                         np.array(img_prevs, dtype=np.float32),
                         np.array(img_nexts, dtype=np.float32),
+                        np.array(flows, dtype=np.float32),
                     )
                 raise
             flows, img_prevs, img_nexts = zip(*batch)
-            import jax.numpy as jnp
-
             return (
-                jnp.array(img_prevs, dtype=jnp.float32),
-                jnp.array(img_nexts, dtype=jnp.float32),
-                jnp.array(flows, dtype=jnp.float32),
+                np.array(img_prevs, dtype=np.float32),
+                np.array(img_nexts, dtype=np.float32),
+                np.array(flows, dtype=np.float32),
             )
         else:
             return super().get_batch(batch_size)

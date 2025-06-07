@@ -1,3 +1,4 @@
+import os
 import timeit
 
 import jax
@@ -450,7 +451,7 @@ def test_generate_images_from_flow(visualize=False):
     selected_flow = "horizontal"
     position_bounds = (128, 128)
     image_shape = (128, 128)
-    seeding_density_range = (0.01, 0.01)
+    seeding_density_range = (0.1, 0.1)
     img_offset = (0, 0)
     p_hide_img1 = 0.0
     p_hide_img2 = 0.0
@@ -471,8 +472,8 @@ def test_generate_images_from_flow(visualize=False):
 
     # 3. apply the flow field to the particles
     img, img_warped, _ = generate_images_from_flow(
-        key,
-        flow_field,
+        key=key,
+        flow_field=flow_field,
         position_bounds=position_bounds,
         image_shape=image_shape,
         seeding_density_range=seeding_density_range,
@@ -581,6 +582,228 @@ def test_speed_generate_images_from_flow(
                 img_offset=img_offset,
                 seeding_density_range=seeding_density_range,
                 num_images=num_images,
+            ),
+            mesh=mesh,
+            in_specs=(PartitionSpec(shard_fields), PartitionSpec(shard_fields)),
+            out_specs=(
+                PartitionSpec(shard_fields),
+                PartitionSpec(shard_fields),
+                PartitionSpec(shard_fields),
+            ),
+        )
+    )
+
+    def run_generate_jit():
+        imgs1, imgs2, seeding_densities = jit_generate_images(keys, flow_field_sharded)
+        imgs1.block_until_ready()
+        imgs2.block_until_ready()
+        seeding_densities.block_until_ready()
+
+    # Warm up the function
+    run_generate_jit()
+
+    # Measure the time of the jit function
+    # We divide by the number of devices because shard_map
+    # will return Number of devices results, like this we keep the number of
+    # images generated the same as the number of devices changes
+    total_time_jit = timeit.repeat(
+        stmt=run_generate_jit,
+        number=NUMBER_OF_EXECUTIONS // num_devices,
+        repeat=REPETITIONS,
+    )
+
+    # Average time
+    average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
+
+    # Check if the time is less than the limit
+    assert (
+        average_time_jit < limit_time
+    ), f"The average time is {average_time_jit}, time limit: {limit_time}"
+
+
+@pytest.mark.run_explicitly
+@pytest.mark.parametrize("warped", [True])
+@pytest.mark.parametrize("selected_flow", ["horizontal"])
+@pytest.mark.parametrize("seeding_density", [0.06])
+@pytest.mark.parametrize("image_shape", [(256, 256), (512, 512)])
+@pytest.mark.parametrize("diameter_range", [(1, 2)])
+@pytest.mark.parametrize("diameter_var", [0])
+@pytest.mark.parametrize("intensity_range", [(80, 100)])
+@pytest.mark.parametrize("intensity_var", [0])
+@pytest.mark.parametrize("dt", [0.0])
+@pytest.mark.parametrize("rho_range", [(-0.01, 0.01)])  # rho cannot be -1 or 1
+@pytest.mark.parametrize("rho_var", [0])
+@pytest.mark.parametrize("noise_level", [0.0])
+@pytest.mark.parametrize("img_offset", [(0, 0)])
+def test_img_parameter_combinations(
+    warped,
+    selected_flow,
+    seeding_density,
+    image_shape,
+    diameter_range,
+    diameter_var,
+    intensity_range,
+    intensity_var,
+    dt,
+    rho_range,
+    rho_var,
+    noise_level,
+    img_offset,
+):
+    """Test that we can generate images from a flow field."""
+
+    # 1. setup the image parameters
+    key = jax.random.PRNGKey(0)
+    out_dir = (
+        "results/images_generated/"
+        + image_shape[0].__str__()
+        + "_"
+        + seeding_density.__str__()
+        + "_"
+        + diameter_range[0].__str__()
+        + "-"
+        + diameter_range[1].__str__()
+        + "_"
+        + intensity_range[0].__str__()
+        + "-"
+        + intensity_range[1].__str__()
+        + "_"
+        + noise_level.__str__()
+    )
+    os.makedirs(out_dir, exist_ok=True)
+
+    # 2. create a flow field
+    flow_field = generate_array_flow_field(
+        get_flow_function(selected_flow, image_shape), image_shape
+    )
+    flow_field = jnp.expand_dims(flow_field, axis=0)
+
+    # 3. apply the flow field to the particles
+    jit_gen = jax.jit(
+        lambda key, flow_field: generate_images_from_flow(
+            key,
+            flow_field,
+            position_bounds=image_shape,
+            image_shape=image_shape,
+            seeding_density_range=(seeding_density, seeding_density),
+            num_images=1,
+            img_offset=img_offset,
+            p_hide_img1=0,
+            p_hide_img2=0,
+            diameter_range=diameter_range,
+            diameter_var=diameter_var,
+            intensity_range=intensity_range,
+            intensity_var=intensity_var,
+            rho_range=rho_range,
+            rho_var=rho_var,
+            dt=dt,
+            noise_level=noise_level,
+        )
+    )
+
+    img, img_warped, _ = jit_gen(key, flow_field)
+    # 4. fix the shape of the images
+    img = jnp.squeeze(img)
+    img_warped = jnp.squeeze(img_warped)
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    plt.imsave(out_dir + "img.png", np.array(img), cmap="gray")
+    if warped:
+        plt.imsave(out_dir + "img_warped.png", np.array(img_warped), cmap="gray")
+
+    # 5. check the shape of the images
+    assert img.shape == image_shape
+    assert img_warped.shape == image_shape
+
+
+@pytest.mark.skipif(
+    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
+    reason="user not connect to the server.",
+)
+@pytest.mark.run_explicitly
+@pytest.mark.parametrize("selected_flow", ["horizontal"])
+@pytest.mark.parametrize("seeding_density_range", [(0.1, 0.1)])
+@pytest.mark.parametrize("num_images", [1, 100, 500, 1000, 5000, 10000])
+@pytest.mark.parametrize(
+    "image_shape", [(128, 128), (256, 256), (512, 512), (1024, 1024), (2048, 2048)]
+)
+@pytest.mark.parametrize("img_offset", [(0, 0)])
+@pytest.mark.parametrize("num_flow_fields", [100])
+@pytest.mark.parametrize("diameter_range", [(1, 2)])
+@pytest.mark.parametrize("position_bounds", [(128, 128)])
+@pytest.mark.parametrize("intensity_range", [(100, 200)])
+@pytest.mark.parametrize("rho_range", [(-0.2, 0.2)])
+def test_speed_parameter_combinations(
+    selected_flow,
+    seeding_density_range,
+    num_images,
+    image_shape,
+    img_offset,
+    num_flow_fields,
+    position_bounds,
+    diameter_range,
+    intensity_range,
+    rho_range,
+):
+    """Test that generate_images_from_flow is faster than a limit time."""
+
+    # Name of the axis for the device mesh
+    shard_fields = "fields"
+
+    # Check how many GPUs are available
+    num_devices = len(jax.devices())
+
+    # Limit time in seconds (depends on the number of GPUs)
+    if num_devices == 1:
+        limit_time = 0
+    elif num_devices == 2:
+        limit_time = 0
+    elif num_devices == 4:
+        limit_time = 0
+
+    # Setup device mesh
+    # We want to shard a key to each device
+    # and give different flow fields to each device.
+    # The idea is that each device will generate a num_images images
+    # and then stack it with the images generated by the other GPUs.
+    devices = mesh_utils.create_device_mesh((num_devices,))
+    mesh = Mesh(devices, axis_names=(shard_fields))
+
+    # 1. Generate key
+    key = jax.random.PRNGKey(0)
+
+    # 2. create a flow field
+    flow_field = generate_array_flow_field(
+        get_flow_function(selected_flow, image_shape), image_shape
+    )
+    flow_field = jnp.expand_dims(flow_field, axis=0)
+    flow_field = jnp.repeat(flow_field, num_flow_fields, axis=0)
+
+    # 3. Shard the flow field
+    flow_field_sharded = jax.device_put(
+        flow_field, NamedSharding(mesh, PartitionSpec(shard_fields))
+    )
+
+    # 4. Setup the random keys
+    keys = jax.random.split(key, num_devices)
+    keys = jnp.stack(keys)
+
+    # 5. Create the jit function
+    jit_generate_images = jax.jit(
+        shard_map(
+            lambda key, flow: generate_images_from_flow(
+                key=key,
+                flow_field=flow,
+                position_bounds=image_shape,
+                image_shape=image_shape,
+                img_offset=img_offset,
+                seeding_density_range=seeding_density_range,
+                num_images=num_images,
+                diameter_range=diameter_range,
+                intensity_range=intensity_range,
+                rho_range=rho_range,
             ),
             mesh=mesh,
             in_specs=(PartitionSpec(shard_fields), PartitionSpec(shard_fields)),
