@@ -215,8 +215,12 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                 The number of flow fields to retrieve in the batch.
 
         Returns:
-            tuple[np.ndarray, np.ndarray, np.ndarray]: A batch of flow fields or a tuple
-            containing flow fields and images.
+            tuple[np.ndarray, np.ndarray, np.ndarray] | np.ndarray:
+                A tuple containing:
+                - img_prevs: np.ndarray of previous images
+                - img_nexts: np.ndarray of next images
+                - flows: np.ndarray of flow fields
+                If `include_images` is False, it only returns a batch of flow fields.
         """
         if self.include_images:
             batch = []

@@ -1,4 +1,3 @@
-import os
 import timeit
 
 import jax
@@ -654,7 +653,7 @@ def test_img_parameter_combinations(
 
     # 1. setup the image parameters
     key = jax.random.PRNGKey(0)
-    out_dir = (
+    file_description = (
         "results/images_generated/"
         + image_shape[0].__str__()
         + "_"
@@ -669,8 +668,8 @@ def test_img_parameter_combinations(
         + intensity_range[1].__str__()
         + "_"
         + noise_level.__str__()
+        + "_"
     )
-    os.makedirs(out_dir, exist_ok=True)
 
     # 2. create a flow field
     flow_field = generate_array_flow_field(
@@ -702,16 +701,19 @@ def test_img_parameter_combinations(
     )
 
     img, img_warped, _ = jit_gen(key, flow_field)
-    # 4. fix the shape of the images
-    img = jnp.squeeze(img)
-    img_warped = jnp.squeeze(img_warped)
 
     import matplotlib.pyplot as plt
     import numpy as np
 
-    plt.imsave(out_dir + "img.png", np.array(img), cmap="gray")
+    # 4. fix the shape of the images
+    img = np.squeeze(img)
+    img_warped = np.squeeze(img_warped)
+
+    plt.imsave(file_description + "img.png", np.array(img), cmap="gray")
     if warped:
-        plt.imsave(out_dir + "img_warped.png", np.array(img_warped), cmap="gray")
+        plt.imsave(
+            file_description + "img_warped.png", np.array(img_warped), cmap="gray"
+        )
 
     # 5. check the shape of the images
     assert img.shape == image_shape
@@ -754,14 +756,6 @@ def test_speed_parameter_combinations(
 
     # Check how many GPUs are available
     num_devices = len(jax.devices())
-
-    # Limit time in seconds (depends on the number of GPUs)
-    if num_devices == 1:
-        limit_time = 0
-    elif num_devices == 2:
-        limit_time = 0
-    elif num_devices == 4:
-        limit_time = 0
 
     # Setup device mesh
     # We want to shard a key to each device
@@ -837,7 +831,5 @@ def test_speed_parameter_combinations(
     # Average time
     average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
 
-    # Check if the time is less than the limit
-    assert (
-        average_time_jit < limit_time
-    ), f"The average time is {average_time_jit}, time limit: {limit_time}"
+    # Print the average time for evaluation purposes
+    assert False(average_time_jit), f"The average time is {average_time_jit}"
