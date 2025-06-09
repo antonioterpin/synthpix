@@ -188,3 +188,6 @@ data/
 
 # Cookies
 *cookies*
+
+# Profiler
+/profiler*

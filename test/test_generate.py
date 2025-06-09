@@ -269,11 +269,11 @@ def test_generate_image_from_density(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connect to the server.",
 )
-@pytest.mark.parametrize("seeding_density", [0.016])
+@pytest.mark.parametrize("seeding_density", [0.1, 0.01, 0.001, 0.0001])
 @pytest.mark.parametrize("image_shape", [(1216, 1936)])
-@pytest.mark.parametrize("diameter_range", [(0.5, 3.5)])
-@pytest.mark.parametrize("intensity_range", [(0, 250)])
-@pytest.mark.parametrize("rho_range", [(-0.5, 0.5)])
+@pytest.mark.parametrize("diameter_range", [(1, 2)])
+@pytest.mark.parametrize("intensity_range", [(100, 200)])
+@pytest.mark.parametrize("rho_range", [(-0.2, 0.2)])
 def test_speed_img_gen(
     seeding_density, image_shape, diameter_range, intensity_range, rho_range
 ):
@@ -287,11 +287,11 @@ def test_speed_img_gen(
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 7.1e-5
+        limit_time = 0e-5
     elif num_devices == 2:
-        limit_time = 4.5e-5
+        limit_time = 0e-5
     elif num_devices == 4:
-        limit_time = 2.1e-5
+        limit_time = 0e-5
 
     # Setup device mesh
     # We want to shard the particles and their characteristics
@@ -354,6 +354,13 @@ def test_speed_img_gen(
     )
     rho = jax.device_put(rho, NamedSharding(mesh, PartitionSpec(shard_particles)))
 
+    # wait for the variables to be sent to the devices
+    jax.block_until_ready(particles)
+    jax.block_until_ready(diameters_x)
+    jax.block_until_ready(diameters_y)
+    jax.block_until_ready(intensities)
+    jax.block_until_ready(rho)
+
     _img_gen_fun = (
         lambda particles, diameters_x, diameters_y, intensities, rho: img_gen_from_data(
             image_shape=image_shape,
@@ -405,7 +412,7 @@ def test_speed_img_gen(
     )
 
     # Average time
-    average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
+    average_time_jit = min(total_time_jit)
 
     # 4. Check if the time is less than the limit
     assert (
