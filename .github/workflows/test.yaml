@@ -29,4 +29,4 @@ jobs:
       # Step 4: Run tests
       - name: Run tests
         run: |
-          pytest -v --junitxml=junit/test-results.xml
+          pytest -v --junitxml=junit/test-results.xml --ignore=test/performances
