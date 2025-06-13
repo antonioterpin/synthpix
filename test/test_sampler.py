@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import pytest
 
 from synthpix.data_generate import generate_images_from_flow
-from synthpix.image_sampler import SyntheticImageSampler
+from synthpix.sampler import SyntheticImageSampler
 from synthpix.scheduler import (
     EpisodicFlowFieldScheduler,
     HDF5FlowFieldScheduler,
