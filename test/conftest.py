@@ -194,3 +194,18 @@ def mock_mat_files(tmp_path, generate_mat_file, mat_test_dims, request):
 
     file_paths = [tmp_path / f"flow_{t:04d}.mat" for t in range(1, num_files + 1)]
     return [str(p) for p in file_paths], mat_test_dims
+
+
+def pytest_collection_modifyitems(config, items):
+    """Modify test items to skip if marked with 'run_explicitly' and not selected."""
+    if config.getoption("-m") and "run_explicitly" in config.getoption("-m"):
+        # User explicitly wants to run this test, allow it
+        return
+
+    # Otherwise skip all tests marked with run_explicitly
+    skip_marker = pytest.mark.skip(
+        reason="Skipped unless explicitly selected with -m run_explicitly"
+    )
+    for item in items:
+        if "run_explicitly" in item.keywords:
+            item.add_marker(skip_marker)

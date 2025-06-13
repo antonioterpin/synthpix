@@ -32,9 +32,10 @@ class BaseFlowFieldScheduler(ABC):
         # Check if file_list is a directory or a list of files
         if isinstance(file_list, str) and os.path.isdir(file_list):
             logger.debug(f"Searching for files in {file_list}")
+            file_path = file_list
             pattern = os.path.join(file_list, self._file_pattern)
             file_list = sorted(glob.glob(pattern, recursive=True))
-            logger.debug(f"Found {len(file_list)} files in {file_list}")
+            logger.debug(f"Found {len(file_list)} files in {file_path}")
         elif isinstance(file_list, str) and os.path.isfile(file_list):
             file_list = [file_list]
 
@@ -98,8 +99,8 @@ class BaseFlowFieldScheduler(ABC):
         self._cached_file = None
         if self.randomize:
             random.shuffle(self.file_list)
-        logger.info("Scheduler state has been reset.")
-        logger.debug(f"File list: {self.file_list}")
+        if reset_epoch:
+            logger.info("Scheduler state has been reset.")
 
     def __next__(self) -> np.ndarray:
         """Returns the next flow field slice from the dataset.
@@ -145,7 +146,7 @@ class BaseFlowFieldScheduler(ABC):
 
         raise StopIteration
 
-    def get_batch(self, batch_size) -> list:
+    def get_batch(self, batch_size) -> np.ndarray:
         """Retrieves a batch of flow fields using the current scheduler state.
 
         This method repeatedly calls `__next__()` to store a batch of flow field slices.
