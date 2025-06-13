@@ -393,11 +393,12 @@ def test_prefetch_batch_shapes(mock_hdf5_files):
     prefetch = PrefetchingFlowFieldScheduler(
         scheduler=scheduler, batch_size=3, buffer_size=2
     )
-
-    batch = prefetch.get_batch(3)
-    expected_shape = (3, dims["x_dim"], dims["z_dim"], 2)
-    assert batch.shape == expected_shape
-    prefetch.shutdown()
+    try:
+        batch = prefetch.get_batch(3)
+        expected_shape = (3, dims["x_dim"], dims["z_dim"], 2)
+        assert batch.shape == expected_shape
+    finally:
+        prefetch.shutdown()
 
 
 @pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
@@ -577,6 +578,8 @@ def test_prefetch_next_episode_flush(mock_mat_files):
 
     assert np.array_equal(files, right_new_episode)
 
+    pre.shutdown()
+
 
 @pytest.mark.parametrize("mock_mat_files", [12], indirect=True)
 def test_prefetch_full_episode(mock_mat_files):
@@ -646,3 +649,5 @@ def test_prefetch_full_episode_next_episode(mock_mat_files):
     new_base = MATFlowFieldScheduler(next_batch_files, loop=False, output_shape=(H, W))
     right_new_episode = new_base.get_batch(batch_size)
     assert np.array_equal(new_episode, right_new_episode)
+
+    pre.shutdown()

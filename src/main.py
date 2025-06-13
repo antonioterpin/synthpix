@@ -51,30 +51,32 @@ def main(config_path, output_dir, num_images_to_display):
         img_gen_fn=generate_images_from_flow,
         config=config,
     )
+    try:
+        # Run the sampler and print results
+        logger.info("Starting the SyntheticImageSampler pipeline...")
+        for i, batch in enumerate(sampler):
+            # logger.info(f"Batch {i + 1} generated.")
+            # logger.info(f"Image 1 batch shape: {batch[0].shape}")
+            # logger.info(f"Image 2 batch shape: {batch[1].shape}")
+            # logger.info(f"Flow field batch shape: {batch[2].shape}")
 
-    # Run the sampler and print results
-    logger.info("Starting the SyntheticImageSampler pipeline...")
-    for i, batch in enumerate(sampler):
-        # logger.info(f"Batch {i + 1} generated.")
-        # logger.info(f"Image 1 batch shape: {batch[0].shape}")
-        # logger.info(f"Image 2 batch shape: {batch[1].shape}")
-        # logger.info(f"Flow field batch shape: {batch[2].shape}")
+            for j in range(min(num_images_to_display, batch[0].shape[0])):
+                visualize_and_save(
+                    f"batch_{i}_sample_{j}",
+                    batch[0][j],
+                    batch[1][j],
+                    batch[2][j],
+                    output_dir,
+                )
 
-        for j in range(min(num_images_to_display, batch[0].shape[0])):
-            visualize_and_save(
-                f"batch_{i}_sample_{j}",
-                batch[0][j],
-                batch[1][j],
-                batch[2][j],
-                output_dir,
-            )
-
-        if num_images_to_display > 0:
-            # Ask user if they want to continue generating images
-            choice = input("Do you want to continue generating images? (y/n): ")
-            if choice.lower() != "y":
-                logger.info("Stopping the pipeline.")
-                break
+            if num_images_to_display > 0:
+                # Ask user if they want to continue generating images
+                choice = input("Do you want to continue generating images? (y/n): ")
+                if choice.lower() != "y":
+                    logger.info("Stopping the pipeline.")
+                    break
+    finally:
+        scheduler.shutdown()
 
 
 if __name__ == "__main__":

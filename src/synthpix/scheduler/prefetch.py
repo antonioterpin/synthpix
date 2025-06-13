@@ -56,20 +56,16 @@ class PrefetchingFlowFieldScheduler:
             StopIteration: If the queue is empty or no more data is available.
         """
         try:
-            batch = self._queue.get(timeout=0.1)
+            batch = self._queue.get(block=True, timeout=5)
             if hasattr(self.scheduler, "episode_length"):
                 if self._t >= self.episode_length:
                     self._t = 0
                 self._t += 1
-
-            if batch is None:
-                logger.info("No more data available. " "Stopping.")
-                raise StopIteration
             if hasattr(self.scheduler, "episode_length"):
                 logger.debug(f"t = {self._t}")
             return batch
         except queue.Empty:
-            logger.info("Prefetch queue is empty. " "Waiting for data.")
+            logger.info("Unable to get data.")
             raise StopIteration
 
     def get_batch(self, batch_size):
@@ -99,31 +95,8 @@ class PrefetchingFlowFieldScheduler:
         """Background thread that continuously fetches batches from the scheduler."""
         # This will run until the stop event is set:
         while not self._stop_event.is_set():
-            try:
-                batch = self.scheduler.get_batch(self.batch_size)
-            except StopIteration:
-                # Intended behavior here: I called get_batch() and ran into a
-                # StopIteration, it means there is no more data left. The underlying
-                # scheduler can be implemented in a way that it raises
-                # StopIteration when it has no more data to provide or when it has
-                # produced an incomplete batch. In the latter case, the behavior is so
-                # that the prefetching scheduler will ignore the incomplete batch
-                # and signal end‑of‑stream to consumer
-                try:
-                    self._queue.put(None, block=False)
-                except queue.Full:
-                    logger.debug("Queue full when signalling EOS; waiting for space…")
-                    # block until it fits
-                    self._queue.put(None, block=True)
-                return
-
-            # This will block until there is free space in the queue:
-            # no busy‑waiting needed.
-            try:
-                self._queue.put(batch, block=True)
-            except Exception as e:
-                logger.warning(f"Failed to put batch: {e}")
-                return
+            batch = self.scheduler.get_batch(self.batch_size)
+            self._queue.put(batch, block=True, timeout=0.1)  # Signal end of stream
 
     def reset(self):
         """Resets the prefetching scheduler and underlying scheduler."""
@@ -136,11 +109,11 @@ class PrefetchingFlowFieldScheduler:
         logger.debug("Prefetching thread stopped, queue cleared.")
 
         # Reinitialize the scheduler and start the thread
+        self.scheduler.reset()
+        self._started = False
         self._stop_event.clear()
         self._queue = queue.Queue(maxsize=self.buffer_size)
         self._thread = threading.Thread(target=self._worker, daemon=True)
-        self._started = False
-        self.scheduler.reset()
 
         logger.debug("Prefetching thread reinitialized, scheduler reset.")
 
