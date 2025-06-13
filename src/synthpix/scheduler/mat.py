@@ -225,15 +225,15 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         if self.include_images:
             batch = []
             try:
-                for _ in range(batch_size):
-                    sample = next(self)
-                    batch.append(
-                        (
-                            sample["flow"],
-                            sample["img_prev"],
-                            sample["img_next"],
-                        )
+                batch = [
+                    (
+                        sample["flow"],
+                        sample["img_prev"],
+                        sample["img_next"],
                     )
+                    for _ in range(batch_size)
+                    for sample in [next(self)]
+                ]
             except StopIteration:
                 if not self.loop and batch:
                     logger.warning(
