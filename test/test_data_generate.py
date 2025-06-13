@@ -450,7 +450,7 @@ def test_generate_images_from_flow(visualize=False):
     selected_flow = "horizontal"
     position_bounds = (128, 128)
     image_shape = (128, 128)
-    seeding_density_range = (0.1, 0.1)
+    seeding_density_range = (0.001, 0.01)
     img_offset = (0, 0)
     p_hide_img1 = 0.0
     p_hide_img2 = 0.0
@@ -506,28 +506,32 @@ def test_generate_images_from_flow(visualize=False):
     assert img_warped.shape == image_shape
 
 
-# skipif is used to skip the test if the user is not connected to the server
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connect to the server.",
 )
 @pytest.mark.parametrize("selected_flow", ["horizontal"])
-@pytest.mark.parametrize("seeding_density_range", [(0.016, 0.016)])
-@pytest.mark.parametrize("num_images", [100])
-@pytest.mark.parametrize("image_shape", [(1216, 1936)])
-@pytest.mark.parametrize("position_bounds", [(1536, 2048)])
-@pytest.mark.parametrize("img_offset", [(160, 56)])
-@pytest.mark.parametrize("num_flow_fields", [100])
+@pytest.mark.parametrize("seeding_density_range", [(0.001, 0.06)])
+@pytest.mark.parametrize("num_images", [64])
+@pytest.mark.parametrize("image_shape", [(512, 512)])
+# @pytest.mark.parametrize("position_bounds", [(1536, 2048)])
+@pytest.mark.parametrize("img_offset", [(10, 10)])
+@pytest.mark.parametrize("num_flow_fields", [1])
 def test_speed_generate_images_from_flow(
     selected_flow,
     seeding_density_range,
     num_images,
     image_shape,
-    position_bounds,
+    # position_bounds,
     img_offset,
     num_flow_fields,
 ):
     """Test that generate_images_from_flow is faster than a limit time."""
+
+    # Set the position bounds to 20 pixels larger than the image shape
+    position_bounds = (image_shape[0] + 20, image_shape[1] + 20)
+
+    NUMBER_OF_EXECUTIONS = 10000
 
     # Name of the axis for the device mesh
     shard_fields = "fields"
@@ -537,11 +541,11 @@ def test_speed_generate_images_from_flow(
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 1.5e-2
+        limit_time = 0e-2
     elif num_devices == 2:
-        limit_time = 6.8e-3
+        limit_time = 0e-3
     elif num_devices == 4:
-        limit_time = 3.5e-3
+        limit_time = 0e-3
 
     # Setup device mesh
     # We want to shard a key to each device
@@ -565,10 +569,15 @@ def test_speed_generate_images_from_flow(
     flow_field_sharded = jax.device_put(
         flow_field, NamedSharding(mesh, PartitionSpec(shard_fields))
     )
+    jax.block_until_ready(flow_field_sharded)
 
     # 4. Setup the random keys
     keys = jax.random.split(key, num_devices)
     keys = jnp.stack(keys)
+    keys_sharded = jax.device_put(
+        keys, NamedSharding(mesh, PartitionSpec(shard_fields))
+    )
+    jax.block_until_ready(keys_sharded)
 
     # 5. Create the jit function
     jit_generate_images = jax.jit(
@@ -581,6 +590,15 @@ def test_speed_generate_images_from_flow(
                 img_offset=img_offset,
                 seeding_density_range=seeding_density_range,
                 num_images=num_images,
+                p_hide_img1=0.0,
+                p_hide_img2=0.0,
+                diameter_range=(1, 2),
+                diameter_var=0,
+                intensity_range=(80, 100),
+                intensity_var=0,
+                noise_level=0,
+                rho_range=(-0.01, 0.01),
+                rho_var=0,
             ),
             mesh=mesh,
             in_specs=(PartitionSpec(shard_fields), PartitionSpec(shard_fields)),
@@ -593,7 +611,9 @@ def test_speed_generate_images_from_flow(
     )
 
     def run_generate_jit():
-        imgs1, imgs2, seeding_densities = jit_generate_images(keys, flow_field_sharded)
+        imgs1, imgs2, seeding_densities = jit_generate_images(
+            keys_sharded, flow_field_sharded
+        )
         imgs1.block_until_ready()
         imgs2.block_until_ready()
         seeding_densities.block_until_ready()
@@ -612,7 +632,7 @@ def test_speed_generate_images_from_flow(
     )
 
     # Average time
-    average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
+    average_time_jit = jnp.mean(jnp.array(total_time_jit))
 
     # Check if the time is less than the limit
     assert (

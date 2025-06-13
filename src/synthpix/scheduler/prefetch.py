@@ -56,7 +56,7 @@ class PrefetchingFlowFieldScheduler:
             StopIteration: If the queue is empty or no more data is available.
         """
         try:
-            batch = self._queue.get(timeout=5.0)
+            batch = self._queue.get(timeout=0.1)
             if hasattr(self.scheduler, "episode_length"):
                 if self._t >= self.episode_length:
                     self._t = 0
@@ -144,7 +144,7 @@ class PrefetchingFlowFieldScheduler:
 
         logger.debug("Prefetching thread reinitialized, scheduler reset.")
 
-    def next_episode(self, join_timeout=5.0):
+    def next_episode(self, join_timeout=0.1):
         """Flush the remaining items of the current episode and restart.
 
         This method removes the remaining items from the current episode from
@@ -196,7 +196,7 @@ class PrefetchingFlowFieldScheduler:
         """
         return self.episode_length - self._t
 
-    def shutdown(self, join_timeout=5.0):
+    def shutdown(self, join_timeout=0.1):
         """Gracefully shuts down the background prefetching thread."""
         self._stop_event.set()
 
