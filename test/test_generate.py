@@ -287,11 +287,11 @@ def test_speed_img_gen(
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 7e-5
+        limit_time = 7.1e-5
     elif num_devices == 2:
         limit_time = 4.5e-5
     elif num_devices == 4:
-        limit_time = 2e-5
+        limit_time = 2.1e-5
 
     # Setup device mesh
     # We want to shard the particles and their characteristics

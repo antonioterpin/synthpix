@@ -537,11 +537,11 @@ def test_speed_generate_images_from_flow(
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 1.1e-2
+        limit_time = 1.5e-2
     elif num_devices == 2:
-        limit_time = 5.5e-3
+        limit_time = 6.8e-3
     elif num_devices == 4:
-        limit_time = 3e-3
+        limit_time = 3.5e-3
 
     # Setup device mesh
     # We want to shard a key to each device

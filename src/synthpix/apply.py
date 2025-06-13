@@ -95,56 +95,20 @@ def apply_flow_to_image_backward(
     """
     H, W = image.shape
 
-    # 1. Meshgrid of pixel coordinates
+    # Meshgrid of pixel coordinates
     ys, xs = jnp.meshgrid(jnp.arange(H), jnp.arange(W), indexing="ij")
 
-    # 2. Real sample locations
+    # Real sample locations
     dx = flow_field[..., 0]
     dy = flow_field[..., 1]
     x_f = xs - dx * dt
     y_f = ys - dy * dt
 
-    # 3. Integer neighbors & clamping
-    x0 = jnp.clip(jnp.floor(x_f).astype(jnp.int32), 0, W - 1)
-    x1 = jnp.clip(x0 + 1, 0, W - 1)
-    y0 = jnp.clip(jnp.floor(y_f).astype(jnp.int32), 0, H - 1)
-    y1 = jnp.clip(y0 + 1, 0, H - 1)
-
-    # 4. Fractional weights
-    wx = x_f - x0
-    wy = y_f - y0
-
-    # Gather neighboring pixels
-    I00 = gather(image, y0, x0)
-    I10 = gather(image, y0, x1)
-    I01 = gather(image, y1, x0)
-    I11 = gather(image, y1, x1)
-
-    # Bilinear interpolation
-    warped = (
-        (1 - wx) * (1 - wy) * I00
-        + wx * (1 - wy) * I10
-        + (1 - wx) * wy * I01
-        + wx * wy * I11
-    )
-
-    return warped
-
-
-def gather(img: jnp.ndarray, y: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
-    """Gather pixels from the image at the specified coordinates.
-
-    Args:
-        img (jnp.ndarray): Image of shape (H, W).
-        y (jnp.ndarray): y-coordinates of shape (N, M).
-        x (jnp.ndarray): x-coordinates of shape (N, M).
-
-    Returns:
-        jnp.ndarray: Gathered pixels of shape (N, M).
-    """
-    all_batches = jnp.stack([y, x], axis=-1)
-    return jax.vmap(lambda batch: jax.vmap(lambda idx: img[tuple(idx)])(batch))(
-        all_batches
+    # Bilinear interpolation to sample the image at (y_f, x_f)
+    return bilinear_interpolate(
+        image,
+        x_f,
+        y_f,
     )
 
 

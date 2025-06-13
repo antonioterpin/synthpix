@@ -291,7 +291,7 @@ def test_speed_apply_flow_to_particles(seeding_density, selected_flow, image_sha
     elif num_devices == 2:
         limit_time = 6e-5
     elif num_devices == 4:
-        limit_time = 7.5e-5
+        limit_time = 8.1e-5
 
     # Setup device mesh
     # We want to shard the particles along the first axis

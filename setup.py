@@ -12,7 +12,7 @@ setup(
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     install_requires=[
-        "jax==0.5.3",
+        "jax>=0.4.3",
         "tqdm>=4.67.1",
         "h5py>=3.13.0",
         "ruamel.yaml>=0.18.10",
@@ -22,11 +22,11 @@ setup(
     ],
     extras_require={
         "dev": [
-            "snowballstemmer==2.2.0",
             "pre_commit==4.0.1",
             "pytest==7.4.4",
+            "snowballstemmer",
         ],
-        "cuda12": ["jax[cuda12_pip]"],
+        "cuda12": ["jax[cuda12]>=0.4.3"],
         "docs": [
             "Sphinx==7.4.7",
             "sphinx-copybutton==0.5.2",

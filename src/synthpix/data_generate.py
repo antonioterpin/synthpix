@@ -238,12 +238,12 @@ def generate_images_from_flow(
 
         # First image generation
         first_img = img_gen_from_data(
-            particle_positions=particle_positions * mask_img1[:, None] * mixed[:, None],
+            particle_positions=particle_positions,
             image_shape=position_bounds,
             max_diameter=diameter_range[1],
             diameters_x=diameters_x1,
             diameters_y=diameters_y1,
-            intensities=intensities1,
+            intensities=intensities1 * mask_img1 * mixed,
             rho=rho1,
             clip=False,
         )
@@ -295,12 +295,12 @@ def generate_images_from_flow(
 
         # Second image generation
         second_img = img_gen_from_data(
-            particle_positions=final_positions * mask_img2[:, None] * mixed[:, None],
+            particle_positions=final_positions,
             image_shape=position_bounds,
             max_diameter=diameter_range[1],
             diameters_x=diameters_x2,
             diameters_y=diameters_y2,
-            intensities=intensities2,
+            intensities=intensities2 * mask_img2 * mixed,
             rho=rho2,
             clip=False,
         )
