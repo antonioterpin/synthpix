@@ -106,7 +106,6 @@ def test_speed_sampler_sweep_all(
     all_rows = []
 
     def run_sampler():
-        pass
         # Time the data sampling (batch_size batches)
         for i, batch in enumerate(sampler):
             batch[0].block_until_ready()
