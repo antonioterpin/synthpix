@@ -10,6 +10,12 @@ from PIL import Image
 
 from synthpix.scheduler import HDF5FlowFieldScheduler
 
+TEST_FOLDER = os.path.join(
+    tempfile.gettempdir(), f"synthpix_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+)
+if not os.path.exists(TEST_FOLDER):
+    os.makedirs(TEST_FOLDER)
+
 
 @pytest.fixture(scope="module")
 def hdf5_test_dims(request):
@@ -35,7 +41,7 @@ def generate_hdf5_file():
     """Fixture to generate a temporary HDF5 file with random data."""
 
     def _generate(filename="test.h5", dims=None):
-        path = os.path.join(tempfile.gettempdir(), filename)
+        path = os.path.join(TEST_FOLDER, filename)
         with h5py.File(path, "w") as f:
             data = np.random.rand(
                 dims["x_dim"], dims["y_dim"], dims["z_dim"], dims["features"]
@@ -71,7 +77,7 @@ def temp_file(request, generate_hdf5_file, hdf5_test_dims):
         dims = request.param
     else:
         dims = hdf5_test_dims
-    filename = "mock_data_tmp.h5"  # TODO change name
+    filename = "mock_data_tmp.h5"
     path = generate_hdf5_file(filename, dims=dims)
     try:
         yield path
@@ -84,7 +90,7 @@ def temp_file(request, generate_hdf5_file, hdf5_test_dims):
 def temp_txt_file(request):
     """Fixture to create a temporary text file."""
     filename = "mock_data.txt"
-    path = os.path.join(tempfile.gettempdir(), filename)
+    path = os.path.join(TEST_FOLDER, filename)
     with open(path, "w") as f:
         f.write("This is a test file.")
     try:
@@ -209,3 +215,14 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "run_explicitly" in item.keywords:
             item.add_marker(skip_marker)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Clean up the temporary test folder after all tests have run."""
+    if os.path.exists(TEST_FOLDER):
+        for root, dirs, files in os.walk(TEST_FOLDER, topdown=False):
+            for name in files:
+                os.remove(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+        os.rmdir(TEST_FOLDER)

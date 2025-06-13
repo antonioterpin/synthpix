@@ -856,6 +856,7 @@ def test_speed_sampler_dummy_fn(
     # Check how many GPUs are available
     num_devices = len(jax.devices())
     # Limit time in seconds (depends on the number of GPUs)
+    # The test should not depend much on the number of GPUs.
     if num_devices == 1:
         limit_time = 3.0
     elif num_devices == 2:

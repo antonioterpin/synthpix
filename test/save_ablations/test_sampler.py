@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from synthpix.data_generate import generate_images_from_flow
-from synthpix.image_sampler import SyntheticImageSampler
+from synthpix.sampler import SyntheticImageSampler
 from synthpix.scheduler import PrefetchingFlowFieldScheduler
 from synthpix.utils import load_configuration
 
@@ -156,3 +156,5 @@ def test_speed_sampler_sweep_all(
     )
 
     write_speed_stats_to_csv(output_csv, all_rows)
+
+    prefetching_scheduler.shutdown()
