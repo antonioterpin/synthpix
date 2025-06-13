@@ -10,7 +10,7 @@ import numpy as np
 from tqdm import tqdm
 
 from synthpix.data_generate import generate_images_from_flow
-from synthpix.image_sampler import SyntheticImageSampler
+from synthpix.sampler import SyntheticImageSampler
 from synthpix.scheduler import HDF5FlowFieldScheduler
 from synthpix.utils import load_configuration, logger
 

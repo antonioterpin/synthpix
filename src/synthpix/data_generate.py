@@ -36,7 +36,11 @@ def generate_images_from_flow(
     flow_field_res_y: float = 1.0,
     noise_level: float = 0.0,
 ):
-    """Generates a batch of image pairs from a flow field.
+    """Generates a batch of grey scale image pairs from a batch of flow fields.
+
+    This function generates pairs of images from a given flow field by simulating
+    the motion of particles in the flow. A single flow can be used to generate
+    multiple pairs of images, each with different particle positions and parameters.
 
     Args:
         key: jax.random.PRNGKey

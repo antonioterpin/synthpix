@@ -65,7 +65,6 @@ class PrefetchingFlowFieldScheduler:
             if batch is None:
                 logger.info("No more data available. " "Stopping.")
                 raise StopIteration
-            logger.debug(f"Fetched batch of shape {batch.shape}, ")
             if hasattr(self.scheduler, "episode_length"):
                 logger.debug(f"t = {self._t}")
             return batch
@@ -103,10 +102,13 @@ class PrefetchingFlowFieldScheduler:
             try:
                 batch = self.scheduler.get_batch(self.batch_size)
             except StopIteration:
-                # Intended behavior here: if I called get_batch() and ran into a
-                # StopIteration, it means that I don't want the whole batch
-                # i.e. I don't want offsize batches.
-                # Signal end‑of‑stream to consumer
+                # Intended behavior here: I called get_batch() and ran into a
+                # StopIteration, it means there is no more data left. The underlying
+                # scheduler can be implemented in a way that it raises
+                # StopIteration when it has no more data to provide or when it has
+                # produced an incomplete batch. In the latter case, the behavior is so
+                # that the prefetching scheduler will ignore the incomplete batch
+                # and signal end‑of‑stream to consumer
                 try:
                     self._queue.put(None, block=False)
                 except queue.Full:
