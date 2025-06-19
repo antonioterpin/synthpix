@@ -13,12 +13,14 @@ class RealImageSampler:
             scheduler: Scheduler instance that provides real images.
             batch_size (int): Number of images to sample in each batch.
         """
-        if not hasattr(scheduler, "include_images") or not getattr(
-            scheduler, "include_images", False
-        ):
-            raise ValueError(
-                "Scheduler must have include_images set to True to use RealImageSampler."
-            )
+        while not hasattr(scheduler, "include_images") or not scheduler.include_images:
+            if hasattr(scheduler, "scheduler"):
+                scheduler = scheduler.scheduler
+            else:
+                raise ValueError(
+                    "Base scheduler must have include_images set to True"
+                    " to use RealImageSampler."
+                )
         self.scheduler = scheduler
         self.batch_size = batch_size
 
