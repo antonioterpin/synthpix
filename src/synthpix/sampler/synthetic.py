@@ -7,8 +7,8 @@ from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
-from synthpix.data_generate import input_check_gen_img_from_flow
-from synthpix.utils import (
+from ..data_generate import input_check_gen_img_from_flow
+from ..utils import (
     DEBUG_JIT,
     flow_field_adapter,
     input_check_flow_field_adapter,

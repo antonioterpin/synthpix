@@ -2,8 +2,8 @@
 import h5py
 import numpy as np
 
-from synthpix.scheduler import BaseFlowFieldScheduler
-from synthpix.utils import logger
+from ..scheduler import BaseFlowFieldScheduler
+from ..utils import logger
 
 
 class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):

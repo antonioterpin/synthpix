@@ -5,8 +5,8 @@ import numpy as np
 import scipy.io
 from PIL import Image
 
-from synthpix.scheduler import BaseFlowFieldScheduler
-from synthpix.utils import logger
+from ..utils import logger
+from .base import BaseFlowFieldScheduler
 
 
 class MATFlowFieldScheduler(BaseFlowFieldScheduler):

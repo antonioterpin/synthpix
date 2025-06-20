@@ -3,8 +3,8 @@ import glob
 import os
 import random
 
-from synthpix.scheduler import BaseFlowFieldScheduler
-from synthpix.utils import discover_leaf_dirs, logger
+from ..utils import discover_leaf_dirs, logger
+from .base import BaseFlowFieldScheduler
 
 
 class EpisodicFlowFieldScheduler:

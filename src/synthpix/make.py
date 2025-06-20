@@ -2,9 +2,9 @@
 import os
 from typing import Union
 
-from synthpix.data_generate import generate_images_from_flow
-from synthpix.sampler import RealImageSampler, SyntheticImageSampler
-from synthpix.scheduler import (
+from .data_generate import generate_images_from_flow
+from .sampler import RealImageSampler, SyntheticImageSampler
+from .scheduler import (
     EpisodicFlowFieldScheduler,
     FloFlowFieldScheduler,
     HDF5FlowFieldScheduler,
@@ -12,7 +12,7 @@ from synthpix.scheduler import (
     NumpyFlowFieldScheduler,
     PrefetchingFlowFieldScheduler,
 )
-from synthpix.utils import load_configuration, logger
+from .utils import load_configuration, logger
 
 SCHEDULERS = {
     ".h5": HDF5FlowFieldScheduler,

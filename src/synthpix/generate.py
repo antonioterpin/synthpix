@@ -5,7 +5,7 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 
-from synthpix.utils import is_int
+from .utils import is_int
 
 
 def gaussian_2d(

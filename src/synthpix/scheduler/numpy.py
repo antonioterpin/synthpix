@@ -5,8 +5,8 @@ import re
 import numpy as np
 from PIL import Image
 
-from synthpix.scheduler import BaseFlowFieldScheduler
-from synthpix.utils import logger
+from ..utils import logger
+from .base import BaseFlowFieldScheduler
 
 
 class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):

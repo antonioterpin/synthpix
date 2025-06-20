@@ -2,7 +2,7 @@
 import queue
 import threading
 
-from synthpix.utils import logger
+from ..utils import logger
 
 
 class PrefetchingFlowFieldScheduler:

@@ -5,7 +5,7 @@ from typing import Callable, Tuple
 import jax
 import jax.numpy as jnp
 
-from synthpix.utils import bilinear_interpolate, trilinear_interpolate
+from .utils import bilinear_interpolate, trilinear_interpolate
 
 
 def apply_flow_to_image_forward(

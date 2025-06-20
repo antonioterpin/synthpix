@@ -4,15 +4,15 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 
-from synthpix.apply import apply_flow_to_particles, input_check_apply_flow
+from .apply import apply_flow_to_particles, input_check_apply_flow
 
 # Import existing modules
-from synthpix.generate import (
+from .generate import (
     add_noise_to_image,
     img_gen_from_data,
     input_check_img_gen_from_data,
 )
-from synthpix.utils import DEBUG_JIT, is_int, logger
+from .utils import DEBUG_JIT, is_int, logger
 
 
 def generate_images_from_flow(

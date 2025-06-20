@@ -3,8 +3,8 @@ import os
 
 import numpy as np
 
-from synthpix.scheduler import BaseFlowFieldScheduler
-from synthpix.utils import logger
+from ..scheduler import BaseFlowFieldScheduler
+from ..utils import logger
 
 
 class FloFlowFieldScheduler(BaseFlowFieldScheduler):

@@ -9,10 +9,10 @@ import jax.numpy as jnp
 import numpy as np
 from tqdm import tqdm
 
-from synthpix.data_generate import generate_images_from_flow
-from synthpix.sampler import SyntheticImageSampler
-from synthpix.scheduler import HDF5FlowFieldScheduler
-from synthpix.utils import load_configuration, logger
+from .data_generate import generate_images_from_flow
+from .sampler import SyntheticImageSampler
+from .scheduler import HDF5FlowFieldScheduler
+from .utils import load_configuration, logger
 
 
 def update_config_file(config_path: str, updated_values: dict):
