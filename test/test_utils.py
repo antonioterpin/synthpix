@@ -128,8 +128,6 @@ def test_generate_array_flow_field(shape, flow_field_type, expected):
     flow_field = get_flow_function(flow_field_type)
     generated_flow_field = generate_array_flow_field(flow_field, shape)
 
-    print(generated_flow_field)
-    print(expected)
     assert generated_flow_field.shape == (shape[0], shape[1], 2)
     assert generated_flow_field.shape == expected.shape
     assert jnp.allclose(generated_flow_field, expected, atol=1e-5)
