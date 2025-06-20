@@ -1,24 +1,8 @@
 """Main file to run the SyntheticImageSampler pipeline."""
 import argparse
 
-from synthpix.data_generate import generate_images_from_flow
-from synthpix.sampler import SyntheticImageSampler
-from synthpix.scheduler import (
-    FloFlowFieldScheduler,
-    HDF5FlowFieldScheduler,
-    MATFlowFieldScheduler,
-    NumpyFlowFieldScheduler,
-    PrefetchingFlowFieldScheduler,
-)
+import synthpix.make as synthpix
 from synthpix.utils import load_configuration, logger, visualize_and_save
-
-SCHEDULERS = {
-    ".h5": HDF5FlowFieldScheduler,
-    ".mat": MATFlowFieldScheduler,
-    ".npy": NumpyFlowFieldScheduler,
-    ".flo": FloFlowFieldScheduler,
-}
-
 
 def main(config_path, output_dir, num_images_to_display):
     """Main function to run the SyntheticImageSampler pipeline.
@@ -29,28 +13,9 @@ def main(config_path, output_dir, num_images_to_display):
         output_dir (str): Directory to save visualized images.
         num_images_to_display (int): Number of images to display and save per batch.
     """
-    # Load configuration
-    config = load_configuration(config_path)
-    logger.info("Configuration loaded successfully.")
-
-    if config["scheduler_class"] not in SCHEDULERS:
-        raise ValueError(f"Scheduler class {config['scheduler_class']} not found.")
-    scheduler_class = SCHEDULERS.get(config["scheduler_class"])
-    base_scheduler = scheduler_class.from_config(config)
-
-    # Initialize the prefetching
-    scheduler = PrefetchingFlowFieldScheduler(
-        scheduler=base_scheduler,
-        batch_size=config["flow_fields_per_batch"],
-        buffer_size=4,
-    )
-
     # Initialize the sampler
-    sampler = SyntheticImageSampler.from_config(
-        scheduler=scheduler,
-        img_gen_fn=generate_images_from_flow,
-        config=config,
-    )
+    sampler = synthpix.make(config_path, buffer_size=10)
+    
     try:
         # Run the sampler and print results
         logger.info("Starting the SyntheticImageSampler pipeline...")
@@ -76,7 +41,7 @@ def main(config_path, output_dir, num_images_to_display):
                     logger.info("Stopping the pipeline.")
                     break
     finally:
-        scheduler.shutdown()
+        sampler.scheduler.shutdown()
 
 
 if __name__ == "__main__":
