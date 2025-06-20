@@ -25,11 +25,11 @@ def generate_images_from_flow(
     seeding_density_range: Tuple[float, float] = (0.01, 0.02),
     p_hide_img1: float = 0.01,
     p_hide_img2: float = 0.01,
-    diameter_range: Tuple[float, float] = (0.1, 1.0),
+    diameter_ranges: Tuple[Tuple[float, float], ...] = ((0.1, 1.0),),
     diameter_var: float = 1.0,
-    intensity_range: Tuple[float, float] = (50, 200),
+    intensity_ranges: Tuple[Tuple[float, float], ...] = ((50, 200),),
     intensity_var: float = 1.0,
-    rho_range: Tuple[float, float] = (-0.99, 0.99),
+    rho_ranges: Tuple[Tuple[float, float], ...] = ((-0.99, 0.99),),
     rho_var: float = 1.0,
     dt: float = 1.0,
     flow_field_res_x: float = 1.0,
@@ -62,16 +62,19 @@ def generate_images_from_flow(
             Probability of hiding particles in the first image.
         p_hide_img2: float
             Probability of hiding particles in the second image.
-        diameter_range: Tuple[float, float]
-            Minimum and maximum particle diameter in pixels.
+        diameter_ranges: Tuple[Tuple[float, float], ...]
+            Tuple of tuples containing the minimum and maximum
+            particle diameter in pixels.
         diameter_var: float
             Variance of the particle diameter.
-        intensity_range: Tuple[float, float]
-            Minimum and maximum peak intensity (I0).
+        intensity_ranges: Tuple[Tuple[float, float], ...]
+            Tuple of tuples containing the minimum and maximum
+            peak intensity (I0).
         intensity_var: float
             Variance of the particle intensity.
-        rho_range: Tuple[float, float]
-            Minimum and maximum correlation coefficient (rho).
+        rho_ranges: Tuple[Tuple[float, float], ...]
+            Tuple of tuples containing the minimum and maximum
+            correlation coefficient (rho).
         rho_var: float
             Variance of the correlation coefficient.
         dt: float
@@ -117,12 +120,16 @@ def generate_images_from_flow(
         maxval=seeding_density_range[1],
     )
 
+    # Use this if the other does not work
+    # max_diameter = max(max(inner) for inner in diameter_ranges)
+
     def scan_body(carry, inputs):
         (key,) = carry
         i, seeding_density = inputs
 
         # Split the key for randomness
         key_i = jax.random.fold_in(key, i)
+        subkeys = jax.random.split(key_i, 12)
         (
             subkey1,
             subkey2,
@@ -130,7 +137,19 @@ def generate_images_from_flow(
             subkey4,
             subkey5,
             subkey6,
-        ) = jax.random.split(key_i, 6)
+            subkey7,
+            subkey8,
+            subkey9,
+        ) = subkeys
+
+        # Randomly select a range for this image for each property
+        diameter_idx = jax.random.randint(subkey7, (), 0, len(diameter_ranges))
+        intensity_idx = jax.random.randint(subkey8, (), 0, len(intensity_ranges))
+        rho_idx = jax.random.randint(subkey9, (), 0, len(rho_ranges))
+
+        diameter_range = diameter_ranges[diameter_idx]
+        intensity_range = intensity_ranges[intensity_idx]
+        rho_range = rho_ranges[rho_idx]
 
         # Calculate the number of particles for this couple of images
         current_num_particles = jnp.floor(
@@ -227,13 +246,14 @@ def generate_images_from_flow(
 
         if DEBUG_JIT:
             input_check_img_gen_from_data(
-                particle_positions=particle_positions
-                * mask_img1[:, None]
-                * mixed[:, None],
+                particle_positions=particle_positions,
                 image_shape=position_bounds,
-                diameter_range=diameter_range,
-                intensity_range=intensity_range,
-                rho_range=rho_range,
+                max_diameter=diameter_range[1],
+                diameters_x=diameters_x1,
+                diameters_y=diameters_y1,
+                intensities=intensities1 * mask_img1 * mixed,
+                rho=rho1,
+                clip=False,
             )
 
         # First image generation
@@ -284,13 +304,14 @@ def generate_images_from_flow(
 
         if DEBUG_JIT:
             input_check_img_gen_from_data(
-                particle_positions=final_positions
-                * mask_img2[:, None]
-                * mixed[:, None],
+                particle_positions=final_positions,
                 image_shape=position_bounds,
-                diameter_range=diameter_range,
-                intensity_range=intensity_range,
-                rho_range=rho_range,
+                max_diameter=diameter_range[1],
+                diameters_x=diameters_x2,
+                diameters_y=diameters_y2,
+                intensities=intensities2 * mask_img2 * mixed,
+                rho=rho2,
+                clip=False,
             )
 
         # Second image generation
@@ -323,7 +344,7 @@ def generate_images_from_flow(
             image=second_img, key=subkey6, noise_level=noise_level
         )
 
-        outputs = (first_img, second_img)
+        outputs = (first_img, second_img, diameter_idx, intensity_idx, rho_idx)
         new_carry = (key,)
         return new_carry, outputs
 
@@ -333,13 +354,28 @@ def generate_images_from_flow(
 
     # Generate images using a lax.scan loop
     # For some reason, even if the different indices are independent, vmap is slower
-    _, (first_imgs, second_imgs) = jax.lax.scan(
+    _, outs = jax.lax.scan(
         scan_body,
         (key,),
         scan_inputs,
     )
+    first_imgs, second_imgs, diameter_indices, intensity_indices, rho_indices = outs
 
-    return first_imgs, second_imgs, seeding_densities
+    # Optionally, map indices back to actual tuples for reporting
+    used_diameter_ranges = jnp.array(diameter_ranges)[diameter_indices]
+    used_intensity_ranges = jnp.array(intensity_ranges)[intensity_indices]
+    used_rho_ranges = jnp.array(rho_ranges)[rho_indices]
+
+    return {
+        "first_images": first_imgs,
+        "second_images": second_imgs,
+        "params": {
+            "seeding_densities": seeding_densities,
+            "diameter_ranges": used_diameter_ranges,
+            "intensity_ranges": used_intensity_ranges,
+            "rho_ranges": used_rho_ranges,
+        },
+    }
 
 
 def input_check_gen_img_from_flow(
@@ -352,11 +388,11 @@ def input_check_gen_img_from_flow(
     seeding_density_range: Tuple[float, float] = (0.01, 0.02),
     p_hide_img1: float = 0.01,
     p_hide_img2: float = 0.01,
-    diameter_range: Tuple[float, float] = (0.1, 1.0),
+    diameter_ranges: Tuple[Tuple[float, float], ...] = ((0.1, 1.0),),
     diameter_var: float = 1.0,
-    intensity_range: Tuple[float, float] = (50, 200),
+    intensity_ranges: Tuple[Tuple[float, float], ...] = ((50, 200),),
     intensity_var: float = 1.0,
-    rho_range: Tuple[float, float] = (-0.99, 0.99),
+    rho_ranges: Tuple[Tuple[float, float], ...] = ((-0.99, 0.99),),
     rho_var: float = 1.0,
     dt: float = 1.0,
     flow_field_res_x: float = 1.0,
@@ -385,16 +421,19 @@ def input_check_gen_img_from_flow(
             Probability of hiding particles in the first image.
         p_hide_img2: float
             Probability of hiding particles in the second image.
-        diameter_range: Tuple[float, float]
-            Minimum and maximum particle diameter in pixels.
+        diameter_ranges: Tuple[Tuple[float, float], ...]
+            Tuple of tuples containing the minimum and maximum
+            particle diameter in pixels.
         diameter_var: float
             Variance of the particle diameter.
-        intensity_range: Tuple[float, float]
-            Minimum and maximum peak intensity (I0).
+        intensity_ranges: Tuple[Tuple[float, float], ...]
+            Tuple of tuples containing the minimum and maximum
+            peak intensity (I0).
         intensity_var: float
             Variance of the particle intensity.
-        rho_range: Tuple[float, float]
-            Minimum and maximum correlation coefficient (rho).
+        rho_ranges: Tuple[Tuple[float, float], ...]
+            Tuple of tuples containing the minimum and maximum
+            correlation coefficient (rho).
         rho_var: float
             Variance of the correlation coefficient.
         dt: float
@@ -438,18 +477,56 @@ def input_check_gen_img_from_flow(
         or flow_field.shape[3] != 2
     ):
         raise ValueError("Flow_field must be a 4D jnp.ndarray with shape (N, H, W, 2).")
-    if len(diameter_range) != 2 or not all(d > 0 for d in diameter_range):
-        raise ValueError("diameter_range must be a tuple of two positive floats.")
-    if diameter_range[0] > diameter_range[1]:
-        raise ValueError("diameter_range must be in the form (min, max).")
-    if len(intensity_range) != 2 or not all(i >= 0 for i in intensity_range):
-        raise ValueError("intensity_range must be a tuple of two positive floats.")
-    if intensity_range[0] > intensity_range[1]:
-        raise ValueError("intensity_range must be in the form (min, max).")
-    if len(rho_range) != 2 or not all(-1 < i < 1 for i in rho_range):
-        raise ValueError("rho_range must be a tuple of two floats between -1 and 1.")
-    if rho_range[0] > rho_range[1]:
-        raise ValueError("rho_range must be in the form (min, max).")
+    # Check diameter_ranges
+    if not isinstance(diameter_ranges, tuple) or len(diameter_ranges) == 0:
+        raise ValueError(
+            "diameter_ranges must be a non-empty tuple of (min, max) tuples."
+        )
+    for dr in diameter_ranges:
+        if not (
+            isinstance(dr, tuple)
+            and len(dr) == 2
+            and all(isinstance(v, (int, float)) for v in dr)
+        ):
+            raise ValueError(
+                "Each element of diameter_ranges must be a tuple of two positive floats."
+            )
+        if dr[0] <= 0 or dr[1] <= 0 or dr[0] > dr[1]:
+            raise ValueError(f"Each diameter_range must have 0 < min ≤ max, got {dr}.")
+
+    # Check intensity_ranges
+    if not isinstance(intensity_ranges, tuple) or len(intensity_ranges) == 0:
+        raise ValueError(
+            "intensity_ranges must be a non-empty tuple of (min, max) tuples."
+        )
+    for ir in intensity_ranges:
+        if not (
+            isinstance(ir, tuple)
+            and len(ir) == 2
+            and all(isinstance(v, (int, float)) for v in ir)
+        ):
+            raise ValueError(
+                "Each element of intensity_ranges must be a tuple"
+                "of two non-negative floats."
+            )
+        if ir[0] < 0 or ir[1] < 0 or ir[0] > ir[1]:
+            raise ValueError(f"Each intensity_range must have 0 ≤ min ≤ max, got {ir}.")
+
+    # Check rho_ranges
+    if not isinstance(rho_ranges, tuple) or len(rho_ranges) == 0:
+        raise ValueError("rho_ranges must be a non-empty tuple of (min, max) tuples.")
+    for rr in rho_ranges:
+        if not (
+            isinstance(rr, tuple)
+            and len(rr) == 2
+            and all(isinstance(v, (int, float)) for v in rr)
+        ):
+            raise ValueError(
+                "Each element of rho_ranges must be a tuple of two floats."
+            )
+        if not (-1 < rr[0] < 1 and -1 < rr[1] < 1 and rr[0] <= rr[1]):
+            raise ValueError(f"Each rho_range must have -1 < min ≤ max < 1, got {rr}.")
+
     if not isinstance(num_images, int) or num_images <= 0:
         raise ValueError("num_images must be a positive integer.")
     if not (0 <= p_hide_img1 <= 1):
@@ -502,9 +579,9 @@ def input_check_gen_img_from_flow(
     logger.debug(f"Number of particles: {num_particles}")
     logger.debug(f"Probability of hiding particles in image 1: {p_hide_img1}")
     logger.debug(f"Probability of hiding particles in image 2: {p_hide_img2}")
-    logger.debug(f"Particle diameter range: {diameter_range}")
-    logger.debug(f"Intensity range: {intensity_range}")
-    logger.debug(f"Correlation coefficient range: {rho_range}")
+    logger.debug(f"Particle diameter ranges: {diameter_ranges}")
+    logger.debug(f"Intensity ranges: {intensity_ranges}")
+    logger.debug(f"Correlation coefficient ranges: {rho_ranges}")
     logger.debug(f"Time step (dt): {dt}")
     logger.debug(f"Flow field resolution (x): {flow_field_res_x}")
     logger.debug(f"Flow field resolution (y): {flow_field_res_y}")
