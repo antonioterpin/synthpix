@@ -2,6 +2,8 @@
 
 import jax.numpy as jnp
 
+from synthpix.utils import logger
+
 
 class RealImageSampler:
     """Sampler for real data."""
@@ -23,6 +25,13 @@ class RealImageSampler:
                 )
         self.scheduler = scheduler
         self.batch_size = batch_size
+
+        logger.info("RealImageSampler initialized successfully")
+
+        logger.debug(f"Scheduler class: {self.scheduler.__class__.__name__}")
+        while hasattr(scheduler, "scheduler"):
+            scheduler = scheduler.scheduler
+            logger.debug(f"Scheduler class: {scheduler.scheduler.__class__.__name__}")
 
     def __iter__(self):
         """Return an iterator for the sampler."""
