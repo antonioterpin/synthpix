@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import pytest
 
 from synthpix.data_generate import generate_images_from_flow
-from synthpix.sampler import SyntheticImageSampler
+from synthpix.sampler import RealImageSampler, SyntheticImageSampler
 from synthpix.scheduler import (
     EpisodicFlowFieldScheduler,
     HDF5FlowFieldScheduler,
@@ -1202,3 +1202,43 @@ def test_stop_after_max_episodes(mock_mat_files):
 
     # Clean up background thread
     sampler.scheduler.shutdown()
+
+
+@pytest.mark.parametrize("mock_mat_files", [10], indirect=True)
+def test_real_sampler(mock_mat_files):
+    """Test the RealImageSampler with a mock HDF5 scheduler."""
+    files, _ = mock_mat_files
+    scheduler = MATFlowFieldScheduler(files, loop=False, include_images=True)
+
+    prefetcher = PrefetchingFlowFieldScheduler(
+        scheduler=scheduler, batch_size=2, buffer_size=4
+    )
+
+    sampler = RealImageSampler(scheduler=prefetcher, batch_size=2)
+
+    for batch in sampler:
+        assert len(batch) == 4
+        assert isinstance(batch[0], jnp.ndarray)
+        assert isinstance(batch[1], jnp.ndarray)
+        assert isinstance(batch[2], jnp.ndarray)
+        assert isinstance(batch[3], jnp.ndarray)
+        assert batch[0].shape[0] == 2  # batch size
+
+
+@pytest.mark.parametrize("mock_mat_files", [10], indirect=True)
+def test_reject_wrong_scheduler_for_real_images(mock_mat_files):
+    """Test the RealImageSampler with a mock HDF5 scheduler."""
+    files, _ = mock_mat_files
+    scheduler = MATFlowFieldScheduler(files, loop=False, include_images=False)
+
+    prefetcher = PrefetchingFlowFieldScheduler(
+        scheduler=scheduler, batch_size=2, buffer_size=4
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Base scheduler must have include_images "
+        "set to True to use RealImageSampler.",
+    ):
+        # This should raise an error because the scheduler does not include images
+        RealImageSampler(scheduler=prefetcher, batch_size=2)
