@@ -2,17 +2,18 @@
 import os
 from typing import Union
 
-from synthpix.utils import load_configuration
+from synthpix.data_generate import generate_images_from_flow
+from synthpix.sampler import RealImageSampler, SyntheticImageSampler
 from synthpix.scheduler import (
+    EpisodicFlowFieldScheduler,
+    FloFlowFieldScheduler,
     HDF5FlowFieldScheduler,
     MATFlowFieldScheduler,
     NumpyFlowFieldScheduler,
-    FloFlowFieldScheduler,
     PrefetchingFlowFieldScheduler,
-    EpisodicFlowFieldScheduler,
-    )
-from synthpix.sampler import RealImageSampler, SyntheticImageSampler
-from synthpix.data_generate import generate_images_from_flow
+)
+from synthpix.utils import load_configuration, logger
+
 SCHEDULERS = {
     ".h5": HDF5FlowFieldScheduler,
     ".mat": MATFlowFieldScheduler,
@@ -20,9 +21,6 @@ SCHEDULERS = {
     ".flo": FloFlowFieldScheduler,
 }
 
-from utils import get_logger
-
-logger = get_logger(__name__)
 
 def make(
     config_path: str,
@@ -31,7 +29,7 @@ def make(
     episode_length: int = 0,
 ) -> Union[SyntheticImageSampler, RealImageSampler]:
     """Load the dataset configuration and initialize the sampler.
-    
+
     The loading file must be a YAML file containing the dataset configuration.
     Extracting images from files is supported only for .mat files.
 
@@ -54,12 +52,12 @@ def make(
         raise FileNotFoundError(f"Configuration file {config_path} not found.")
     if not os.path.isfile(config_path):
         raise ValueError(f"Configuration path {config_path} is not a file.")
-    
+
     # Load the dataset configuration
     dataset_config = load_configuration(config_path)
-    
+
     logger.info(f"Loading dataset configuration from {config_path}")
-    
+
     # Configuration validation
     if not isinstance(dataset_config, dict):
         raise TypeError("dataset_config must be a dictionary.")
@@ -71,20 +69,23 @@ def make(
         raise ValueError("buffer_size must be a positive integer.")
     if not isinstance(episode_length, int) or episode_length < 0:
         raise ValueError("episode_length must be a non-negative integer.")
-    
+
     if images_from_file:
         if dataset_config["scheduler_class"] != ".mat":
             raise ValueError(
                 f"Scheduler class {dataset_config['scheduler_class']} "
                 "is not supported for file images."
             )
-        if "include_images" not in dataset_config or not dataset_config["include_images"]:
+        if (
+            "include_images" not in dataset_config
+            or not dataset_config["include_images"]
+        ):
             logger.warning(
                 "The dataset configuration does not have 'include_images' set to True. "
                 "It will be set to True by default."
             )
         dataset_config["include_images"] = True
-        
+
         # Initialize the base scheduler
         base = MATFlowFieldScheduler.from_config(dataset_config)
 
@@ -94,13 +95,13 @@ def make(
                 base,
                 batch_size=dataset_config["batch_size"],
                 episode_length=episode_length,
-                seed=dataset_config.get("seed")
+                seed=dataset_config.get("seed"),
             )
         else:
             sched = base
-            
-        # If buffer_size is specified, use PrefetchingFlowFieldScheduler        
-        if buffer_size > 0: 
+
+        # If buffer_size is specified, use PrefetchingFlowFieldScheduler
+        if buffer_size > 0:
             scheduler = PrefetchingFlowFieldScheduler(
                 sched,
                 batch_size=dataset_config["batch_size"],
@@ -117,23 +118,23 @@ def make(
                 f"Scheduler class {dataset_config['scheduler_class']} not found."
             )
         scheduler_class = SCHEDULERS.get(dataset_config["scheduler_class"])
-        
+
         # Initialize the base scheduler
         base = scheduler_class.from_config(dataset_config)
-        
+
         # If episode_length is specified, use EpisodicFlowFieldScheduler
         if episode_length > 0:
             sched = EpisodicFlowFieldScheduler(
                 base,
                 batch_size=dataset_config["flow_fields_per_batch"],
                 episode_length=episode_length,
-                seed=dataset_config.get("seed")
+                seed=dataset_config.get("seed"),
             )
         else:
             sched = base
 
         # If buffer_size is specified, use PrefetchingFlowFieldScheduler
-        if buffer_size > 0:        
+        if buffer_size > 0:
             scheduler = PrefetchingFlowFieldScheduler(
                 scheduler=sched,
                 batch_size=dataset_config["flow_fields_per_batch"],

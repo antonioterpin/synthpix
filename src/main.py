@@ -1,21 +1,21 @@
 """Main file to run the SyntheticImageSampler pipeline."""
 import argparse
 
-import synthpix.make as synthpix
-from synthpix.utils import load_configuration, logger, visualize_and_save
+import synthpix
+from synthpix.utils import logger, visualize_and_save
+
 
 def main(config_path, output_dir, num_images_to_display):
     """Main function to run the SyntheticImageSampler pipeline.
 
     Args:
         config_path (string): Configuration file path.
-        visualize (bool): Enable visualization of generated images.
         output_dir (str): Directory to save visualized images.
         num_images_to_display (int): Number of images to display and save per batch.
     """
     # Initialize the sampler
     sampler = synthpix.make(config_path, buffer_size=10)
-    
+
     try:
         # Run the sampler and print results
         logger.info("Starting the SyntheticImageSampler pipeline...")
@@ -71,9 +71,6 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-
-    # Read config file
-    config = load_configuration(args.config)
 
     main(
         config_path=args.config,
