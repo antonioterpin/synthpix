@@ -15,6 +15,7 @@ class RealImageSampler:
             scheduler: Scheduler instance that provides real images.
             batch_size (int): Number of images to sample in each batch.
         """
+        self.scheduler = scheduler
         while not hasattr(scheduler, "include_images") or not scheduler.include_images:
             if hasattr(scheduler, "scheduler"):
                 scheduler = scheduler.scheduler
@@ -23,7 +24,6 @@ class RealImageSampler:
                     "Base scheduler must have include_images set to True"
                     " to use RealImageSampler."
                 )
-        self.scheduler = scheduler
         self.batch_size = batch_size
 
         logger.info("RealImageSampler initialized successfully")
@@ -47,3 +47,15 @@ class RealImageSampler:
             jnp.zeros(batch[0].shape[0], dtype=jnp.float32),
         )
         return batch
+
+    def shutdown(self):
+        """Shutdown the sampler."""
+        logger.info("Shutting down RealImageSampler.")
+        if hasattr(self.scheduler, "shutdown"):
+            self.scheduler.shutdown()
+        else:
+            logger.warning(
+                "The underlying scheduler does not have a shutdown method."
+                " Skipping shutdown."
+            )
+        logger.info("RealImageSampler shutdown complete.")

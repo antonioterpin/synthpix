@@ -749,6 +749,18 @@ class SyntheticImageSampler:
         # asynchronous horizons
         return jnp.full((self.batch_size,), is_last_step, dtype=bool)
 
+    def shutdown(self):
+        """Shutdown the sampler and release resources."""
+        logger.info("Shutting down the SyntheticImageSampler.")
+        if hasattr(self.scheduler, "shutdown"):
+            self.scheduler.shutdown()
+        else:
+            logger.warning(
+                "The underlying scheduler does not have a shutdown method. "
+                "Skipping shutdown."
+            )
+        logger.info("SyntheticImageSampler shutdown complete.")
+
     @classmethod
     def from_config(cls, scheduler, img_gen_fn, config) -> "SyntheticImageSampler":
         """Creates a SyntheticImageSampler instance from a configuration dictionary.

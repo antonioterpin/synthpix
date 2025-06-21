@@ -14,11 +14,11 @@ def main(config_path, output_dir, num_images_to_display):
         num_images_to_display (int): Number of images to display and save per batch.
     """
     # Initialize the sampler
-    sampler = synthpix.make(config_path, buffer_size=10)
+    sampler = synthpix.make(config_path, buffer_size=10, images_from_file=True)
 
     try:
         # Run the sampler and print results
-        logger.info("Starting the SyntheticImageSampler pipeline...")
+        logger.info(f"Starting the {sampler.__class__.__name__} pipeline...")
         for i, batch in enumerate(sampler):
             # logger.info(f"Batch {i + 1} generated.")
             # logger.info(f"Image 1 batch shape: {batch[0].shape}")
@@ -41,7 +41,7 @@ def main(config_path, output_dir, num_images_to_display):
                     logger.info("Stopping the pipeline.")
                     break
     finally:
-        sampler.scheduler.shutdown()
+        sampler.shutdown()
 
 
 if __name__ == "__main__":
