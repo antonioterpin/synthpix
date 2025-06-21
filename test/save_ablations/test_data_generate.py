@@ -128,8 +128,8 @@ def test_speed_generate_images_sweep_all():
 
         # 3. Prepare the jit function
         out_specs = {
-            "first_images": PartitionSpec(shard_fields),
-            "second_images": PartitionSpec(shard_fields),
+            "images1": PartitionSpec(shard_fields),
+            "images2": PartitionSpec(shard_fields),
             "params": {
                 "seeding_densities": PartitionSpec(shard_fields),
                 "diameter_ranges": PartitionSpec(shard_fields),
@@ -166,8 +166,8 @@ def test_speed_generate_images_sweep_all():
 
         def run_generate_jit():
             data = jit_generate_images(keys_sharded, flow_field_sharded)
-            imgs1 = data["first_images"]
-            imgs2 = data["second_images"]
+            imgs1 = data["images1"]
+            imgs2 = data["images2"]
             params = data["params"]
             seeding_densities = params["seeding_densities"]
             diameter_ranges = params["diameter_ranges"]

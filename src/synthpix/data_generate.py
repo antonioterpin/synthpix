@@ -93,7 +93,16 @@ def generate_images_from_flow(
             Maximum amplitude of the uniform noise to add.
 
     Returns:
-        tuple: Two image batches (num_images, H, W) each.
+        batch: dict
+            Dictionary containing the generated images and parameters.
+            The keys are:
+                - "images1": jnp.ndarray of shape (num_images, H, W) for the first image.
+                - "images2": jnp.ndarray of shape (num_images, H, W) for the second image.
+                - "params": dict containing:
+                    - "seeding_densities": jnp.ndarray of shape (num_images,).
+                    - "diameter_ranges": jnp.ndarray of shape (num_images, 2).
+                    - "intensity_ranges": jnp.ndarray of shape (num_images, 2).
+                    - "rho_ranges": jnp.ndarray of shape (num_images, 2).
     """
     # Fix the key shape
     key = jnp.reshape(key, (-1, key.shape[-1]))[0]
@@ -359,7 +368,7 @@ def generate_images_from_flow(
         (key,),
         scan_inputs,
     )
-    first_imgs, second_imgs, diameter_indices, intensity_indices, rho_indices = outs
+    images1, images2, diameter_indices, intensity_indices, rho_indices = outs
 
     # Optionally, map indices back to actual tuples for reporting
     used_diameter_ranges = jnp.array(diameter_ranges)[diameter_indices]
@@ -367,10 +376,10 @@ def generate_images_from_flow(
     used_rho_ranges = jnp.array(rho_ranges)[rho_indices]
 
     return {
-        "first_images": first_imgs,
-        "second_images": second_imgs,
+        "images1": images1,
+        "images2": images2,
         "params": {
-            "seeding_densities": seeding_densities,
+            "seeding_densities": seeding_densities[:, None],
             "diameter_ranges": used_diameter_ranges,
             "intensity_ranges": used_intensity_ranges,
             "rho_ranges": used_rho_ranges,

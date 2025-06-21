@@ -108,8 +108,8 @@ def test_speed_sampler_sweep_all(
     def run_sampler():
         # Time the data sampling (batch_size batches)
         for i, batch in enumerate(sampler):
-            batch["first_images"].block_until_ready()
-            batch["second_images"].block_until_ready()
+            batch["images1"].block_until_ready()
+            batch["images2"].block_until_ready()
             batch["flow_fields"].block_until_ready()
             batch["params"]["seeding_densities"].block_until_ready()
             batch["params"]["diameter_ranges"].block_until_ready()

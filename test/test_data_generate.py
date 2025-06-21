@@ -517,8 +517,8 @@ def test_generate_images_from_flow(visualize=False):
         dt=dt,
         noise_level=noise_level,
     )
-    img = data["first_images"]
-    img_warped = data["second_images"]
+    img = data["images1"]
+    img_warped = data["images2"]
 
     # 4. fix the shape of the images
     img = jnp.squeeze(img)
@@ -610,8 +610,8 @@ def test_speed_generate_images_from_flow(
     jax.block_until_ready(keys_sharded)
 
     out_specs = {
-        "first_images": PartitionSpec(shard_fields),
-        "second_images": PartitionSpec(shard_fields),
+        "images1": PartitionSpec(shard_fields),
+        "images2": PartitionSpec(shard_fields),
         "params": {
             "seeding_densities": PartitionSpec(shard_fields),
             "diameter_ranges": PartitionSpec(shard_fields),
@@ -650,8 +650,8 @@ def test_speed_generate_images_from_flow(
 
     def run_generate_jit():
         data = jit_generate_images(keys_sharded, flow_field_sharded)
-        imgs1 = data["first_images"]
-        imgs2 = data["second_images"]
+        imgs1 = data["images1"]
+        imgs2 = data["images2"]
         params = data["params"]
         seeding_densities = params["seeding_densities"]
         diameter_ranges = params["diameter_ranges"]
@@ -863,8 +863,8 @@ def test_speed_parameter_combinations(
     jax.block_until_ready(keys_sharded)
 
     out_specs = {
-        "first_images": PartitionSpec(shard_fields),
-        "second_images": PartitionSpec(shard_fields),
+        "images1": PartitionSpec(shard_fields),
+        "images2": PartitionSpec(shard_fields),
         "params": {
             "seeding_densities": PartitionSpec(shard_fields),
             "diameter_ranges": PartitionSpec(shard_fields),
@@ -897,8 +897,8 @@ def test_speed_parameter_combinations(
 
     def run_generate_jit():
         data = jit_generate_images(keys_sharded, flow_field_sharded)
-        imgs1 = data["first_images"]
-        imgs2 = data["second_images"]
+        imgs1 = data["images1"]
+        imgs2 = data["images2"]
         params = data["params"]
         seeding_densities = params["seeding_densities"]
         diameter_ranges = params["diameter_ranges"]

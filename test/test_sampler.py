@@ -47,10 +47,10 @@ def dummy_img_gen_fn(
     noise_level,
 ):
     """Simulates generating a batch of synthetic images based on a single key."""
-    first_imgs = jnp.ones((num_images, image_shape[0], image_shape[1])) * (
+    images1 = jnp.ones((num_images, image_shape[0], image_shape[1])) * (
         jnp.sum(flow_field) + jnp.sum(key)
     )
-    second_imgs = jnp.ones((num_images, image_shape[0], image_shape[1])) * (
+    images2 = jnp.ones((num_images, image_shape[0], image_shape[1])) * (
         jnp.sum(flow_field) + jnp.sum(key)
     )
     # Fake parameters to match shapes
@@ -60,8 +60,8 @@ def dummy_img_gen_fn(
     used_rho_ranges = jnp.zeros((num_images, 2))
 
     return {
-        "first_images": first_imgs,
-        "second_images": second_imgs,
+        "images1": images1,
+        "images2": images2,
         "params": {
             "seeding_densities": seeding_densities,
             "diameter_ranges": used_diameter_ranges,
@@ -801,9 +801,9 @@ def test_synthetic_sampler_batches(
     )
 
     for batch in sampler:
-        assert batch["first_images"].shape[0] >= batch_size
-        assert batch["first_images"][0].shape >= image_shape
-        assert isinstance(batch["first_images"], jnp.ndarray)
+        assert batch["images1"].shape[0] >= batch_size
+        assert batch["images1"][0].shape >= image_shape
+        assert isinstance(batch["images1"], jnp.ndarray)
 
 
 @pytest.mark.parametrize(
@@ -833,8 +833,8 @@ def test_sampler_switches_flow_fields(
 
     batch2 = next(sampler)
 
-    assert not jnp.allclose(batch1["first_images"], batch2["first_images"])
-    assert not jnp.allclose(batch1["second_images"], batch2["second_images"])
+    assert not jnp.allclose(batch1["images1"], batch2["images1"])
+    assert not jnp.allclose(batch1["images2"], batch2["images2"])
     assert not jnp.allclose(batch1["flow_fields"], batch2["flow_fields"])
 
 
@@ -881,11 +881,11 @@ def test_sampler_with_real_img_gen_fn(
 
     expected_size = jnp.array([image_shape[0] / res, image_shape[1] / res, 2])
 
-    assert isinstance(batch["first_images"], jnp.ndarray)
-    assert isinstance(batch["second_images"], jnp.ndarray)
+    assert isinstance(batch["images1"], jnp.ndarray)
+    assert isinstance(batch["images2"], jnp.ndarray)
     assert isinstance(batch["flow_fields"], jnp.ndarray)
-    assert batch["first_images"].shape == (sampler.batch_size, *image_shape)
-    assert batch["second_images"].shape == (sampler.batch_size, *image_shape)
+    assert batch["images1"].shape == (sampler.batch_size, *image_shape)
+    assert batch["images2"].shape == (sampler.batch_size, *image_shape)
     assert jnp.allclose(output_size, expected_size, atol=0.01)
 
 
@@ -952,8 +952,8 @@ def test_speed_sampler_dummy_fn(
         # Generates images_per_field // batch_size batches
         # of size batch_size
         for i, batch in enumerate(sampler):
-            batch["first_images"].block_until_ready()
-            batch["second_images"].block_until_ready()
+            batch["images1"].block_until_ready()
+            batch["images2"].block_until_ready()
             batch["flow_fields"].block_until_ready()
             batch["params"]["seeding_densities"].block_until_ready()
             batch["params"]["diameter_ranges"].block_until_ready()
@@ -1042,8 +1042,8 @@ def test_speed_sampler_real_fn(
         # Generates batches_per_flow_batch batches
         # of size batch_size
         for i, batch in enumerate(sampler):
-            batch["first_images"].block_until_ready()
-            batch["second_images"].block_until_ready()
+            batch["images1"].block_until_ready()
+            batch["images2"].block_until_ready()
             batch["flow_fields"].block_until_ready()
             batch["params"]["seeding_densities"].block_until_ready()
             batch["params"]["diameter_ranges"].block_until_ready()
@@ -1086,8 +1086,8 @@ def _dummy_img_gen_fn(*, key, flow_field, num_images, image_shape, **_):
     imgs1 = jnp.zeros((num_images, h, w), dtype=jnp.float32)
     imgs2 = jnp.zeros_like(imgs1)
     batch = {
-        "first_images": imgs1,
-        "second_images": imgs2,
+        "images1": imgs1,
+        "images2": imgs2,
         "params": {
             "seeding_densities": jnp.full((num_images,), 0.1, dtype=jnp.float32),
             "diameter_ranges": jnp.full((num_images, 2), 0.1, dtype=jnp.float32),
@@ -1183,12 +1183,12 @@ def test_done_flag_and_horizon(sampler):
     dones = []
     for i in range(NUM_EPISODES):
         batch = sampler.next_episode()
-        imgs1 = batch["first_images"]
+        imgs1 = batch["images1"]
         done = batch["done"]
         dones.append(done)
         for j in range(EPISODE_LENGTH - 1):
             batch = next(sampler)
-            imgs1 = batch["first_images"]
+            imgs1 = batch["images1"]
             done = batch["done"]
             assert imgs1.shape[0] == BATCH_SIZE
             assert imgs1[0].shape == IMG_SHAPE
@@ -1277,14 +1277,14 @@ def test_stop_after_max_episodes(mock_mat_files):
 
     for i in range(num_episodes):
         batch = sampler.next_episode()
-        imgs1 = batch["first_images"]
+        imgs1 = batch["images1"]
         done = batch["done"]
         print(f"episode {i} batch {n_batches}")
         n_batches += 1
         while not any(done):
             logger.debug(f"episode {i} batch {n_batches}")
             batch = next(sampler)
-            imgs1 = batch["first_images"]
+            imgs1 = batch["images1"]
             done = batch["done"]
             assert imgs1.shape[0] == 4
             assert imgs1[0].shape == (H, W)
@@ -1314,11 +1314,14 @@ def test_real_sampler(mock_mat_files):
 
     for batch in sampler:
         assert len(batch) == 4
-        assert isinstance(batch[0], jnp.ndarray)
-        assert isinstance(batch[1], jnp.ndarray)
-        assert isinstance(batch[2], jnp.ndarray)
-        assert isinstance(batch[3], jnp.ndarray)
-        assert batch[0].shape[0] == 2  # batch size
+        assert isinstance(batch["images1"], jnp.ndarray)
+        assert isinstance(batch["images2"], jnp.ndarray)
+        assert isinstance(batch["flow_fields"], jnp.ndarray)
+        assert isinstance(batch["params"]["seeding_densities"], jnp.ndarray)
+        assert isinstance(batch["params"]["diameter_ranges"], jnp.ndarray)
+        assert isinstance(batch["params"]["intensity_ranges"], jnp.ndarray)
+        assert isinstance(batch["params"]["rho_ranges"], jnp.ndarray)
+        assert batch["images1"].shape[0] == 2  # batch size
 
 
 @pytest.mark.parametrize("mock_mat_files", [10], indirect=True)

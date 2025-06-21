@@ -1,5 +1,5 @@
 """SyntheticImageSampler class for generating synthetic images from flow fields."""
-from typing import Callable, Tuple
+from typing import Callable, List, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -50,11 +50,11 @@ class SyntheticImageSampler:
         seeding_density_range: Tuple[float, float],
         p_hide_img1: float,
         p_hide_img2: float,
-        diameter_ranges: list[list[float]],
+        diameter_ranges: List[List[float]],
         diameter_var: float,
-        intensity_ranges: list[list[float]],
+        intensity_ranges: List[List[float]],
         intensity_var: float,
-        rho_ranges: list[list[float]],
+        rho_ranges: List[List[float]],
         rho_var: float,
         dt: float,
         seed: int,
@@ -95,15 +95,15 @@ class SyntheticImageSampler:
                 Probability of hiding particles in the first image.
             p_hide_img2: float
                 Probability of hiding particles in the second image.
-            diameter_ranges: list[list[float, float], ...]
+            diameter_ranges: List[List[float, float], ...]
                 List of ranges of diameters for particles.
             diameter_var: float
                 Variance of the diameters for particles.
-            intensity_ranges: list[list[float, float], ...]
+            intensity_ranges: List[List[float, float], ...]
                 List of ranges of intensities for particles.
             intensity_var: float
                 Variance of the intensities for particles.
-            rho_ranges: list[list[float, float], ...]
+            rho_ranges: List[List[float, float], ...]
                 List of ranges of correlation coefficients for particles.
             rho_var: float
                 Variance of the correlation coefficients for particles.
@@ -461,8 +461,8 @@ class SyntheticImageSampler:
 
         if not DEBUG_JIT:
             out_specs = {
-                "first_images": PartitionSpec(self.shard_fields),
-                "second_images": PartitionSpec(self.shard_fields),
+                "images1": PartitionSpec(self.shard_fields),
+                "images2": PartitionSpec(self.shard_fields),
                 "params": {
                     "seeding_densities": PartitionSpec(self.shard_fields),
                     "diameter_ranges": PartitionSpec(self.shard_fields),
@@ -665,14 +665,13 @@ class SyntheticImageSampler:
             StopIteration: can only be thrown by the underlying scheduler.
 
         Returns:
-            imgs1: jnp.ndarray
-                Batch of previous images.
-            imgs2: jnp.ndarray
-                Batch of current images.
-            output_flow_fields: jnp.ndarray
-                Output flow fields after the adapter.
-            seeding_densities: jnp.ndarray
-                Seeding densities for the images.
+            batch: dict
+                A dictionary containing:
+                - "images1": First images of the batch.
+                - "images2": Second images of the batch.
+                - "flow_fields": Flow fields used to generate the images.
+                - "done": (optional) A boolean array indicating if the episode is done.
+                - "params": A dictionary with parameters used for image generation.
         """
         # Check if we need to initialize or switch to a new batch of flow fields
         if (
@@ -712,8 +711,8 @@ class SyntheticImageSampler:
 
         # Generate a new batch of images using the current flow fields
         batch = self.img_gen_fn_jit(keys, self._current_flows)
-        imgs1 = batch["first_images"]
-        imgs2 = batch["second_images"]
+        imgs1 = batch["images1"]
+        imgs2 = batch["images2"]
         batch["flow_fields"] = self.output_flow_fields
         logger.debug(f"imgs1 location: {imgs1.sharding}")
         logger.debug(f"imgs2 location: {imgs2.sharding}")
