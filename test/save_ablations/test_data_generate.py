@@ -56,7 +56,7 @@ def test_speed_generate_images_sweep_all():
     batch_sizes = [64]
     image_sizes = [512]
     flow_fields_per_batch = [1]
-    particles_dims = [[0.8, 1.2]]
+    particles_dims = [[[0.8, 1.2]]]
     seeding_densities = [
         0.001,
         0.005,
@@ -127,6 +127,17 @@ def test_speed_generate_images_sweep_all():
         seeding_density_range = (seeding_density, seeding_density)
 
         # 3. Prepare the jit function
+        out_specs = {
+            "first_images": PartitionSpec(shard_fields),
+            "second_images": PartitionSpec(shard_fields),
+            "params": {
+                "seeding_densities": PartitionSpec(shard_fields),
+                "diameter_ranges": PartitionSpec(shard_fields),
+                "intensity_ranges": PartitionSpec(shard_fields),
+                "rho_ranges": PartitionSpec(shard_fields),
+            },
+        }
+
         jit_generate_images = jax.jit(
             shard_map(
                 lambda key, flow: generate_images_from_flow(
@@ -139,31 +150,35 @@ def test_speed_generate_images_sweep_all():
                     num_images=batch_size,
                     p_hide_img1=0.00,
                     p_hide_img2=0.00,
-                    diameter_range=tuple(particles_dim),
+                    diameter_ranges=jnp.array(particles_dim),
                     diameter_var=0,
-                    intensity_range=(80, 100),
+                    intensity_ranges=jnp.array([[80, 100]]),
                     intensity_var=0,
                     noise_level=0,
-                    rho_range=(-0.01, 0.01),
+                    rho_ranges=jnp.array([[-0.01, 0.01]]),
                     rho_var=0,
                 ),
                 mesh=mesh,
                 in_specs=(PartitionSpec(shard_fields), PartitionSpec(shard_fields)),
-                out_specs=(
-                    PartitionSpec(shard_fields),
-                    PartitionSpec(shard_fields),
-                    PartitionSpec(shard_fields),
-                ),
+                out_specs=out_specs,
             )
         )
 
         def run_generate_jit():
-            imgs1, imgs2, seeding_densities = jit_generate_images(
-                keys_sharded, flow_field_sharded
-            )
+            data = jit_generate_images(keys_sharded, flow_field_sharded)
+            imgs1 = data["first_images"]
+            imgs2 = data["second_images"]
+            params = data["params"]
+            seeding_densities = params["seeding_densities"]
+            diameter_ranges = params["diameter_ranges"]
+            intensity_ranges = params["intensity_ranges"]
+            rho_ranges = params["rho_ranges"]
             imgs1.block_until_ready()
             imgs2.block_until_ready()
             seeding_densities.block_until_ready()
+            diameter_ranges.block_until_ready()
+            intensity_ranges.block_until_ready()
+            rho_ranges.block_until_ready()
 
         # Warm up
         run_generate_jit()

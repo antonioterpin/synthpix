@@ -77,11 +77,11 @@ def test_speed_sampler_sweep_all(
     config["flow_fields_per_batch"] = 1
     config["p_hide_img1"] = 0
     config["p_hide_img2"] = 0
-    config["rho_range"] = (-0.01, 0.01)  # rho_range
+    config["rho_ranges"] = [[-0.01, 0.01]]  # rho_range
     config["rho_var"] = 0.0
-    config["intensity_range"] = (80.0, 100.0)  # intensity_range
+    config["intensity_ranges"] = [[80.0, 100.0]]  # intensity_range
     config["intensity_var"] = 0.0
-    config["diameter_range"] = (0.8, 1.2)  # diameter_range
+    config["diameter_ranges"] = [[0.8, 1.2]]  # diameter_range
     config["diameter_var"] = 0.0
 
     output_csv = f"batches_per_flow_batch{batches_per_flow_batch}.csv"
@@ -108,10 +108,13 @@ def test_speed_sampler_sweep_all(
     def run_sampler():
         # Time the data sampling (batch_size batches)
         for i, batch in enumerate(sampler):
-            batch[0].block_until_ready()
-            batch[1].block_until_ready()
-            batch[2].block_until_ready()
-            batch[3].block_until_ready()
+            batch["first_images"].block_until_ready()
+            batch["second_images"].block_until_ready()
+            batch["flow_fields"].block_until_ready()
+            batch["params"]["seeding_densities"].block_until_ready()
+            batch["params"]["diameter_ranges"].block_until_ready()
+            batch["params"]["intensity_ranges"].block_until_ready()
+            batch["params"]["rho_ranges"].block_until_ready()
             if i + 1 >= NUMBER_OF_EXECUTIONS:
                 sampler.reset(scheduler_reset=False)
                 break

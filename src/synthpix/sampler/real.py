@@ -40,12 +40,21 @@ class RealImageSampler:
     def __next__(self):
         """Return the next batch of real images."""
         batch = self.scheduler.get_batch(batch_size=self.batch_size)
-        batch = (
-            jnp.array(batch[0], dtype=jnp.float32),
-            jnp.array(batch[1], dtype=jnp.float32),
-            jnp.array(batch[2], dtype=jnp.float32),
-            jnp.zeros(batch[0].shape[0], dtype=jnp.float32),
-        )
+        batch = {
+            "first_images": jnp.array(batch[0], dtype=jnp.float32),
+            "second_images": jnp.array(batch[1], dtype=jnp.float32),
+            "flow_fields": jnp.array(batch[2], dtype=jnp.float32),
+            "params": {
+                "seeding_densities": jnp.zeros(batch[0].shape[0], dtype=jnp.float32),
+                "diameter_ranges": jnp.zeros(
+                    batch[0].shape[0] + (2,), dtype=jnp.float32
+                ),
+                "intensity_ranges": jnp.zeros(
+                    batch[0].shape[0] + (2,), dtype=jnp.float32
+                ),
+                "rho_ranges": jnp.zeros(batch[0].shape[0] + (2,), dtype=jnp.float32),
+            },
+        }
         return batch
 
     def shutdown(self):

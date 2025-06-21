@@ -25,11 +25,12 @@ def generate_images_from_flow(
     seeding_density_range: Tuple[float, float] = (0.01, 0.02),
     p_hide_img1: float = 0.01,
     p_hide_img2: float = 0.01,
-    diameter_ranges: Tuple[Tuple[float, float], ...] = ((0.1, 1.0),),
+    diameter_ranges: jnp.ndarray = jnp.array([[0.1, 1.0]]),
     diameter_var: float = 1.0,
-    intensity_ranges: Tuple[Tuple[float, float], ...] = ((50, 200),),
+    max_diameter: float = 1.0,
+    intensity_ranges: jnp.ndarray = jnp.array([[50, 200]]),
     intensity_var: float = 1.0,
-    rho_ranges: Tuple[Tuple[float, float], ...] = ((-0.99, 0.99),),
+    rho_ranges: jnp.ndarray = jnp.array([[-0.99, 0.99]]),
     rho_var: float = 1.0,
     dt: float = 1.0,
     flow_field_res_x: float = 1.0,
@@ -62,18 +63,20 @@ def generate_images_from_flow(
             Probability of hiding particles in the first image.
         p_hide_img2: float
             Probability of hiding particles in the second image.
-        diameter_ranges: Tuple[Tuple[float, float], ...]
-            Tuple of tuples containing the minimum and maximum
+        diameter_ranges: jnp.ndarray
+            Array of shape (N, 2) containing the minimum and maximum
             particle diameter in pixels.
         diameter_var: float
             Variance of the particle diameter.
-        intensity_ranges: Tuple[Tuple[float, float], ...]
-            Tuple of tuples containing the minimum and maximum
+        max_diameter: float
+            Maximum diameter.
+        intensity_ranges: jnp.ndarray
+            Array of shape (N, 2) containing the minimum and maximum
             peak intensity (I0).
         intensity_var: float
             Variance of the particle intensity.
-        rho_ranges: Tuple[Tuple[float, float], ...]
-            Tuple of tuples containing the minimum and maximum
+        rho_ranges: jnp.ndarray
+            Array of shape (N, 2) containing the minimum and maximum
             correlation coefficient (rho).
         rho_var: float
             Variance of the correlation coefficient.
@@ -120,16 +123,13 @@ def generate_images_from_flow(
         maxval=seeding_density_range[1],
     )
 
-    # Use this if the other does not work
-    # max_diameter = max(max(inner) for inner in diameter_ranges)
-
     def scan_body(carry, inputs):
         (key,) = carry
         i, seeding_density = inputs
 
         # Split the key for randomness
         key_i = jax.random.fold_in(key, i)
-        subkeys = jax.random.split(key_i, 12)
+        subkeys = jax.random.split(key_i, 9)
         (
             subkey1,
             subkey2,
@@ -248,7 +248,7 @@ def generate_images_from_flow(
             input_check_img_gen_from_data(
                 particle_positions=particle_positions,
                 image_shape=position_bounds,
-                max_diameter=diameter_range[1],
+                max_diameter=max_diameter,
                 diameters_x=diameters_x1,
                 diameters_y=diameters_y1,
                 intensities=intensities1 * mask_img1 * mixed,
@@ -260,7 +260,7 @@ def generate_images_from_flow(
         first_img = img_gen_from_data(
             particle_positions=particle_positions,
             image_shape=position_bounds,
-            max_diameter=diameter_range[1],
+            max_diameter=max_diameter,
             diameters_x=diameters_x1,
             diameters_y=diameters_y1,
             intensities=intensities1 * mask_img1 * mixed,
@@ -306,7 +306,7 @@ def generate_images_from_flow(
             input_check_img_gen_from_data(
                 particle_positions=final_positions,
                 image_shape=position_bounds,
-                max_diameter=diameter_range[1],
+                max_diameter=max_diameter,
                 diameters_x=diameters_x2,
                 diameters_y=diameters_y2,
                 intensities=intensities2 * mask_img2 * mixed,
@@ -318,7 +318,7 @@ def generate_images_from_flow(
         second_img = img_gen_from_data(
             particle_positions=final_positions,
             image_shape=position_bounds,
-            max_diameter=diameter_range[1],
+            max_diameter=max_diameter,
             diameters_x=diameters_x2,
             diameters_y=diameters_y2,
             intensities=intensities2 * mask_img2 * mixed,
@@ -388,11 +388,12 @@ def input_check_gen_img_from_flow(
     seeding_density_range: Tuple[float, float] = (0.01, 0.02),
     p_hide_img1: float = 0.01,
     p_hide_img2: float = 0.01,
-    diameter_ranges: Tuple[Tuple[float, float], ...] = ((0.1, 1.0),),
+    diameter_ranges: jnp.ndarray = jnp.array([[0.1, 1.0]]),
     diameter_var: float = 1.0,
-    intensity_ranges: Tuple[Tuple[float, float], ...] = ((50, 200),),
+    max_diameter: float = 1.0,
+    intensity_ranges: jnp.ndarray = jnp.array([[50, 200]]),
     intensity_var: float = 1.0,
-    rho_ranges: Tuple[Tuple[float, float], ...] = ((-0.99, 0.99),),
+    rho_ranges: jnp.ndarray = jnp.array([[-0.99, 0.99]]),
     rho_var: float = 1.0,
     dt: float = 1.0,
     flow_field_res_x: float = 1.0,
@@ -421,18 +422,20 @@ def input_check_gen_img_from_flow(
             Probability of hiding particles in the first image.
         p_hide_img2: float
             Probability of hiding particles in the second image.
-        diameter_ranges: Tuple[Tuple[float, float], ...]
-            Tuple of tuples containing the minimum and maximum
+        diameter_ranges: jnp.ndarray
+            Array of shape (N, 2) containing the minimum and maximum
             particle diameter in pixels.
         diameter_var: float
             Variance of the particle diameter.
-        intensity_ranges: Tuple[Tuple[float, float], ...]
-            Tuple of tuples containing the minimum and maximum
+        max_diameter: float
+            Maximum diameter.
+        intensity_ranges: jnp.ndarray
+            Array of shape (N, 2) containing the minimum and maximum
             peak intensity (I0).
         intensity_var: float
             Variance of the particle intensity.
-        rho_ranges: Tuple[Tuple[float, float], ...]
-            Tuple of tuples containing the minimum and maximum
+        rho_ranges: jnp.ndarray
+            Array of shape (N, 2) containing the minimum and maximum
             correlation coefficient (rho).
         rho_var: float
             Variance of the correlation coefficient.
@@ -477,55 +480,50 @@ def input_check_gen_img_from_flow(
         or flow_field.shape[3] != 2
     ):
         raise ValueError("Flow_field must be a 4D jnp.ndarray with shape (N, H, W, 2).")
+
     # Check diameter_ranges
-    if not isinstance(diameter_ranges, tuple) or len(diameter_ranges) == 0:
-        raise ValueError(
-            "diameter_ranges must be a non-empty tuple of (min, max) tuples."
-        )
-    for dr in diameter_ranges:
-        if not (
-            isinstance(dr, tuple)
-            and len(dr) == 2
-            and all(isinstance(v, (int, float)) for v in dr)
-        ):
-            raise ValueError(
-                "Each element of diameter_ranges must be a tuple of two positive floats."
-            )
-        if dr[0] <= 0 or dr[1] <= 0 or dr[0] > dr[1]:
-            raise ValueError(f"Each diameter_range must have 0 < min ≤ max, got {dr}.")
+    if not (
+        isinstance(diameter_ranges, jnp.ndarray)
+        and diameter_ranges.ndim == 2
+        and diameter_ranges.shape[1] == 2
+    ):
+        raise ValueError("diameter_ranges must be a 2D jnp.ndarray with shape (N, 2).")
+
+    if not jnp.all(diameter_ranges > 0):
+        raise ValueError("All values in diameter_ranges must be > 0.")
+
+    if not jnp.all(diameter_ranges[:, 0] <= diameter_ranges[:, 1]):
+        raise ValueError("Each diameter_range must satisfy min <= max.")
 
     # Check intensity_ranges
-    if not isinstance(intensity_ranges, tuple) or len(intensity_ranges) == 0:
-        raise ValueError(
-            "intensity_ranges must be a non-empty tuple of (min, max) tuples."
-        )
-    for ir in intensity_ranges:
-        if not (
-            isinstance(ir, tuple)
-            and len(ir) == 2
-            and all(isinstance(v, (int, float)) for v in ir)
-        ):
-            raise ValueError(
-                "Each element of intensity_ranges must be a tuple"
-                "of two non-negative floats."
-            )
-        if ir[0] < 0 or ir[1] < 0 or ir[0] > ir[1]:
-            raise ValueError(f"Each intensity_range must have 0 ≤ min ≤ max, got {ir}.")
+    if not (
+        isinstance(intensity_ranges, jnp.ndarray)
+        and intensity_ranges.ndim == 2
+        and intensity_ranges.shape[1] == 2
+    ):
+        raise ValueError("intensity_ranges must be a 2D jnp.ndarray with shape (N, 2).")
+
+    if not jnp.all(intensity_ranges >= 0):
+        raise ValueError("All values in intensity_ranges must be >= 0.")
+
+    if not jnp.all(intensity_ranges[:, 0] <= intensity_ranges[:, 1]):
+        raise ValueError("Each intensity_range must satisfy min <= max.")
 
     # Check rho_ranges
-    if not isinstance(rho_ranges, tuple) or len(rho_ranges) == 0:
-        raise ValueError("rho_ranges must be a non-empty tuple of (min, max) tuples.")
-    for rr in rho_ranges:
-        if not (
-            isinstance(rr, tuple)
-            and len(rr) == 2
-            and all(isinstance(v, (int, float)) for v in rr)
-        ):
-            raise ValueError(
-                "Each element of rho_ranges must be a tuple of two floats."
-            )
-        if not (-1 < rr[0] < 1 and -1 < rr[1] < 1 and rr[0] <= rr[1]):
-            raise ValueError(f"Each rho_range must have -1 < min ≤ max < 1, got {rr}.")
+    if not (
+        isinstance(rho_ranges, jnp.ndarray)
+        and rho_ranges.ndim == 2
+        and rho_ranges.shape[1] == 2
+    ):
+        raise ValueError("rho_ranges must be a 2D jnp.ndarray with shape (N, 2).")
+
+    if not jnp.all((-1 < rho_ranges) & (rho_ranges < 1)):
+        raise ValueError(
+            "All values in rho_ranges must be in the open interval (-1, 1)."
+        )
+
+    if not jnp.all(rho_ranges[:, 0] <= rho_ranges[:, 1]):
+        raise ValueError("Each rho_range must satisfy min <= max.")
 
     if not isinstance(num_images, int) or num_images <= 0:
         raise ValueError("num_images must be a positive integer.")
@@ -562,6 +560,8 @@ def input_check_gen_img_from_flow(
 
     if not isinstance(diameter_var, (int, float)) or diameter_var < 0:
         raise ValueError("diameter_var must be a non-negative number.")
+    if not isinstance(max_diameter, (int, float)) or max_diameter <= 0:
+        raise ValueError("max_diameter must be a positive number.")
     if not isinstance(intensity_var, (int, float)) or intensity_var < 0:
         raise ValueError("intensity_var must be a non-negative number.")
     if not isinstance(rho_var, (int, float)) or rho_var < 0:

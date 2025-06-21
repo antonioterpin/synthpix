@@ -10,11 +10,11 @@ dt: 1 # Time step between images
 seeding_density_range: [0.03, 0.04] # Range of density of particles in the images
 p_hide_img1: 0.0001 # Probability of hiding particles in the first image
 p_hide_img2: 0.0001 # Probability of hiding particles in the second image
-diameter_range: [1.5, 2.5]  # Diameter of particles in pixels
+diameter_ranges: [[1.5, 2.5]]  # Diameter of particles in pixels
 diameter_var: 0.03 # Variance of the diameter of particles
-intensity_range: [150, 230] # Range of intensity values for the particles
+intensity_ranges: [[150, 230]] # Range of intensity values for the particles
 intensity_var: 0.01 # Variance of the intensity of particles
-rho_range: [-0.1, 0.1] # Correlation coefficients for the particles (similarity)
+rho_ranges: [[-0.1, 0.1]] # Correlation coefficients for the particles (similarity)
 rho_var: 0.1 # Variance of the correlation coefficients for the particles
 noise_level: 0.001 # Maximum amplitude of the uniform noise to add.
 

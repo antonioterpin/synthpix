@@ -187,16 +187,16 @@ def test_invalid_p_hide_img2(p_hide_img2):
 
 
 @pytest.mark.parametrize(
-    "diameter_range, expected_message",
+    "diameter_ranges, expected_message",
     [
-        ((-1.0, 1.0), "diameter_range must be a tuple of two positive floats."),
-        ((0.0, -1.0), "diameter_range must be a tuple of two positive floats."),
-        ((-0.5, -0.5), "diameter_range must be a tuple of two positive floats."),
-        ((1.0, 0.5), "diameter_range must be in the form \\(min, max\\)."),
-        ((0.5, 0.1), "diameter_range must be in the form \\(min, max\\)."),
+        (jnp.array([[-1.0, 1.0]]), "All values in diameter_ranges must be > 0."),
+        (jnp.array([[0.0, -1.0]]), "All values in diameter_ranges must be > 0."),
+        (jnp.array([[-0.5, -0.5]]), "All values in diameter_ranges must be > 0."),
+        (jnp.array([[1.0, 0.5]]), "Each diameter_range must satisfy min <= max."),
+        (jnp.array([[0.5, 0.1]]), "Each diameter_range must satisfy min <= max."),
     ],
 )
-def test_invalid_diameter_range(diameter_range, expected_message):
+def test_invalid_diameter_range(diameter_ranges, expected_message):
     """Test that invalid diameter ranges raise a ValueError."""
     key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -204,23 +204,23 @@ def test_invalid_diameter_range(diameter_range, expected_message):
     with pytest.raises(ValueError, match=expected_message):
         input_check_gen_img_from_flow(
             key,
-            diameter_range=diameter_range,
+            diameter_ranges=diameter_ranges,
             flow_field=flow_field,
             image_shape=image_shape,
         )
 
 
 @pytest.mark.parametrize(
-    "intensity_range, expected_message",
+    "intensity_ranges, expected_message",
     [
-        ((-1.0, 1.0), "intensity_range must be a tuple of two positive floats."),
-        ((0.0, -1.0), "intensity_range must be a tuple of two positive floats."),
-        ((-0.5, -0.5), "intensity_range must be a tuple of two positive floats."),
-        ((1.0, 0.5), "intensity_range must be in the form \\(min, max\\)."),
-        ((0.5, 0.1), "intensity_range must be in the form \\(min, max\\)."),
+        (jnp.array([[-1.0, 1.0]]), "All values in intensity_ranges must be >= 0."),
+        (jnp.array([[0.0, -1.0]]), "All values in intensity_ranges must be >= 0."),
+        (jnp.array([[-0.5, -0.5]]), "All values in intensity_ranges must be >= 0."),
+        (jnp.array([[1.0, 0.5]]), "Each intensity_range must satisfy min <= max."),
+        (jnp.array([[0.5, 0.1]]), "Each intensity_range must satisfy min <= max."),
     ],
 )
-def test_invalid_intensity_range(intensity_range, expected_message):
+def test_invalid_intensity_range(intensity_ranges, expected_message):
     """Test that invalid intensity ranges raise a ValueError."""
     key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -230,27 +230,33 @@ def test_invalid_intensity_range(intensity_range, expected_message):
             key,
             flow_field=flow_field,
             image_shape=image_shape,
-            intensity_range=intensity_range,
+            intensity_ranges=intensity_ranges,
         )
 
 
 @pytest.mark.parametrize(
-    "rho_range, expected_message",
+    "rho_ranges, expected_message",
     [
-        ((-1.1, 1.0), "rho_range must be a tuple of two floats between -1 and 1."),
-        ((0.0, 1.1), "rho_range must be a tuple of two floats between -1 and 1."),
-        ((0.9, 0.5), "rho_range must be in the form \\(min, max\\)."),
-        ((0.5, 0.1), "rho_range must be in the form \\(min, max\\)."),
+        (
+            jnp.array([[-1.1, 1.0]]),
+            "All values in rho_ranges must be in the open interval \\(-1, 1\\).",
+        ),
+        (
+            jnp.array([[0.0, 1.1]]),
+            "All values in rho_ranges must be in the open interval \\(-1, 1\\).",
+        ),
+        (jnp.array([[0.9, 0.5]]), "Each rho_range must satisfy min <= max."),
+        (jnp.array([[0.5, 0.1]]), "Each rho_range must satisfy min <= max."),
     ],
 )
-def test_invalid_rho_range(rho_range, expected_message):
+def test_invalid_rho_range(rho_ranges, expected_message):
     """Test that invalid rho ranges raise a ValueError."""
     key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(ValueError, match=expected_message):
         input_check_gen_img_from_flow(
-            key, flow_field=flow_field, image_shape=image_shape, rho_range=rho_range
+            key, flow_field=flow_field, image_shape=image_shape, rho_ranges=rho_ranges
         )
 
 
@@ -391,6 +397,26 @@ def test_invalid_rho_var(rho_var):
 
 
 @pytest.mark.parametrize(
+    "max_diameter", ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+)
+def test_invalid_max_diameter(max_diameter):
+    """Test that invalid max_diameter raise a ValueError."""
+    key = jax.random.PRNGKey(0)
+    flow_field = jnp.zeros((1, 128, 128, 2))
+    image_shape = (128, 128)
+    with pytest.raises(
+        ValueError,
+        match="max_diameter must be a positive number.",
+    ):
+        input_check_gen_img_from_flow(
+            key,
+            flow_field=flow_field,
+            image_shape=image_shape,
+            max_diameter=max_diameter,
+        )
+
+
+@pytest.mark.parametrize(
     "image_shape, img_offset, position_bounds, error_message",
     [
         (
@@ -454,14 +480,15 @@ def test_generate_images_from_flow(visualize=False):
     img_offset = (0, 0)
     p_hide_img1 = 0.0
     p_hide_img2 = 0.0
-    diameter_range = (1, 2)
+    diameter_ranges = jnp.array([[1, 2]])
     diameter_var = 0
-    intensity_range = (50, 250)
+    intensity_ranges = jnp.array([[50, 250]])
     intensity_var = 0
-    rho_range = (-0.2, 0.2)  # rho cannot be -1 or 1
+    rho_ranges = jnp.array([[-0.2, 0.2]])  # rho cannot be -1 or 1
     rho_var = 0
     dt = 0.0
     noise_level = 0.0
+    max_diameter = float(max((d[1] for d in diameter_ranges)))
 
     # 2. create a flow field
     flow_field = generate_array_flow_field(
@@ -470,7 +497,7 @@ def test_generate_images_from_flow(visualize=False):
     flow_field = jnp.expand_dims(flow_field, axis=0)
 
     # 3. apply the flow field to the particles
-    img, img_warped, _ = generate_images_from_flow(
+    data = generate_images_from_flow(
         key=key,
         flow_field=flow_field,
         position_bounds=position_bounds,
@@ -480,15 +507,18 @@ def test_generate_images_from_flow(visualize=False):
         img_offset=img_offset,
         p_hide_img1=p_hide_img1,
         p_hide_img2=p_hide_img2,
-        diameter_range=diameter_range,
+        diameter_ranges=diameter_ranges,
         diameter_var=diameter_var,
-        intensity_range=intensity_range,
+        max_diameter=max_diameter,
+        intensity_ranges=intensity_ranges,
         intensity_var=intensity_var,
-        rho_range=rho_range,
+        rho_ranges=rho_ranges,
         rho_var=rho_var,
         dt=dt,
         noise_level=noise_level,
     )
+    img = data["first_images"]
+    img_warped = data["second_images"]
 
     # 4. fix the shape of the images
     img = jnp.squeeze(img)
@@ -579,6 +609,17 @@ def test_speed_generate_images_from_flow(
     )
     jax.block_until_ready(keys_sharded)
 
+    out_specs = {
+        "first_images": PartitionSpec(shard_fields),
+        "second_images": PartitionSpec(shard_fields),
+        "params": {
+            "seeding_densities": PartitionSpec(shard_fields),
+            "diameter_ranges": PartitionSpec(shard_fields),
+            "intensity_ranges": PartitionSpec(shard_fields),
+            "rho_ranges": PartitionSpec(shard_fields),
+        },
+    }
+
     # 5. Create the jit function
     jit_generate_images = jax.jit(
         shard_map(
@@ -592,31 +633,36 @@ def test_speed_generate_images_from_flow(
                 num_images=num_images,
                 p_hide_img1=0.0,
                 p_hide_img2=0.0,
-                diameter_range=(1, 2),
+                diameter_ranges=jnp.array([[1, 2]]),
                 diameter_var=0,
-                intensity_range=(80, 100),
+                intensity_ranges=jnp.array([[80, 100]]),
                 intensity_var=0,
                 noise_level=0,
-                rho_range=(-0.01, 0.01),
+                rho_ranges=jnp.array([[-0.01, 0.01]]),
                 rho_var=0,
+                max_diameter=2.0,
             ),
             mesh=mesh,
             in_specs=(PartitionSpec(shard_fields), PartitionSpec(shard_fields)),
-            out_specs=(
-                PartitionSpec(shard_fields),
-                PartitionSpec(shard_fields),
-                PartitionSpec(shard_fields),
-            ),
+            out_specs=out_specs,
         )
     )
 
     def run_generate_jit():
-        imgs1, imgs2, seeding_densities = jit_generate_images(
-            keys_sharded, flow_field_sharded
-        )
+        data = jit_generate_images(keys_sharded, flow_field_sharded)
+        imgs1 = data["first_images"]
+        imgs2 = data["second_images"]
+        params = data["params"]
+        seeding_densities = params["seeding_densities"]
+        diameter_ranges = params["diameter_ranges"]
+        intensity_ranges = params["intensity_ranges"]
+        rho_ranges = params["rho_ranges"]
         imgs1.block_until_ready()
         imgs2.block_until_ready()
         seeding_densities.block_until_ready()
+        diameter_ranges.block_until_ready()
+        intensity_ranges.block_until_ready()
+        rho_ranges.block_until_ready()
 
     # Warm up the function
     run_generate_jit()
@@ -645,12 +691,14 @@ def test_speed_generate_images_from_flow(
 @pytest.mark.parametrize("selected_flow", ["horizontal"])
 @pytest.mark.parametrize("seeding_density", [0.06])
 @pytest.mark.parametrize("image_shape", [(256, 256), (512, 512)])
-@pytest.mark.parametrize("diameter_range", [(1, 2)])
+@pytest.mark.parametrize("diameter_ranges", [jnp.array([[1, 2]])])
 @pytest.mark.parametrize("diameter_var", [0])
-@pytest.mark.parametrize("intensity_range", [(80, 100)])
+@pytest.mark.parametrize("intensity_ranges", [jnp.array([[80, 100]])])
 @pytest.mark.parametrize("intensity_var", [0])
 @pytest.mark.parametrize("dt", [0.0])
-@pytest.mark.parametrize("rho_range", [(-0.01, 0.01)])  # rho cannot be -1 or 1
+@pytest.mark.parametrize(
+    "rho_ranges", [jnp.array([[-0.01, 0.01]])]
+)  # rho cannot be -1 or 1
 @pytest.mark.parametrize("rho_var", [0])
 @pytest.mark.parametrize("noise_level", [0.0])
 @pytest.mark.parametrize("img_offset", [(0, 0)])
@@ -659,12 +707,12 @@ def test_img_parameter_combinations(
     selected_flow,
     seeding_density,
     image_shape,
-    diameter_range,
+    diameter_ranges,
     diameter_var,
-    intensity_range,
+    intensity_ranges,
     intensity_var,
     dt,
-    rho_range,
+    rho_ranges,
     rho_var,
     noise_level,
     img_offset,
@@ -679,17 +727,19 @@ def test_img_parameter_combinations(
         + "_"
         + seeding_density.__str__()
         + "_"
-        + diameter_range[0].__str__()
+        + diameter_ranges[0][0].__str__()
         + "-"
-        + diameter_range[1].__str__()
+        + diameter_ranges[0][1].__str__()
         + "_"
-        + intensity_range[0].__str__()
+        + intensity_ranges[0][0].__str__()
         + "-"
-        + intensity_range[1].__str__()
+        + intensity_ranges[0][1].__str__()
         + "_"
         + noise_level.__str__()
         + "_"
     )
+
+    max_diameter = max((d[1] for d in diameter_ranges))
 
     # 2. create a flow field
     flow_field = generate_array_flow_field(
@@ -709,11 +759,12 @@ def test_img_parameter_combinations(
             img_offset=img_offset,
             p_hide_img1=0,
             p_hide_img2=0,
-            diameter_range=diameter_range,
+            diameter_ranges=diameter_ranges,
             diameter_var=diameter_var,
-            intensity_range=intensity_range,
+            max_diameter=max_diameter,
+            intensity_ranges=intensity_ranges,
             intensity_var=intensity_var,
-            rho_range=rho_range,
+            rho_ranges=rho_ranges,
             rho_var=rho_var,
             dt=dt,
             noise_level=noise_level,
@@ -753,10 +804,10 @@ def test_img_parameter_combinations(
 )
 @pytest.mark.parametrize("img_offset", [(0, 0)])
 @pytest.mark.parametrize("num_flow_fields", [100])
-@pytest.mark.parametrize("diameter_range", [(1, 2)])
+@pytest.mark.parametrize("diameter_ranges", [jnp.array([[1, 2]])])
 @pytest.mark.parametrize("position_bounds", [(128, 128)])
-@pytest.mark.parametrize("intensity_range", [(100, 200)])
-@pytest.mark.parametrize("rho_range", [(-0.2, 0.2)])
+@pytest.mark.parametrize("intensity_ranges", [jnp.array([[100, 200]])])
+@pytest.mark.parametrize("rho_ranges", [jnp.array([[(-0.2, 0.2)]])])
 def test_speed_parameter_combinations(
     selected_flow,
     seeding_density_range,
@@ -765,11 +816,14 @@ def test_speed_parameter_combinations(
     img_offset,
     num_flow_fields,
     position_bounds,
-    diameter_range,
-    intensity_range,
-    rho_range,
+    diameter_ranges,
+    intensity_ranges,
+    rho_ranges,
 ):
     """Test that generate_images_from_flow is faster than a limit time."""
+
+    # Set the max diameter to the maximum of the diameter ranges
+    max_diameter = max((d[1] for d in diameter_ranges))
 
     # Name of the axis for the device mesh
     shard_fields = "fields"
@@ -803,6 +857,21 @@ def test_speed_parameter_combinations(
     # 4. Setup the random keys
     keys = jax.random.split(key, num_devices)
     keys = jnp.stack(keys)
+    keys_sharded = jax.device_put(
+        keys, NamedSharding(mesh, PartitionSpec(shard_fields))
+    )
+    jax.block_until_ready(keys_sharded)
+
+    out_specs = {
+        "first_images": PartitionSpec(shard_fields),
+        "second_images": PartitionSpec(shard_fields),
+        "params": {
+            "seeding_densities": PartitionSpec(shard_fields),
+            "diameter_ranges": PartitionSpec(shard_fields),
+            "intensity_ranges": PartitionSpec(shard_fields),
+            "rho_ranges": PartitionSpec(shard_fields),
+        },
+    }
 
     # 5. Create the jit function
     jit_generate_images = jax.jit(
@@ -810,30 +879,37 @@ def test_speed_parameter_combinations(
             lambda key, flow: generate_images_from_flow(
                 key=key,
                 flow_field=flow,
-                position_bounds=image_shape,
+                position_bounds=position_bounds,
                 image_shape=image_shape,
                 img_offset=img_offset,
                 seeding_density_range=seeding_density_range,
                 num_images=num_images,
-                diameter_range=diameter_range,
-                intensity_range=intensity_range,
-                rho_range=rho_range,
+                diameter_ranges=diameter_ranges,
+                intensity_ranges=intensity_ranges,
+                rho_ranges=rho_ranges,
+                max_diameter=max_diameter,
             ),
             mesh=mesh,
             in_specs=(PartitionSpec(shard_fields), PartitionSpec(shard_fields)),
-            out_specs=(
-                PartitionSpec(shard_fields),
-                PartitionSpec(shard_fields),
-                PartitionSpec(shard_fields),
-            ),
+            out_specs=out_specs,
         )
     )
 
     def run_generate_jit():
-        imgs1, imgs2, seeding_densities = jit_generate_images(keys, flow_field_sharded)
+        data = jit_generate_images(keys_sharded, flow_field_sharded)
+        imgs1 = data["first_images"]
+        imgs2 = data["second_images"]
+        params = data["params"]
+        seeding_densities = params["seeding_densities"]
+        diameter_ranges = params["diameter_ranges"]
+        intensity_ranges = params["intensity_ranges"]
+        rho_ranges = params["rho_ranges"]
         imgs1.block_until_ready()
         imgs2.block_until_ready()
         seeding_densities.block_until_ready()
+        diameter_ranges.block_until_ready()
+        intensity_ranges.block_until_ready()
+        rho_ranges.block_until_ready()
 
     # Warm up the function
     run_generate_jit()
