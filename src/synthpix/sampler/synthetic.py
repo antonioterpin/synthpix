@@ -1,5 +1,5 @@
 """SyntheticImageSampler class for generating synthetic images from flow fields."""
-from typing import Callable, Tuple
+from typing import Callable, List, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -50,11 +50,11 @@ class SyntheticImageSampler:
         seeding_density_range: Tuple[float, float],
         p_hide_img1: float,
         p_hide_img2: float,
-        diameter_range: Tuple[float, float],
+        diameter_ranges: List[List[float]],
         diameter_var: float,
-        intensity_range: Tuple[float, float],
+        intensity_ranges: List[List[float]],
         intensity_var: float,
-        rho_range: Tuple[float, float],
+        rho_ranges: List[List[float]],
         rho_var: float,
         dt: float,
         seed: int,
@@ -95,16 +95,16 @@ class SyntheticImageSampler:
                 Probability of hiding particles in the first image.
             p_hide_img2: float
                 Probability of hiding particles in the second image.
-            diameter_range: Tuple[float, float]
-                Range of diameters for particles.
+            diameter_ranges: List[List[float, float], ...]
+                List of ranges of diameters for particles.
             diameter_var: float
                 Variance of the diameters for particles.
-            intensity_range: Tuple[float, float]
-                Range of intensities for particles.
+            intensity_ranges: List[List[float, float], ...]
+                List of ranges of intensities for particles.
             intensity_var: float
                 Variance of the intensities for particles.
-            rho_range: Tuple[float, float]
-                Range of correlation coefficients for particles.
+            rho_ranges: List[List[float, float], ...]
+                List of ranges of correlation coefficients for particles.
             rho_var: float
                 Variance of the correlation coefficients for particles.
             dt: float
@@ -256,48 +256,65 @@ class SyntheticImageSampler:
         self.p_hide_img2 = p_hide_img2
 
         if (
-            not isinstance(diameter_range, tuple)
-            or len(diameter_range) != 2
-            or not all(isinstance(d, (int, float)) and d > 0 for d in diameter_range)
+            not isinstance(diameter_ranges, list)
+            or len(diameter_ranges) == 0
+            or not all(
+                isinstance(r, (list, tuple))
+                and len(r) == 2
+                and all(isinstance(d, (int, float)) and d > 0 for d in r)
+                and r[0] <= r[1]
+                for r in diameter_ranges
+            )
         ):
-            raise ValueError("diameter_range must be a tuple of two positive floats.")
-        if diameter_range[0] > diameter_range[1]:
-            raise ValueError("diameter_range must be in the form (min, max).")
-        self.diameter_range = diameter_range
+            raise ValueError(
+                "diameter_ranges must be a non-empty list "
+                "of [min, max] pairs, with 0 < min <= max."
+            )
+        self.diameter_ranges = jnp.array(diameter_ranges)
+
+        self.max_diameter = max(r[1] for r in diameter_ranges)
 
         if not isinstance(diameter_var, (int, float)) or diameter_var < 0:
             raise ValueError("diameter_var must be a non-negative number.")
         self.diameter_var = diameter_var
 
         if (
-            not isinstance(intensity_range, tuple)
-            or len(intensity_range) != 2
-            or not all(isinstance(i, (int, float)) and i >= 0 for i in intensity_range)
+            not isinstance(intensity_ranges, list)
+            or len(intensity_ranges) == 0
+            or not all(
+                isinstance(r, (list, tuple))
+                and len(r) == 2
+                and all(isinstance(i, (int, float)) and i >= 0 for i in r)
+                and r[0] <= r[1]
+                for r in intensity_ranges
+            )
         ):
             raise ValueError(
-                "intensity_range must be a tuple of two non-negative floats."
+                "intensity_ranges must be a non-empty list "
+                "of [min, max] pairs, with 0 <= min <= max."
             )
-        if intensity_range[0] > intensity_range[1]:
-            raise ValueError("intensity_range must be in the form (min, max).")
-        self.intensity_range = intensity_range
+        self.intensity_ranges = jnp.array(intensity_ranges)
 
         if not isinstance(intensity_var, (int, float)) or intensity_var < 0:
             raise ValueError("intensity_var must be a non-negative number.")
         self.intensity_var = intensity_var
 
         if (
-            not isinstance(rho_range, tuple)
-            or len(rho_range) != 2
+            not isinstance(rho_ranges, list)
+            or len(rho_ranges) == 0
             or not all(
-                isinstance(r, (int, float)) and -1.0 < r < 1.0 for r in rho_range
+                isinstance(r, (list, tuple))
+                and len(r) == 2
+                and all(isinstance(x, (int, float)) and -1.0 < x < 1.0 for x in r)
+                and r[0] <= r[1]
+                for r in rho_ranges
             )
         ):
             raise ValueError(
-                "rho_range must be a tuple of two floats between -1 and 1."
+                "rho_ranges must be a non-empty list of [min, max] "
+                "pairs, each in (-1, 1), with min <= max."
             )
-        if rho_range[0] > rho_range[1]:
-            raise ValueError("rho_range must be in the form (min, max).")
-        self.rho_range = rho_range
+        self.rho_ranges = jnp.array(rho_ranges)
 
         if not isinstance(rho_var, (int, float)) or rho_var < 0:
             raise ValueError("rho_var must be a non-negative number.")
@@ -397,7 +414,7 @@ class SyntheticImageSampler:
             )
 
         # Compute the particle size in length measure unit
-        particle_pixel_radius = int(3 * diameter_range[1] / 2)
+        particle_pixel_radius = int(3 * self.max_diameter / 2)
         particle_size = (2 * particle_pixel_radius + 1) / resolution
 
         # Check if a bigger position bounds is needed
@@ -443,6 +460,16 @@ class SyntheticImageSampler:
         self.position_bounds = tuple(int(x * resolution) for x in position_bounds)
 
         if not DEBUG_JIT:
+            out_specs = {
+                "images1": PartitionSpec(self.shard_fields),
+                "images2": PartitionSpec(self.shard_fields),
+                "params": {
+                    "seeding_densities": PartitionSpec(self.shard_fields),
+                    "diameter_ranges": PartitionSpec(self.shard_fields),
+                    "intensity_ranges": PartitionSpec(self.shard_fields),
+                    "rho_ranges": PartitionSpec(self.shard_fields),
+                },
+            }
             self.img_gen_fn_jit = jax.jit(
                 shard_map(
                     lambda key, flow: img_gen_fn(
@@ -455,11 +482,12 @@ class SyntheticImageSampler:
                         seeding_density_range=self.seeding_density_range,
                         p_hide_img1=self.p_hide_img1,
                         p_hide_img2=self.p_hide_img2,
-                        diameter_range=self.diameter_range,
+                        diameter_ranges=self.diameter_ranges,
                         diameter_var=self.diameter_var,
-                        intensity_range=self.intensity_range,
+                        max_diameter=self.max_diameter,
+                        intensity_ranges=self.intensity_ranges,
                         intensity_var=self.intensity_var,
-                        rho_range=self.rho_range,
+                        rho_ranges=self.rho_ranges,
                         rho_var=self.rho_var,
                         dt=self.dt,
                         flow_field_res_x=self.flow_field_res_x,
@@ -471,11 +499,7 @@ class SyntheticImageSampler:
                         PartitionSpec(self.shard_fields),
                         PartitionSpec(self.shard_fields),
                     ),
-                    out_specs=(
-                        PartitionSpec(self.shard_fields),
-                        PartitionSpec(self.shard_fields),
-                        PartitionSpec(self.shard_fields),
-                    ),
+                    out_specs=out_specs,
                 )
             )
         else:
@@ -488,11 +512,12 @@ class SyntheticImageSampler:
                 seeding_density_range=self.seeding_density_range,
                 p_hide_img1=self.p_hide_img1,
                 p_hide_img2=self.p_hide_img2,
-                diameter_range=self.diameter_range,
+                diameter_ranges=self.diameter_ranges,
                 diameter_var=self.diameter_var,
-                intensity_range=self.intensity_range,
+                max_diameter=self.max_diameter,
+                intensity_ranges=self.intensity_ranges,
                 intensity_var=self.intensity_var,
-                rho_range=self.rho_range,
+                rho_ranges=self.rho_ranges,
                 rho_var=self.rho_var,
                 dt=self.dt,
                 flow_field_res_x=self.flow_field_res_x,
@@ -509,11 +534,12 @@ class SyntheticImageSampler:
                 seeding_density_range=seeding_density_range,
                 p_hide_img1=self.p_hide_img1,
                 p_hide_img2=self.p_hide_img2,
-                diameter_range=self.diameter_range,
+                diameter_ranges=self.diameter_ranges,
                 diameter_var=self.diameter_var,
-                intensity_range=self.intensity_range,
+                max_diameter=self.max_diameter,
+                intensity_ranges=self.intensity_ranges,
                 intensity_var=self.intensity_var,
-                rho_range=self.rho_range,
+                rho_ranges=self.rho_ranges,
                 rho_var=self.rho_var,
                 dt=self.dt,
                 flow_field_res_x=self.flow_field_res_x,
@@ -599,11 +625,12 @@ class SyntheticImageSampler:
         logger.debug(f"Seeding density Range: {self.seeding_density_range}")
         logger.debug(f"p_hide_img1: {self.p_hide_img1}")
         logger.debug(f"p_hide_img2: {self.p_hide_img2}")
-        logger.debug(f"Diameter range: {self.diameter_range}")
+        logger.debug(f"Diameter ranges: {self.diameter_ranges}")
         logger.debug(f"Diameter var: {self.diameter_var}")
-        logger.debug(f"Intensity range: {self.intensity_range}")
+        logger.debug(f"Max diameter: {self.max_diameter}")
+        logger.debug(f"Intensity ranges: {self.intensity_ranges}")
         logger.debug(f"Intensity var: {self.intensity_var}")
-        logger.debug(f"Rho range: {self.rho_range}")
+        logger.debug(f"Rho ranges: {self.rho_ranges}")
         logger.debug(f"Rho var: {self.rho_var}")
         logger.debug(f"dt: {self.dt}")
         logger.debug(f"Seed: {self.seed}")
@@ -638,14 +665,13 @@ class SyntheticImageSampler:
             StopIteration: can only be thrown by the underlying scheduler.
 
         Returns:
-            imgs1: jnp.ndarray
-                Batch of previous images.
-            imgs2: jnp.ndarray
-                Batch of current images.
-            output_flow_fields: jnp.ndarray
-                Output flow fields after the adapter.
-            seeding_densities: jnp.ndarray
-                Seeding densities for the images.
+            batch: dict
+                A dictionary containing:
+                - "images1": First images of the batch.
+                - "images2": Second images of the batch.
+                - "flow_fields": Flow fields used to generate the images.
+                - "done": (optional) A boolean array indicating if the episode is done.
+                - "params": A dictionary with parameters used for image generation.
         """
         # Check if we need to initialize or switch to a new batch of flow fields
         if (
@@ -684,8 +710,10 @@ class SyntheticImageSampler:
         logger.debug(f"Current random keys: {keys}")
 
         # Generate a new batch of images using the current flow fields
-        imgs1, imgs2, seeding_densities = self.img_gen_fn_jit(keys, self._current_flows)
-
+        batch = self.img_gen_fn_jit(keys, self._current_flows)
+        imgs1 = batch["images1"]
+        imgs2 = batch["images2"]
+        batch["flow_fields"] = self.output_flow_fields
         logger.debug(f"imgs1 location: {imgs1.sharding}")
         logger.debug(f"imgs2 location: {imgs2.sharding}")
         logger.debug(f"Current flow fields location: {self._current_flows.sharding}")
@@ -711,14 +739,8 @@ class SyntheticImageSampler:
 
         if self._episodic:
             done = self._make_done()
-            return (imgs1, imgs2, self.output_flow_fields, seeding_densities, done)
-        else:
-            return (
-                imgs1,
-                imgs2,
-                self.output_flow_fields,
-                seeding_densities,
-            )
+            batch["done"] = done
+        return batch
 
     def next_episode(self):
         """Flush the current episode and return the first batch of the next one.
@@ -791,11 +813,11 @@ class SyntheticImageSampler:
                 seeding_density_range=tuple(config["seeding_density_range"]),
                 p_hide_img1=config["p_hide_img1"],
                 p_hide_img2=config["p_hide_img2"],
-                diameter_range=tuple(config["diameter_range"]),
+                diameter_ranges=config["diameter_ranges"],
                 diameter_var=config["diameter_var"],
-                intensity_range=tuple(config["intensity_range"]),
+                intensity_ranges=config["intensity_ranges"],
                 intensity_var=config["intensity_var"],
-                rho_range=tuple(config["rho_range"]),
+                rho_ranges=config["rho_ranges"],
                 rho_var=config["rho_var"],
                 dt=config["dt"],
                 seed=config["seed"],
