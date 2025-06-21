@@ -2,11 +2,9 @@
 
 from setuptools import find_packages, setup
 
-from src.synthpix import __version__ as version
-
 setup(
     name="synthpix",
-    version=version,
+    version="0.1.0",
     author="Antonio Terpin",
     description="Synthetic particle image generator",
     package_dir={"": "src"},
