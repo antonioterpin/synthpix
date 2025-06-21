@@ -1,6 +1,15 @@
 # Fluid flow estimation
 
 ## Installation
+
+### With Docker
+```bash
+docker build -t synthpix .
+docker run --rm -it synthpix <command> # e.g., pytest, pytest test/test_utils.py, etc.
+```
+
+
+### Without Docker
 We will use [conda](https://conda.io/en/latest/user-guide/install/) to handle the virtual environment.
 ```sh
 conda create -n synthpix python=3.12
