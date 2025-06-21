@@ -23,7 +23,7 @@ SCHEDULERS = {
 
 
 def make(
-    config_path: str,
+    config: str | dict,
     images_from_file: bool = False,
     buffer_size: int = 0,
     episode_length: int = 0,
@@ -34,7 +34,7 @@ def make(
     Extracting images from files is supported only for .mat files.
 
     Args:
-        dataset_config (dict): The dataset configuration.
+        config (str | dict): The dataset configuration.
         images_from_file (bool): If true, images are loaded from files.
         buffer_size (int): Size of the buffer (in batches) for prefetching.
             If 0, no prefetching is used.
@@ -44,19 +44,22 @@ def make(
         SyntheticImageSampler | RealImageSampler: The initialized sampler.
     """
     # Input validation
-    if not isinstance(config_path, str):
-        raise TypeError("config_path must be a string.")
-    if not config_path.endswith(".yaml"):
-        raise ValueError("config_path must point to a .yaml file.")
-    if not os.path.exists(config_path):
-        raise FileNotFoundError(f"Configuration file {config_path} not found.")
-    if not os.path.isfile(config_path):
-        raise ValueError(f"Configuration path {config_path} is not a file.")
+    if not isinstance(config, (str, dict)):
+        raise TypeError("config_path must be a string or a dictionary.")
+    if isinstance(config, str):
+        if not config.endswith(".yaml"):
+            raise ValueError("config must point to a .yaml file.")
+        if not os.path.exists(config):
+            raise FileNotFoundError(f"Configuration file {config} not found.")
+        if not os.path.isfile(config):
+            raise ValueError(f"Configuration path {config} is not a file.")
+        # Load the dataset configuration
+        dataset_config = load_configuration(config)
 
-    # Load the dataset configuration
-    dataset_config = load_configuration(config_path)
-
-    logger.info(f"Loading dataset configuration from {config_path}")
+        logger.info(f"Loading dataset configuration from {config}")
+    elif isinstance(config, dict):
+        dataset_config = config
+        logger.info("Using provided dataset configuration dictionary.")
 
     # Configuration validation
     if not isinstance(dataset_config, dict):
