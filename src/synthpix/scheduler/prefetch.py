@@ -42,7 +42,12 @@ class PrefetchingFlowFieldScheduler:
         self._started = False
 
     def __iter__(self):
-        """Returns the iterator instance itself and starts the background thread."""
+        """Returns the iterator instance itself and starts the background thread.
+
+        If the background thread is not started yet, it will be started.
+        This behavior also takes care of the case where there has been an Exception
+        in the previous run, and the thread needs to be restarted.
+        """
         if not self._started:
             self._started = True
             self._thread.start()
@@ -63,6 +68,9 @@ class PrefetchingFlowFieldScheduler:
                 self._t += 1
             if hasattr(self.scheduler, "episode_length"):
                 logger.debug(f"t = {self._t}")
+            if batch is None:
+                logger.info("End of stream reached, stopping iteration.")
+                raise StopIteration
             return batch
         except queue.Empty:
             logger.info("Unable to get data.")
@@ -93,16 +101,36 @@ class PrefetchingFlowFieldScheduler:
 
     def _worker(self):
         """Background thread that continuously fetches batches from the scheduler."""
-        # This will run until the stop event is set:
         while not self._stop_event.is_set():
-            batch = self.scheduler.get_batch(self.batch_size)
             try:
-                self._queue.put(batch, block=True, timeout=2)
-            except queue.Full:
-                logger.warning(
-                    "Queue is full, dropping batch. "
-                    "Consider increasing the buffer size."
-                )
+                batch = self.scheduler.get_batch(self.batch_size)
+            except StopIteration:
+                # Intended behavior here:
+                # I called get_batch() and ran into a StopIteration,
+                # it means there is no more data left.
+                # The underlying scheduler can be implemented in a way that it raises
+                # StopIteration when it has no more data to provide or when it has
+                # produced an incomplete batch. In the latter case, the behavior is so
+                # that the prefetching scheduler will ignore the incomplete batch
+                # and signal end‑of‑stream to consumer
+                try:
+                    self._queue.put(None, block=False)
+                except queue.Full:
+                    logger.info("Queue full when signalling EOS; waiting for space…")
+                    self._queue.get(block=True, timeout=2)
+                    self._queue.put(None, block=True, timeout=2)
+
+                logger.info("No more data to fetch, stopping prefetching thread.")
+                self._stop_event.set()
+                return
+
+            # This will block until there is free space in the queue:
+            # no busy‑waiting needed.
+            try:
+                self._queue.put(batch, block=True)
+            except Exception as e:
+                logger.warning(f"Failed to put batch: {e}")
+                return
 
     def reset(self):
         """Resets the prefetching scheduler and underlying scheduler."""
@@ -135,15 +163,33 @@ class PrefetchingFlowFieldScheduler:
             join_timeout: float
                 Timeout for the thread to join.
         """
-        if self._started:
-            # halt producer thread
+        if self._started and self.steps_remaining() > 0:
+            # if this is a premature halt, I need to eliminate the first
+            # steps_remaining batches from the queue.
+            # Two cases:
+            # 1. If the prefetching thread is already at the next episode,
+            # I can just flush the queue.
+            # 2. If the prefetching thread is still in the current episode,
+            # I need to stop it and then flush the queue.
+            # Both cases can be handled by stopping the thread and flushing
+            # steps_remaining items from the queue, or until the queue is empty.
+            # If the thread is stuck on put(),
+            # I need to free up one slot in the queue, which is safe since
+            # I am going to discard the items anyway.
             self._stop_event.set()
             if self._thread.is_alive():
+                try:
+                    self._queue.get_nowait()  # Free up one slot in the queue
+                    self._t += 1  # Increment t to account for the discarded batch
+                except queue.Empty:
+                    logger.debug("Queue is empty, no need to free up a slot.")
+                    pass
                 self._thread.join(timeout=join_timeout)
 
-            # drain the part of the queue that belongs to the unfinished episode
-            # discard up to `n_left` batches (may be fewer if queue < n_left)
-            for _ in range(self.steps_remaining()):
+            # Drain the part of the queue that belongs to the unfinished episode
+            # discard up to steps_remaing batches (may be fewer if prefetching is
+            # slower than consuming)
+            for i in range(self.steps_remaining()):
                 logger.debug(
                     "Moving to next episode, "
                     f"of length {self.episode_length}, "
@@ -154,7 +200,7 @@ class PrefetchingFlowFieldScheduler:
                 except queue.Empty:
                     break
 
-            logger.debug(f"Flushed {self.steps_remaining()} batches from queue.")
+            logger.debug(f"Flushed {i + 2} batches from queue.")
 
         self._t = 0
         # restart producer thread
@@ -165,7 +211,7 @@ class PrefetchingFlowFieldScheduler:
         self._thread = threading.Thread(target=self._worker, daemon=True)
         self._thread.start()
 
-        logger.debug("Next episode started, " "remaining items flushed from the queue.")
+        logger.debug("Next episode started.")
 
     def steps_remaining(self) -> int:
         """Return the number of steps remaining in the current episode.
