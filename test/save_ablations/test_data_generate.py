@@ -46,6 +46,7 @@ def write_speed_stats_to_csv(filename, all_rows):
             writer.writerow(row)
 
 
+@pytest.mark.run_explicitly
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connected to the server.",

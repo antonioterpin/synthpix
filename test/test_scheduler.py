@@ -425,7 +425,6 @@ def test_prefetch_scheduler_exhaustion(mock_hdf5_files):
         while True:
             results.append(prefetch.get_batch(2))
     except StopIteration:
-        print("Scheduler exhausted, stopping iteration.")
         pass
 
     assert len(results) > 0
@@ -602,7 +601,6 @@ def test_prefetch_full_episode(mock_mat_files):
 
     # Exhaust the prefetcher
     for t, batch in enumerate(pre):
-        print(f"Prefetching batch {t}")
         if t == episode_length - 1:
             final_batch = batch
             break
@@ -610,7 +608,6 @@ def test_prefetch_full_episode(mock_mat_files):
     pre.shutdown()
 
     final_files = [files[10], files[9]]
-    print(f"Final files: {final_files}")
     new_base = MATFlowFieldScheduler(final_files, loop=False, output_shape=(H, W))
 
     right_new_episode = new_base.get_batch(batch_size)

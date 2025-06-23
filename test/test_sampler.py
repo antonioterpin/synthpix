@@ -1020,11 +1020,11 @@ def test_speed_sampler_real_fn(
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 1.7
+        limit_time = 1.3
     elif num_devices == 2:
-        limit_time = 1.2
+        limit_time = 1.1
     elif num_devices == 4:
-        limit_time = 1.14
+        limit_time = 1.1
 
     # Create the sampler
     prefetching_scheduler = PrefetchingFlowFieldScheduler(
@@ -1125,8 +1125,6 @@ def _build_sampler(mock_mat_files):
     files, dims = mock_mat_files
     H, W = dims["height"], dims["width"]
 
-    print(files)
-
     base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
     epi = EpisodicFlowFieldScheduler(
         scheduler=base,
@@ -1181,12 +1179,12 @@ def test_done_flag_and_horizon(sampler):
     """`done` should be True *exactly* once (the final step of each episode)."""
 
     dones = []
-    for i in range(NUM_EPISODES):
+    for _ in range(NUM_EPISODES):
         batch = sampler.next_episode()
         imgs1 = batch["images1"]
         done = batch["done"]
         dones.append(done)
-        for j in range(EPISODE_LENGTH - 1):
+        for _ in range(EPISODE_LENGTH - 1):
             batch = next(sampler)
             imgs1 = batch["images1"]
             done = batch["done"]
@@ -1279,7 +1277,6 @@ def test_stop_after_max_episodes(mock_mat_files):
         batch = sampler.next_episode()
         imgs1 = batch["images1"]
         done = batch["done"]
-        print(f"episode {i} batch {n_batches}")
         n_batches += 1
         while not any(done):
             logger.debug(f"episode {i} batch {n_batches}")
@@ -1289,7 +1286,6 @@ def test_stop_after_max_episodes(mock_mat_files):
             assert imgs1.shape[0] == 4
             assert imgs1[0].shape == (H, W)
             assert isinstance(imgs1, jnp.ndarray)
-            print(f"episode {i} batch {n_batches}")
             n_batches += 1
 
     assert (
