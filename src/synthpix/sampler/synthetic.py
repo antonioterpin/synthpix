@@ -752,7 +752,11 @@ class SyntheticImageSampler:
                 The first batch of the next episode.
         """
         if not hasattr(self.scheduler, "next_episode"):
-            raise AttributeError("Underlying scheduler lacks next_episode()")
+            raise AttributeError(
+                "Underlying scheduler lacks next_episode(), "
+                "only prefetching schedulers support this."
+            )
+        # TODO: change the error message once regular episodic scheduler supports this
 
         self.scheduler.next_episode()
 

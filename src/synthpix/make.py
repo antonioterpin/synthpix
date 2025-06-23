@@ -73,6 +73,12 @@ def make(
     if not isinstance(episode_length, int) or episode_length < 0:
         raise ValueError("episode_length must be a non-negative integer.")
 
+    if episode_length > 0 and buffer_size == 0:
+        raise NotImplementedError(
+            "Episodic sampling is not supported without prefetching. "
+            "Please set buffer_size to a positive integer."
+        )
+
     if images_from_file:
         if dataset_config["scheduler_class"] != ".mat":
             raise ValueError(
