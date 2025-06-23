@@ -748,7 +748,7 @@ class SyntheticImageSampler:
         The underlying scheduler is expected to be the prefetching scheduler.
 
         Returns:
-            next(self): tuple
+            next(self): dict
                 The first batch of the next episode.
         """
         if not hasattr(self.scheduler, "next_episode"):

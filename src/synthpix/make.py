@@ -127,6 +127,12 @@ def make(
 
         # If episode_length is specified, use EpisodicFlowFieldScheduler
         if episode_length > 0:
+            if dataset_config.get("batches_per_flow_batch") > 1:
+                logger.warning(
+                    "Using EpisodicFlowFieldScheduler with batches_per_flow_batch > 1 "
+                    "may lead to unexpected behavior. "
+                    "Consider using a single batch per flow field."
+                )
             sched = EpisodicFlowFieldScheduler(
                 base,
                 batch_size=dataset_config["flow_fields_per_batch"],

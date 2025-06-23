@@ -2,7 +2,7 @@
 seed: 0 # Random seed for reproducibility
 batch_size: 1 # Number of (img1, img2, flow) tuples per batch
 flow_fields_per_batch: 1 # Number of flow fields used for each batch
-batches_per_flow_batch: 100 # Number of batches of (imgs1, imgs2, flows) tuples per flow batch
+batches_per_flow_batch: 1 # Number of batches of (imgs1, imgs2, flows) tuples per flow batch
 
 # Image generation parameters
 image_shape: [256, 256] # Shape of the images to be generated
@@ -38,5 +38,5 @@ max_speed_y: 0 # Maximum speed in the y direction
 # Units of the output flow field. Can be "measure units per second" or "pixels"
 output_units: "pixels"
 # Flows files
-scheduler_files: /shared/fluids/fluids-estimation/piv_dataset_fast/cylinder/Re400
+scheduler_files: /shared/fluids/fluids-estimation/piv_dataset_final/train/cylinder_full
 scheduler_class: ".mat"

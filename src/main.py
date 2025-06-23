@@ -14,7 +14,9 @@ def main(config_path, output_dir, num_images_to_display):
         num_images_to_display (int): Number of images to display and save per batch.
     """
     # Initialize the sampler
-    sampler = synthpix.make(config_path, buffer_size=10, images_from_file=True)
+    sampler = synthpix.make(
+        config_path, buffer_size=10, images_from_file=False, episode_length=2
+    )
 
     try:
         # Run the sampler and print results
