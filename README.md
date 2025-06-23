@@ -5,9 +5,17 @@
 ### With Docker
 ```bash
 docker build -t synthpix .
-docker run --rm -it synthpix <command> # e.g., pytest, pytest test/test_utils.py, etc.
+docker run --rm --gpus all \
+  -e CUDA_VISIBLE_DEVICES=<ID> \
+  -v /shared/fluids/fluids-estimation:/shared/fluids/fluids-estimation \
+  -it synthpix <commmand>
 ```
 
+For development, while installing repos:
+```bash
+eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519
+export DOCKER_BUILDKIT=1 && docker build -t synthpix . --ssh default
+```
 
 ### Without Docker
 We will use [conda](https://conda.io/en/latest/user-guide/install/) to handle the virtual environment.

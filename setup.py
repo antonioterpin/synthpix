@@ -17,6 +17,7 @@ setup(
         "imageio>=2.37.0",
         "matplotlib>=3.10.1",
         "opencv-python-headless>=4.5.5",
+        "goggles @ git+ssh://git@github.com/antonioterpin/goggles.git",
     ],
     extras_require={
         "dev": [
@@ -24,7 +25,10 @@ setup(
             "pytest==7.4.4",
             "snowballstemmer",
         ],
-        "cuda12": ["jax[cuda12]>=0.4.3"],
+        "cuda12": [
+            "jax[cuda12]>=0.4.3",
+            "nvidia-cublas-cu12==12.8.4.1",
+        ],
         "docs": [
             "Sphinx==7.4.7",
             "sphinx-copybutton==0.5.2",
