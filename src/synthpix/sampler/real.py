@@ -49,7 +49,7 @@ class RealImageSampler:
         # Get the next batch of flow fields from the scheduler
         if self._episodic and self.scheduler.steps_remaining() == 0:
             raise IndexError(
-                "Episode ended. No more flow fields available."
+                "Episode ended. No more flow fields available. "
                 "Use next_episode() to continue."
             )
 
