@@ -1,3 +1,4 @@
+import re
 import timeit
 
 import jax
@@ -46,15 +47,32 @@ def test_invalid_key(key):
         )
 
 
-@pytest.mark.parametrize("flow_field", [1, jnp.array([1, 2, 3]), [[[[10, 20]]]]])
+@pytest.mark.parametrize("flow_field", [None, "invalid_flow", 42, [1, 2]])
 def test_invalid_flow_field(flow_field):
     """Test that invalid flow_field raise a ValueError."""
     key = jax.random.PRNGKey(0)
     image_shape = (128, 128)
     with pytest.raises(
         ValueError,
-        match="Flow_field must be a 4D jnp.ndarray with shape \\(N, H, W, 2\\).",
+        match=f"flow_field must be a jnp.ndarray, got {type(flow_field)}.",
     ):
+        input_check_gen_img_from_flow(
+            key, flow_field=flow_field, image_shape=image_shape
+        )
+
+
+@pytest.mark.parametrize(
+    "flow_field", [jnp.zeros((1, 128, 128, 3)), jnp.zeros((128, 128, 2))]
+)
+def test_invalid_flow_field_shape(flow_field):
+    """Test that invalid flow_field shapes raise a ValueError."""
+    key = jax.random.PRNGKey(0)
+    image_shape = (128, 128)
+    expected_message = (
+        "flow_field must be a 4D jnp.ndarray with shape (N, H, W, 2), "
+        f"got shape {flow_field.shape}."
+    )
+    with pytest.raises(ValueError, match=re.escape(expected_message)):
         input_check_gen_img_from_flow(
             key, flow_field=flow_field, image_shape=image_shape
         )

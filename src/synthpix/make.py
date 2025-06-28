@@ -68,12 +68,10 @@ def make(
         raise ValueError("dataset_config must contain 'scheduler_class' key.")
     if not isinstance(images_from_file, bool):
         raise TypeError("images_from_file must be a boolean.")
-    if not isinstance(buffer_size, int) or buffer_size <= 0:
-        raise ValueError("buffer_size must be a positive integer.")
+    if not isinstance(buffer_size, int) or buffer_size < 0:
+        raise ValueError("buffer_size must be a non-negative integer.")
     if not isinstance(episode_length, int) or episode_length < 0:
         raise ValueError("episode_length must be a non-negative integer.")
-
-# Removed unreachable condition and block.
 
     if images_from_file:
         if dataset_config["scheduler_class"] != ".mat":

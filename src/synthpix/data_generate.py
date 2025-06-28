@@ -483,12 +483,13 @@ def input_check_gen_img_from_flow(
         or not all(s >= 0 for s in img_offset)
     ):
         raise ValueError("img_offset must be a tuple of two non-negative integers.")
-    if (
-        not isinstance(flow_field, jnp.ndarray)
-        or flow_field.ndim != 4
-        or flow_field.shape[3] != 2
-    ):
-        raise ValueError("Flow_field must be a 4D jnp.ndarray with shape (N, H, W, 2).")
+    if not isinstance(flow_field, jnp.ndarray):
+        raise ValueError(f"flow_field must be a jnp.ndarray, got {type(flow_field)}.")
+    if flow_field.ndim != 4 or flow_field.shape[3] != 2:
+        raise ValueError(
+            "flow_field must be a 4D jnp.ndarray with shape (N, H, W, 2), "
+            f"got shape {flow_field.shape}."
+        )
 
     # Check diameter_ranges
     if not (
