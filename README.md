@@ -4,8 +4,17 @@
 
 ### With Docker
 ```bash
-docker build -t synthpix .
-docker run --rm -it synthpix <command> # e.g., pytest, pytest test/test_utils.py, etc.
+docker build --ssh default -t synthpix .
+docker run --rm --gpus all \
+  -e CUDA_VISIBLE_DEVICES=<ID> \
+  -v /shared/fluids/fluids-estimation:/shared/fluids/fluids-estimation \
+  -it synthpix <commmand>
+```
+
+For development, while installing repos:
+```bash
+eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519
+export DOCKER_BUILDKIT=1 && docker build -t synthpix . --ssh default
 ```
 
 
@@ -36,14 +45,10 @@ Please follow the official instructions for
 - [cudnn](https://developer.nvidia.com/cudnn-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local)
 Note: wheels only available on linux.
 
-## Compiling the documentation with Sphinx
-To compile the documentation using Sphinx, navigate to the root directory of your project and run the following command to build the HTML documentation:
+## Checking test coverage
 ```bash
-sphinx-build -b html ./docs ./docs/build/
+pytest --cov=.
 ```
-This command tells Sphinx to generate HTML files from the source files located in the ./docs directory and place the generated files in the ./docs/build/ directory.
-
-The compiled HTML pages will be located in the docs/build directory. You can open the index.html file in your web browser to view the documentation.
 
 ## Contributing
 The `Coding style validation` action will fail if the pre-commit checks do not pass. To make sure that these are checked automatically on push, run:

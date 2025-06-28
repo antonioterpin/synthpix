@@ -161,4 +161,6 @@ def make(
             config=dataset_config,
         )
 
+    logger.info(f"--- SynthPix sampler and scheduler initialized ---\n{dataset_config}")
+
     return sampler
