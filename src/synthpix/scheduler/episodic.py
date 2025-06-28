@@ -156,7 +156,7 @@ class EpisodicFlowFieldScheduler:
         return self.episode_length - self._t
 
     def next_episode(self):
-        """Advance to the next episode, independenet of the current step.
+        """Advance to the next episode, independent of the current step.
 
         This method is useful when you want to skip to the next episode
         without waiting for the current episode to finish.
