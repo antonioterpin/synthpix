@@ -1,28 +1,17 @@
 """Utility functions for the vision module."""
 
-import logging
 import os
 from typing import Tuple, Union
 
+import goggles as logger
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-from ruamel.yaml import YAML
 
-DEBUG = False
 DEBUG_JIT = False
 
-
-# Create a logger instance
-logger = logging.getLogger(__name__)
-
-# Configure the logging format
-logging.basicConfig(
-    level=logging.DEBUG if DEBUG else logging.INFO,
-    format="[%(levelname)s][%(asctime)s][%(filename)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+load_configuration = logger.load_configuration
 
 
 def is_int(val: Union[int, float]) -> bool:
@@ -40,13 +29,6 @@ def is_int(val: Union[int, float]) -> bool:
         if abs(val - int(val)) < 1e-6:
             return True
     return False
-
-
-def load_configuration(file_path: str):
-    """Load YAML configuration from file."""
-    yaml = YAML(typ="safe", pure=True)
-    with open(file_path, "r", encoding="utf-8") as file:
-        return yaml.load(file)
 
 
 def bilinear_interpolate(
