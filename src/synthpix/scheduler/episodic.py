@@ -106,14 +106,13 @@ class EpisodicFlowFieldScheduler:
         """
         # If we’ve exhausted the current horizon, start fresh episodes
         if self._t >= self.episode_length:
-            self._sample_new_episodes()
-            self._t = 0
+            self.next_episode()
 
         self._t += 1
 
         batch = self.scheduler.get_batch(self.batch_size)
 
-        logger.debug("__next__() called, " "returning batch of shape {batch.shape}")
+        logger.debug("__next__() called, returning batch of shape {batch.shape}")
         logger.debug(f"timestep: {self._t}")
         return batch
 
@@ -155,6 +154,15 @@ class EpisodicFlowFieldScheduler:
             int: Number of steps remaining in the current episode.
         """
         return self.episode_length - self._t
+
+    def next_episode(self):
+        """Advance to the next episode, independent of the current step.
+
+        This method is useful when you want to skip to the next episode
+        without waiting for the current episode to finish.
+        """
+        self._sample_new_episodes()
+        self._t = 0
 
     def get_flow_fields_shape(self):
         """Return the shape of the flow fields from the underlying scheduler.

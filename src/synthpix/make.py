@@ -68,8 +68,8 @@ def make(
         raise ValueError("dataset_config must contain 'scheduler_class' key.")
     if not isinstance(images_from_file, bool):
         raise TypeError("images_from_file must be a boolean.")
-    if not isinstance(buffer_size, int) or buffer_size <= 0:
-        raise ValueError("buffer_size must be a positive integer.")
+    if not isinstance(buffer_size, int) or buffer_size < 0:
+        raise ValueError("buffer_size must be a non-negative integer.")
     if not isinstance(episode_length, int) or episode_length < 0:
         raise ValueError("episode_length must be a non-negative integer.")
 
@@ -127,6 +127,12 @@ def make(
 
         # If episode_length is specified, use EpisodicFlowFieldScheduler
         if episode_length > 0:
+            if dataset_config.get("batches_per_flow_batch") > 1:
+                logger.warning(
+                    "Using EpisodicFlowFieldScheduler with batches_per_flow_batch > 1 "
+                    "may lead to unexpected behavior. "
+                    "Consider using a single batch per flow field."
+                )
             sched = EpisodicFlowFieldScheduler(
                 base,
                 batch_size=dataset_config["flow_fields_per_batch"],

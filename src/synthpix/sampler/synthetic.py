@@ -503,11 +503,16 @@ class SyntheticImageSampler:
                 )
             )
         else:
+            _current_flows = jnp.asarray(
+                self.scheduler.get_batch(self.flow_fields_per_batch)
+            )
+
             input_check_gen_img_from_flow(
-                self._current_flows,
-                self.position_bounds,
-                self.image_shape,
-                self.img_offset,
+                key=jax.random.PRNGKey(self.seed),
+                flow_field=_current_flows,
+                position_bounds=self.position_bounds,
+                image_shape=self.image_shape,
+                img_offset=self.img_offset,
                 num_images=self.batch_size,
                 seeding_density_range=self.seeding_density_range,
                 p_hide_img1=self.p_hide_img1,
@@ -575,13 +580,15 @@ class SyntheticImageSampler:
             )
         else:
             input_check_flow_field_adapter(
-                self._current_flows,
+                flow_field=_current_flows,
                 new_flow_field_shape=self.output_flow_field_shape,
                 image_shape=self.image_shape,
-                image_offset=self.img_offset,
+                img_offset=self.img_offset,
                 resolution=self.resolution,
                 res_x=self.flow_field_res_x,
                 res_y=self.flow_field_res_y,
+                position_bounds=self.position_bounds,
+                position_bounds_offset=self.position_bounds_offset,
                 batch_size=self.batch_size // num_devices,
                 output_units=self.output_units,
                 dt=self.dt,
@@ -595,9 +602,9 @@ class SyntheticImageSampler:
                 resolution=self.resolution,
                 res_x=self.flow_field_res_x,
                 res_y=self.flow_field_res_y,
-                batch_size=self.batch_size // num_devices,
                 position_bounds=self.position_bounds,
                 position_bounds_offset=self.position_bounds_offset,
+                batch_size=self.batch_size // num_devices,
                 output_units=self.output_units,
                 dt=self.dt,
                 zero_padding=self.zero_padding,
@@ -684,7 +691,7 @@ class SyntheticImageSampler:
             # Get the next batch of flow fields from the scheduler
             if self._episodic and self.scheduler.steps_remaining() == 0:
                 raise IndexError(
-                    "Episode ended. No more flow fields available."
+                    "Episode ended. No more flow fields available. "
                     "Use next_episode() to continue."
                 )
 
@@ -748,11 +755,11 @@ class SyntheticImageSampler:
         The underlying scheduler is expected to be the prefetching scheduler.
 
         Returns:
-            next(self): tuple
+            next(self): dict
                 The first batch of the next episode.
         """
         if not hasattr(self.scheduler, "next_episode"):
-            raise AttributeError("Underlying scheduler lacks next_episode()")
+            raise AttributeError("Underlying scheduler lacks next_episode(), ")
 
         self.scheduler.next_episode()
 
