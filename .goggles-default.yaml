@@ -1,4 +1,3 @@
 to_terminal: true
-to_file: false
 level: INFO
 enable_signal_handler: false
