@@ -36,6 +36,11 @@ Please follow the official instructions for
 - [cudnn](https://developer.nvidia.com/cudnn-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local)
 Note: wheels only available on linux.
 
+## Checking test coverage
+```bash
+pytest --cov=.
+```
+
 ## Compiling the documentation with Sphinx
 To compile the documentation using Sphinx, navigate to the root directory of your project and run the following command to build the HTML documentation:
 ```bash
