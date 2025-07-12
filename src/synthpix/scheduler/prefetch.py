@@ -1,6 +1,7 @@
 """PrefetchingFlowFieldScheduler to asynchronously prefetch flow fields."""
 import queue
 import threading
+import time
 
 from ..utils import logger
 
@@ -117,8 +118,21 @@ class PrefetchingFlowFieldScheduler:
                     self._queue.put(None, block=False)
                 except queue.Full:
                     logger.info("Queue full when signalling EOS; waiting for space…")
-                    self._queue.get(block=True, timeout=2)
-                    self._queue.put(None, block=True, timeout=2)
+                    # If the queue is full, I need to wait for the consumer to consume
+                    # one more item before I can put the end‑of‑stream signal.
+                    # This is to ensure that the consumer can consume the last batch
+                    # before the end‑of‑stream signal.
+                    time.sleep(2)
+                    if self._queue.full():
+                        try:
+                            self._queue.get_nowait()
+                            logger.warning(
+                                "Queue is still full after waiting, "
+                                "Throwing away one item to make space."
+                            )
+                            self._queue.put(None, block=False)
+                        except queue.Empty:
+                            logger.debug("Queue is empty, no need to free up a slot.")
 
                 logger.info("No more data to fetch, stopping prefetching thread.")
                 self._stop_event.set()
@@ -134,10 +148,21 @@ class PrefetchingFlowFieldScheduler:
 
     def reset(self):
         """Resets the prefetching scheduler and underlying scheduler."""
-        # Stop the background thread and clear the queue
+        # Set the stop event to stop the current thread
         self._stop_event.set()
+
+        # If the thread is stuck on put(), free up one slot in the queue
+        # so the thread can check the stop event.
+        try:
+            self._queue.get_nowait()
+        except queue.Empty:
+            logger.debug("Queue is empty, no need to free up a slot.")
+
+        # Wait for the thread to finish
         if self._thread.is_alive():
             self._thread.join()
+
+        # Clear the queue to remove any remaining items
         self._queue.queue.clear()
 
         logger.debug("Prefetching thread stopped, queue cleared.")
