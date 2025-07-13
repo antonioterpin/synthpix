@@ -1013,7 +1013,6 @@ def test_speed_sampler_real_fn(
     config["flow_fields_per_batch"] = 64
 
     # Check how many GPUs are available
-
     if config["flow_fields_per_batch"] % len(jax.devices()) != 0:
         pytest.skip("flow_fields_per_batch must be divisible by the number of devices.")
     num_devices = len(jax.devices())
@@ -1076,12 +1075,7 @@ def test_speed_sampler_real_fn(
 
 
 def _dummy_img_gen_fn(*, key, flow_field, num_images, image_shape, **_):
-    """Return zero‑filled image pairs and constant densities.
-
-    The sampler tests are *control‑flow* tests – we don’t need heavyweight
-    rendering; we just need correctly‑shaped outputs so the JIT/shard_map path
-    executes.
-    """
+    """Return zero-filled image pairs and constant densities."""
     h, w = image_shape
     imgs1 = jnp.zeros((num_images, h, w), dtype=jnp.float32)
     imgs2 = jnp.zeros_like(imgs1)

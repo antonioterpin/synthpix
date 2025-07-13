@@ -6,8 +6,6 @@ import jax
 import jax.numpy as jnp
 import pytest
 import yaml
-from jax.experimental import mesh_utils
-from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
 from synthpix.example_flows import get_flow_function
@@ -602,8 +600,8 @@ def test_speed_flow_fields_adapter(
 
     # Name of the axis for the device mesh
     shard_fields = "fields"
-    num_devices = len(jax.devices())
-    devices = mesh_utils.create_device_mesh((num_devices,))
+    devices = jax.devices()
+    num_devices = len(devices)
     mesh = Mesh(devices, axis_names=(shard_fields))
 
     sharding = NamedSharding(mesh, PartitionSpec(shard_fields))
@@ -617,7 +615,7 @@ def test_speed_flow_fields_adapter(
     flow_fields = jax.device_put(flow_fields, sharding)
 
     flow_field_adapter_jit = jax.jit(
-        shard_map(
+        jax.shard_map(
             lambda flow: flow_field_adapter(
                 flow,
                 new_flow_field_shape=new_flow_field_shape,
