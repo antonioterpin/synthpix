@@ -735,7 +735,7 @@ def test_invalid_flow_field_size_and_img_offset(
         img_offset[1] - max_speed_x * dt,
     )
     expected_message = re.escape(
-        f"The size of the flow field is too small."
+        f"The size {flow_field_size} of the flow field is too small."
         f" It must be at least "
         f"({position_bounds[0] + position_bounds_offset[0]},"
         f"{position_bounds[1] + position_bounds_offset[1]})."
