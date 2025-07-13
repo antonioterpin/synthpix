@@ -12,12 +12,11 @@ jobs:
     steps:
       # 1. Check out the repository
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # 2. Build the Docker image
       - name: Build Docker image
-        run: |
-          docker build -t synthpix .
+        run: docker build -t synthpix .
 
       # 3. Create directory for test results
       - name: Prepare test-results directory
@@ -31,9 +30,9 @@ jobs:
             synthpix \
             pytest -v --junitxml=/workspace/junit/test-results.xml --ignore=test/save_ablations
 
-      # 5. Upload JUnit test results (so GH can annotate failures)
+      # 5. Upload JUnit test results
       - name: Upload test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pytest-results
           path: junit/test-results.xml

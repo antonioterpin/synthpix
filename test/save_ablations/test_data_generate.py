@@ -6,8 +6,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from jax.experimental import mesh_utils
-from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
 from synthpix.data_generate import generate_images_from_flow
@@ -81,9 +79,9 @@ def test_speed_generate_images_sweep_all():
 
     # ---- DEVICE AND MESH SETUP ----
     shard_fields = "fields"
-    num_devices = len(jax.devices())
+    devices = jax.devices()
+    num_devices = len(devices)
 
-    devices = mesh_utils.create_device_mesh((num_devices,))
     mesh = Mesh(devices, axis_names=(shard_fields,))
     key = jax.random.PRNGKey(0)
 
@@ -140,7 +138,7 @@ def test_speed_generate_images_sweep_all():
         }
 
         jit_generate_images = jax.jit(
-            shard_map(
+            jax.shard_map(
                 lambda key, flow: generate_images_from_flow(
                     key=key,
                     flow_field=flow,

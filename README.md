@@ -8,6 +8,7 @@ docker build --ssh default -t synthpix .
 docker run --rm --gpus all \
   -e CUDA_VISIBLE_DEVICES=<ID> \
   -v /shared/fluids/fluids-estimation:/shared/fluids/fluids-estimation \
+  --shm-size=4g \
   -it synthpix <commmand>
 ```
 
