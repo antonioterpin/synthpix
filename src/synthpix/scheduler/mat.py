@@ -225,30 +225,27 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                 If `include_images` is False, it only returns a batch of flow fields.
         """
         if self.include_images:
-            batch = []
-            try:
-                batch = [
-                    (s["flow"], s["img_prev"], s["img_next"])
-                    for s in it.islice(self, batch_size)
-                ]
-            except StopIteration:
-                if not self.loop and batch:
-                    logger.warning(
-                        f"Only {len(batch)} slices could be loaded before exhaustion."
-                    )
-                    flows, img_prevs, img_nexts = zip(*batch)
-                    return (
-                        np.array(img_prevs, dtype=np.float32),
-                        np.array(img_nexts, dtype=np.float32),
-                        np.array(flows, dtype=np.float32),
-                    )
-                raise
+            batch = [
+                (s["flow"], s["img_prev"], s["img_next"])
+                for s in it.islice(self, batch_size)
+            ]
+
+            if not batch:
+                # Iterator is fully exhausted
+                raise StopIteration
+
+            if len(batch) < batch_size and not self.loop:
+                logger.warning(
+                    f"Only {len(batch)} slices could be loaded before exhaustion."
+                )
+
             flows, img_prevs, img_nexts = zip(*batch)
             return (
                 np.array(img_prevs, dtype=np.float32),
                 np.array(img_nexts, dtype=np.float32),
                 np.array(flows, dtype=np.float32),
             )
+
         else:
             return super().get_batch(batch_size)
 
