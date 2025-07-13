@@ -235,11 +235,12 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             ]
 
             if len(batch) < batch_size and not self.loop:
-                if len(batch) == 0:
-                    raise StopIteration
                 logger.warning(
-                    f"Only {len(batch)} slices could be loaded before exhaustion."
+                    f"Skipping the last {len(batch)} slices."
+                    "If undesired, use loop or a batch size dividing "
+                    "the number of slices in the dataset."
                 )
+                raise StopIteration
 
             flows, img_prevs, img_nexts = zip(*batch)
             return (

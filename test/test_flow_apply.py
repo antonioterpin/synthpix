@@ -3,7 +3,6 @@ import timeit
 import jax
 import jax.numpy as jnp
 import pytest
-from jax.experimental import mesh_utils
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
 from synthpix.apply import (
@@ -283,7 +282,13 @@ def test_speed_apply_flow_to_particles(seeding_density, selected_flow, image_sha
     shard_particles = "particles"
 
     # Check how many GPUs are available
-    num_devices = len(jax.devices())
+    devices = jax.devices()
+    if len(devices) == 3:
+        devices = devices[:2]
+    elif len(devices) > 4:
+        devices = devices[:4]
+
+    num_devices = len(devices)
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
@@ -298,7 +303,6 @@ def test_speed_apply_flow_to_particles(seeding_density, selected_flow, image_sha
     # and replicate the flow field along all devices.
     # The idea is that each device will apply the flow to a part of the particles
     # and then we will combine the results.
-    devices = mesh_utils.create_device_mesh((num_devices,))
     mesh = Mesh(devices, axis_names=(shard_particles))
 
     # 1. Generate random particles

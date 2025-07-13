@@ -842,7 +842,7 @@ def test_sampler_switches_flow_fields(
     "image_shape, batches_per_flow_batch, seeding_density_range",
     [((32, 32), 4, (0.1, 0.1)), ((64, 64), 4, (0.0, 0.04))],
 )
-@pytest.mark.parametrize("batch_size", [4])
+@pytest.mark.parametrize("batch_size", [12])
 @pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
 def test_sampler_with_real_img_gen_fn(
     image_shape,
@@ -904,6 +904,13 @@ def test_speed_sampler_dummy_fn(
     scheduler, batch_size, batches_per_flow_batch, seed, seeding_density_range
 ):
     """Test the speed of the sampler with a dummy image generation function."""
+    devices = jax.devices()
+    if len(devices) == 3:
+        devices = devices[:2]
+    elif len(devices) > 4:
+        devices = devices[:4]
+    num_devices = len(devices)
+
     # Define the parameters for the test
     config = sampler_config.copy()
     config["batch_size"] = batch_size
@@ -921,12 +928,11 @@ def test_speed_sampler_dummy_fn(
     config["noise_level"] = 0.0
     config["batch_size"] = batch_size
     config["seed"] = seed
+    config["device_ids"] = [d.id for d in devices]
 
-    if config["flow_fields_per_batch"] % len(jax.devices()) != 0:
+    if config["flow_fields_per_batch"] % num_devices != 0:
         pytest.skip("flow_fields_per_batch must be divisible by the number of devices.")
 
-    # Check how many GPUs are available
-    num_devices = len(jax.devices())
     # Limit time in seconds (depends on the number of GPUs)
     # The test should not depend much on the number of GPUs.
     if num_devices == 1:
@@ -995,6 +1001,14 @@ def test_speed_sampler_dummy_fn(
 def test_speed_sampler_real_fn(
     batch_size, batches_per_flow_batch, seed, seeding_density_range, scheduler
 ):
+    # Check how many GPUs are available
+    devices = jax.devices()
+    if len(devices) == 3:
+        devices = devices[:2]
+    elif len(devices) > 4:
+        devices = devices[:4]
+    num_devices = len(devices)
+
     config = sampler_config.copy()
     config["batch_size"] = batch_size
     config["batches_per_flow_batch"] = batches_per_flow_batch
@@ -1011,11 +1025,10 @@ def test_speed_sampler_real_fn(
     config["dt"] = 2.6e-2
     config["noise_level"] = 0.0
     config["flow_fields_per_batch"] = 64
+    config["device_ids"] = [d.id for d in devices]
 
-    # Check how many GPUs are available
-    if config["flow_fields_per_batch"] % len(jax.devices()) != 0:
+    if config["flow_fields_per_batch"] % num_devices != 0:
         pytest.skip("flow_fields_per_batch must be divisible by the number of devices.")
-    num_devices = len(jax.devices())
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
@@ -1096,15 +1109,15 @@ def _dummy_img_gen_fn(*, key, flow_field, num_images, image_shape, **_):
 # Global parameters – tweak once here if you change defaults in the code base
 # -----------------------------------------------------------------------------
 
-BATCH_SIZE = 4
+BATCH_SIZE = 12
 EPISODE_LENGTH = 4
 FLOW_BATCH_SIZE = BATCH_SIZE  # one flow‑field per episode step
-BATCHES_PER_FLOW_BATCH = 1  # keep simple: one synthetic batch per step
+BATCHES_PER_FLOW_BATCH = 1
 BUFFER_SIZE = 3 * EPISODE_LENGTH  # queue can hold an entire episode
 FLOW_FIELD_SIZE = (64, 64)  # arbitrary physical dimensions (metres)
 DT = 1.0
 IMG_SHAPE = (64, 64)  # small so CPU JAX is quick
-NUM_EPISODES = 6
+NUM_EPISODES = 2
 
 
 # -----------------------------------------------------------------------------
@@ -1194,7 +1207,7 @@ def test_done_flag_and_horizon(sampler):
 
     last_step_dones = dones[EPISODE_LENGTH - 1 :: EPISODE_LENGTH]
 
-    # For each episode's last batch, require *all* BATCH_SIZE flags to be True
+    # For each episode's last batch, require all BATCH_SIZE flags to be True
     assert all(
         bool(jnp.all(d)) for d in last_step_dones
     ), "`done` must be True for every env on the *last* step of each episode"
@@ -1229,17 +1242,24 @@ def test_stop_after_max_episodes(mock_mat_files):
     files, dims = mock_mat_files
     H, W = dims["height"], dims["width"]
 
+    devices = jax.devices()
+    if len(devices) > 4:
+        devices = devices[:4]
+
     num_episodes = 2
+    batch_size = 3 * 4  # multiple of all number of devices
     base = MATFlowFieldScheduler(files, loop=True, output_shape=(H, W))
-    epi = EpisodicFlowFieldScheduler(base, batch_size=4, episode_length=2, seed=0)
-    pre = PrefetchingFlowFieldScheduler(epi, batch_size=4, buffer_size=90)
+    epi = EpisodicFlowFieldScheduler(
+        base, batch_size=batch_size, episode_length=2, seed=0
+    )
+    pre = PrefetchingFlowFieldScheduler(epi, batch_size=batch_size, buffer_size=90)
 
     sampler = SyntheticImageSampler(
         scheduler=pre,
         img_gen_fn=dummy_img_gen_fn,
         batches_per_flow_batch=1,
-        batch_size=4,
-        flow_fields_per_batch=4,
+        batch_size=batch_size,
+        flow_fields_per_batch=batch_size,
         flow_field_size=(H, W),
         image_shape=(H, W),
         resolution=1.0,
@@ -1262,6 +1282,7 @@ def test_stop_after_max_episodes(mock_mat_files):
         min_speed_y=0.0,
         output_units="pixels",
         noise_level=0.0,
+        device_ids=[d.id for d in devices],
     )
 
     # We expect exactly num_episodes × episode_length iterations.
@@ -1277,7 +1298,7 @@ def test_stop_after_max_episodes(mock_mat_files):
             batch = next(sampler)
             imgs1 = batch["images1"]
             done = batch["done"]
-            assert imgs1.shape[0] == 4
+            assert imgs1.shape[0] == batch_size
             assert imgs1[0].shape == (H, W)
             assert isinstance(imgs1, jnp.ndarray)
             n_batches += 1
