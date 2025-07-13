@@ -227,8 +227,9 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                 batch = []
                 for _ in range(batch_size):
                     sample = next(self)
-                    batch.append
-                    ((sample["flow"], sample["img_prev"], sample["img_next"]))
+                    batch.append(
+                        (sample["flow"], sample["img_prev"], sample["img_next"])
+                    )
             except StopIteration:
                 if not self.loop and batch:
                     logger.warning(

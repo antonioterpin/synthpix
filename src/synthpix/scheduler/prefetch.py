@@ -1,7 +1,6 @@
 """PrefetchingFlowFieldScheduler to asynchronously prefetch flow fields."""
 import queue
 import threading
-import time
 
 from ..utils import logger
 
@@ -115,25 +114,22 @@ class PrefetchingFlowFieldScheduler:
                 # that the prefetching scheduler will ignore the incomplete batch
                 # and signal end‑of‑stream to consumer
                 try:
-                    self._queue.put(None, block=False)
+                    self._queue.put(None, block=True, timeout=2)
                 except queue.Full:
-                    logger.info("Queue full when signalling EOS; waiting for space…")
                     # If the queue is full, I need to wait for the consumer to consume
                     # one more item before I can put the end‑of‑stream signal.
                     # This is to ensure that the consumer can consume the last batch
                     # before the end‑of‑stream signal.
-                    time.sleep(2)
-                    if self._queue.full():
-                        try:
-                            self._queue.get_nowait()
-                            logger.warning(
-                                "Queue is still full after waiting, "
-                                "Throwing away one item to make space."
-                            )
-                            self._queue.put(None, block=False)
-                        except queue.Empty:
-                            logger.debug("Queue is empty, no need to free up a slot.")
-
+                    try:
+                        self._queue.get_nowait()
+                        logger.warning(
+                            "Queue is still full after waiting, "
+                            "Throwing away one item to make space."
+                        )
+                        self._queue.put(None, block=False)
+                    except queue.Empty:
+                        logger.debug("Queue is empty, no need to free up a slot.")
+                        self._queue.put(None, block=False)
                 logger.info("No more data to fetch, stopping prefetching thread.")
                 self._stop_event.set()
                 return
@@ -163,7 +159,8 @@ class PrefetchingFlowFieldScheduler:
             self._thread.join()
 
         # Clear the queue to remove any remaining items
-        self._queue.queue.clear()
+        with self._queue.mutex:
+            self._queue.queue.clear()
 
         logger.debug("Prefetching thread stopped, queue cleared.")
 
