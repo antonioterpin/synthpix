@@ -101,6 +101,17 @@ class RealImageSampler:
         # asynchronous horizons
         return jnp.full((self.batch_size,), is_last_step, dtype=bool)
 
+    def reset(self):
+        """Resets the underlying scheduler to its initial state."""
+        if hasattr(self.scheduler, "reset"):
+            self.scheduler.reset()
+        else:
+            logger.warning(
+                "The underlying scheduler does not have a reset method."
+                " Skipping reset."
+            )
+        logger.debug("Sampler has been reset.")
+
     def shutdown(self):
         """Shutdown the sampler."""
         logger.info("Shutting down RealImageSampler.")

@@ -99,7 +99,7 @@ class PrefetchingFlowFieldScheduler:
         """
         return self.scheduler.get_flow_fields_shape()
 
-    def _worker(self):
+    def _worker(self, eos_timeout=2):
         """Background thread that continuously fetches batches from the scheduler."""
         while not self._stop_event.is_set():
             try:
@@ -114,11 +114,22 @@ class PrefetchingFlowFieldScheduler:
                 # that the prefetching scheduler will ignore the incomplete batch
                 # and signal end‑of‑stream to consumer
                 try:
-                    self._queue.put(None, block=False)
+                    self._queue.put(None, block=True, timeout=eos_timeout)
                 except queue.Full:
-                    logger.info("Queue full when signalling EOS; waiting for space…")
-                    self._queue.get(block=True, timeout=2)
-                    self._queue.put(None, block=True, timeout=2)
+                    # If the queue is full for <timeout>, I remove one item
+                    # before I can put the end‑of‑stream signal.
+
+                    # Acquire the mutex to ensure atomicity
+                    with self._queue.mutex:
+                        if self._queue.queue:
+                            # Remove one item from the queue to free up a slot
+                            self._queue.queue.popleft()
+
+                        # Write the EOS sentinel atomically
+                        self._queue.queue.append(None)
+
+                        # Notify the consumer that the end-of-stream signal is available
+                        self._queue.not_empty.notify_all()
 
                 logger.info("No more data to fetch, stopping prefetching thread.")
                 self._stop_event.set()
@@ -134,11 +145,23 @@ class PrefetchingFlowFieldScheduler:
 
     def reset(self):
         """Resets the prefetching scheduler and underlying scheduler."""
-        # Stop the background thread and clear the queue
+        # Set the stop event to stop the current thread
         self._stop_event.set()
+
+        # If the thread is stuck on put(), free up one slot in the queue
+        # so the thread can check the stop event.
+        try:
+            self._queue.get_nowait()
+        except queue.Empty:
+            pass
+
+        # Wait for the thread to finish
         if self._thread.is_alive():
             self._thread.join()
-        self._queue.queue.clear()
+
+        # Clear the queue to remove any remaining items
+        with self._queue.mutex:
+            self._queue.queue.clear()
 
         logger.debug("Prefetching thread stopped, queue cleared.")
 

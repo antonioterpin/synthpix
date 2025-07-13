@@ -1,4 +1,6 @@
 """FlowFieldScheduler to load the flow field data from files."""
+import itertools as it
+
 import cv2
 import h5py
 import numpy as np
@@ -226,13 +228,8 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             batch = []
             try:
                 batch = [
-                    (
-                        sample["flow"],
-                        sample["img_prev"],
-                        sample["img_next"],
-                    )
-                    for _ in range(batch_size)
-                    for sample in [next(self)]
+                    (s["flow"], s["img_prev"], s["img_next"])
+                    for s in it.islice(self, batch_size)
                 ]
             except StopIteration:
                 if not self.loop and batch:
