@@ -234,11 +234,9 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                 for s in it.islice(self, batch_size)
             ]
 
-            if not batch:
-                # Iterator is fully exhausted
-                raise StopIteration
-
             if len(batch) < batch_size and not self.loop:
+                if len(batch) == 0:
+                    raise StopIteration
                 logger.warning(
                     f"Only {len(batch)} slices could be loaded before exhaustion."
                 )
