@@ -116,22 +116,14 @@ class PrefetchingFlowFieldScheduler:
                 try:
                     self._queue.put(None, block=True, timeout=eos_timeout)
                 except queue.Full:
-                    # If the queue is full, I need to wait for the consumer to consume
-                    # one more item before I can put the end‑of‑stream signal.
-                    # This is to ensure that the consumer can consume the last batch
-                    # before the end‑of‑stream signal.
+                    # If the queue is full for <timeout>, I remove one item
+                    # before I can put the end‑of‑stream signal.
 
-                    removed_item = False
                     # Acquire the mutex to ensure atomicity
                     with self._queue.mutex:
                         if self._queue.queue:
                             # Remove one item from the queue to free up a slot
                             self._queue.queue.popleft()
-
-                            # Store that we removed an item
-                            removed_item = True
-                            # Notify the consumer that there is space in the queue
-                            self._queue.not_full.notify_all()
 
                         # Write the EOS sentinel atomically
                         self._queue.queue.append(None)
@@ -139,12 +131,6 @@ class PrefetchingFlowFieldScheduler:
                         # Notify the consumer that the end-of-stream signal is available
                         self._queue.not_empty.notify_all()
 
-                    if removed_item:
-                        try:
-                            # Mark the task as done to avoid blocking the consumer
-                            self._queue.task_done()
-                        except ValueError:
-                            logger.warning("task_done() called too many times")
                 logger.info("No more data to fetch, stopping prefetching thread.")
                 self._stop_event.set()
                 return
