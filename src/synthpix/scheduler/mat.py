@@ -223,13 +223,12 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                 If `include_images` is False, it only returns a batch of flow fields.
         """
         if self.include_images:
+            batch = []
             try:
-                batch = []
-                for _ in range(batch_size):
-                    sample = next(self)
-                    batch.append(
-                        (sample["flow"], sample["img_prev"], sample["img_next"])
-                    )
+                batch = [
+                    (s["flow"], s["img_prev"], s["img_next"])
+                    for s in (next(self) for _ in range(batch_size))
+                ]
             except StopIteration:
                 if not self.loop and batch:
                     logger.warning(
