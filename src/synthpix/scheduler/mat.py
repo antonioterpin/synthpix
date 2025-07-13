@@ -223,32 +223,31 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                 - img_nexts: np.ndarray of next images
                 - flows: np.ndarray of flow fields
                 If `include_images` is False, it only returns a batch of flow fields.
+
+        Raises:
+            StopIteration: If the iterator is fully exhausted.
+            Warning: If fewer slices than `batch_size` are available and `loop` is False
         """
         if self.include_images:
-            batch = []
-            try:
-                batch = [
-                    (s["flow"], s["img_prev"], s["img_next"])
-                    for s in it.islice(self, batch_size)
-                ]
-            except StopIteration:
-                if not self.loop and batch:
-                    logger.warning(
-                        f"Only {len(batch)} slices could be loaded before exhaustion."
-                    )
-                    flows, img_prevs, img_nexts = zip(*batch)
-                    return (
-                        np.array(img_prevs, dtype=np.float32),
-                        np.array(img_nexts, dtype=np.float32),
-                        np.array(flows, dtype=np.float32),
-                    )
-                raise
+            batch = [
+                (s["flow"], s["img_prev"], s["img_next"])
+                for s in it.islice(self, batch_size)
+            ]
+
+            if len(batch) < batch_size and not self.loop:
+                if len(batch) == 0:
+                    raise StopIteration
+                logger.warning(
+                    f"Only {len(batch)} slices could be loaded before exhaustion."
+                )
+
             flows, img_prevs, img_nexts = zip(*batch)
             return (
                 np.array(img_prevs, dtype=np.float32),
                 np.array(img_nexts, dtype=np.float32),
                 np.array(flows, dtype=np.float32),
             )
+
         else:
             return super().get_batch(batch_size)
 
