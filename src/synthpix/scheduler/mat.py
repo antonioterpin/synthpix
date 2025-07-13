@@ -223,6 +223,10 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                 - img_nexts: np.ndarray of next images
                 - flows: np.ndarray of flow fields
                 If `include_images` is False, it only returns a batch of flow fields.
+
+        Raises:
+            StopIteration: If the iterator is fully exhausted.
+            Warning: If fewer slices than `batch_size` are available and `loop` is False
         """
         if self.include_images:
             batch = [
