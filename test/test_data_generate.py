@@ -1,5 +1,6 @@
 import re
 import timeit
+from test.example_flows import get_flow_function
 
 import jax
 import jax.numpy as jnp
@@ -12,7 +13,6 @@ from synthpix.data_generate import (
 )
 
 # Import existing modules
-from synthpix.example_flows import get_flow_function
 from synthpix.utils import generate_array_flow_field, load_configuration
 
 config = load_configuration("config/testing.yaml")

@@ -1,6 +1,7 @@
 import csv
 import itertools
 import timeit
+from test.example_flows import get_flow_function
 
 import jax
 import jax.numpy as jnp
@@ -11,7 +12,6 @@ from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from synthpix.data_generate import generate_images_from_flow
 
 # Import existing modules
-from synthpix.example_flows import get_flow_function
 from synthpix.utils import generate_array_flow_field, load_configuration
 
 config = load_configuration("config/testing.yaml")

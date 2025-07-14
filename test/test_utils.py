@@ -2,6 +2,7 @@ import os
 import re
 import tempfile
 import timeit
+from test.example_flows import get_flow_function
 
 import jax
 import jax.numpy as jnp
@@ -9,7 +10,6 @@ import pytest
 import yaml
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
-from synthpix.example_flows import get_flow_function
 from synthpix.sanity import calculate_min_and_max_speeds, update_config_file
 from synthpix.utils import (
     bilinear_interpolate,
