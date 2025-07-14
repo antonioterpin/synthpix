@@ -58,6 +58,64 @@ def test_flow_apply_to_image(image_shape, visualize=False):
     assert img.shape == img_warped.shape, "Image shapes do not match"
 
 
+@pytest.mark.parametrize("dt", [1.0])
+def test_flow_apply_to_image_forward(dt):
+    """Pixel should move one step to the right when forward=True."""
+    # 1. Build a simple test image: one bright pixel in the centre.
+    img = jnp.zeros((5, 5))
+    img = img.at[2, 2].set(1.0)
+
+    # 2. Constant horizontal flow (u = +1 px / step, v = 0).
+    def flow_f(_t, _x, _y):
+        return 1.0, 0.0
+
+    # 3. Apply the flow in the *forward* sense.
+    img_warped = apply_flow_to_image_callable(
+        img,
+        flow_f,
+        t=0.0,
+        dt=dt,
+        forward=True,
+    )
+
+    # 4. Expected result: pixel shifted from (2, 2) → (2, 3).
+    expected = jnp.zeros_like(img)
+    expected = expected.at[2, 3].set(1.0)
+
+    # 5. Verify shape, location and intensity.
+    assert img_warped.shape == expected.shape
+    assert jnp.allclose(
+        img_warped, expected
+    ), "Forward mapping did not move the pixel correctly."
+
+
+@pytest.mark.parametrize("dt", [1.0])
+def test_apply_flow_to_particles_3d_constant(dt):
+    """Particles in 3-D should be advected by (u, v, w) → (x+u·dt, y+v·dt, z+w·dt)."""
+    # Random particles
+    key = jax.random.PRNGKey(42)
+    num_particles = 8
+    zyx_max = jnp.array([9.0, 9.0, 9.0])
+    particles = jax.random.uniform(key, (num_particles, 3), minval=0.0, maxval=zyx_max)
+
+    # Build a constant velocity field (u, v, w) = (1, 2, 3) everywhere.
+    D = H = W = 10
+    u, v, w = 1.0, 2.0, 3.0
+    flow_field = jnp.tile(jnp.array([u, v, w]), (D, H, W, 1))  # shape D, H, W, 3)
+
+    # Apply the flow
+    advected = apply_flow_to_particles(particles, flow_field, dt=dt)
+
+    # Expected displacement
+    expected = particles + jnp.array([w * dt, v * dt, u * dt])
+
+    # Verify shape and values
+    assert advected.shape == particles.shape
+    assert jnp.allclose(
+        advected, expected
+    ), "3D particles displacement produced wrong positions."
+
+
 @pytest.mark.parametrize("selected_flow", ["vertical"])
 @pytest.mark.parametrize("seeding_density", [0.1])
 @pytest.mark.parametrize("image_shape", [(128, 128)])
