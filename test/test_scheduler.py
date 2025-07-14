@@ -29,25 +29,35 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_SCHEDULER"]
 @pytest.mark.parametrize("file_list", [[None], [123, "invalid"], [123, "invalid"]])
 def test_invalid_file_list_type(file_list):
     with pytest.raises(ValueError, match="All file paths must be strings."):
-        HDF5FlowFieldScheduler(file_list)
+        HDF5FlowFieldScheduler.from_config({"scheduler_files": file_list})
 
 
 @pytest.mark.parametrize("file_list", [["nonexistent.h5"]])
 def test_invalid_file_paths(file_list):
     with pytest.raises(ValueError, match=f"File {file_list[0]} does not exist."):
-        HDF5FlowFieldScheduler(file_list)
+        HDF5FlowFieldScheduler.from_config({"scheduler_files": file_list})
 
 
 @pytest.mark.parametrize("randomize", [None, 123, "invalid"])
 def test_invalid_randomize(randomize, temp_file):
     with pytest.raises(ValueError, match="randomize must be a boolean value."):
-        HDF5FlowFieldScheduler([temp_file], randomize=randomize)
+        HDF5FlowFieldScheduler.from_config(
+            {
+                "scheduler_files": [temp_file],
+                "randomize": randomize,
+            }
+        )
 
 
 @pytest.mark.parametrize("loop", [None, 123, "invalid"])
 def test_invalid_loop(loop, temp_file):
     with pytest.raises(ValueError, match="loop must be a boolean value."):
-        HDF5FlowFieldScheduler([temp_file], loop=loop)
+        HDF5FlowFieldScheduler.from_config(
+            {
+                "scheduler_files": [temp_file],
+                "loop": loop,
+            }
+        )
 
 
 @pytest.mark.parametrize(
@@ -56,7 +66,13 @@ def test_invalid_loop(loop, temp_file):
 )
 def test_empty_file_list(file_list, randomize, loop):
     with pytest.raises(ValueError, match="The file_list must not be empty."):
-        HDF5FlowFieldScheduler(file_list, randomize=randomize, loop=loop)
+        HDF5FlowFieldScheduler.from_config(
+            {
+                "scheduler_files": file_list,
+                "randomize": randomize,
+                "loop": loop,
+            }
+        )
 
 
 # ============================
@@ -74,7 +90,11 @@ def test_non_hdf5_file(temp_txt_file):
 
 def test_hdf5_shape(temp_file):
     """Test that the HDF5 file has the correct shape."""
-    scheduler = HDF5FlowFieldScheduler(file_list=[temp_file])
+    scheduler = HDF5FlowFieldScheduler.from_config(
+        {
+            "scheduler_files": [temp_file],
+        }
+    )
     with h5py.File(temp_file, "r") as file:
         temp_file_key = list(file.keys())[0]
         expected_shape = (
