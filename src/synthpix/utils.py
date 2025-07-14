@@ -6,8 +6,6 @@ from typing import Tuple, Union
 import goggles as logger
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
-import numpy as np
 
 DEBUG_JIT = False
 
@@ -166,60 +164,6 @@ def generate_array_flow_field(
     arr = jax.vmap(lambda i: jax.vmap(lambda j: jnp.array(flow_f(1, i, j)))(cols))(rows)
 
     return arr
-
-
-def visualize_and_save(name, image1, image2, flow_field, output_dir="output_images"):
-    """Visualizes and saves a specified number of images from a batch.
-
-    Args:
-        name (str): The name of the batch.
-        image1 (jnp.ndarray): The first image to visualize.
-        image2 (jnp.ndarray): The second image to visualize.
-        flow_field (jnp.ndarray): The flow field to visualize.
-        output_dir (str): Directory to save the images.
-    """
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Extract flow field
-    flow_x = flow_field[..., 0]
-    flow_y = flow_field[..., 1]
-    # Create a grid for the quiver plot
-    y, x = np.mgrid[0 : flow_x.shape[0], 0 : flow_x.shape[1]]
-
-    # Save individual images and flow field
-    plt.imsave(os.path.join(output_dir, f"{name}_image1.png"), image1, cmap="gray")
-    plt.imsave(os.path.join(output_dir, f"{name}_image2.png"), image2, cmap="gray")
-
-    # Save the quiver plot as a separate image
-    quiver_fig, quiver_ax = plt.subplots(figsize=(7, 7))
-    step = 1
-    quiver_ax.quiver(
-        x[::step, ::step],
-        y[::step, ::step],
-        flow_x[::step, ::step],
-        flow_y[::step, ::step],
-        pivot="mid",
-        color="blue",
-    )
-    quiver_ax.set_aspect("equal")
-    quiver_fig.savefig(os.path.join(output_dir, f"{name}_quiver.png"))
-    plt.close(quiver_fig)
-
-    logger.info(f"Saved images for {name} to {output_dir}.")
-
-
-def interp_channel(
-    channel, row_floor, row_ceil, col_floor, col_ceil, row_lerp, col_lerp
-):
-    """Perform bilinear interpolation on a single 2D channel."""
-    I00 = channel[row_floor[:, None], col_floor[None, :]]
-    I01 = channel[row_floor[:, None], col_ceil[None, :]]
-    I10 = channel[row_ceil[:, None], col_floor[None, :]]
-    I11 = channel[row_ceil[:, None], col_ceil[None, :]]
-
-    top = I00 * (1 - col_lerp) + I01 * col_lerp
-    bottom = I10 * (1 - col_lerp) + I11 * col_lerp
-    return top * (1 - row_lerp) + bottom * row_lerp
 
 
 def flow_field_adapter(
@@ -414,18 +358,24 @@ def input_check_flow_field_adapter(
     if not isinstance(flow_field, jnp.ndarray):
         raise ValueError("flow_field must be a jnp.ndarray.")
     if flow_field.ndim != 4:
-        raise ValueError("flow_field must be a 4D jnp.ndarray with shape (N, H, W, 2).")
+        raise ValueError(
+            "flow_field must be a 4D jnp.ndarray with shape (N, H, W, 2), "
+            f"got {flow_field.shape}."
+        )
     if flow_field.shape[-1] != 2:
         raise ValueError(
-            "flow_field must have shape (N, H, W, 2) in the last dimension."
+            f"flow_field must have shape (N, H, W, 2), got {flow_field.shape}."
         )
 
-    if not isinstance(new_flow_field_shape, tuple) or len(new_flow_field_shape) != 2:
+    if (
+        not isinstance(new_flow_field_shape, tuple)
+        or len(new_flow_field_shape) != 2
+        or not all(isinstance(s, int) and s > 0 for s in new_flow_field_shape)
+    ):
         raise ValueError(
-            "new_flow_field_shape must be a tuple of two positive integers."
+            "new_flow_field_shape must be a tuple of two positive integers, "
+            f"got {new_flow_field_shape}."
         )
-    if not all(isinstance(s, int) and s > 0 for s in new_flow_field_shape):
-        raise ValueError("new_flow_field_shape must contain two positive integers.")
 
     if not isinstance(image_shape, tuple) or len(image_shape) != 2:
         raise ValueError("image_shape must be a tuple of two positive integers.")
