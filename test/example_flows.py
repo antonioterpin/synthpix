@@ -1,4 +1,4 @@
-"""Example flow fields for testing the flow estimation algorithms."""
+"""Example flow functions for testing purposes."""
 
 from typing import Tuple
 

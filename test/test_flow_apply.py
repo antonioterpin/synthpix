@@ -1,4 +1,5 @@
 import timeit
+from test.example_flows import get_flow_function
 
 import jax
 import jax.numpy as jnp
@@ -10,7 +11,6 @@ from synthpix.apply import (
     apply_flow_to_particles,
     input_check_apply_flow,
 )
-from synthpix.example_flows import get_flow_function
 from synthpix.generate import img_gen_from_data, img_gen_from_density
 from synthpix.utils import generate_array_flow_field, load_configuration
 
