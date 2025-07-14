@@ -210,6 +210,12 @@ def test_invalid_p_hide_img2(p_hide_img2):
         (jnp.array([[-0.5, -0.5]]), "All values in diameter_ranges must be > 0."),
         (jnp.array([[1.0, 0.5]]), "Each diameter_range must satisfy min <= max."),
         (jnp.array([[0.5, 0.1]]), "Each diameter_range must satisfy min <= max."),
+        (None, "diameter_ranges must be a 2D jnp.ndarray with shape (N, 2)."),
+        ("invalid", "diameter_ranges must be a 2D jnp.ndarray with shape (N, 2)."),
+        (
+            jnp.array([[1], [2]]),
+            "diameter_ranges must be a 2D jnp.ndarray with shape (N, 2).",
+        ),
     ],
 )
 def test_invalid_diameter_range(diameter_ranges, expected_message):
@@ -217,7 +223,7 @@ def test_invalid_diameter_range(diameter_ranges, expected_message):
     key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
-    with pytest.raises(ValueError, match=expected_message):
+    with pytest.raises(ValueError, match=re.escape(expected_message)):
         input_check_gen_img_from_flow(
             key,
             diameter_ranges=diameter_ranges,
@@ -234,6 +240,10 @@ def test_invalid_diameter_range(diameter_ranges, expected_message):
         (jnp.array([[-0.5, -0.5]]), "All values in intensity_ranges must be >= 0."),
         (jnp.array([[1.0, 0.5]]), "Each intensity_range must satisfy min <= max."),
         (jnp.array([[0.5, 0.1]]), "Each intensity_range must satisfy min <= max."),
+        (
+            jnp.array([[0.5], [0.4]]),
+            "intensity_ranges must be a 2D jnp.ndarray with shape (N, 2).",
+        ),
     ],
 )
 def test_invalid_intensity_range(intensity_ranges, expected_message):
@@ -241,7 +251,7 @@ def test_invalid_intensity_range(intensity_ranges, expected_message):
     key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
-    with pytest.raises(ValueError, match=expected_message):
+    with pytest.raises(ValueError, match=re.escape(expected_message)):
         input_check_gen_img_from_flow(
             key,
             flow_field=flow_field,
@@ -255,14 +265,18 @@ def test_invalid_intensity_range(intensity_ranges, expected_message):
     [
         (
             jnp.array([[-1.1, 1.0]]),
-            "All values in rho_ranges must be in the open interval \\(-1, 1\\).",
+            "All values in rho_ranges must be in the open interval (-1, 1).",
         ),
         (
             jnp.array([[0.0, 1.1]]),
-            "All values in rho_ranges must be in the open interval \\(-1, 1\\).",
+            "All values in rho_ranges must be in the open interval (-1, 1).",
         ),
         (jnp.array([[0.9, 0.5]]), "Each rho_range must satisfy min <= max."),
         (jnp.array([[0.5, 0.1]]), "Each rho_range must satisfy min <= max."),
+        (
+            jnp.array([[0.5], [0.4]]),
+            "rho_ranges must be a 2D jnp.ndarray with shape (N, 2).",
+        ),
     ],
 )
 def test_invalid_rho_range(rho_ranges, expected_message):
@@ -270,7 +284,7 @@ def test_invalid_rho_range(rho_ranges, expected_message):
     key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
-    with pytest.raises(ValueError, match=expected_message):
+    with pytest.raises(ValueError, match=re.escape(expected_message)):
         input_check_gen_img_from_flow(
             key, flow_field=flow_field, image_shape=image_shape, rho_ranges=rho_ranges
         )
@@ -484,8 +498,13 @@ def test_incoherent_image_shape_and_position_bounds(
         )
 
 
-def test_generate_images_from_flow(visualize=False):
+@pytest.mark.parametrize("debug_flag", [False, True])
+def test_generate_images_from_flow(monkeypatch, debug_flag):
     """Test that we can generate images from a flow field."""
+    import synthpix.data_generate as dg
+
+    if debug_flag:
+        monkeypatch.setattr(dg, "DEBUG_JIT", debug_flag, raising=True)
 
     # 1. setup the image parameters
     key = jax.random.PRNGKey(0)
@@ -513,7 +532,7 @@ def test_generate_images_from_flow(visualize=False):
     flow_field = jnp.expand_dims(flow_field, axis=0)
 
     # 3. apply the flow field to the particles
-    data = generate_images_from_flow(
+    data = dg.generate_images_from_flow(
         key=key,
         flow_field=flow_field,
         position_bounds=position_bounds,
@@ -540,16 +559,36 @@ def test_generate_images_from_flow(visualize=False):
     img = jnp.squeeze(img)
     img_warped = jnp.squeeze(img_warped)
 
-    if visualize:
-        import matplotlib.pyplot as plt
-        import numpy as np
-
-        plt.imsave("img.png", np.array(img), cmap="gray")
-        plt.imsave("img_warped.png", np.array(img_warped), cmap="gray")
-
     # 5. check the shape of the images
     assert img.shape == image_shape
     assert img_warped.shape == image_shape
+
+    # an invalid argument should raise a ValueError (the check is in the function)
+    if debug_flag:
+        with pytest.raises(
+            ValueError,
+            match="image_shape must be a tuple of two positive integers.",
+        ):
+            dg.generate_images_from_flow(
+                key=key,
+                flow_field=flow_field,
+                position_bounds=position_bounds,
+                image_shape=(-1, -1),
+                seeding_density_range=seeding_density_range,
+                num_images=1,
+                img_offset=img_offset,
+                p_hide_img1=p_hide_img1,
+                p_hide_img2=p_hide_img2,
+                diameter_ranges=diameter_ranges,
+                diameter_var=diameter_var,
+                max_diameter=max_diameter,
+                intensity_ranges=intensity_ranges,
+                intensity_var=intensity_var,
+                rho_ranges=rho_ranges,
+                rho_var=rho_var,
+                dt=dt,
+                noise_level=noise_level,
+            )
 
 
 # skipif is used to skip the test if the user is not connected to the server

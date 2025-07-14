@@ -4,14 +4,10 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 
-from .apply import apply_flow_to_particles, input_check_apply_flow
+from .apply import apply_flow_to_particles
 
 # Import existing modules
-from .generate import (
-    add_noise_to_image,
-    img_gen_from_data,
-    input_check_img_gen_from_data,
-)
+from .generate import add_noise_to_image, img_gen_from_data
 from .utils import DEBUG_JIT, is_int, logger
 
 
@@ -104,6 +100,30 @@ def generate_images_from_flow(
                     - "intensity_ranges": jnp.ndarray of shape (num_images, 2).
                     - "rho_ranges": jnp.ndarray of shape (num_images, 2).
     """
+    if DEBUG_JIT:
+        input_check_gen_img_from_flow(
+            key=key,
+            flow_field=flow_field,
+            position_bounds=position_bounds,
+            image_shape=image_shape,
+            num_images=num_images,
+            img_offset=img_offset,
+            seeding_density_range=seeding_density_range,
+            p_hide_img1=p_hide_img1,
+            p_hide_img2=p_hide_img2,
+            diameter_ranges=diameter_ranges,
+            diameter_var=diameter_var,
+            max_diameter=max_diameter,
+            intensity_ranges=intensity_ranges,
+            intensity_var=intensity_var,
+            rho_ranges=rho_ranges,
+            rho_var=rho_var,
+            dt=dt,
+            flow_field_res_x=flow_field_res_x,
+            flow_field_res_y=flow_field_res_y,
+            noise_level=noise_level,
+        )
+
     # Fix the key shape
     key = jnp.reshape(key, (-1, key.shape[-1]))[0]
 
@@ -253,18 +273,6 @@ def generate_images_from_flow(
         rho2 = jnp.clip(rho2, rho_range[0], rho_range[1])
         intensities2 = jnp.clip(intensities2, intensity_range[0], intensity_range[1])
 
-        if DEBUG_JIT:
-            input_check_img_gen_from_data(
-                particle_positions=particle_positions,
-                image_shape=position_bounds,
-                max_diameter=max_diameter,
-                diameters_x=diameters_x1,
-                diameters_y=diameters_y1,
-                intensities=intensities1 * mask_img1 * mixed,
-                rho=rho1,
-                clip=False,
-            )
-
         # First image generation
         first_img = img_gen_from_data(
             particle_positions=particle_positions,
@@ -276,15 +284,6 @@ def generate_images_from_flow(
             rho=rho1,
             clip=False,
         )
-
-        if DEBUG_JIT:
-            input_check_apply_flow(
-                particle_positions=particle_positions,
-                flow_field=flow_field_i,
-                dt=dt,
-                flow_field_res_x=flow_field_res_x,
-                flow_field_res_y=flow_field_res_y,
-            )
 
         # Rescale the particle positions to match the flow field resolution
         particle_positions = jnp.array(
@@ -310,18 +309,6 @@ def generate_images_from_flow(
                 final_positions[:, 1] / alpha2,
             ]
         ).T
-
-        if DEBUG_JIT:
-            input_check_img_gen_from_data(
-                particle_positions=final_positions,
-                image_shape=position_bounds,
-                max_diameter=max_diameter,
-                diameters_x=diameters_x2,
-                diameters_y=diameters_y2,
-                intensities=intensities2 * mask_img2 * mixed,
-                rho=rho2,
-                clip=False,
-            )
 
         # Second image generation
         second_img = img_gen_from_data(
