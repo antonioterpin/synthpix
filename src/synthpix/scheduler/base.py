@@ -189,7 +189,6 @@ class BaseFlowFieldScheduler(ABC):
         Returns:
             np.ndarray: The loaded dataset.
         """
-        pass
 
     @abstractmethod
     def get_next_slice(self):
@@ -198,7 +197,6 @@ class BaseFlowFieldScheduler(ABC):
         Returns:
             np.ndarray: A 2D flow field slice.
         """
-        pass
 
     @abstractmethod
     def get_flow_fields_shape(self):
@@ -207,4 +205,3 @@ class BaseFlowFieldScheduler(ABC):
         Returns:
             tuple: Shape of the flow field.
         """
-        pass

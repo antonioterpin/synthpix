@@ -1,5 +1,7 @@
 import os
+import random
 import timeit
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -302,6 +304,15 @@ class DummyScheduler(BaseFlowFieldScheduler):
         return self._cached_data.shape[0], self._cached_data.shape[2] // 2, 2
 
 
+class FailingDummyScheduler(DummyScheduler):
+    """Same as DummyScheduler, but the first file intentionally fails to load."""
+
+    def load_file(self, file_path):
+        if "bad" in Path(file_path).stem:
+            raise ValueError("Corrupted file")
+        return super().load_file(file_path)
+
+
 def test_abstract_scheduler_iteration(generate_hdf5_file):
     tmp_file = generate_hdf5_file(
         "dummy_test.h5", dims={"x_dim": 4, "y_dim": 2, "z_dim": 4, "features": 3}
@@ -312,9 +323,131 @@ def test_abstract_scheduler_iteration(generate_hdf5_file):
     os.remove(tmp_file)
 
 
-# ============================
-# Core Functional Tests
-# ============================
+def test_init_with_single_file_string(tmp_path):
+    f = tmp_path / "flow.dat"
+    f.write_text("dummy")
+    sch = DummyScheduler(str(f))
+    assert sch.file_list == [str(f)]
+
+
+def test_reset_calls_random_shuffle(monkeypatch, tmp_path):
+    files = [tmp_path / f"f{i}.dat" for i in range(3)]
+    for f in files:
+        f.write_text("x")
+    call_flag = {"called": False}
+
+    def spy(lst):
+        call_flag["called"] = True
+        lst.reverse()
+
+    monkeypatch.setattr(random, "shuffle", spy)
+    sch = DummyScheduler([str(f) for f in files], randomize=True)
+
+    original = sch.file_list.copy()
+    sch.reset(reset_epoch=True)
+
+    assert call_flag["called"]
+    assert sch.file_list == list(reversed(original))
+
+
+def test_directory_initialisation(tmp_path):
+    for idx in range(3):  # create three dummy files in a tmp dir
+        (tmp_path / f"flow_{idx}.dat").write_text("irrelevant")
+
+    scheduler = DummyScheduler(str(tmp_path))  # pass *directory* not list
+    assert len(scheduler) == 3
+    # file_list must be sorted (the Base class guarantees this)
+    assert scheduler.file_list == sorted(map(str, tmp_path.iterdir()))
+
+
+def test_reset_preserves_or_resets_epoch(tmp_path):
+    files = [tmp_path / f"file_{i}.dat" for i in range(2)]
+    for f in files:
+        f.write_text("x")
+
+    scheduler = DummyScheduler([str(f) for f in files], randomize=False, loop=False)
+
+    # simulate progress
+    scheduler.epoch = 7
+    scheduler.index = 1
+    scheduler._slice_idx = 1
+
+    # --- reset without touching epoch
+    scheduler.reset(reset_epoch=False)
+    assert scheduler.epoch == 7  # epoch untouched
+    assert scheduler.index == 0  # index rewound
+    assert scheduler._slice_idx == 0  # slice counter rewound
+
+    # --- reset with epoch reset
+    scheduler.epoch = 5
+    scheduler.reset(reset_epoch=True)
+    assert scheduler.epoch == 0
+
+
+def test_error_branch_skips_bad_file(tmp_path):
+    bad = tmp_path / "bad_file.dat"
+    good = tmp_path / "good_file.dat"
+    bad.write_text("✗")  # unreadable by design
+    good.write_text("✓")
+
+    scheduler = FailingDummyScheduler(
+        [str(bad), str(good)], randomize=False, loop=False
+    )
+
+    first_flow = next(scheduler)  # should come from *good* file
+    # shape (x, z, 2) = (4, 4, 2)
+    assert first_flow.shape == (4, 4, 2)
+    # exhaust remaining slice to be sure everything still works
+    _ = next(scheduler)
+    with pytest.raises(StopIteration):
+        next(scheduler)
+
+
+def test_get_batch_success(tmp_path):
+    f = tmp_path / "file.dat"
+    f.write_text("data")
+    scheduler = DummyScheduler([str(f)], randomize=False, loop=False)
+
+    batch = scheduler.get_batch(2)  # exactly the available slices
+    assert batch.shape == (2, 4, 4, 2)  # (batch, x, z, 2)
+
+
+def test_get_batch_partial_raises_stopiteration(tmp_path):
+    f = tmp_path / "one_file.dat"
+    f.write_text("data")
+    scheduler = DummyScheduler([str(f)], randomize=False, loop=False)
+
+    with pytest.raises(StopIteration):
+        scheduler.get_batch(3)
+
+
+def test_get_batch_warning_and_return(tmp_path):
+    f = tmp_path / "file.dat"
+    f.write_text("x")
+
+    # ── partial-batch branch ──
+    sch_partial = DummyScheduler([str(f)])
+    with pytest.raises(StopIteration):
+        sch_partial.get_batch(3)  # asks for >2 slices -> partial batch
+
+    # ── success branch ──
+    sch_full = DummyScheduler([str(f)])
+    batch = sch_full.get_batch(2)  # exactly the available slices
+    assert batch.shape == (2, 4, 4, 2)
+
+
+def test_loop_resets_and_continues_dummy(tmp_path):
+    f = tmp_path / "one.dat"
+    f.write_text("x")
+    sch = DummyScheduler([str(f)], loop=True, randomize=False)
+
+    next(sch)  # slice 0
+    next(sch)  # slice 1
+    third = next(sch)  # after reset → slice 0 again
+
+    assert third.shape == (4, 4, 2)
+    # internal state: back at first file, having emitted first slice of epoch 2
+    assert sch.index == 0 and sch._slice_idx == 1
 
 
 @pytest.mark.parametrize(
