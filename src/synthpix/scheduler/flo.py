@@ -40,7 +40,7 @@ class FloFlowFieldScheduler(BaseFlowFieldScheduler):
             tag = np.fromfile(f, dtype="<f4", count=1)[0]
             if tag != self.TAG_FLOAT:
                 raise ValueError(
-                    f"readFlowFile({file_path}): wrong tag (maybe big‐endian?)"
+                    f"readFlowFile({file_path}): wrong tag (maybe big-endian?)"
                 )
             width = int(np.fromfile(f, dtype="<i4", count=1)[0])
             height = int(np.fromfile(f, dtype="<i4", count=1)[0])
