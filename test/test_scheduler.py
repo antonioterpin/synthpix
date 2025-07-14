@@ -111,7 +111,13 @@ def test_hdf5_shape(temp_file):
 @pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
 def test_numpy_scheduler_iteration(mock_numpy_files):
     files, dims = mock_numpy_files
-    scheduler = NumpyFlowFieldScheduler(files, randomize=False, loop=False)
+    scheduler = NumpyFlowFieldScheduler.from_config(
+        {
+            "scheduler_files": files,
+            "randomize": False,
+            "loop": False,
+        }
+    )
 
     count = 0
     for flow in scheduler:
@@ -124,7 +130,11 @@ def test_numpy_scheduler_iteration(mock_numpy_files):
 
 def test_numpy_scheduler_shape(mock_numpy_files):
     files, dims = mock_numpy_files
-    scheduler = NumpyFlowFieldScheduler(files)
+    scheduler = NumpyFlowFieldScheduler.from_config(
+        {
+            "scheduler_files": files,
+        }
+    )
     shape = scheduler.get_flow_fields_shape()
     assert shape == (dims["height"], dims["width"], 2)
 
@@ -132,7 +142,13 @@ def test_numpy_scheduler_shape(mock_numpy_files):
 @pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
 def test_numpy_scheduler_init_flags(mock_numpy_files):
     files, _ = mock_numpy_files
-    scheduler = NumpyFlowFieldScheduler(files, randomize=True, loop=True)
+    scheduler = NumpyFlowFieldScheduler.from_config(
+        {
+            "scheduler_files": files,
+            "randomize": True,
+            "loop": True,
+        }
+    )
 
     assert scheduler.randomize is True
     assert scheduler.loop is True
@@ -150,10 +166,33 @@ def test_numpy_scheduler_invalid_ext(tmp_path):
         NumpyFlowFieldScheduler([str(bad_file)])
 
 
+def test_numpy_scheduler_invalid_npy(tmp_path):
+    bad_file = tmp_path / "floww_0.npy"
+    np.zeros((1, 64, 64, 2)).astype(np.float32).tofile(bad_file)
+
+    with pytest.raises(ValueError, match=f"Bad filename: {bad_file}"):
+        NumpyFlowFieldScheduler([str(bad_file)], include_images=True)
+
+
+def test_numpy_scheduler_missing_images(tmp_path):
+    file = tmp_path / "flow_1.npy"
+    np.zeros((1, 64, 64, 2)).astype(np.float32).tofile(file)
+
+    pattern = (
+        f"Missing images for frame {1}: {tmp_path}/img_0.jpg, {tmp_path}/img_1.jpg"
+    )
+    with pytest.raises(FileNotFoundError, match=pattern):
+        NumpyFlowFieldScheduler([str(file)], include_images=True)
+
+
 @pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
 def test_numpy_scheduler_get_batch(mock_numpy_files):
     files, dims = mock_numpy_files
-    scheduler = NumpyFlowFieldScheduler(files)
+    scheduler = NumpyFlowFieldScheduler.from_config(
+        {
+            "scheduler_files": files,
+        }
+    )
 
     batch_size = len(files)
     batch = scheduler.get_batch(batch_size)
@@ -164,7 +203,9 @@ def test_numpy_scheduler_get_batch(mock_numpy_files):
 @pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
 def test_numpy_scheduler_with_images(mock_numpy_files):
     files, dims = mock_numpy_files
-    scheduler = NumpyFlowFieldScheduler(files, include_images=True)
+    scheduler = NumpyFlowFieldScheduler.from_config(
+        {"scheduler_files": files, "include_images": True, "loop": False}
+    )
 
     # when including images, iteration returns dicts with flow and images
     for output in scheduler:
@@ -181,6 +222,68 @@ def test_numpy_scheduler_with_images(mock_numpy_files):
         assert img_prev.shape == (dims["height"], dims["width"], 3)
         assert isinstance(img_next, np.ndarray)
         assert img_next.shape == (dims["height"], dims["width"], 3)
+
+
+@pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
+def test_numpy_scheduler_loop_reset(mock_numpy_files):
+    """Cover the branch where `index >= len(file_list)` and `loop is True`.
+
+    We iterate twice through the same small dataset.  The first time the
+    pointer reaches the end of the list, the scheduler should call
+    `reset(reset_epoch=False)` and start a new epoch without raising StopIteration.
+    """
+    files, dims = mock_numpy_files
+    scheduler = NumpyFlowFieldScheduler(
+        file_list=files,
+        loop=True,
+        randomize=False,
+    )
+
+    # Read exactly two full epochs
+    expected_total = len(files) * 2
+    out_shapes = [next(scheduler).shape for _ in range(expected_total)]
+
+    # We should have received the right number of samples
+    assert len(out_shapes) == expected_total
+
+    # Every returned flow must have the correct shape
+    assert set(out_shapes) == {(dims["height"], dims["width"], 2)}
+
+    # After two complete epochs the internal index should be back at 0
+    # (because reset was called when the first epoch ended).
+    assert scheduler.index == len(files)
+
+
+def test_numpy_scheduler_skips_bad_file(tmp_path):
+    """Covers the branch where an Exception is raised while loading a file.
+
+    The first .npy file is deliberately corrupted so that `np.load` fails.
+    The scheduler must log the error, skip that file, and yield the flow
+    from the subsequent valid file instead of crashing.
+    """
+    # -- corrupt file (cannot be read with np.load)
+    bad_file = tmp_path / "flow_0.npy"
+    bad_file.write_bytes(b"not a valid npy blob")
+
+    # -- good file
+    good_file = tmp_path / "flow_1.npy"
+    good_flow = np.random.rand(8, 8, 2).astype(np.float32)
+    np.save(good_file, good_flow)
+
+    scheduler = NumpyFlowFieldScheduler(
+        file_list=[str(bad_file), str(good_file)],
+        randomize=False,
+        loop=False,
+    )
+
+    # The first call should return the *good* flow after silently
+    # skipping the corrupted one.
+    flow = next(scheduler)
+    assert np.allclose(flow, good_flow)
+
+    # No more valid files remain, so a second call must raise StopIteration
+    with pytest.raises(StopIteration):
+        next(scheduler)
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
