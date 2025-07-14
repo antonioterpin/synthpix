@@ -262,6 +262,43 @@ def test_generate_image_from_density(
     assert img_background.max() <= 255, "Image contains values above 255"
 
 
+@pytest.mark.parametrize("seed", [0, 1])
+@pytest.mark.parametrize("image_shape", [(16, 16), (32, 32)])
+@pytest.mark.parametrize(
+    "particle_positions",
+    [
+        jnp.array([[7.0, 7.0]]),  # single particle
+        jnp.array([[4.5, 4.5], [12.3, 15.7]]),  # two particles
+    ],
+)
+def test_generate_image_from_density_with_given_positions(
+    seed, image_shape, particle_positions
+):
+    """
+    Ensure img_gen_from_density works when `particle_positions` is not None.
+
+    The test verifies:
+        * correct output shape
+        * values stay within [0, 255]
+        * at least one non-zero pixel (image is not empty)
+    """
+    key = jax.random.PRNGKey(seed)
+
+    img = img_gen_from_density(
+        key=key,
+        image_shape=image_shape,
+        seeding_density=0.01,  # ignored when positions are provided
+        diameter_range=(1.0, 3.0),
+        intensity_range=(150, 150),  # constant amplitude to simplify checks
+        particle_positions=particle_positions,
+    )
+
+    assert img.shape == image_shape, "Image shape is incorrect"
+    assert img.min() >= 0, "Image contains negative values"
+    assert img.max() <= 255, "Image contains values above 255"
+    assert jnp.count_nonzero(img) > 0, "Image appears empty (all zeros)"
+
+
 # skipif is used to skip the test if there is no GPU available
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
