@@ -63,10 +63,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
 
     @staticmethod
     def _path_is_hdf5(path: str) -> bool:
-        try:
-            return h5py.is_hdf5(path)
-        except OSError:
-            return False
+        return h5py.is_hdf5(path)
 
     def load_file(self, file_path: str):
         """Load any MATLAB .mat file (v4, v5/6/7, or v7.3) and return its data dict.
@@ -104,17 +101,14 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                 struct_as_record=False,
                 squeeze_me=True,
             )  # SciPy raises NotImplementedError for v7.3
+            logger.debug(f"Loaded {file_path} with version MATLAB v4-v7.2")
             data = {k: v for k, v in mat.items() if not k.startswith("__")}
         except (NotImplementedError, ValueError):
             if self._path_is_hdf5(file_path):
                 # MATLAB v7.3 ⇒ fall back to h5py
-                try:
-                    with h5py.File(file_path, "r") as f:
-                        data = recursively_load_hdf5_group(f)
-                except Exception as e:
-                    raise ValueError(
-                        f"Failed to load {file_path} as HDF5 or legacy MATLAB: {e}"
-                    ) from e
+                logger.debug(f"Falling back to HDF5 for {file_path}")
+                with h5py.File(file_path, "r") as f:
+                    data = recursively_load_hdf5_group(f)
 
         if data is None:
             raise ValueError(f"Failed to load {file_path} as HDF5 or legacy MATLAB.")
@@ -138,11 +132,13 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                     )
 
         flow = data["V"]
+        assert flow.shape[2] == 2 or flow.shape[0] == 2, (
+            f"Flow field shape {flow.shape} is not valid. "
+            "Expected shape to have 2 channels (e.g., (H, W, 2) or (2, H, W))."
+        )
         if flow.shape[2] != 2:
             if flow.shape[0] == 2:
                 flow = np.transpose(flow, (1, 2, 0))
-            elif flow.shape[1] == 2:
-                flow = np.transpose(flow, (0, 2, 1))
             data["V"] = flow
         if flow.shape[:2] != self.output_shape:
             # Resize flow to output_shape and scale by the ratio
@@ -266,7 +262,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         return MATFlowFieldScheduler(
             file_list=config["scheduler_files"],
             randomize=config.get("randomize", False),
-            loop=config.get("loop", True),
+            loop=config.get("loop", False),
             include_images=config.get("include_images", False),
             output_shape=tuple(config.get("output_shape", (256, 256))),
         )
