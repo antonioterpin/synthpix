@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 import timeit
 
@@ -202,6 +203,113 @@ valid_position_offset = (0, 0)
 valid_batch_size = 1
 valid_dt = 1.0
 valid_zero_padding = (0, 0)
+
+
+@pytest.mark.parametrize("flow_field", [(256,), "invalid", None])
+def test_invalid_flow_field(flow_field):
+    """Test input_check_flow_field_adapter raises ValueError for invalid flow fields."""
+    with pytest.raises(ValueError, match="flow_field must be a jnp.ndarray."):
+        input_check_flow_field_adapter(
+            flow_field=flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
+        )
+
+
+@pytest.mark.parametrize(
+    "flow_field",
+    [
+        jnp.zeros((256, 256, 2)),
+        jnp.ones((256, 256)),
+        jnp.zeros((64, 256, 256, 2, 1)),
+    ],
+)
+def test_invalid_flow_field_dims(flow_field):
+    """Test input_check_flow_field_adapter raises ValueError for invalid flow fields."""
+    pattern = (
+        r"^flow_field must be a 4D jnp\.ndarray with shape \(N, H, W, 2\), "
+        r"got " + re.escape(str(flow_field.shape)) + r"\.$"
+    )
+    with pytest.raises(ValueError, match=pattern):
+        input_check_flow_field_adapter(
+            flow_field=flow_field,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
+        )
+
+
+@pytest.mark.parametrize("N", [1, 3, 64, 12, 0])
+def test_invalid_flow_field_channels(N):
+    """Test input_check_flow_field_adapter raises ValueError for invalid flow fields."""
+    ff = jnp.zeros((16, 64, 64, N))
+    pattern = (
+        r"^flow_field must have shape \(N, H, W, 2\), "
+        r"got " + re.escape(str(ff.shape)) + r"\.$"
+    )
+    with pytest.raises(ValueError, match=pattern):
+        input_check_flow_field_adapter(
+            flow_field=ff,
+            new_flow_field_shape=valid_shape,
+            image_shape=valid_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
+        )
+
+
+@pytest.mark.parametrize(
+    "new_flow_field_shape",
+    [(256,), (256, 1, 3), "invalid", None, (234.1, 243.3), (-256, 245)],
+)
+def test_invalid_new_flow_field_shape(new_flow_field_shape):
+    """Test invalid new_flow_field_shape."""
+    pattern = (
+        r"new_flow_field_shape must be a tuple of two positive integers, "
+        r"got " + re.escape(str(new_flow_field_shape)) + r"\.$"
+    )
+    with pytest.raises(ValueError, match=pattern):
+        input_check_flow_field_adapter(
+            flow_field=valid_flow_field,
+            new_flow_field_shape=new_flow_field_shape,
+            image_shape=valid_shape,
+            img_offset=valid_offset,
+            resolution=valid_resolution,
+            res_x=valid_resolution,
+            res_y=valid_resolution,
+            position_bounds=valid_position_bounds,
+            position_bounds_offset=valid_position_offset,
+            batch_size=valid_batch_size,
+            output_units="pixels",
+            dt=valid_dt,
+            zero_padding=valid_zero_padding,
+        )
 
 
 @pytest.mark.parametrize("image_shape", [(256,), "invalid"])

@@ -12,6 +12,11 @@ docker run --rm --gpus all \
   -it synthpix <commmand>
 ```
 
+For instance, we use the following to check the test coverage:
+```bash
+docker run --rm --gpus all   -e CUDA_VISIBLE_DEVICES=<ID>   -v /shared/fluids/fluids-estimation:/shared/fluids/fluids-estimation --shm-size=2g  -it synthpix pytest --cov=src/synthpix --cov-report=term-missing -v
+```
+
 For development, while installing repos:
 ```bash
 eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519
