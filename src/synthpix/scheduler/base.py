@@ -167,11 +167,12 @@ class BaseFlowFieldScheduler(ABC):
             for _ in range(batch_size):
                 batch.append(next(self))
         except StopIteration:
-            if not self.loop and batch:
+            if len(batch) > 0:
                 logger.warning(
-                    f"Only {len(batch)} slices could be loaded before exhaustion."
+                    f"Skipping the last {len(batch)} slices. "
+                    "If undesired, use loop or a batch size dividing "
+                    "the number of slices in the dataset."
                 )
-                return np.array(batch)
             raise
 
         logger.debug(f"Loaded batch of {len(batch)} flow field slices.")

@@ -588,7 +588,12 @@ def test_speed_flow_fields_adapter(
     """Test that flow_field_adapter is faster than a limit time."""
 
     # Check how many GPUs are available
-    num_devices = len(jax.devices())
+    devices = jax.devices()
+    if len(devices) == 3:
+        devices = devices[:2]
+    elif len(devices) > 4:
+        devices = devices[:4]
+    num_devices = len(devices)
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
@@ -600,8 +605,6 @@ def test_speed_flow_fields_adapter(
 
     # Name of the axis for the device mesh
     shard_fields = "fields"
-    devices = jax.devices()
-    num_devices = len(devices)
     mesh = Mesh(devices, axis_names=(shard_fields))
 
     sharding = NamedSharding(mesh, PartitionSpec(shard_fields))

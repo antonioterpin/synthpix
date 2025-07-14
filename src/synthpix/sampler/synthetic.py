@@ -136,12 +136,16 @@ class SyntheticImageSampler:
         all_devices = jax.devices()
         if device_ids is None:
             devices = all_devices
+            logger.info(
+                "No device IDs provided. Using all available devices for sharding."
+            )
         else:
             devices = [all_devices[i] for i in device_ids if i < len(all_devices)]
             if len(devices) == 0:
                 raise ValueError("No valid device IDs provided.")
+            logger.info(f"Using devices {devices} for sharding.")
 
-        num_devices = len(devices)
+        self.ndevices = len(devices)
 
         # We want to shard a key to each device
         # and duplicate the flow field.
@@ -182,8 +186,8 @@ class SyntheticImageSampler:
         self.flow_fields_per_batch = flow_fields_per_batch
 
         # Make sure the batch size is divisible by the number of devices
-        if batch_size % num_devices != 0:
-            batch_size = (batch_size // num_devices + 1) * num_devices
+        if batch_size % self.ndevices != 0:
+            batch_size = (batch_size // self.ndevices + 1) * self.ndevices
             logger.warning(
                 f"Batch size was not divisible by the number of devices. "
                 f"Setting batch_size to {batch_size}."
@@ -504,7 +508,7 @@ class SyntheticImageSampler:
                 res_y=self.flow_field_res_y,
                 position_bounds=self.position_bounds,
                 position_bounds_offset=self.position_bounds_offset,
-                batch_size=self.batch_size // num_devices,
+                batch_size=self.batch_size // self.ndevices,
                 output_units=self.output_units,
                 dt=self.dt,
                 zero_padding=self.zero_padding,
@@ -516,7 +520,7 @@ class SyntheticImageSampler:
             position_bounds=self.position_bounds,
             image_shape=self.image_shape,
             img_offset=self.img_offset,
-            num_images=self.batch_size // num_devices,
+            num_images=self.batch_size // self.ndevices,
             seeding_density_range=seeding_density_range,
             p_hide_img1=self.p_hide_img1,
             p_hide_img2=self.p_hide_img2,
@@ -543,7 +547,7 @@ class SyntheticImageSampler:
             res_y=self.flow_field_res_y,
             position_bounds=self.position_bounds,
             position_bounds_offset=self.position_bounds_offset,
-            batch_size=self.batch_size // num_devices,
+            batch_size=self.batch_size // self.ndevices,
             output_units=self.output_units,
             dt=self.dt,
             zero_padding=self.zero_padding,
@@ -681,7 +685,7 @@ class SyntheticImageSampler:
 
         # Generate a new random key for image generation
         self._rng, subkey = jax.random.split(self._rng)
-        keys = jax.random.split(subkey, jax.device_count())
+        keys = jax.random.split(subkey, self.ndevices)
 
         logger.debug(f"Number of flow fields: {self._current_flows.shape[0]}")
         logger.debug(f"Current flow fields shape: {self._current_flows.shape[1:]}")
@@ -807,6 +811,7 @@ class SyntheticImageSampler:
                 min_speed_y=config["min_speed_y"],
                 output_units=config["output_units"],
                 noise_level=config["noise_level"],
+                device_ids=config.get("device_ids", None),
             )
         except KeyError as e:
             raise KeyError(

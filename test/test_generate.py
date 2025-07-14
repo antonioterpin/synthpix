@@ -282,6 +282,10 @@ def test_speed_img_gen(
 
     # Check how many GPUs are available
     devices = jax.devices()
+    if len(devices) == 3:
+        devices = devices[:2]
+    elif len(devices) > 4:
+        devices = devices[:4]
     num_devices = len(devices)
 
     # Limit time in seconds (depends on the number of GPUs)

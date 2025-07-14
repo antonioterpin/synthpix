@@ -580,6 +580,11 @@ def test_speed_generate_images_from_flow(
 
     # Check how many GPUs are available
     devices = jax.devices()
+    if len(devices) == 3:
+        devices = devices[:2]
+    elif len(devices) > 4:
+        devices = devices[:4]
+
     num_devices = len(devices)
 
     # Limit time in seconds (depends on the number of GPUs)
@@ -842,6 +847,11 @@ def test_speed_parameter_combinations(
 
     # Check how many GPUs are available
     devices = jax.devices()
+    if len(devices) == 3:
+        devices = devices[:2]
+    elif len(devices) > 4:
+        devices = devices[:4]
+
     num_devices = len(devices)
 
     # Setup device mesh
