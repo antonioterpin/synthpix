@@ -257,6 +257,7 @@ class SyntheticImageSampler:
         if seeding_density_range[0] > seeding_density_range[1]:
             raise ValueError("seeding_density_range must be in the form (min, max).")
         self.seeding_density_range = seeding_density_range
+        self.max_seeding_density = seeding_density_range[1]
 
         if not (0 <= p_hide_img1 <= 1):
             raise ValueError("p_hide_img1 must be between 0 and 1.")
@@ -483,6 +484,7 @@ class SyntheticImageSampler:
                 img_offset=self.img_offset,
                 num_images=self.batch_size,
                 seeding_density_range=self.seeding_density_range,
+                max_seeding_density=self.max_seeding_density,
                 p_hide_img1=self.p_hide_img1,
                 p_hide_img2=self.p_hide_img2,
                 diameter_ranges=self.diameter_ranges,
@@ -522,6 +524,7 @@ class SyntheticImageSampler:
             img_offset=self.img_offset,
             num_images=self.batch_size // self.ndevices,
             seeding_density_range=seeding_density_range,
+            max_seeding_density=self.max_seeding_density,
             p_hide_img1=self.p_hide_img1,
             p_hide_img2=self.p_hide_img2,
             diameter_ranges=self.diameter_ranges,
@@ -605,6 +608,7 @@ class SyntheticImageSampler:
         logger.debug(f"Velocities per pixel: {velocities_per_pixel}")
         logger.debug(f"Image offset: {self.img_offset}")
         logger.debug(f"Seeding density Range: {self.seeding_density_range}")
+        logger.debug(f"Max seeding density: {self.max_seeding_density}")
         logger.debug(f"p_hide_img1: {self.p_hide_img1}")
         logger.debug(f"p_hide_img2: {self.p_hide_img2}")
         logger.debug(f"Diameter ranges: {self.diameter_ranges}")

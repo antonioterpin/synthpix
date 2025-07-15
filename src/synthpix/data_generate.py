@@ -19,6 +19,7 @@ def generate_images_from_flow(
     num_images: int = 300,
     img_offset: Tuple[int, int] = (128, 128),
     seeding_density_range: Tuple[float, float] = (0.01, 0.02),
+    max_seeding_density: float = 0.02,
     p_hide_img1: float = 0.01,
     p_hide_img2: float = 0.01,
     diameter_ranges: jnp.ndarray = jnp.array([[0.1, 1.0]]),
@@ -55,6 +56,8 @@ def generate_images_from_flow(
             Offset to apply to the generated images.
         seeding_density_range: Tuple[float, float]
             Range of density of particles in the images.
+        max_seeding_density: float
+            Maximum density of particles in the images.
         p_hide_img1: float
             Probability of hiding particles in the first image.
         p_hide_img2: float
@@ -136,9 +139,7 @@ def generate_images_from_flow(
     # Calculate the number of particles based on the max density
     # Density is given in particles per pixel, so we use
     # the number of pixels in position bounds
-    num_particles = int(
-        position_bounds[0] * position_bounds[1] * seeding_density_range[1]
-    )
+    num_particles = int(position_bounds[0] * position_bounds[1] * max_seeding_density)
 
     # Number of flow fields
     num_flow_fields = flow_field.shape[0]
@@ -151,6 +152,7 @@ def generate_images_from_flow(
         minval=seeding_density_range[0],
         maxval=seeding_density_range[1],
     )
+    seeding_densities = jnp.clip(seeding_densities, 0, max_seeding_density)
 
     def scan_body(carry, inputs):
         (key,) = carry
@@ -383,6 +385,7 @@ def input_check_gen_img_from_flow(
     num_images: int = 300,
     img_offset: Tuple[int, int] = (128, 128),
     seeding_density_range: Tuple[float, float] = (0.01, 0.02),
+    max_seeding_density: float = 0.02,
     p_hide_img1: float = 0.01,
     p_hide_img2: float = 0.01,
     diameter_ranges: jnp.ndarray = jnp.array([[0.1, 1.0]]),
@@ -415,6 +418,8 @@ def input_check_gen_img_from_flow(
             Offset to apply to the generated images.
         seeding_density_range: Tuple[float, float]
             Range of density of particles in the images.
+        max_seeding_density: float
+            Maximum density of particles in the images.
         p_hide_img1: float
             Probability of hiding particles in the first image.
         p_hide_img2: float
@@ -553,6 +558,10 @@ def input_check_gen_img_from_flow(
         )
     if seeding_density_range[0] > seeding_density_range[1]:
         raise ValueError("seeding_density_range must be in the form (min, max).")
+
+    if not isinstance(max_seeding_density, (int, float)) or max_seeding_density <= 0:
+        raise ValueError("max_seeding_density must be a positive number.")
+
     if not isinstance(noise_level, (int, float)) or noise_level < 0:
         raise ValueError("noise_level must be a non-negative number.")
 
@@ -574,6 +583,7 @@ def input_check_gen_img_from_flow(
     logger.debug(f"Position bounds shape: {position_bounds}")
     logger.debug(f"Number of images: {num_images}")
     logger.debug(f"Particles density range: {seeding_density_range}")
+    logger.debug(f"Max seeding density: {max_seeding_density}")
     logger.debug(f"Number of particles: {num_particles}")
     logger.debug(f"Probability of hiding particles in image 1: {p_hide_img1}")
     logger.debug(f"Probability of hiding particles in image 2: {p_hide_img2}")
