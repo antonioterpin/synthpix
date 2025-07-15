@@ -224,12 +224,13 @@ def generate_images_from_flow(
             minval=diameter_range[0],
             maxval=diameter_range[1],
         )
-        diameters_y1 = jax.random.uniform(
+        diameters_y1 = diameters_x1 + jax.random.uniform(
             key_dy,
             shape=(num_particles,),
-            minval=diameter_range[0],
-            maxval=diameter_range[1],
+            minval=-1,
+            maxval=+1,
         )
+        diameters_y1 = jnp.clip(diameters_y1, diameter_range[0], diameter_range[1])
 
         # Sample theta in the specified range
         rho1 = jax.random.uniform(

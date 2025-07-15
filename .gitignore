@@ -191,3 +191,7 @@ data/
 
 # Profiler
 /profiler*
+
+# Images
+*.png
+*.jpg
