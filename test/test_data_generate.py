@@ -145,6 +145,25 @@ def test_invalid_seeding_density_range(seeding_density_range, expected_message):
         )
 
 
+@pytest.mark.parametrize(
+    "max_seeding_density", [-1, "a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+)
+def test_invalid_max_seeding_density(max_seeding_density):
+    """Test that invalid max_seeding_density raise a ValueError."""
+    key = jax.random.PRNGKey(0)
+    flow_field = jnp.zeros((1, 128, 128, 2))
+    image_shape = (128, 128)
+    with pytest.raises(
+        ValueError, match="max_seeding_density must be a positive number."
+    ):
+        input_check_gen_img_from_flow(
+            key,
+            flow_field=flow_field,
+            image_shape=image_shape,
+            max_seeding_density=max_seeding_density,
+        )
+
+
 @pytest.mark.parametrize("num_images", [-1, 0, 1.5, 2.5])
 def test_invalid_num_images(num_images):
     """Test that invalid num_images raise a ValueError."""
@@ -598,6 +617,7 @@ def test_generate_images_from_flow(monkeypatch, debug_flag):
 )
 @pytest.mark.parametrize("selected_flow", ["horizontal"])
 @pytest.mark.parametrize("seeding_density_range", [(0.01, 0.1)])
+@pytest.mark.parametrize("max_seeding_density", [0.02])
 @pytest.mark.parametrize("num_images", [100])
 @pytest.mark.parametrize("image_shape", [(1216, 1936)])
 @pytest.mark.parametrize("position_bounds", [(1536, 2048)])
@@ -606,6 +626,7 @@ def test_generate_images_from_flow(monkeypatch, debug_flag):
 def test_speed_generate_images_from_flow(
     selected_flow,
     seeding_density_range,
+    max_seeding_density,
     num_images,
     image_shape,
     position_bounds,
@@ -686,6 +707,7 @@ def test_speed_generate_images_from_flow(
                 image_shape=image_shape,
                 img_offset=img_offset,
                 seeding_density_range=seeding_density_range,
+                max_seeding_density=max_seeding_density,
                 num_images=num_images,
                 p_hide_img1=0.0,
                 p_hide_img2=0.0,
@@ -854,6 +876,7 @@ def test_img_parameter_combinations(
 @pytest.mark.run_explicitly
 @pytest.mark.parametrize("selected_flow", ["horizontal"])
 @pytest.mark.parametrize("seeding_density_range", [(0.1, 0.1)])
+@pytest.mark.parametrize("max_seeding_density", [0.1])
 @pytest.mark.parametrize("num_images", [1, 100, 500, 1000, 5000, 10000])
 @pytest.mark.parametrize(
     "image_shape", [(128, 128), (256, 256), (512, 512), (1024, 1024), (2048, 2048)]
@@ -867,6 +890,7 @@ def test_img_parameter_combinations(
 def test_speed_parameter_combinations(
     selected_flow,
     seeding_density_range,
+    max_seeding_density,
     num_images,
     image_shape,
     img_offset,
@@ -944,6 +968,7 @@ def test_speed_parameter_combinations(
                 image_shape=image_shape,
                 img_offset=img_offset,
                 seeding_density_range=seeding_density_range,
+                max_seeding_density=max_seeding_density,
                 num_images=num_images,
                 diameter_ranges=diameter_ranges,
                 intensity_ranges=intensity_ranges,

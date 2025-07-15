@@ -32,6 +32,7 @@ def dummy_img_gen_fn(
     img_offset,
     num_images,
     seeding_density_range,
+    max_seeding_density,
     p_hide_img1,
     p_hide_img2,
     diameter_ranges,
