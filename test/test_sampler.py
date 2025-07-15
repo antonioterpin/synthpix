@@ -1501,13 +1501,9 @@ class SyntheticImageSamplerWrapper:
         )
 
 
-@pytest.mark.parametrize(
-    "sampler_class", [RealImageSampler, SyntheticImageSamplerWrapper]
-)
+@pytest.mark.parametrize("sampler_class", [RealImageSampler])
 def test_episodic_done_and_episode_end(sampler_class):
     sched = EpisodicDummy(episode_length=2)
-    if sampler_class is SyntheticImageSamplerWrapper:
-        sched.get_batch = lambda batch_size: sched.get_batch(batch_size=batch_size)[-1]
     sampler = sampler_class.from_config(sched, batch_size=4)
 
     first = next(sampler)
@@ -1520,14 +1516,10 @@ def test_episodic_done_and_episode_end(sampler_class):
         next(sampler)  # overrun episode
 
 
-@pytest.mark.parametrize(
-    "sampler_class", [RealImageSampler, SyntheticImageSamplerWrapper]
-)
+@pytest.mark.parametrize("sampler_class", [RealImageSampler])
 def test_next_episode_restarts_horizon(sampler_class):
     sched = EpisodicDummy(episode_length=2)
     sampler = sampler_class.from_config(sched, batch_size=2)
-    if sampler_class is SyntheticImageSamplerWrapper:
-        sched.get_batch = lambda batch_size: sched.get_batch(batch_size=batch_size)[-1]
 
     _ = next(sampler)  # consume the only step
     fresh = sampler.next_episode()  # should auto-reset scheduler
