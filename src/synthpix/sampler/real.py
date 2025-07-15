@@ -8,6 +8,19 @@ from ..utils import logger
 class RealImageSampler:
     """Sampler for real data."""
 
+    @classmethod
+    def from_config(cls, scheduler, batch_size=1):
+        """Create a RealImageSampler instance from a configuration.
+
+        Args:
+            scheduler: Scheduler instance that provides real images.
+            batch_size (int): Number of images to sample in each batch.
+
+        Returns:
+            RealImageSampler: An instance of the sampler.
+        """
+        return cls(scheduler, batch_size)
+
     def __init__(self, scheduler, batch_size=1):
         """Initialize the sampler.
 
@@ -36,9 +49,6 @@ class RealImageSampler:
         logger.info("RealImageSampler initialized successfully")
 
         logger.debug(f"Scheduler class: {self.scheduler.__class__.__name__}")
-        while hasattr(scheduler, "scheduler"):
-            scheduler = scheduler.scheduler
-            logger.debug(f"Scheduler class: {scheduler.scheduler.__class__.__name__}")
 
     def __iter__(self):
         """Return an iterator for the sampler."""
@@ -105,11 +115,6 @@ class RealImageSampler:
         """Resets the underlying scheduler to its initial state."""
         if hasattr(self.scheduler, "reset"):
             self.scheduler.reset()
-        else:
-            logger.warning(
-                "The underlying scheduler does not have a reset method."
-                " Skipping reset."
-            )
         logger.debug("Sampler has been reset.")
 
     def shutdown(self):
@@ -117,9 +122,4 @@ class RealImageSampler:
         logger.info("Shutting down RealImageSampler.")
         if hasattr(self.scheduler, "shutdown"):
             self.scheduler.shutdown()
-        else:
-            logger.warning(
-                "The underlying scheduler does not have a shutdown method."
-                " Skipping shutdown."
-            )
         logger.info("RealImageSampler shutdown complete.")

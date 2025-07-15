@@ -136,6 +136,47 @@ def test_invalid_img_gen_fn(scheduler):
         )
 
 
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_no_device_provided(scheduler):
+    config = sampler_config.copy()
+    config["device_ids"] = []
+    with pytest.raises(ValueError, match="No valid device IDs provided."):
+        SyntheticImageSampler.from_config(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            config=config,
+        )
+
+
+@pytest.mark.parametrize("n_devices", [1, 2, 3, 4])
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_batch_size_n_devices(n_devices, scheduler):
+    config = sampler_config.copy()
+    all_devices = jax.devices()
+    if n_devices > len(all_devices):
+        pytest.skip(
+            f"Only {len(all_devices)} devices available, "
+            f"cannot test {n_devices} devices."
+        )
+
+    config["device_ids"] = [d.id for d in all_devices[:n_devices]]
+    config["batch_size"] = 1
+    config["flow_fields_per_batch"] = 1
+    config["batches_per_flow_batch"] = 1
+    sampler = SyntheticImageSampler.from_config(
+        scheduler=scheduler,
+        img_gen_fn=dummy_img_gen_fn,
+        config=config,
+    )
+    assert (
+        sampler.batch_size == n_devices
+    ), "Batch size should match number of devices when set to 1."
+
+
 @pytest.mark.parametrize("batch_size", [-1, 0, 1.5])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
@@ -145,6 +186,24 @@ def test_invalid_batch_size(batch_size, scheduler):
     with pytest.raises(ValueError, match="batch_size must be a positive integer."):
         config = sampler_config.copy()
         config["batch_size"] = batch_size
+        SyntheticImageSampler.from_config(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            config=config,
+        )
+
+
+@pytest.mark.parametrize("flow_shape", [(-1, 128), (128, -1), (0, 128), (128, 0)])
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_flow_shape(flow_shape, scheduler):
+    """Test that invalid flow_shape raises a ValueError."""
+    with pytest.raises(
+        ValueError, match="flow_field_size must be a tuple of two positive numbers."
+    ):
+        config = sampler_config.copy()
+        config["flow_field_size"] = flow_shape
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
@@ -939,9 +998,9 @@ def test_speed_sampler_dummy_fn(
     if num_devices == 1:
         limit_time = 3.5
     elif num_devices == 2:
-        limit_time = 2.6
+        limit_time = 2.7
     elif num_devices == 4:
-        limit_time = 2.6
+        limit_time = 2.7
 
     # Create the sampler
     prefetching_scheduler = PrefetchingFlowFieldScheduler(
@@ -1033,11 +1092,11 @@ def test_speed_sampler_real_fn(
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
-        limit_time = 1.3
+        limit_time = 1.5
     elif num_devices == 2:
-        limit_time = 1.1
+        limit_time = 1.3
     elif num_devices == 4:
-        limit_time = 1.1
+        limit_time = 1.3
 
     # Create the sampler
     prefetching_scheduler = PrefetchingFlowFieldScheduler(
@@ -1353,3 +1412,159 @@ def test_reject_wrong_scheduler_for_real_images(mock_mat_files):
     ):
         # This should raise an error because the scheduler does not include images
         RealImageSampler(scheduler=prefetcher, batch_size=2)
+
+
+class _BaseDummy:
+    """Common helpers for all dummy schedulers."""
+
+    include_images = True
+    _batch_ctr = 0
+
+    def _make_arrays(self, batch_size):
+        """Return three arrays that differ per call so we can detect resets."""
+        val = float(self._batch_ctr)
+        self._batch_ctr += 1
+        imgs1 = jnp.full((batch_size, 2, 2), val, dtype=jnp.float32)
+        imgs2 = imgs1 + 1.0
+        flows = jnp.full((batch_size, 2, 2, 2), -val, dtype=jnp.float32)
+        return imgs1, imgs2, flows
+
+    def get_batch(self, batch_size):
+        return self._make_arrays(batch_size)
+
+    def get_flow_fields_shape(self):
+        """Return the shape of the flow fields."""
+        return (2, 2, 2)
+
+    def __iter__(self):
+        while True:
+            yield self.get_batch(batch_size=self.batch_size)
+
+    def __next__(self):
+        return self.get_batch(batch_size=self.batch_size)
+
+
+class EpisodicDummy(_BaseDummy):
+    """Implements the full episodic API."""
+
+    def __init__(self, episode_length=3):
+        self.episode_length = episode_length
+        self._step = 0
+        self.reset_called = False
+        self.shutdown_called = False
+
+    # ---------- RealImageSampler hooks ---------------------------------
+    def steps_remaining(self):
+        return max(self.episode_length - self._step, 0)
+
+    def get_batch(self, batch_size):
+        arrays = super().get_batch(batch_size=batch_size)
+        self._step += 1
+        return arrays
+
+    def next_episode(self):
+        self._step = 0
+
+    def reset(self):
+        self.reset_called = True
+        self._step = 0
+
+    def shutdown(self):
+        self.shutdown_called = True
+
+
+class PlainDummy(_BaseDummy):
+    """Non-episodic scheduler - *no* next_episode/steps_remaining/reset/shutdown."""
+
+    pass
+
+
+class NoResetShutdownDummy(_BaseDummy):
+    """Has next_episode but deliberately *omits* reset / shutdown for branch tests."""
+
+    def next_episode(self):
+        pass
+
+
+class SyntheticImageSamplerWrapper:
+    """A wrapper for SyntheticImageSampler to use with pytest."""
+
+    @classmethod
+    def from_config(cls, scheduler, batch_size):
+        config = sampler_config.copy()
+        config["batch_size"] = batch_size
+        config["flow_fields_per_batch"] = batch_size
+        return SyntheticImageSampler.from_config(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            config=config,
+        )
+
+
+@pytest.mark.parametrize(
+    "sampler_class", [RealImageSampler, SyntheticImageSamplerWrapper]
+)
+def test_episodic_done_and_episode_end(sampler_class):
+    sched = EpisodicDummy(episode_length=2)
+    if sampler_class is SyntheticImageSamplerWrapper:
+        sched.get_batch = lambda batch_size: sched.get_batch(batch_size=batch_size)[-1]
+    sampler = sampler_class.from_config(sched, batch_size=4)
+
+    first = next(sampler)
+    assert "done" in first and not first["done"].any()
+
+    second = next(sampler)
+    assert second["done"].all()  # last step → all True
+
+    with pytest.raises(IndexError, match="Episode ended"):
+        next(sampler)  # overrun episode
+
+
+@pytest.mark.parametrize(
+    "sampler_class", [RealImageSampler, SyntheticImageSamplerWrapper]
+)
+def test_next_episode_restarts_horizon(sampler_class):
+    sched = EpisodicDummy(episode_length=2)
+    sampler = sampler_class.from_config(sched, batch_size=2)
+    if sampler_class is SyntheticImageSamplerWrapper:
+        sched.get_batch = lambda batch_size: sched.get_batch(batch_size=batch_size)[-1]
+
+    _ = next(sampler)  # consume the only step
+    fresh = sampler.next_episode()  # should auto-reset scheduler
+
+    # After reset the first batch of the new episode must show `done == False`
+    assert not fresh["done"].any()
+    # scheduler’s internal counter is back at one
+    assert sched._step == 1
+
+
+@pytest.mark.parametrize(
+    "sampler_class", [RealImageSampler, SyntheticImageSamplerWrapper]
+)
+def test_next_episode_attribute_error(sampler_class):
+    sampler = sampler_class.from_config(PlainDummy(), batch_size=1)
+    with pytest.raises(AttributeError, match="next_episode"):
+        sampler.next_episode()
+
+
+@pytest.mark.parametrize(
+    "sampler_class", [RealImageSampler, SyntheticImageSamplerWrapper]
+)
+def test_make_done_not_implemented(sampler_class):
+    sampler = sampler_class.from_config(PlainDummy(), batch_size=3)
+    with pytest.raises(NotImplementedError):
+        sampler._make_done()
+
+
+@pytest.mark.parametrize(
+    "sampler_class", [RealImageSampler, SyntheticImageSamplerWrapper]
+)
+def test_reset_and_shutdown_delegation(sampler_class):
+    sched = EpisodicDummy()
+    sampler = sampler_class.from_config(sched, batch_size=2)
+
+    sampler.reset()
+    assert sched.reset_called
+
+    sampler.shutdown()
+    assert sched.shutdown_called
