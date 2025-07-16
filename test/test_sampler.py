@@ -266,20 +266,38 @@ def test_more_flows_per_batch_than_batch_size(flow_fields_per_batch, scheduler):
         )
 
 
-@pytest.mark.parametrize("flow_field_size", [(-1, 128), (128, -1), (0, 128), (128, 0)])
+@pytest.mark.parametrize(
+    "flow_field_size",
+    [
+        (-1, 128),
+        (128, -1),
+        (0, 128),
+        (128, 0),
+        (128.5, 128.5),
+        ("invalid", "size"),
+        (128,),
+        (128, 128, 128),
+    ],
+)
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_invalid_flow_field_size_in_scheduler(flow_field_size, scheduler):
     """Test that invalid flow_field_size raises a ValueError."""
-    scheduler.get_flow_fields_shape = lambda: config["flow_field_size"]
+    scheduler.get_flow_fields_shape = lambda: flow_field_size + (2,)
     with pytest.raises(
-        ValueError, match="flow_field_size must be a tuple of two positive numbers."
+        ValueError,
+        match=re.escape(
+            "scheduler.get_flow_fields_shape must return a tuple "
+            "of three positive integers with the last being 2 or 3; "
+            f"got {flow_field_size + (2,)}."
+        ),
     ):
+        config = sampler_config.copy()
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            config=sampler_config,
+            config=config,
         )
 
 
@@ -666,15 +684,15 @@ def test_invalid_seed(seed, scheduler):
         )
 
 
-@pytest.mark.parametrize("min_speed_x, max_speed_x", [(1, -1), (2, 1)])
+@pytest.mark.parametrize(
+    "min_speed_x, max_speed_x", [(1, -1), (2, 1), ("invalid", 1), (1, "invalid")]
+)
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_invalid_min_max_speed_x(min_speed_x, max_speed_x, scheduler):
     """Test that invalid min_speed_x and max_speed_x raises a ValueError."""
-    with pytest.raises(
-        ValueError, match="max_speed_x must be greater than min_speed_x."
-    ):
+    with pytest.raises(ValueError):
         config = sampler_config.copy()
         config["min_speed_x"] = min_speed_x
         config["max_speed_x"] = max_speed_x
@@ -687,15 +705,15 @@ def test_invalid_min_max_speed_x(min_speed_x, max_speed_x, scheduler):
         )
 
 
-@pytest.mark.parametrize("min_speed_y, max_speed_y", [(1, -1), (2, 1)])
+@pytest.mark.parametrize(
+    "min_speed_y, max_speed_y", [(1, -1), (2, 1), ("invalid", 1), (1, "invalid")]
+)
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_invalid_min_max_speed_y(min_speed_y, max_speed_y, scheduler):
     """Test that invalid min_speed_y and max_speed_y raises a ValueError."""
-    with pytest.raises(
-        ValueError, match="max_speed_y must be greater than min_speed_y."
-    ):
+    with pytest.raises(ValueError):
         config = sampler_config.copy()
         config["min_speed_x"] = 0.0
         config["max_speed_x"] = 0.0
@@ -1361,9 +1379,14 @@ def test_episodic_done_and_episode_end(sampler_class):
         next(sampler)  # overrun episode
 
 
-@pytest.mark.parametrize("sampler_class", [RealImageSampler])
+@pytest.mark.parametrize(
+    "sampler_class", [RealImageSampler, SyntheticImageSamplerWrapper]
+)
 def test_reset_and_shutdown(sampler_class):
     sched = EpisodicDummy(episode_length=2)
+    if sampler_class is SyntheticImageSamplerWrapper:
+        old_get_batch = sched.get_batch
+        sched.get_batch = lambda batch_size: old_get_batch(batch_size=batch_size)[-1]
     sampler = sampler_class.from_config(sched, batch_size=4)
 
     next(sampler)
@@ -1374,9 +1397,14 @@ def test_reset_and_shutdown(sampler_class):
     assert sched.shutdown_called, "Scheduler shutdown was not called"
 
 
-@pytest.mark.parametrize("sampler_class", [RealImageSampler])
+@pytest.mark.parametrize(
+    "sampler_class", [RealImageSampler, SyntheticImageSamplerWrapper]
+)
 def test_next_episode_restarts_horizon(sampler_class):
     sched = EpisodicDummy(episode_length=2)
+    if sampler_class is SyntheticImageSamplerWrapper:
+        old_get_batch = sched.get_batch
+        sched.get_batch = lambda batch_size: old_get_batch(batch_size=batch_size)[-1]
     sampler = sampler_class.from_config(sched, batch_size=2)
 
     _ = next(sampler)  # consume the only step

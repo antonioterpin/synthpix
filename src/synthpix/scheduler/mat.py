@@ -178,7 +178,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         Returns:
             tuple: Shape of the flow field.
         """
-        return self.output_shape
+        return self.output_shape + (2,)
 
     def __next__(self):
         """Iterate over .mat files, returning flow or flow+images."""

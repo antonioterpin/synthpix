@@ -204,15 +204,18 @@ class SyntheticImageSampler:
 
         # Use the scheduler to get the flow field shape
         flow_field_shape = scheduler.get_flow_fields_shape()
-        flow_field_shape = (flow_field_shape[0], flow_field_shape[1])
         if (
             not isinstance(flow_field_shape, tuple)
-            or len(flow_field_shape) != 2
+            or len(flow_field_shape) != 3
+            or (flow_field_shape[2] != 2 and flow_field_shape[2] != 3)
             or not all(isinstance(s, int) and s > 0 for s in flow_field_shape)
         ):
             raise ValueError(
-                "flow_field_shape must be a tuple of two positive integers."
+                "scheduler.get_flow_fields_shape must return a tuple "
+                "of three positive integers with the last being 2 or 3; "
+                f"got {flow_field_shape}."
             )
+        flow_field_shape = (flow_field_shape[0], flow_field_shape[1])
 
         if (
             not isinstance(image_shape, tuple)
@@ -378,12 +381,10 @@ class SyntheticImageSampler:
         # Clip the max and min speeds.
         # Positive values of min speeds and negative values of max speeds
         # are not useful to create the position bounds
-        if max_speed_x < 0 or max_speed_y < 0:
-            max_speed_x = 0.0
-            max_speed_y = 0.0
-        if min_speed_x > 0 or min_speed_y > 0:
-            min_speed_x = 0.0
-            min_speed_y = 0.0
+        max_speed_x = max(0.0, max_speed_x)
+        max_speed_y = max(0.0, max_speed_y)
+        min_speed_x = min(0.0, min_speed_x)
+        min_speed_y = min(0.0, min_speed_y)
 
         logger.info(
             f"max_speed_x: {max_speed_x},\n max_speed_y: {max_speed_y},\n "
@@ -471,7 +472,7 @@ class SyntheticImageSampler:
         # Calculate the position bounds in pixels
         self.position_bounds = tuple(int(x * resolution) for x in position_bounds)
 
-        if DEBUG_JIT:
+        if DEBUG_JIT:  # pragma: no cover
             _current_flows = jnp.asarray(
                 self.scheduler.get_batch(self.flow_fields_per_batch)
             )
@@ -764,11 +765,6 @@ class SyntheticImageSampler:
         logger.info("Shutting down the SyntheticImageSampler.")
         if hasattr(self.scheduler, "shutdown"):
             self.scheduler.shutdown()
-        else:
-            logger.warning(
-                "The underlying scheduler does not have a shutdown method. "
-                "Skipping shutdown."
-            )
         logger.info("SyntheticImageSampler shutdown complete.")
 
     @classmethod
