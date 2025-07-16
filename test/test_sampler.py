@@ -949,6 +949,62 @@ def test_sampler_with_real_img_gen_fn(
     assert jnp.allclose(output_size, expected_size, atol=0.01)
 
 
+BATCH_SIZE = 12
+EPISODE_LENGTH = 4
+FLOW_BATCH_SIZE = BATCH_SIZE
+BATCHES_PER_FLOW_BATCH = 1
+BUFFER_SIZE = 3 * EPISODE_LENGTH
+FLOW_FIELD_SIZE = (64, 64)
+DT = 1.0
+IMG_SHAPE = (64, 64)
+NUM_EPISODES = 2
+
+
+@pytest.mark.parametrize("mock_mat_files", [128], indirect=True)
+def test_done_flag_and_horizon(sampler):
+    """`done` should be True *exactly* once (the final step of each episode)."""
+
+    dones = []
+    for _ in range(NUM_EPISODES):
+        batch = sampler.next_episode()
+        imgs1 = batch["images1"]
+        done = batch["done"]
+        dones.append(done)
+        for _ in range(EPISODE_LENGTH - 1):
+            batch = next(sampler)
+            imgs1 = batch["images1"]
+            done = batch["done"]
+            assert imgs1.shape[0] == BATCH_SIZE
+            assert imgs1[0].shape == IMG_SHAPE
+            assert isinstance(imgs1, jnp.ndarray)
+            dones.append(done)
+
+    true_flags = sum(int(flag) for d in dones for flag in d)
+    assert (
+        true_flags == NUM_EPISODES * BATCH_SIZE
+    ), "`done` must become True once per episode"
+
+    last_step_dones = dones[EPISODE_LENGTH - 1 :: EPISODE_LENGTH]
+
+    # For each episode's last batch, require all BATCH_SIZE flags to be True
+    assert all(
+        bool(jnp.all(d)) for d in last_step_dones
+    ), "`done` must be True for every env on the *last* step of each episode"
+
+
+@pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
+def test_next_episode_flushes_queue(sampler):
+    for _ in range(EPISODE_LENGTH // 2):
+        next(sampler)
+
+    first_batch_new_ep = sampler.next_episode()
+    time.sleep(0.1)
+    remaining = sampler.scheduler.steps_remaining()
+    assert remaining == EPISODE_LENGTH - 1
+
+    assert not first_batch_new_ep["done"].any()
+
+
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connect to the server.",
@@ -1140,159 +1196,6 @@ def test_speed_sampler_real_fn(
     assert (
         avg_time < limit_time
     ), f"The average time is {avg_time}, time limit: {limit_time}"
-
-
-# -----------------------------------------------------------------------------
-# Dummy image generator – ultra‑lightweight
-# -----------------------------------------------------------------------------
-
-
-def _dummy_img_gen_fn(*, key, flow_field, num_images, image_shape, **_):
-    """Return zero-filled image pairs and constant densities."""
-    h, w = image_shape
-    imgs1 = jnp.zeros((num_images, h, w), dtype=jnp.float32)
-    imgs2 = jnp.zeros_like(imgs1)
-    batch = {
-        "images1": imgs1,
-        "images2": imgs2,
-        "params": {
-            "seeding_densities": jnp.full((num_images,), 0.1, dtype=jnp.float32),
-            "diameter_ranges": jnp.full((num_images, 2), 0.1, dtype=jnp.float32),
-            "intensity_ranges": jnp.full((num_images, 2), 1.0, dtype=jnp.float32),
-            "rho_ranges": jnp.full((num_images, 2), 0.0, dtype=jnp.float32),
-        },
-    }
-    return batch
-
-
-# -----------------------------------------------------------------------------
-# Global parameters – tweak once here if you change defaults in the code base
-# -----------------------------------------------------------------------------
-
-BATCH_SIZE = 12
-EPISODE_LENGTH = 4
-FLOW_BATCH_SIZE = BATCH_SIZE  # one flow‑field per episode step
-BATCHES_PER_FLOW_BATCH = 1
-BUFFER_SIZE = 3 * EPISODE_LENGTH  # queue can hold an entire episode
-FLOW_FIELD_SIZE = (64, 64)  # arbitrary physical dimensions (metres)
-DT = 1.0
-IMG_SHAPE = (64, 64)  # small so CPU JAX is quick
-NUM_EPISODES = 2
-
-
-# -----------------------------------------------------------------------------
-# Fixture: full stack (MAT → Episodic → Prefetch → SyntheticImageSampler)
-# -----------------------------------------------------------------------------
-
-
-@pytest.fixture(name="sampler")
-def _build_sampler(mock_mat_files):
-    """Build a *fully‑stacked* sampler and ensure the background thread is closed."""
-
-    files, dims = mock_mat_files
-    H, W = dims["height"], dims["width"]
-
-    base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
-    epi = EpisodicFlowFieldScheduler(
-        scheduler=base,
-        batch_size=BATCH_SIZE,
-        episode_length=EPISODE_LENGTH,
-        seed=123,
-    )
-    pre = PrefetchingFlowFieldScheduler(
-        epi, batch_size=BATCH_SIZE, buffer_size=BUFFER_SIZE
-    )
-
-    sampler = SyntheticImageSampler(
-        scheduler=pre,
-        img_gen_fn=_dummy_img_gen_fn,
-        batches_per_flow_batch=BATCHES_PER_FLOW_BATCH,
-        batch_size=BATCH_SIZE,
-        flow_fields_per_batch=FLOW_BATCH_SIZE,
-        flow_field_size=FLOW_FIELD_SIZE,
-        image_shape=IMG_SHAPE,
-        resolution=1.0,
-        velocities_per_pixel=1.0,
-        img_offset=(0.0, 0.0),
-        seeding_density_range=(0.01, 0.01),
-        p_hide_img1=0.0,
-        p_hide_img2=0.0,
-        diameter_ranges=[[1.0, 1.0]],
-        diameter_var=0.0,
-        intensity_ranges=[[1.0, 1.0]],
-        intensity_var=0.0,
-        rho_ranges=[[0.0, 0.0]],
-        rho_var=0.0,
-        dt=DT,
-        seed=0,
-        max_speed_x=0.0,
-        max_speed_y=0.0,
-        min_speed_x=0.0,
-        min_speed_y=0.0,
-        output_units="pixels",
-        noise_level=0.0,
-    )
-    yield sampler
-
-    # ---------------------------------------------------------------------
-    # Teardown – make sure the background thread is gone so the test runner
-    # exits cleanly even under pytest‑xdist or when only collecting tests.
-    # ---------------------------------------------------------------------
-    sampler.scheduler.shutdown()
-
-
-@pytest.mark.parametrize("mock_mat_files", [128], indirect=True)
-def test_done_flag_and_horizon(sampler):
-    """`done` should be True *exactly* once (the final step of each episode)."""
-
-    dones = []
-    for _ in range(NUM_EPISODES):
-        batch = sampler.next_episode()
-        imgs1 = batch["images1"]
-        done = batch["done"]
-        dones.append(done)
-        for _ in range(EPISODE_LENGTH - 1):
-            batch = next(sampler)
-            imgs1 = batch["images1"]
-            done = batch["done"]
-            assert imgs1.shape[0] == BATCH_SIZE
-            assert imgs1[0].shape == IMG_SHAPE
-            assert isinstance(imgs1, jnp.ndarray)
-            dones.append(done)
-
-    true_flags = sum(int(flag) for d in dones for flag in d)
-    assert (
-        true_flags == NUM_EPISODES * BATCH_SIZE
-    ), "`done` must become True once per episode"
-
-    last_step_dones = dones[EPISODE_LENGTH - 1 :: EPISODE_LENGTH]
-
-    # For each episode's last batch, require all BATCH_SIZE flags to be True
-    assert all(
-        bool(jnp.all(d)) for d in last_step_dones
-    ), "`done` must be True for every env on the *last* step of each episode"
-
-
-@pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
-def test_next_episode_flushes_queue(sampler):
-    """Calling `next_episode()` should discard buffered batches and restart."""
-
-    # Consume half an episode …
-    for _ in range(EPISODE_LENGTH // 2):
-        next(sampler)
-
-    # … then jump straight to the next one.
-    first_batch_new_ep = sampler.next_episode()
-
-    # Give the producer thread a moment to refill.
-    time.sleep(0.1)
-
-    # steps_remaining() should be reset to horizon‑1.
-    remaining = sampler.scheduler.steps_remaining()
-    assert remaining == EPISODE_LENGTH - 1
-
-    # The very first `done` after reset must be False.
-    assert not first_batch_new_ep["done"].any()
 
 
 @pytest.mark.parametrize("mock_mat_files", [64], indirect=True)

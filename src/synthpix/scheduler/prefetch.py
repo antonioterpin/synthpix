@@ -137,11 +137,8 @@ class PrefetchingFlowFieldScheduler:
 
             # This will block until there is free space in the queue:
             # no busy‑waiting needed.
-            try:
-                self._queue.put(batch, block=True)
-            except Exception as e:
-                logger.warning(f"Failed to put batch: {e}")
-                return
+            # Exception cannot be raised here, would be dead code.
+            self._queue.put(batch, block=True)
 
     def reset(self):
         """Resets the prefetching scheduler and underlying scheduler."""
@@ -222,8 +219,6 @@ class PrefetchingFlowFieldScheduler:
                     self._queue.get_nowait()
                 except queue.Empty:
                     break
-
-            logger.debug(f"Flushed {i + 2} batches from queue.")
 
         self._t = 0
         # restart producer thread
