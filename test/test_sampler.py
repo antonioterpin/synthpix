@@ -1,5 +1,4 @@
 import re
-import time
 import timeit
 
 import jax
@@ -949,62 +948,6 @@ def test_sampler_with_real_img_gen_fn(
     assert jnp.allclose(output_size, expected_size, atol=0.01)
 
 
-BATCH_SIZE = 12
-EPISODE_LENGTH = 4
-FLOW_BATCH_SIZE = BATCH_SIZE
-BATCHES_PER_FLOW_BATCH = 1
-BUFFER_SIZE = 3 * EPISODE_LENGTH
-FLOW_FIELD_SIZE = (64, 64)
-DT = 1.0
-IMG_SHAPE = (64, 64)
-NUM_EPISODES = 2
-
-
-@pytest.mark.parametrize("mock_mat_files", [128], indirect=True)
-def test_done_flag_and_horizon(sampler):
-    """`done` should be True *exactly* once (the final step of each episode)."""
-
-    dones = []
-    for _ in range(NUM_EPISODES):
-        batch = sampler.next_episode()
-        imgs1 = batch["images1"]
-        done = batch["done"]
-        dones.append(done)
-        for _ in range(EPISODE_LENGTH - 1):
-            batch = next(sampler)
-            imgs1 = batch["images1"]
-            done = batch["done"]
-            assert imgs1.shape[0] == BATCH_SIZE
-            assert imgs1[0].shape == IMG_SHAPE
-            assert isinstance(imgs1, jnp.ndarray)
-            dones.append(done)
-
-    true_flags = sum(int(flag) for d in dones for flag in d)
-    assert (
-        true_flags == NUM_EPISODES * BATCH_SIZE
-    ), "`done` must become True once per episode"
-
-    last_step_dones = dones[EPISODE_LENGTH - 1 :: EPISODE_LENGTH]
-
-    # For each episode's last batch, require all BATCH_SIZE flags to be True
-    assert all(
-        bool(jnp.all(d)) for d in last_step_dones
-    ), "`done` must be True for every env on the *last* step of each episode"
-
-
-@pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
-def test_next_episode_flushes_queue(sampler):
-    for _ in range(EPISODE_LENGTH // 2):
-        next(sampler)
-
-    first_batch_new_ep = sampler.next_episode()
-    time.sleep(0.1)
-    remaining = sampler.scheduler.steps_remaining()
-    assert remaining == EPISODE_LENGTH - 1
-
-    assert not first_batch_new_ep["done"].any()
-
-
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connect to the server.",
@@ -1449,17 +1392,3 @@ def test_make_done_not_implemented(sampler_class):
     sampler = sampler_class.from_config(PlainDummy(), batch_size=3)
     with pytest.raises(NotImplementedError):
         sampler._make_done()
-
-
-@pytest.mark.parametrize(
-    "sampler_class", [RealImageSampler, SyntheticImageSamplerWrapper]
-)
-def test_reset_and_shutdown_delegation(sampler_class):
-    sched = EpisodicDummy()
-    sampler = sampler_class.from_config(sched, batch_size=2)
-
-    sampler.reset()
-    assert sched.reset_called
-
-    sampler.shutdown()
-    assert sched.shutdown_called

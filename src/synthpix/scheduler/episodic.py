@@ -3,7 +3,7 @@ import glob
 import os
 import random
 
-from ..utils import discover_leaf_dirs, logger
+from ..utils import discover_leaf_dirs, is_int, logger
 from .base import BaseFlowFieldScheduler
 
 
@@ -76,11 +76,11 @@ class EpisodicFlowFieldScheduler:
                 dataset does not contain enough distinct starting positions to form
                 at least one complete batch of episodes.
         """
-        if batch_size <= 0:
-            raise ValueError("batch_size must be positive")
+        if not is_int(batch_size) or batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
 
-        if episode_length <= 0:
-            raise ValueError("episode_length must be positive")
+        if not is_int(episode_length) or episode_length <= 0:
+            raise ValueError("episode_length must be a positive integer")
 
         self.scheduler = scheduler
         self.batch_size = batch_size

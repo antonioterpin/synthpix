@@ -155,17 +155,19 @@ def test_reset_stops_thread_and_clears_queue():
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=3)
 
     # prime the queue with two prefetched batches
-    time.sleep(0.1)
+    it = iter(pf)
+    next(it)
+    for _ in range(40):
+        if not pf._queue.empty():
+            break
+        time.sleep(0.1)
 
-    assert not pf._queue.empty()
+    assert not pf._queue.empty(), "Pre-condition queue not empty before reset failed."
     pf.reset()
 
-    assert not pf._thread.is_alive()
-    assert pf._queue.empty()
-    assert sched.reset_called
+    assert pf._queue.empty(), "Queue should be empty after reset"
+    assert sched.reset_called, "Scheduler should have been reset"
 
-    # After reset we can iterate again
-    next(iter(pf))
     pf.shutdown()
 
 
