@@ -270,17 +270,16 @@ def test_more_flows_per_batch_than_batch_size(flow_fields_per_batch, scheduler):
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_flow_field_size(flow_field_size, scheduler):
+def test_invalid_flow_field_size_in_scheduler(flow_field_size, scheduler):
     """Test that invalid flow_field_size raises a ValueError."""
+    scheduler.get_flow_fields_shape = lambda: config["flow_field_size"]
     with pytest.raises(
         ValueError, match="flow_field_size must be a tuple of two positive numbers."
     ):
-        config = sampler_config.copy()
-        config["flow_field_size"] = flow_field_size
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
-            config=config,
+            config=sampler_config,
         )
 
 
@@ -1360,6 +1359,19 @@ def test_episodic_done_and_episode_end(sampler_class):
 
     with pytest.raises(IndexError, match="Episode ended"):
         next(sampler)  # overrun episode
+
+
+@pytest.mark.parametrize("sampler_class", [RealImageSampler])
+def test_reset_and_shutdown(sampler_class):
+    sched = EpisodicDummy(episode_length=2)
+    sampler = sampler_class.from_config(sched, batch_size=4)
+
+    next(sampler)
+    sampler.reset()  # reset the sampler
+    assert sched.reset_called, "Scheduler reset was not called"
+
+    sampler.shutdown()  # shutdown the sampler
+    assert sched.shutdown_called, "Scheduler shutdown was not called"
 
 
 @pytest.mark.parametrize("sampler_class", [RealImageSampler])
