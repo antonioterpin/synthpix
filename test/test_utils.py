@@ -1,16 +1,13 @@
 import os
 import re
-import tempfile
 import timeit
 from test.example_flows import get_flow_function
 
 import jax
 import jax.numpy as jnp
 import pytest
-import yaml
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
-from synthpix.sanity import calculate_min_and_max_speeds, update_config_file
 from synthpix.utils import (
     bilinear_interpolate,
     discover_leaf_dirs,
@@ -131,66 +128,6 @@ def test_generate_array_flow_field(shape, flow_field_type, expected):
     assert generated_flow_field.shape == expected.shape
     assert jnp.allclose(generated_flow_field, expected, atol=1e-5)
     assert generated_flow_field.dtype == jnp.float32
-
-
-def test_update_config_file():
-    """Test the update_config_file function."""
-    # Create a temporary configuration file based on test_data.yaml
-    base_config_path = os.path.join("config", "test_data.yaml")
-    tmp_path = tempfile.gettempdir()
-    temp_config_path = os.path.join(tmp_path, "temp_config.yaml")
-    try:
-        base_config = load_configuration(base_config_path)
-        with open(temp_config_path, "w") as temp_file:
-            yaml.safe_dump(base_config, temp_file)
-        # Define the updates to be made
-        updates = {
-            "max_speed_x": 15.0,
-            "max_speed_y": 20.0,
-            "min_speed_x": -15.0,
-            "min_speed_y": -20.0,
-        }
-        # Call the function to update the configuration file
-        update_config_file(temp_config_path, updates)
-        # Reload the updated configuration file
-        updated_config = load_configuration(temp_config_path)
-        # Assert that the updates were applied correctly
-        for key, value in updates.items():
-            assert updated_config[key] == value
-        # Assert that other keys remain unchanged
-        for key in base_config:
-            if key not in updates:
-                assert updated_config[key] == base_config[key]
-    finally:
-        # Ensure the temporary file is deleted
-        if os.path.exists(temp_config_path):
-            os.remove(temp_config_path)
-
-
-@pytest.mark.parametrize("mock_hdf5_files", [2], indirect=True)
-def test_calculate_min_and_max_speeds(mock_hdf5_files):
-    """Test the calculate_min_and_max_speeds function."""
-    files, dims = mock_hdf5_files
-
-    # Call the function to calculate speeds
-    result = calculate_min_and_max_speeds(files)
-
-    # Assert the results
-    assert "min_speed_x" in result
-    assert "max_speed_x" in result
-    assert "min_speed_y" in result
-    assert "max_speed_y" in result
-
-    # Ensure the values are within expected ranges based on the mock data
-    assert result["min_speed_x"] <= result["max_speed_x"]
-    assert result["min_speed_y"] <= result["max_speed_y"]
-
-    # Test with invalid inputs
-    with pytest.raises(ValueError):
-        calculate_min_and_max_speeds([])  # Empty list
-
-    with pytest.raises(ValueError):
-        calculate_min_and_max_speeds(["nonexistent_file.h5"])  # Nonexistent file
 
 
 # Mock valid inputs

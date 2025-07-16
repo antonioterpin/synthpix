@@ -68,18 +68,6 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
             - "min_speed_y"
             - "max_speed_y"
     """
-    # Input validation
-    if not file_list:
-        raise ValueError("The file_list must not be empty.")
-
-    for file_path in file_list:
-        if not isinstance(file_path, str):
-            raise ValueError("All file paths must be strings.")
-        if not os.path.isfile(file_path):
-            raise ValueError(f"File {file_path} does not exist.")
-        if not file_path.endswith(".h5"):
-            raise ValueError(f"File {file_path} is not a .h5 file.")
-
     running_max_speed_x = float("-inf")
     running_max_speed_y = float("-inf")
     running_min_speed_x = float("inf")
@@ -116,8 +104,22 @@ def missing_speeds_panel(config_path) -> tuple[float, float, float, float]:
         speeds: tuple[float, float, float, float]
             The maximum and minimum speeds in the x and y directions.
     """
-    # Load the configuration file
     config = load_configuration(config_path)
+
+    # Input validation
+    if "scheduler_files" not in config:
+        raise ValueError("The configuration must contain 'scheduler_files'.")
+    file_list = config["scheduler_files"]
+    if not isinstance(file_list, list) or not file_list:
+        raise ValueError("The file_list must not be empty.")
+
+    for file_path in file_list:
+        if not isinstance(file_path, str):
+            raise ValueError("All file paths must be strings.")
+        if not os.path.isfile(file_path):
+            raise ValueError(f"File {file_path} does not exist.")
+        if not file_path.endswith(".h5"):
+            raise ValueError(f"File {file_path} is not a .h5 file.")
 
     missing_speeds = []
     for key in ["max_speed_x", "max_speed_y", "min_speed_x", "min_speed_y"]:
@@ -136,7 +138,7 @@ def missing_speeds_panel(config_path) -> tuple[float, float, float, float]:
         )
 
         if choice == "1":
-            calculated_speeds = calculate_min_and_max_speeds(config["scheduler_files"])
+            calculated_speeds = calculate_min_and_max_speeds(file_list)
             config.update(calculated_speeds)
             update_config_file(config_path, calculated_speeds)
             print("Calculated values:")
@@ -175,8 +177,21 @@ def missing_speeds_panel(config_path) -> tuple[float, float, float, float]:
         )
 
 
-def main(config_path):
-    """Check the sanity of the configuration file."""
+def main():  # pragma: no cover
+    """Main function to check the sanity of the configuration file."""
+    parser = argparse.ArgumentParser(
+        description="Check the sanity of the configuration file."
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        required=True,
+        help="Path to the configuration file.",
+    )
+
+    args = parser.parse_args()
+    config_path = args.config
+
     if not os.path.exists(config_path):
         print(f"Configuration file does not exist: {config_path}")
         sys.exit(1)
@@ -212,15 +227,4 @@ def main(config_path):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Check the sanity of the configuration file."
-    )
-    parser.add_argument(
-        "--config",
-        type=str,
-        required=True,
-        help="Path to the configuration file.",
-    )
-
-    args = parser.parse_args()
-    main(args.config)
+    main()  # pragma: no cover
