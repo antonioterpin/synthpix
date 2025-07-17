@@ -1,5 +1,6 @@
 """HDF5FlowFieldScheduler to load flow fields from .h5 files."""
 import h5py
+import jax
 import numpy as np
 
 from ..scheduler import BaseFlowFieldScheduler
@@ -20,7 +21,7 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         file_list: list,
         randomize: bool = False,
         loop: bool = False,
-        rng: np.random.Generator = None,
+        key: jax.random.PRNGKey = None,
     ):
         """Initializes the HDF5 scheduler.
 
@@ -28,10 +29,9 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
             file_list (list): A directory, single .h5 file, or list of .h5 paths.
             randomize (bool): If True, shuffle file order per epoch.
             loop (bool): If True, cycle indefinitely.
-            rng (np.random.Generator): Random number generator for reproducibility.
-                Random number generator for reproducibility.
+            key (jax.random.PRNGKey): Random key for reproducibility.
         """
-        super().__init__(file_list, randomize, loop, rng)
+        super().__init__(file_list, randomize, loop, key)
         if not all(file_path.endswith(".h5") for file_path in file_list):
             raise ValueError("All files must be HDF5 files with .h5 extension.")
 
