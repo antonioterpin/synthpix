@@ -22,12 +22,10 @@ jobs:
 
       - name: Run tests
         run: |
-          docker compose \
-            -f docker-compose.cpu.yaml \
-            run --rm \
+          docker compose -f docker-compose.cpu.yaml run --rm \
             -v "${{ github.workspace }}/junit:/workspace/junit" \
             synthpix \
-            pytest -v \
+            /usr/bin/time -v pytest -v \
               --junitxml=/workspace/junit/test-results.xml \
               --ignore=test/save_ablations
 
