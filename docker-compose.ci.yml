@@ -1,0 +1,5 @@
+services:
+  synthpix:
+    deploy: {}
+    environment:
+      CUDA_VISIBLE_DEVICES: ""

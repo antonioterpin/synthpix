@@ -10,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Check out the repository
       - name: Check out code
         uses: actions/checkout@v4
 
@@ -18,17 +17,25 @@ jobs:
         run: mkdir -p junit
 
       - name: Build Docker image
-        run: docker compose build
-
-      - name: Run tests in Docker
         run: |
-          docker compose run --rm --entrypoint "" synthpix \
-            -v "${{ github.workspace }}/junit:/workspace/junit" \
-            pytest -v --junitxml=/workspace/junit/test-results.xml --ignore=test/save_ablations
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.ci.yml \
+            build
 
-      # 5. Upload JUnit test results
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
+      - name: Run tests
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.ci.yml \
+            run --rm \
+            -v "${{ github.workspace }}/junit:/workspace/junit" \
+            synthpix \
+            pytest -v \
+              --junitxml=/workspace/junit/test-results.xml \
+              --ignore=test/save_ablations
+
+      - uses: actions/upload-artifact@v4
         with:
           name: pytest-results
           path: junit/test-results.xml

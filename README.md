@@ -15,8 +15,7 @@ for i, batch in enumerate(sampler):
    """batch contains images1, images2, flow_fields, params"""
 sampler.shutdown()
 ```
-
-Check out the [paper]() for more information and performance analysis 🔥.
+See `src/main.py` for a fully working example, and check out the [paper]() for more information and performance analysis 🔥.
 
 ## Getting started 🚀
 Alright, now that hopefully we convinced you to try SynthPix, let's get to it. Don't worry, installing it is even easier than using it:
