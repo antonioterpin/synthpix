@@ -101,6 +101,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--devices",
+        type=str,
+        default="cpu",
+        help="Devices to use for computation (e.g., 'cpu', '0,1' for GPUs).",
+    )
+
+    parser.add_argument(
         "--output_dir",
         type=str,
         default="out",
