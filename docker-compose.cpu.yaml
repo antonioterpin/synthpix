@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  synthpix:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    image: synthpix:cpu
+    environment:
+      CUDA_VISIBLE_DEVICES: ""
+      TZ: Europe/Zurich
+    volumes:
+      - /shared/fluids/fluids-estimation:/shared/fluids/fluids-estimation
+      - .:/app
+    shm_size: "2g"
+    stdin_open: true
+    tty: true
+    command: >
+      pytest --cov=src/synthpix --cov-report=term-missing -v

@@ -1,0 +1,54 @@
+# ────────────────────────────────────────────────────────────────
+# CPU-only image for SynthPix
+# ────────────────────────────────────────────────────────────────
+FROM ubuntu:24.04
+
+# Use bash with pipefail for safer RUN statements
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# Environment
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe/Zurich
+
+# ── System packages ─────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        git \
+        python3-pip \
+        unzip \
+        wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Miniconda (latest) ──────────────────────────────────────────
+ENV CONDA_DIR=/opt/conda
+RUN wget -qO /tmp/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
+    bash /tmp/miniconda.sh -b -p "$CONDA_DIR" && \
+    rm /tmp/miniconda.sh
+ENV PATH="$CONDA_DIR/bin:${PATH}"
+
+# Conda configuration
+ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS=yes
+RUN conda config --remove channels defaults && \
+    conda config --add channels conda-forge && \
+    conda config --set channel_priority strict && \
+    conda update -y conda
+
+# Create env
+ARG PY_VER=3.11
+ENV CONDA_DEFAULT_ENV=synthpix
+RUN conda create -y -n "$CONDA_DEFAULT_ENV" python="${PY_VER}" pip && \
+    conda clean -afy
+ENV PATH="$CONDA_DIR/envs/$CONDA_DEFAULT_ENV/bin:${PATH}"
+
+# ── Project code ────────────────────────────────────────────────
+WORKDIR /app
+COPY src/synthpix /app/src/synthpix
+COPY setup.py /app/setup.py
+RUN chown -R 1000:root /app
+
+# Install project without CUDA extras
+RUN pip install -e .[dev]
+
+# Convenience entrypoint
+ENTRYPOINT ["conda", "run", "-n", "synthpix", "--no-capture-output"]
+CMD ["bash"]
