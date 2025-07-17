@@ -601,3 +601,17 @@ def test_prefetch_scheduler_shutdown(mock_hdf5_files):
     prefetch.get_batch(2)
     prefetch.shutdown()
     assert not prefetch._thread.is_alive()
+
+
+@pytest.mark.parametrize("bad_include_images", ["bad_value", None, 123])
+@pytest.mark.parametrize("mock_numpy_files", [1], indirect=True)
+def test_mat_scheduler_invalid_include_images(bad_include_images, mock_numpy_files):
+    """Test that invalid `include_images` values raise a ValueError."""
+    files, _ = mock_numpy_files
+    with pytest.raises(ValueError, match="include_images must be a boolean value."):
+        NumpyFlowFieldScheduler.from_config(
+            {
+                "scheduler_files": files,
+                "include_images": bad_include_images,
+            }
+        )

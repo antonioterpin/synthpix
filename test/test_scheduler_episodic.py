@@ -3,6 +3,15 @@ import pytest
 from synthpix.scheduler import EpisodicFlowFieldScheduler, MATFlowFieldScheduler
 
 
+@pytest.mark.parametrize("invalid_scheduler", [None, "not_a_scheduler", 123, [], {}])
+@pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
+def test_invalid_scheduler(invalid_scheduler, mock_mat_files):
+    files, dims = mock_mat_files
+
+    with pytest.raises(TypeError):
+        EpisodicFlowFieldScheduler(invalid_scheduler, batch_size=1, episode_length=2)
+
+
 @pytest.mark.parametrize("invalid_batch_size", [-1, 0, 1.5, "two"])
 @pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
 def test_invalid_batch_size(invalid_batch_size, mock_mat_files):

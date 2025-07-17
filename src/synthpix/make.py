@@ -75,13 +75,10 @@ def make(
         raise ValueError("episode_length must be a non-negative integer.")
 
     # Initialize the random number generator
-    seed = dataset_config.get("seed", None)
-    if seed is not None:
-        key = jax.random.PRNGKey(seed)
-        cpu = jax.devices("cpu")[0]
-        key = jax.device_put(key, cpu)
-    else:
-        key = jax.random.PRNGKey(0)
+    cpu = jax.devices("cpu")[0]
+    seed = dataset_config.get("seed", 0)
+    key = jax.random.PRNGKey(seed)
+    key = jax.device_put(key, cpu)
 
     if images_from_file:
         if dataset_config["scheduler_class"] != ".mat":
