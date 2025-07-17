@@ -19,15 +19,15 @@ jobs:
       - name: Build Docker image
         run: |
           docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.ci.yml \
+            -f docker-compose.yaml \
+            -f docker-compose.ci.yaml \
             build
 
       - name: Run tests
         run: |
           docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.ci.yml \
+            -f docker-compose.yaml \
+            -f docker-compose.ci.yaml \
             run --rm \
             -v "${{ github.workspace }}/junit:/workspace/junit" \
             synthpix \
