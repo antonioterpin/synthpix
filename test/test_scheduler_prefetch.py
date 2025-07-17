@@ -119,6 +119,22 @@ def test_t_counter_wraps_after_episode():
     pf.shutdown()
 
 
+@pytest.mark.parametrize("batch_size", [None, "invalid", -1, 1.3])
+def test_invalid_batch_size_raises_value_error(batch_size):
+    with pytest.raises(ValueError, match="batch_size must be a positive integer."):
+        PrefetchingFlowFieldScheduler(
+            MinimalScheduler(), batch_size=batch_size, buffer_size=1
+        )
+
+
+@pytest.mark.parametrize("buffer_size", [None, "invalid", -1, 1.3])
+def test_invalid_buffer_size_raises_value_error(buffer_size):
+    with pytest.raises(ValueError, match="buffer_size must be a positive integer."):
+        PrefetchingFlowFieldScheduler(
+            MinimalScheduler(), batch_size=1, buffer_size=buffer_size
+        )
+
+
 def test_get_batch_size_mismatch_raises_value_error():
     pf = PrefetchingFlowFieldScheduler(MinimalScheduler(), batch_size=2)
     with pytest.raises(ValueError):
