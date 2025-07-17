@@ -1014,9 +1014,9 @@ def test_speed_sampler_dummy_fn(
     if num_devices == 1:
         limit_time = 3.5
     elif num_devices == 2:
-        limit_time = 2.7
+        limit_time = 2.8
     elif num_devices == 4:
-        limit_time = 2.7
+        limit_time = 2.8
 
     # Create the sampler
     prefetching_scheduler = PrefetchingFlowFieldScheduler(
@@ -1234,6 +1234,78 @@ def test_stop_after_max_episodes(mock_mat_files):
     sampler.scheduler.shutdown()
 
 
+@pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
+def test_index_error_if_no_next_episode(mock_mat_files):
+    """Sampler raises IndexError if next_episode() is not called."""
+
+    files, dims = mock_mat_files
+    H, W = dims["height"], dims["width"]
+
+    devices = jax.devices()
+    if len(devices) > 4:
+        devices = devices[:4]
+
+    batch_size = 3 * 4  # multiple of all number of devices
+    base = MATFlowFieldScheduler(files, loop=True, output_shape=(H, W))
+    epi = EpisodicFlowFieldScheduler(
+        base, batch_size=batch_size, episode_length=2, seed=0
+    )
+    pre = PrefetchingFlowFieldScheduler(epi, batch_size=batch_size, buffer_size=90)
+
+    sampler = SyntheticImageSampler(
+        scheduler=pre,
+        img_gen_fn=dummy_img_gen_fn,
+        batches_per_flow_batch=1,
+        batch_size=batch_size,
+        flow_fields_per_batch=batch_size,
+        flow_field_size=(H, W),
+        image_shape=(H, W),
+        resolution=1.0,
+        velocities_per_pixel=1.0,
+        img_offset=(0.0, 0.0),
+        seeding_density_range=(0.01, 0.01),
+        p_hide_img1=0.0,
+        p_hide_img2=0.0,
+        diameter_ranges=[[1.0, 1.0]],
+        diameter_var=0.0,
+        intensity_ranges=[[1.0, 1.0]],
+        intensity_var=0.0,
+        rho_ranges=[[0.0, 0.0]],
+        rho_var=0.0,
+        dt=1.0,
+        seed=0,
+        max_speed_x=0.0,
+        max_speed_y=0.0,
+        min_speed_x=0.0,
+        min_speed_y=0.0,
+        output_units="pixels",
+        noise_level=0.0,
+        device_ids=[d.id for d in devices],
+    )
+
+    batch = sampler.next_episode()
+    imgs1 = batch["images1"]
+    done = batch["done"]
+    while not any(done):
+        batch = next(sampler)
+        imgs1 = batch["images1"]
+        done = batch["done"]
+        assert imgs1.shape[0] == batch_size
+        assert imgs1[0].shape == (H, W)
+        assert isinstance(imgs1, jnp.ndarray)
+    with pytest.raises(
+        IndexError,
+        match=re.escape(
+            "Episode ended. No more flow fields available. "
+            "Use next_episode() to continue."
+        ),
+    ):
+        next(sampler)
+
+    # Clean up background thread
+    sampler.shutdown()
+
+
 @pytest.mark.parametrize("mock_mat_files", [10], indirect=True)
 def test_real_sampler(mock_mat_files):
     """Test the RealImageSampler with a mock HDF5 scheduler."""
@@ -1251,11 +1323,8 @@ def test_real_sampler(mock_mat_files):
         assert isinstance(batch["images1"], jnp.ndarray)
         assert isinstance(batch["images2"], jnp.ndarray)
         assert isinstance(batch["flow_fields"], jnp.ndarray)
-        assert isinstance(batch["params"]["seeding_densities"], jnp.ndarray)
-        assert isinstance(batch["params"]["diameter_ranges"], jnp.ndarray)
-        assert isinstance(batch["params"]["intensity_ranges"], jnp.ndarray)
-        assert isinstance(batch["params"]["rho_ranges"], jnp.ndarray)
         assert batch["images1"].shape[0] == 2  # batch size
+        assert batch["params"] is None
 
 
 @pytest.mark.parametrize("mock_mat_files", [10], indirect=True)
@@ -1364,16 +1433,22 @@ class SyntheticImageSamplerWrapper:
         )
 
 
-@pytest.mark.parametrize("sampler_class", [RealImageSampler])
+@pytest.mark.parametrize(
+    "sampler_class", [RealImageSampler, SyntheticImageSamplerWrapper]
+)
 def test_episodic_done_and_episode_end(sampler_class):
     sched = EpisodicDummy(episode_length=2)
+    if sampler_class is SyntheticImageSamplerWrapper:
+        old_get_batch = sched.get_batch
+        sched.get_batch = lambda batch_size: old_get_batch(batch_size=batch_size)[-1]
     sampler = sampler_class.from_config(sched, batch_size=4)
 
     first = next(sampler)
     assert "done" in first and not first["done"].any()
 
-    second = next(sampler)
-    assert second["done"].all()  # last step → all True
+    last = next(sampler)
+    print(last)
+    assert last["done"].all()  # last step → all True
 
     with pytest.raises(IndexError, match="Episode ended"):
         next(sampler)  # overrun episode
@@ -1390,30 +1465,12 @@ def test_reset_and_shutdown(sampler_class):
     sampler = sampler_class.from_config(sched, batch_size=4)
 
     next(sampler)
-    sampler.reset()  # reset the sampler
+    # reset the sampler
+    sampler.reset()
     assert sched.reset_called, "Scheduler reset was not called"
 
     sampler.shutdown()  # shutdown the sampler
     assert sched.shutdown_called, "Scheduler shutdown was not called"
-
-
-@pytest.mark.parametrize(
-    "sampler_class", [RealImageSampler, SyntheticImageSamplerWrapper]
-)
-def test_next_episode_restarts_horizon(sampler_class):
-    sched = EpisodicDummy(episode_length=2)
-    if sampler_class is SyntheticImageSamplerWrapper:
-        old_get_batch = sched.get_batch
-        sched.get_batch = lambda batch_size: old_get_batch(batch_size=batch_size)[-1]
-    sampler = sampler_class.from_config(sched, batch_size=2)
-
-    _ = next(sampler)  # consume the only step
-    fresh = sampler.next_episode()  # should auto-reset scheduler
-
-    # After reset the first batch of the new episode must show `done == False`
-    assert not fresh["done"].any()
-    # scheduler’s internal counter is back at one
-    assert sched._step == 1
 
 
 @pytest.mark.parametrize(

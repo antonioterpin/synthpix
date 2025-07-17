@@ -4,17 +4,13 @@
 
 ### With Docker
 ```bash
-docker build --ssh default -t synthpix .
-docker run --rm --gpus all \
-  -e CUDA_VISIBLE_DEVICES=<ID> \
-  -v /shared/fluids/fluids-estimation:/shared/fluids/fluids-estimation \
-  --shm-size=4g \
-  -it synthpix <commmand>
+docker compose build
+docker compose run --rm synthpix
 ```
 
-For instance, we use the following to check the test coverage:
+Or, for a custom command
 ```bash
-docker run --rm --gpus all   -e CUDA_VISIBLE_DEVICES=<ID>   -v /shared/fluids/fluids-estimation:/shared/fluids/fluids-estimation --shm-size=2g  -it synthpix pytest --cov=src/synthpix --cov-report=term-missing -v
+docker compose run --rm --entrypoint "" synthpix <your-command>
 ```
 
 For development, while installing repos:

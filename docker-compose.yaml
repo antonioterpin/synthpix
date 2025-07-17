@@ -1,0 +1,28 @@
+# docker-compose.yml
+version: "3.9"
+
+services:
+  synthpix:
+    image: synthpix:latest
+    build:
+      context: .
+      ssh:
+        - default
+    # ---------- runtime -----------------
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      CUDA_VISIBLE_DEVICES: "0,1,2,3"
+    volumes:
+      - /shared/fluids/fluids-estimation:/shared/fluids/fluids-estimation
+      - .:/app
+    shm_size: "2g"
+    stdin_open: true
+    tty: true
+    command: >
+      pytest --cov=src/synthpix --cov-report=term-missing -v

@@ -12,9 +12,10 @@ from ..utils import (
     input_check_flow_field_adapter,
     logger,
 )
+from .base import Sampler
 
 
-class SyntheticImageSampler:
+class SyntheticImageSampler(Sampler):
     """Iterator class that generates synthetic images from flow fields.
 
     This class repeatedly samples flow fields from a FlowFieldScheduler, and for each,
@@ -129,6 +130,8 @@ class SyntheticImageSampler:
             device_ids: Sequence[int]
                 List of device IDs to use for sharding the flow fields and images.
         """
+        super().__init__(scheduler, batch_size)
+
         # Name of the axis for the device mesh
         self.shard_fields = "fields"
 
@@ -160,25 +163,18 @@ class SyntheticImageSampler:
             ),
         )
 
-        if not hasattr(scheduler, "__iter__"):
-            raise ValueError("scheduler must be an iterable object.")
-        if not hasattr(scheduler, "__next__"):
-            raise ValueError(
-                "scheduler must be an iterable object with __next__ method."
-            )
-        self.scheduler = scheduler
-
         if not callable(img_gen_fn):
             raise ValueError("img_gen_fn must be a callable function.")
 
         if not isinstance(batches_per_flow_batch, int) or batches_per_flow_batch <= 0:
             raise ValueError("batches_per_flow_batch must be a positive integer.")
         self.batches_per_flow_batch = batches_per_flow_batch
+        if self._episodic and batches_per_flow_batch != 1:
+            self.batches_per_flow_batch = 1
+            logger.warning("Using batches_per_flow_batch = 1 for episodic setting.")
 
         if not isinstance(flow_fields_per_batch, int) or flow_fields_per_batch <= 0:
             raise ValueError("flow_fields_per_batch must be a positive integer.")
-        if not isinstance(batch_size, int) or batch_size <= 0:
-            raise ValueError("batch_size must be a positive integer.")
         if flow_fields_per_batch > batch_size:
             raise ValueError(
                 "flow_fields_per_batch must be less than or equal to batch_size."
@@ -589,13 +585,6 @@ class SyntheticImageSampler:
                 )
             )
 
-        if hasattr(scheduler, "episode_length"):
-            self._episodic = True
-            logger.info("The underlying scheduler is episodic.")
-        else:
-            self._episodic = False
-            logger.info("The underlying scheduler is not episodic.")
-
         logger.debug("Input arguments of SyntheticImageSampler are valid.")
         logger.debug(f"Flow field scheduler: {self.scheduler}")
         logger.debug(f"Image generation function: {img_gen_fn}")
@@ -627,25 +616,15 @@ class SyntheticImageSampler:
         logger.debug(f"Min speed y: {min_speed_y}")
         logger.debug(f"Output units: {self.output_units}")
         logger.debug(f"Background level: {self.noise_level}")
-        self._rng = jax.random.PRNGKey(seed)
-        self._current_flows = None
-        self._batches_generated = 0
-        self._total_generated_image_couples = 0
+        self._reset()
 
-    def __iter__(self):
-        """Returns the iterator instance itself."""
-        return self
-
-    def reset(self, scheduler_reset: bool = True):
+    def _reset(self):
         """Resets the state variables to their initial values."""
         self._rng = jax.random.PRNGKey(self.seed)
         self._current_flows = None
         self._batches_generated = 0
-        if scheduler_reset:
-            self.scheduler.reset()
-        logger.debug("Sampler state has been reset.")
 
-    def __next__(self):
+    def ___next__(self):
         """Generates the next batch of synthetic images.
 
         Raises:
@@ -667,13 +646,6 @@ class SyntheticImageSampler:
         ):
             # Reset the batch counter
             self._batches_generated = 0
-
-            # Get the next batch of flow fields from the scheduler
-            if self._episodic and self.scheduler.steps_remaining() == 0:
-                raise IndexError(
-                    "Episode ended. No more flow fields available. "
-                    "Use next_episode() to continue."
-                )
 
             _current_flows = self.scheduler.get_batch(self.flow_fields_per_batch)
 
@@ -721,51 +693,8 @@ class SyntheticImageSampler:
         logger.debug(
             f"Generated {self._batches_generated * self.batch_size} " "image couples"
         )
-        self._total_generated_image_couples += self.batch_size
-        logger.debug(
-            f"Generated {self._total_generated_image_couples} image couples so far."
-        )
 
-        if self._episodic:
-            done = self._make_done()
-            batch["done"] = done
         return batch
-
-    def next_episode(self):
-        """Flush the current episode and return the first batch of the next one.
-
-        The underlying scheduler is expected to be the prefetching scheduler.
-
-        Returns:
-            next(self): dict
-                The first batch of the next episode.
-        """
-        if not hasattr(self.scheduler, "next_episode"):
-            raise AttributeError("Underlying scheduler lacks next_episode(), ")
-
-        self.scheduler.next_episode()
-
-        return next(self)
-
-    def _make_done(self):
-        """Return a `(batch_size,)` bool array if episodic, else None."""
-        if not self._episodic:
-            raise NotImplementedError("The underlying scheduler is not episodic.")
-
-        is_last_step = self.scheduler.steps_remaining() == 0
-        logger.debug(f"Is last step: {is_last_step}")
-        logger.debug(f"Steps remaining: {self.scheduler.steps_remaining()}")
-        # broadcast identical flag to every episode (synchronous horizons)
-        # implemented like this to make it easier in the future to implement
-        # asynchronous horizons
-        return jnp.full((self.batch_size,), is_last_step, dtype=bool)
-
-    def shutdown(self):
-        """Shutdown the sampler and release resources."""
-        logger.info("Shutting down the SyntheticImageSampler.")
-        if hasattr(self.scheduler, "shutdown"):
-            self.scheduler.shutdown()
-        logger.info("SyntheticImageSampler shutdown complete.")
 
     @classmethod
     def from_config(cls, scheduler, img_gen_fn, config) -> "SyntheticImageSampler":

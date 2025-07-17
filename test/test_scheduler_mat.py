@@ -84,7 +84,7 @@ def test_mat_scheduler_shape(mock_mat_files):
         }
     )
     shape = scheduler.get_flow_fields_shape()
-    assert shape == (256, 256)
+    assert shape == (256, 256, 2)
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)

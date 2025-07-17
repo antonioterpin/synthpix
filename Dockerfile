@@ -7,12 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Zurich
 
 # System packages
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    ffmpeg git vim curl software-properties-common grep \
-    libglew-dev x11-xserver-utils xvfb wget \
-    python3-pip python3-venv openjdk-8-jdk \
-    unzip wget \
+RUN apt-get update && apt-get install -y build-essential git python3-pip unzip wget \
  && rm -rf /var/lib/apt/lists/*
 
 # Install Miniconda
@@ -23,6 +18,10 @@ RUN wget -qO /tmp/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-la
 ENV PATH="$CONDA_DIR/bin:$PATH"
 
 # Create and activate a Conda env with Python 3.11
+ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS=yes
+RUN conda config --remove channels defaults \
+ && conda config --add channels conda-forge \
+ && conda config --set channel_priority strict
 RUN conda update -y conda \
  && conda create -y -n synthpix python=3.11 pip \
  && conda clean -afy
@@ -32,19 +31,15 @@ ENV CONDA_DEFAULT_ENV=synthpix
 ENV PATH="$CONDA_DIR/envs/$CONDA_DEFAULT_ENV/bin:$PATH"
 
 # Copy and install Python dependencies
-COPY . /app/
+COPY src/synthpix /app/src/synthpix
+COPY setup.py /app/setup.py
+RUN chown -R 1000:root /app
 WORKDIR /app
 RUN mkdir -p /root/.ssh \
     && ssh-keyscan -t rsa github.com >> /root/.ssh/known_hosts
 RUN --mount=type=ssh pip install -e .[cuda12,dev]
 
-# Copy your source code
-COPY . /app
-RUN chown -R 1000:root /app
-
-# Env
-ENV PYTHONUNBUFFERED=1
-
+COPY src/main.py /app/src/main.py
 
 # Use conda-run to guarantee activation in ENTRYPOINT
 ENTRYPOINT ["conda", "run", "-n", "synthpix", "--no-capture-output"]
