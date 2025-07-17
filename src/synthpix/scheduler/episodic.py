@@ -80,7 +80,7 @@ class EpisodicFlowFieldScheduler:
         """
         if not isinstance(scheduler, BaseFlowFieldScheduler):
             raise TypeError(
-                f"Expected scheduler to be a BaseFlowFieldScheduler ,"
+                f"Expected scheduler to be a BaseFlowFieldScheduler, "
                 f"got {type(scheduler)}"
             )
         if not is_int(batch_size) or batch_size <= 0:
@@ -214,7 +214,7 @@ class EpisodicFlowFieldScheduler:
 
         self._key, starts_key = jax.random.split(self._key)
         starts = jax.random.choice(
-            starts_key, indices, shape=(self.batch_size,), replace=False
+            starts_key, indices, shape=(self.batch_size,), replace=True
         )
 
         # Map the indices to directories
