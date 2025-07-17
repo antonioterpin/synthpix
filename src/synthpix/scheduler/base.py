@@ -76,9 +76,9 @@ class BaseFlowFieldScheduler(ABC):
         if self.randomize:
             self.key, shuffle_key = jax.random.split(self.key)
             cpu = jax.devices("cpu")[0]
-            file_list_indices = jnp.arange(len(file_list), device=cpu)
+            file_list_indices = jnp.arange(len(self.file_list), device=cpu)
             file_list_indices = jax.random.permutation(shuffle_key, file_list_indices)
-            self.file_list = [file_list[i] for i in file_list_indices.tolist()]
+            self.file_list = [self.file_list[i] for i in file_list_indices.tolist()]
 
         self._cached_data = None
         self._cached_file = None
