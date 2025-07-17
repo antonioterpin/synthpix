@@ -35,9 +35,7 @@ COPY src/synthpix /app/src/synthpix
 COPY setup.py /app/setup.py
 RUN chown -R 1000:root /app
 WORKDIR /app
-RUN mkdir -p /root/.ssh \
-    && ssh-keyscan -t rsa github.com >> /root/.ssh/known_hosts
-RUN --mount=type=ssh pip install -e .[cuda12,dev]
+RUN pip install -e .[cuda12,dev]
 
 COPY src/main.py /app/src/main.py
 

@@ -14,20 +14,16 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
-      # 2. Build the Docker image
-      - name: Build Docker image
-        run: docker build -t synthpix .
-
-      # 3. Create directory for test results
       - name: Prepare test-results directory
         run: mkdir -p junit
 
-      # 4. Run tests inside the container
+      - name: Build Docker image
+        run: docker compose build
+
       - name: Run tests in Docker
         run: |
-          docker run --rm \
+          docker compose run --rm --entrypoint "" synthpix \
             -v "${{ github.workspace }}/junit:/workspace/junit" \
-            synthpix \
             pytest -v --junitxml=/workspace/junit/test-results.xml --ignore=test/save_ablations
 
       # 5. Upload JUnit test results

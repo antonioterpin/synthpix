@@ -7,8 +7,13 @@ In a nutshell, if you need many synthetic PIV images and you do not want to wait
 ![Performances](docs/times.jpg)
 
 `SynthPix` is also fairly easy to use:
-```bash
-TODO
+```python
+import synthpix
+
+sampler = synthpix.make(config_path)
+for i, batch in enumerate(sampler):
+   """batch contains images1, images2, flow_fields, params"""
+sampler.shutdown()
 ```
 
 ## Getting started 🚀

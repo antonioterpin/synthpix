@@ -17,7 +17,7 @@ setup(
         "imageio>=2.37.0",
         "matplotlib>=3.10.1",
         "opencv-python-headless>=4.5.5",
-        "goggles @ git+ssh://git@github.com/antonioterpin/goggles.git",
+        "goggles @ git+https://github.com/antonioterpin/goggles.git@main",
     ],
     extras_require={
         "dev": [

@@ -6,8 +6,6 @@ services:
     image: synthpix:latest
     build:
       context: .
-      ssh:
-        - default
     # ---------- runtime -----------------
     deploy:
       resources:
