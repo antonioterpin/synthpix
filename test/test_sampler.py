@@ -3,6 +3,7 @@ import timeit
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from synthpix.data_generate import generate_images_from_flow
@@ -1173,7 +1174,7 @@ def test_stop_after_max_episodes(mock_mat_files):
     batch_size = 3 * 4  # multiple of all number of devices
     base = MATFlowFieldScheduler(files, loop=True, output_shape=(H, W))
     epi = EpisodicFlowFieldScheduler(
-        base, batch_size=batch_size, episode_length=2, seed=0
+        base, batch_size=batch_size, episode_length=2, rng=np.random.default_rng(0)
     )
     pre = PrefetchingFlowFieldScheduler(epi, batch_size=batch_size, buffer_size=90)
 
@@ -1248,7 +1249,7 @@ def test_index_error_if_no_next_episode(mock_mat_files):
     batch_size = 3 * 4  # multiple of all number of devices
     base = MATFlowFieldScheduler(files, loop=True, output_shape=(H, W))
     epi = EpisodicFlowFieldScheduler(
-        base, batch_size=batch_size, episode_length=2, seed=0
+        base, batch_size=batch_size, episode_length=2, rng=np.random.default_rng(0),
     )
     pre = PrefetchingFlowFieldScheduler(epi, batch_size=batch_size, buffer_size=90)
 

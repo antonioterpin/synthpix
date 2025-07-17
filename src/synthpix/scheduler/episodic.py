@@ -1,7 +1,8 @@
 """EpisodicFlowFieldScheduler to organize flow fields in episodes."""
 import glob
 import os
-import random
+
+import numpy as np
 
 from ..utils import discover_leaf_dirs, is_int, logger
 from .base import BaseFlowFieldScheduler
@@ -37,7 +38,7 @@ class EpisodicFlowFieldScheduler:
     ...             scheduler=base,
     ...             batch_size=16,
     ...             episode_length=32,
-    ...             seed=42)
+    ...             rng=np.random.default_rng(42))
     >>> batch_t0 = next(episodic)        # first time-step from 16 episodes
     >>> batch_t1 = next(episodic)        # second time-step
     >>> episodic.reset()                 # start 16 fresh episodes
@@ -57,36 +58,43 @@ class EpisodicFlowFieldScheduler:
         scheduler: BaseFlowFieldScheduler,
         batch_size: int,
         episode_length: int,
-        seed: int = 0,
-    ) -> None:
+        rng: np.random.Generator = None,
+    ):
         """Constructs an episodic scheduler wrapper.
 
         Args:
-            scheduler: Any concrete subclass of :class:`BaseFlowFieldScheduler`
-            (e.g. :class:`MATFlowFieldScheduler`).
-            batch_size: episodes to run in parallel (== first dim of each batch).
-            episode_length: Number of consecutive flow-fields that make up *one* episode.
-            seed: Seed for the internal pseudo-random number generator.  Use a fixed
-            seed for deterministic episode sampling; use different seeds across
-            workers for data-parallel training.
+            scheduler (BaseFlowFieldScheduler):
+                Any concrete subclass of :class:`BaseFlowFieldScheduler`
+                (e.g. :class:`MATFlowFieldScheduler`).
+            batch_size (int): episodes to run in parallel (== first dim of each batch).
+            episode_length (int): 
+                Number of consecutive flow-fields that make up *one* episode.
+            rng (np.random.Generator, optional): 
+                Random number generator for reproducibility.
 
         Raises:
-            ValueError
-                If ``batch_size`` or ``episode_length`` are not positive, or if the
-                dataset does not contain enough distinct starting positions to form
-                at least one complete batch of episodes.
+            ValueError: If ``batch_size`` or ``episode_length`` are not positive,
+                or if the dataset does not contain enough distinct starting positions
+                to form at least one complete batch of episodes.
         """
+        if not isinstance(scheduler, BaseFlowFieldScheduler):
+            raise TypeError(
+                f"Expected scheduler to be a BaseFlowFieldScheduler, got {type(scheduler)}"
+            )
         if not is_int(batch_size) or batch_size <= 0:
             raise ValueError("batch_size must be a positive integer")
 
         if not is_int(episode_length) or episode_length <= 0:
             raise ValueError("episode_length must be a positive integer")
 
+        if not isinstance(rng, np.random.Generator) and rng is not None:
+            raise TypeError("rng must be a np.random.Generator or None")
+        
         self.scheduler = scheduler
         self.batch_size = batch_size
         self.episode_length = episode_length
 
-        self._rng = random.Random(seed)
+        self._rng = rng if rng is not None else np.random.default_rng()
         self._t = 0
 
         # Calculate the possible starting positions to sample from
@@ -201,9 +209,12 @@ class EpisodicFlowFieldScheduler:
 
     def _sample_new_episodes(self):
         """Create a new interleaved file order and push it into ``scheduler``."""
-        # Randomly choose batch_size starts without replacement
-        starts = self._rng.choices(self._starts, k=self.batch_size)
-
+        # Randomly choose batch_size starts indices without replacement
+        starts = self._rng.choice(np.arange(len(self._starts)), size=self.batch_size, replace=False)
+        
+        # Map the indices to directories
+        starts = [self._starts[s] for s in starts]
+        
         # Build individual episode sequences
         episodes = []
         for d, s in starts:
@@ -219,11 +230,11 @@ class EpisodicFlowFieldScheduler:
 
         logger.debug(
             "Order rebuilt — "
-            f"{self.batch_size} episodes × "
+            f"{self.batch_size} episodes x "
             f"{self.episode_length} steps = "
             f"{len(interleaved)} files"
         )
 
-        # Inject new order and reset cursors *without* reshuffling internally
+        # Inject new order and reset cursors without reshuffling internally
         self.scheduler.file_list = interleaved
         self.scheduler.reset(reset_epoch=False)

@@ -1,7 +1,6 @@
 """BaseFlowFieldScheduler abstract class."""
 import glob
 import os
-import random
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -18,16 +17,20 @@ class BaseFlowFieldScheduler(ABC):
 
     _file_pattern = "*"
 
-    def __init__(self, file_list, randomize=False, loop=False):
+    def __init__(
+        self,
+        file_list: list,
+        randomize: bool = False,
+        loop: bool = False,
+        rng: np.random.Generator = None,
+        ):
         """Initializes the scheduler.
 
         Args:
-            file_list: list
-                List of file paths to flow field datasets.
-            randomize: bool
-                If True, shuffle the order of files each epoch.
-            loop: bool
-                If True, loop over the dataset indefinitely.
+            file_list (list):  List of file paths to flow field datasets.
+            randomize (bool): If True, shuffle the order of files each epoch.
+            loop (bool): If True, loop over the dataset indefinitely.
+            rng (np.random.Generator): Random number generator for reproducibility.
         """
         # Check if file_list is a directory or a list of files
         if isinstance(file_list, str) and os.path.isdir(file_list):
@@ -54,6 +57,13 @@ class BaseFlowFieldScheduler(ABC):
             raise ValueError("randomize must be a boolean value.")
         self.randomize = randomize
 
+        if rng is not None:
+            if not isinstance(rng, (np.random.Generator, type(None))):
+                raise ValueError("rng must be a numpy random Generator.")
+            self.rng = rng
+        else:
+            self.rng = np.random.default_rng()
+
         if not isinstance(loop, bool):
             raise ValueError("loop must be a boolean value.")
         self.loop = loop
@@ -62,7 +72,7 @@ class BaseFlowFieldScheduler(ABC):
         self.index = 0
 
         if self.randomize:
-            random.shuffle(self.file_list)
+            self.rng.shuffle(self.file_list)
 
         self._cached_data = None
         self._cached_file = None
@@ -98,7 +108,7 @@ class BaseFlowFieldScheduler(ABC):
         self._cached_data = None
         self._cached_file = None
         if self.randomize:
-            random.shuffle(self.file_list)
+            self.rng.shuffle(self.file_list)
         if reset_epoch:
             logger.info("Scheduler state has been reset.")
 

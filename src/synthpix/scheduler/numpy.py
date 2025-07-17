@@ -20,7 +20,12 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
     _file_pattern = "flow_*.npy"
 
     def __init__(
-        self, file_list, randomize=False, loop=False, include_images: bool = False
+        self,
+        file_list: list,
+        randomize: bool = False,
+        loop: bool = False,
+        include_images: bool = False,
+        rng: np.random.Generator = None,
     ):
         """Initializes the Numpy scheduler.
 
@@ -30,17 +35,18 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         named 'img_<t-1>.jpg' and 'img_<t>.jpg' in the same folder.
 
         Args:
-            file_list: str or list of str
+            file_list (str | list of str):
                 A directory, single .npy file, or list of .npy paths.
-            randomize: bool
-                If True, shuffle file order per epoch.
-            loop: bool
-                If True, cycle indefinitely.
-            include_images: bool
-                If True, validate and return paired JPEG images.
+            randomize (bool): If True, shuffle file order per epoch.
+            loop (bool): If True, cycle indefinitely.
+            include_images (bool): If True, validate and return paired JPEG images.
+            rng (np.random.Generator): Random number generator for reproducibility.
         """
+        if not isinstance(include_images, bool):
+            raise ValueError("include_images must be a boolean value.")
+        
         self.include_images = include_images
-        super().__init__(file_list, randomize, loop)
+        super().__init__(file_list, randomize, loop, rng)
 
         # ensure all supplied files are .npy
         if not all(fp.endswith(".npy") for fp in self.file_list):

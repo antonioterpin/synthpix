@@ -1,9 +1,11 @@
 """Make module to instantiate SynthPix."""
 import os
 from typing import Union
+from jax import random
+import numpy as np
 
 from .data_generate import generate_images_from_flow
-from .sampler import RealImageSampler, SyntheticImageSampler
+from .sampler import Sampler, RealImageSampler, SyntheticImageSampler
 from .scheduler import (
     EpisodicFlowFieldScheduler,
     FloFlowFieldScheduler,
@@ -27,7 +29,7 @@ def make(
     images_from_file: bool = False,
     buffer_size: int = 0,
     episode_length: int = 0,
-) -> Union[SyntheticImageSampler, RealImageSampler]:
+) -> Sampler:
     """Load the dataset configuration and initialize the sampler.
 
     The loading file must be a YAML file containing the dataset configuration.
@@ -41,7 +43,7 @@ def make(
         episode_length (int): Length of the episode for episodic sampling.
 
     Returns:
-        SyntheticImageSampler | RealImageSampler: The initialized sampler.
+        sampler (Sampler): The initialized sampler.
     """
     # Input validation
     if not isinstance(config, (str, dict)):
@@ -73,6 +75,17 @@ def make(
     if not isinstance(episode_length, int) or episode_length < 0:
         raise ValueError("episode_length must be a non-negative integer.")
 
+    # Initialize the random number generator
+    seed = dataset_config.get("seed", None)
+    if seed is not None:
+        key = random.PRNGKey(seed)
+    else:
+        key = random.PRNGKey(0)
+    # Notice that the key here won't actually be used directly in the sampler,
+    # but the rng will be passed to the schedulers. However, the same seed 
+    # will be used to initialize the random number generator inside the sampler.
+    rng = np.random.default_rng(np.asarray(key))
+        
     if images_from_file:
         if dataset_config["scheduler_class"] != ".mat":
             raise ValueError(
@@ -88,9 +101,16 @@ def make(
                 "It will be set to True by default."
             )
         dataset_config["include_images"] = True
-
+            
         # Initialize the base scheduler
-        base = MATFlowFieldScheduler.from_config(dataset_config)
+        base = MATFlowFieldScheduler(
+            file_list=dataset_config.get("file_list", []),
+            randomize=dataset_config.get("randomize", False),
+            loop=dataset_config.get("loop", False),
+            include_images=True,
+            output_shape=tuple(dataset_config.get("output_shape", (256, 256))),
+            rng=rng,
+        )
 
         # If episode_length is specified, use EpisodicFlowFieldScheduler
         if episode_length > 0:
@@ -123,7 +143,12 @@ def make(
         scheduler_class = SCHEDULERS.get(dataset_config["scheduler_class"])
 
         # Initialize the base scheduler
-        base = scheduler_class.from_config(dataset_config)
+        base = scheduler_class(
+            file_list=dataset_config.get("file_list", []),
+            randomize=dataset_config.get("randomize", False),
+            loop=dataset_config.get("loop", True),
+            rng=rng,
+        )
 
         # If episode_length is specified, use EpisodicFlowFieldScheduler
         if episode_length > 0:
@@ -138,6 +163,7 @@ def make(
                 batch_size=dataset_config["flow_fields_per_batch"],
                 episode_length=episode_length,
                 seed=dataset_config.get("seed"),
+                rng=rng,
             )
         else:
             sched = base
