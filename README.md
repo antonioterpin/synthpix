@@ -1,177 +1,58 @@
-# Fluid flow estimation
+# SynthPix: A lightspeed PIV images generator 🌊
 
-## Installation
+`SynthPix` is a synthetic image generator for Particle Image Velocimetry (PIV) with a focus on performance and parallelism on accelerators, implemented in [JAX](https://docs.jax.dev/en/latest/quickstart.html). `SynthPix` supports the same configuration parameters as existing tools but achieves a throughput several orders of magnitude higher in image-pair generation per second, enabling comprehensive validation and comparison of PIV algorithms, rapid experimental design iterations, and the development of data-hungry methods.
+![The SynthPix image generation pipeline](docs/synthpix.jpg)
 
-### With Docker
+In a nutshell, if you need many synthetic PIV images and you do not want to wait ages, you are better off with `SynthPix` 😄. Below are the performances (image pairs per second) with and without GPU for different batch sizes B.
+![Performances](docs/times.jpg)
+
+`SynthPix` is also fairly easy to use:
 ```bash
-docker compose build
-docker compose run --rm synthpix
+TODO
 ```
 
-Or, for a custom command
+## Getting started 🚀
+Alright, now that hopefully we convinced you to try SynthPix, let's get to it. Don't worry, installing it is even easier than using it:
 ```bash
-docker compose run --rm --entrypoint "" synthpix <your-command>
+pip install synthpix
 ```
-
-For development, while installing repos:
+If you have CUDA GPUs,
 ```bash
-eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519
-export DOCKER_BUILDKIT=1 && docker build -t synthpix . --ssh default
+pip install "synthpix[cuda12]"
 ```
+If you have issues with CUDA drivers, please follow the official instructions for [cuda12](https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local) and [cudnn](https://developer.nvidia.com/cudnn-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local)
+(*Note: wheels only available on linux*).
 
+Check out our [instructions](docs/installing.md) for installing `SynthPix` with Docker and from source.
 
-### Without Docker
-We will use [conda](https://conda.io/en/latest/user-guide/install/) to handle the virtual environment.
+To generate the images, you need flow data. We provide two scripts to download the commonly used PIV datasets:
+```bash
+sh scripts/download_piv_1.sh <output_folder> <configs_directory>
+```
 ```sh
-conda create -n synthpix python=3.12
-conda activate synthpix
-pip install pip --upgrade
-pip install uv
+sh scripts/download_piv_2.sh <output_folder> <configs_directory>
 ```
-Dev with CUDA12:
-```bash
-uv pip install .[cuda12,dev]
-```
-Dev without CUDA12:
-```bash
-uv pip install .[dev]
-```
-For docs:
-```bash
-uv pip install .[cuda12,dev,docs]
-```
+These scripts will automatically save also one configuration file each in `<configs_directory>`. You can use these paths as in the example above.
 
-### JAX CUDA 12 installation
-Please follow the official instructions for
-- [cuda12](https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local).
-- [cudnn](https://developer.nvidia.com/cudnn-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local)
-Note: wheels only available on linux.
+For more examples and tutorials to use custom flow data or real-world data, check out our [tutorials page](docs/tutorials.md).
 
-## Checking test coverage
-```bash
-pytest --cov=.
-```
+## Configuring the synthetic images ⚙️
 
-## Contributing
-The `Coding style validation` action will fail if the pre-commit checks do not pass. To make sure that these are checked automatically on push, run:
-```sh
-pre-commit install --hook-type pre-push --install-hooks
-```
-To run the pre-commit checks on specific files:
-```bash
-pre-commit run --files <files>
-```
-To run on all files:
-```bash
-pre-commit run --all-files
-```
-If for some reason you really want to ignore them during commit/push, add `--no-verify`.
+TODO explain
 
-To ease writing commit messages that conform to the [standard](https://www.conventionalcommits.org/en/v1.0.0/#summary), you can configure the template with:
-```bash
-git config commit.template .gitmessage
-```
-To fill in the template, run
-```bash
-git commit
-```
-When you have edited the commit, press `Esc` and then type `:wq` to save. In `Visual Studio Code`, you should setup the editor with
-```bash
-git config core.editor "code --wait"
-```
-You may need to [setup the `code` command](https://code.visualstudio.com/docs/setup/mac).
-The `Commit style validation` action will fail if you do not adhere to the recommended style.
+### Performances 🔥
 
-Tip: When something fails, fix the issue and use:
-```bash
-git commit --amend
-git push --force
-```
+TODO picture
 
-### Development workflow
-We follow a [Git feature branch](https://www.atlassian.com/git/tutorials/comparing-workflows/feature-branch-workflow) workflow with test-driven-development. In particular:
+## Contributing 🤗
+Contributions are more than welcome! 🙏 Please check out our [how to contribute page](docs/contributing.md), and feel free to open an issue for problems and feature requests⚠️.
 
-- The basic workflow is as follows:
-  1. Open an issue for the feature to implement, and describe in detail the goal of the feature. Describe the tests that should pass for the feature to be considered implemented.
-  2. Open a branch from `dev` for the feature:
-    ```bash
-    git checkout dev
-    git checkout -b feature-<issue-number>
-    ```
-  3. Add the tests; see [Testing](#testing-a-feature).
-  4. Implement the feature and make sure the tests pass.
-  5. Open a PR to the `dev` branch. Note that the PR requires to `squash` the commit. See [Preparing for a PR](#preparing-for-a-pr).
-  6. Close the branch.
-
-- `main` and `dev` branches are protected from push, and require a PR.
-- We run github actions to check the test status on push on any branch. The rationale is that we want to know the state of each feature without polling the developer.
-- We open a PR to `main` only for milestones.
-
-### Testing a feature
-We will use [pytest](https://docs.pytest.org/en/stable/) to thoroughly test all our code. To run all tests:
+## Citation 📈
+If you use this code in your research, please cite our paper:
 ```bash
-pytest -v
+   @article{terpin2025synthpix,
+      title={SynthPix: A lightspeed PIV images generator},
+      author={Terpin, Antonio and Bonomi, Alan and Banelli, Francesco and D'Andrea, Raffaello},
+      year={2025}
+   }
 ```
-Before pushing a feature, implement also the related test. The goal is to make sure that if something does not behave as expected (possibly as a result of another change) the tests capture it.
-
-
-### Preparing for a PR
-Before opening a PR to `dev`, you need to `squash` your commits into a single one. First, review your commit history to identify how many commits need to be squashed:
-```bash
-git log --oneline
-```
-For example, you may get
-```bash
-abc123 Feature added A
-def456 Fix for bug in feature A
-ghi789 Update documentation for feature A
-```
-Suppose you want to squash the three above into a single commit, `Implement feature <issue-number>`. You can rebase interactively to squash the commits:
-```bash
-git rebase -i HEAD~<number-of-commits>
-```
-For example, if you want to squash the last 3 commits:
-```bash
-git rebase -i HEAD~3
-```
-An editor will open, showing a list of commits:
-```bash
-pick abc123 Feature added A
-pick def456 Fix for bug in feature A
-pick ghi789 Update documentation for feature A
-```
-- Keep the first commit as `pick`.
-- Change `pick` to `squash` (or `s`) for the subsequent commits:
-```bash
-pick abc123 Feature added A
-squash def456 Fix for bug in feature A
-squash ghi789 Update documentation for feature A
-```
-Save and close the editor.
-Git will prompt you to edit the combined commit message. You’ll see:
-```bash
-# This is a combination of 3 commits.
-# The first commit's message is:
-Feature added A
-
-# The following commit messages will also be included:
-Fix for bug in feature A
-Update documentation for feature A
-```
-Edit it into a single meaningful message, like:
-```bash
-Add feature A with bug fixes and documentation updates
-```
-Save and close the editor; Git will squash the commits. If there are conflicts during the rebase, resolve them and continue:
-```bash
-git rebase --continue
-```
-Verify the commit history:
-```bash
-git log --oneline
-```
-You should see one clean commit instead of multiple. If you’ve already pushed the branch to a remote repository, you need to force-push after squashing:
-```bash
-git push --force
-```
-Now that the feature branch has a clean history, create the PR from your feature branch to the main branch. The reviewers will see a single, concise commit summarizing your changes. See the [guidelines for commit messages](https://www.conventionalcommits.org/en/v1.0.0/#summary).
