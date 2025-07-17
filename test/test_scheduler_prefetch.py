@@ -8,6 +8,7 @@ from synthpix.scheduler import (
     EpisodicFlowFieldScheduler,
     MATFlowFieldScheduler,
     PrefetchingFlowFieldScheduler,
+    BaseFlowFieldScheduler,
 )
 
 

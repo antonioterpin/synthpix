@@ -291,8 +291,8 @@ def test_numpy_scheduler_skips_bad_file(tmp_path):
 
 
 class DummyScheduler(BaseFlowFieldScheduler):
-    def __init__(self, file_list, randomize=False, loop=False):
-        super().__init__(file_list, randomize, loop)
+    def __init__(self, file_list, randomize=False, loop=False, rng=None):
+        super().__init__(file_list, randomize, loop, rng)
 
     def load_file(self, file_path):
         return np.random.rand(4, 2, 4, 3).astype(np.float32)
@@ -335,13 +335,18 @@ def test_reset_calls_random_shuffle(monkeypatch, tmp_path):
     for f in files:
         f.write_text("x")
     call_flag = {"called": False}
+    
+    class SpyGenerator(np.random.Generator):
+        def __init__(self, flag):
+            super().__init__(np.random.PCG64())
+            self._flag = flag
 
-    def spy(lst):
-        call_flag["called"] = True
-        lst.reverse()
+        def shuffle(self, seq):
+            self._flag["called"] = True
+            seq.reverse()
 
-    monkeypatch.setattr(random, "shuffle", spy)
-    sch = DummyScheduler([str(f) for f in files], randomize=True)
+    rng  = SpyGenerator(call_flag)
+    sch = DummyScheduler([str(f) for f in files], randomize=True, rng=rng)
 
     original = sch.file_list.copy()
     sch.reset(reset_epoch=True)

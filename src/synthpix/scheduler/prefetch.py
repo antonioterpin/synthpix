@@ -33,11 +33,6 @@ class PrefetchingFlowFieldScheduler:
                 Flow field slices per batch, must match the underlying scheduler.
             buffer_size (int): Number of batches to prefetch.
         """
-        if not isinstance(scheduler, (BaseFlowFieldScheduler, EpisodicFlowFieldScheduler)):
-            raise ValueError(
-                "scheduler must be an instance of BaseFlowFieldScheduler or "
-                "EpisodicFlowFieldScheduler."
-            )
         self.scheduler = scheduler
         
         if not isinstance(batch_size, int) or batch_size <= 0:

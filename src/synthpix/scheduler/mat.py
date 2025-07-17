@@ -261,7 +261,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             return super().get_batch(batch_size)
 
     @staticmethod
-    def from_config(config: dict, rng: np.random.Generator) -> "MATFlowFieldScheduler":
+    def from_config(config: dict) -> "MATFlowFieldScheduler":
         """Creates a MATFlowFieldScheduler instance from a configuration dictionary.
 
         Args:
@@ -277,5 +277,4 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             loop=config.get("loop", False),
             include_images=config.get("include_images", False),
             output_shape=tuple(config.get("output_shape", (256, 256))),
-            rng=rng
         )
