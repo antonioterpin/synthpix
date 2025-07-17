@@ -1,5 +1,6 @@
+# doker compose yaml for CI
 services:
   synthpix:
-    deploy: {}
+    deploy: null
     environment:
       CUDA_VISIBLE_DEVICES: ""
