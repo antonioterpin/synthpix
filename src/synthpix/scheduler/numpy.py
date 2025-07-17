@@ -44,7 +44,7 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         """
         if not isinstance(include_images, bool):
             raise ValueError("include_images must be a boolean value.")
-        
+
         self.include_images = include_images
         super().__init__(file_list, randomize, loop, rng)
 

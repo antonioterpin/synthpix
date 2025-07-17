@@ -1,9 +1,10 @@
 import os
-import random
 import timeit
 from pathlib import Path
 
 import h5py
+import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 
@@ -291,8 +292,8 @@ def test_numpy_scheduler_skips_bad_file(tmp_path):
 
 
 class DummyScheduler(BaseFlowFieldScheduler):
-    def __init__(self, file_list, randomize=False, loop=False, rng=None):
-        super().__init__(file_list, randomize, loop, rng)
+    def __init__(self, file_list, randomize=False, loop=False, key=None):
+        super().__init__(file_list, randomize, loop, key)
 
     def load_file(self, file_path):
         return np.random.rand(4, 2, 4, 3).astype(np.float32)
@@ -335,18 +336,15 @@ def test_reset_calls_random_shuffle(monkeypatch, tmp_path):
     for f in files:
         f.write_text("x")
     call_flag = {"called": False}
-    
-    class SpyGenerator(np.random.Generator):
-        def __init__(self, flag):
-            super().__init__(np.random.PCG64())
-            self._flag = flag
 
-        def shuffle(self, seq):
-            self._flag["called"] = True
-            seq.reverse()
+    def spy(key, indices):
+        call_flag["called"] = True
+        return jnp.flip(indices)
 
-    rng  = SpyGenerator(call_flag)
-    sch = DummyScheduler([str(f) for f in files], randomize=True, rng=rng)
+    monkeypatch.setattr(jax.random, "permutation", spy)
+
+    key = jax.random.PRNGKey(0)
+    sch = DummyScheduler([str(f) for f in files], randomize=True, key=key)
 
     original = sch.file_list.copy()
     sch.reset(reset_epoch=True)

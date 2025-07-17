@@ -1,8 +1,9 @@
 """Sampler module."""
 
+from .base import Sampler
 from .real import RealImageSampler
 from .synthetic import SyntheticImageSampler
-from .base import Sampler
+
 __all__ = [
     "SyntheticImageSampler",
     "RealImageSampler",

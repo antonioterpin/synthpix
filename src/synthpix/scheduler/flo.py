@@ -29,7 +29,7 @@ class FloFlowFieldScheduler(BaseFlowFieldScheduler):
         rng: np.random.Generator = None,
     ):
         """Initializes the .flo scheduler.
-        
+
         Args:
             file_list: list
                 A directory, single .flo file, or list of .flo paths.

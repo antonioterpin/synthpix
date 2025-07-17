@@ -21,9 +21,9 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         randomize: bool = False,
         loop: bool = False,
         rng: np.random.Generator = None,
-        ):
+    ):
         """Initializes the HDF5 scheduler.
-        
+
         Args:
             file_list (list): A directory, single .h5 file, or list of .h5 paths.
             randomize (bool): If True, shuffle file order per epoch.

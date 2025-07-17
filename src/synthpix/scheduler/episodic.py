@@ -2,7 +2,8 @@
 import glob
 import os
 
-import numpy as np
+import jax
+import jax.numpy as jnp
 
 from ..utils import discover_leaf_dirs, is_int, logger
 from .base import BaseFlowFieldScheduler
@@ -38,7 +39,7 @@ class EpisodicFlowFieldScheduler:
     ...             scheduler=base,
     ...             batch_size=16,
     ...             episode_length=32,
-    ...             rng=np.random.default_rng(42))
+    ...             key=jax.random.PRNGKey(42))
     >>> batch_t0 = next(episodic)        # first time-step from 16 episodes
     >>> batch_t1 = next(episodic)        # second time-step
     >>> episodic.reset()                 # start 16 fresh episodes
@@ -58,7 +59,7 @@ class EpisodicFlowFieldScheduler:
         scheduler: BaseFlowFieldScheduler,
         batch_size: int,
         episode_length: int,
-        rng: np.random.Generator = None,
+        key: jax.random.PRNGKey = None,
     ):
         """Constructs an episodic scheduler wrapper.
 
@@ -67,10 +68,10 @@ class EpisodicFlowFieldScheduler:
                 Any concrete subclass of :class:`BaseFlowFieldScheduler`
                 (e.g. :class:`MATFlowFieldScheduler`).
             batch_size (int): episodes to run in parallel (== first dim of each batch).
-            episode_length (int): 
+            episode_length (int):
                 Number of consecutive flow-fields that make up *one* episode.
-            rng (np.random.Generator, optional): 
-                Random number generator for reproducibility.
+            key (jax.random.PRNGKey, optional):
+                Random key for reproducibility.
 
         Raises:
             ValueError: If ``batch_size`` or ``episode_length`` are not positive,
@@ -79,7 +80,8 @@ class EpisodicFlowFieldScheduler:
         """
         if not isinstance(scheduler, BaseFlowFieldScheduler):
             raise TypeError(
-                f"Expected scheduler to be a BaseFlowFieldScheduler, got {type(scheduler)}"
+                f"Expected scheduler to be a BaseFlowFieldScheduler ,"
+                f"got {type(scheduler)}"
             )
         if not is_int(batch_size) or batch_size <= 0:
             raise ValueError("batch_size must be a positive integer")
@@ -87,14 +89,11 @@ class EpisodicFlowFieldScheduler:
         if not is_int(episode_length) or episode_length <= 0:
             raise ValueError("episode_length must be a positive integer")
 
-        if not isinstance(rng, np.random.Generator) and rng is not None:
-            raise TypeError("rng must be a np.random.Generator or None")
-        
         self.scheduler = scheduler
         self.batch_size = batch_size
         self.episode_length = episode_length
 
-        self._rng = rng if rng is not None else np.random.default_rng()
+        self._key = key if key is not None else jax.random.PRNGKey(0)
         self._t = 0
 
         # Calculate the possible starting positions to sample from
@@ -127,7 +126,7 @@ class EpisodicFlowFieldScheduler:
     def get_batch(self, batch_size: int):
         """Return exactly one time-step for `batch_size` parallel episodes.
 
-        *Does not* loop internally – we delegate to the wrapped base
+        *Does not* loop internally, we delegate to the wrapped base
         scheduler once, because `__next__` already returns a full batch.
         """
         if batch_size != self.batch_size:
@@ -210,11 +209,17 @@ class EpisodicFlowFieldScheduler:
     def _sample_new_episodes(self):
         """Create a new interleaved file order and push it into ``scheduler``."""
         # Randomly choose batch_size starts indices without replacement
-        starts = self._rng.choice(np.arange(len(self._starts)), size=self.batch_size, replace=False)
-        
+        cpu = jax.devices("cpu")[0]
+        indices = jnp.arange(len(self._starts), device=cpu)
+
+        self._key, starts_key = jax.random.split(self._key)
+        starts = jax.random.choice(
+            starts_key, indices, shape=(self.batch_size,), replace=False
+        )
+
         # Map the indices to directories
         starts = [self._starts[s] for s in starts]
-        
+
         # Build individual episode sequences
         episodes = []
         for d, s in starts:

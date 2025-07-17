@@ -19,7 +19,7 @@ class PrefetchingFlowFieldScheduler:
         self,
         scheduler: BaseFlowFieldScheduler | EpisodicFlowFieldScheduler,
         batch_size: int,
-        buffer_size: int = 8
+        buffer_size: int = 8,
     ):
         """Initializes the prefetching scheduler.
 
@@ -29,12 +29,12 @@ class PrefetchingFlowFieldScheduler:
         Args:
             scheduler (BaseFlowFieldScheduler | EpisodicFlowFieldScheduler):
                 The underlying flow field scheduler.
-            batch_size (int): 
+            batch_size (int):
                 Flow field slices per batch, must match the underlying scheduler.
             buffer_size (int): Number of batches to prefetch.
         """
         self.scheduler = scheduler
-        
+
         if not isinstance(batch_size, int) or batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
         if not isinstance(buffer_size, int) or buffer_size <= 0:

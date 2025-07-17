@@ -1,4 +1,5 @@
 import h5py
+import jax
 import numpy as np
 import pytest
 import scipy.io
@@ -180,7 +181,10 @@ def test_episode_iteration(mock_mat_files):
 
     base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
     epi = EpisodicFlowFieldScheduler(
-        scheduler=base, batch_size=batch_size, episode_length=episode_length, rng=np.random.default_rng(42)
+        scheduler=base,
+        batch_size=batch_size,
+        episode_length=episode_length,
+        key=jax.random.PRNGKey(42),
     )
     steps = []
     for t, (batch) in enumerate(epi):
@@ -204,7 +208,10 @@ def test_reset_episode_resamples(mock_mat_files):
 
     base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
     epi = EpisodicFlowFieldScheduler(
-        scheduler=base, batch_size=batch_size, episode_length=episode_length, rng=np.random.default_rng(42)
+        scheduler=base,
+        batch_size=batch_size,
+        episode_length=episode_length,
+        key=jax.random.PRNGKey(42),
     )
 
     reordered_files = base.file_list
@@ -239,7 +246,10 @@ def test_steps_remaining(mock_mat_files):
 
     base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
     epi = EpisodicFlowFieldScheduler(
-        scheduler=base, batch_size=batch_size, episode_length=episode_length, rng=np.random.default_rng(42)
+        scheduler=base,
+        batch_size=batch_size,
+        episode_length=episode_length,
+        key=jax.random.PRNGKey(42),
     )
 
     assert epi.steps_remaining() == episode_length
