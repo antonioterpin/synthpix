@@ -24,8 +24,7 @@ jobs:
         run: |
           docker compose -f docker-compose.cpu.yaml run --rm \
             -v "${{ github.workspace }}/junit:/workspace/junit" \
-            synthpix \
-            /usr/bin/time -v pytest -v \
+            synthpix pytest -v \
               --junitxml=/workspace/junit/test-results.xml \
               --ignore=test/save_ablations
 
