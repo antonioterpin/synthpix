@@ -1,6 +1,7 @@
 """FloFlowFieldScheduler to load flow fields from Middlebury .flo files."""
 import os
 
+import jax
 import numpy as np
 
 from ..scheduler import BaseFlowFieldScheduler
@@ -21,9 +22,26 @@ class FloFlowFieldScheduler(BaseFlowFieldScheduler):
     TAG_FLOAT = 202021.25
     N_BANDS = 2
 
-    def __init__(self, file_list, randomize=False, loop=False):
-        """Initializes the .flo scheduler."""
-        super().__init__(file_list, randomize, loop)
+    def __init__(
+        self,
+        file_list: list,
+        randomize: bool = False,
+        loop: bool = False,
+        key: jax.random.PRNGKey = None,
+    ):
+        """Initializes the .flo scheduler.
+
+        Args:
+            file_list: list
+                A directory, single .flo file, or list of .flo paths.
+            randomize: bool
+                If True, shuffle file order per epoch.
+            loop: bool
+                If True, cycle indefinitely.
+            key: jax.random.PRNGKey
+                Random key for reproducibility.
+        """
+        super().__init__(file_list, randomize, loop, key)
         if isinstance(file_list, str):
             # consider file list as a directory
             file_list = [os.path.join(file_list, f) for f in os.listdir(file_list)]

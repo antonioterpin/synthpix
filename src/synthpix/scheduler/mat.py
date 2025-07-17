@@ -3,6 +3,7 @@ import itertools as it
 
 import cv2
 import h5py
+import jax
 import numpy as np
 import scipy.io
 from PIL import Image
@@ -36,8 +37,20 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         loop=False,
         include_images: bool = False,
         output_shape=(256, 256),
+        key: jax.random.PRNGKey = None,
     ):
-        """Initializes the MATFlowFieldScheduler."""
+        """Initializes the MATFlowFieldScheduler.
+
+        Args:
+            file_list (list):
+                A directory, single .mat file, or list of .mat paths.
+            randomize (bool): If True, shuffle file order per epoch.
+            loop (bool): If True, cycle indefinitely by wrapping around.
+            include_images (bool): If True, return a tuple (I0, I1, V).
+            output_shape (tuple): The desired output shape for the flow fields.
+                Must be a tuple of two integers (height, width).
+            key (jax.random.PRNGKey): Random key for reproducibility.
+        """
         if not isinstance(include_images, bool):
             raise ValueError("include_images must be a boolean value.")
         self.include_images = include_images
@@ -48,7 +61,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             raise ValueError("output_shape must contain positive integers.")
         self.output_shape = output_shape
 
-        super().__init__(file_list, randomize, loop)
+        super().__init__(file_list, randomize, loop, key)
         # ensure all supplied files are .mat
         if not all(file_path.endswith(".mat") for file_path in self.file_list):
             raise ValueError("All files must be MATLAB .mat files with HDF5 format")

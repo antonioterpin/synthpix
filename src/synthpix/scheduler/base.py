@@ -1,9 +1,10 @@
 """BaseFlowFieldScheduler abstract class."""
 import glob
 import os
-import random
 from abc import ABC, abstractmethod
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 
 from ..utils import logger
@@ -18,16 +19,20 @@ class BaseFlowFieldScheduler(ABC):
 
     _file_pattern = "*"
 
-    def __init__(self, file_list, randomize=False, loop=False):
+    def __init__(
+        self,
+        file_list: list,
+        randomize: bool = False,
+        loop: bool = False,
+        key: jax.random.PRNGKey = None,
+    ):
         """Initializes the scheduler.
 
         Args:
-            file_list: list
-                List of file paths to flow field datasets.
-            randomize: bool
-                If True, shuffle the order of files each epoch.
-            loop: bool
-                If True, loop over the dataset indefinitely.
+            file_list (list):  List of file paths to flow field datasets.
+            randomize (bool): If True, shuffle the order of files each epoch.
+            loop (bool): If True, loop over the dataset indefinitely.
+            key (jax.random.PRNGKey): Random key for reproducibility.
         """
         # Check if file_list is a directory or a list of files
         if isinstance(file_list, str) and os.path.isdir(file_list):
@@ -54,6 +59,13 @@ class BaseFlowFieldScheduler(ABC):
             raise ValueError("randomize must be a boolean value.")
         self.randomize = randomize
 
+        if key is not None:
+            self.key = key
+        else:
+            self.key = jax.random.PRNGKey(0)
+            cpu = jax.devices("cpu")[0]
+            self.key = jax.device_put(self.key, cpu)
+
         if not isinstance(loop, bool):
             raise ValueError("loop must be a boolean value.")
         self.loop = loop
@@ -62,7 +74,11 @@ class BaseFlowFieldScheduler(ABC):
         self.index = 0
 
         if self.randomize:
-            random.shuffle(self.file_list)
+            self.key, shuffle_key = jax.random.split(self.key)
+            cpu = jax.devices("cpu")[0]
+            file_list_indices = jnp.arange(len(self.file_list), device=cpu)
+            file_list_indices = jax.random.permutation(shuffle_key, file_list_indices)
+            self.file_list = [self.file_list[i] for i in file_list_indices.tolist()]
 
         self._cached_data = None
         self._cached_file = None
@@ -98,7 +114,11 @@ class BaseFlowFieldScheduler(ABC):
         self._cached_data = None
         self._cached_file = None
         if self.randomize:
-            random.shuffle(self.file_list)
+            self.key, shuffle_key = jax.random.split(self.key)
+            cpu = jax.devices("cpu")[0]
+            file_list_indices = jnp.arange(len(self.file_list), device=cpu)
+            file_list_indices = jax.random.permutation(shuffle_key, file_list_indices)
+            self.file_list = [self.file_list[i] for i in file_list_indices.tolist()]
         if reset_epoch:
             logger.info("Scheduler state has been reset.")
 

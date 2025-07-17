@@ -33,7 +33,7 @@ def visualize_and_save(name, image1, image2, flow_field, output_dir="output_imag
 
     # Save the quiver plot as a separate image
     quiver_fig, quiver_ax = plt.subplots(figsize=(7, 7))
-    step = 1
+    step = 32
     quiver_ax.quiver(
         x[::step, ::step],
         y[::step, ::step],
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="config/JHTDB.yaml",
+        default="config/main.yaml",
         help="Configuration file path.",
     )
 

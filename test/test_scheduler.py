@@ -1,9 +1,10 @@
 import os
-import random
 import timeit
 from pathlib import Path
 
 import h5py
+import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 
@@ -291,8 +292,8 @@ def test_numpy_scheduler_skips_bad_file(tmp_path):
 
 
 class DummyScheduler(BaseFlowFieldScheduler):
-    def __init__(self, file_list, randomize=False, loop=False):
-        super().__init__(file_list, randomize, loop)
+    def __init__(self, file_list, randomize=False, loop=False, key=None):
+        super().__init__(file_list, randomize, loop, key)
 
     def load_file(self, file_path):
         return np.random.rand(4, 2, 4, 3).astype(np.float32)
@@ -336,12 +337,14 @@ def test_reset_calls_random_shuffle(monkeypatch, tmp_path):
         f.write_text("x")
     call_flag = {"called": False}
 
-    def spy(lst):
+    def spy(key, indices):
         call_flag["called"] = True
-        lst.reverse()
+        return jnp.flip(indices)
 
-    monkeypatch.setattr(random, "shuffle", spy)
-    sch = DummyScheduler([str(f) for f in files], randomize=True)
+    monkeypatch.setattr(jax.random, "permutation", spy)
+
+    key = jax.random.PRNGKey(0)
+    sch = DummyScheduler([str(f) for f in files], randomize=True, key=key)
 
     original = sch.file_list.copy()
     sch.reset(reset_epoch=True)
@@ -598,3 +601,17 @@ def test_prefetch_scheduler_shutdown(mock_hdf5_files):
     prefetch.get_batch(2)
     prefetch.shutdown()
     assert not prefetch._thread.is_alive()
+
+
+@pytest.mark.parametrize("bad_include_images", ["bad_value", None, 123])
+@pytest.mark.parametrize("mock_numpy_files", [1], indirect=True)
+def test_mat_scheduler_invalid_include_images(bad_include_images, mock_numpy_files):
+    """Test that invalid `include_images` values raise a ValueError."""
+    files, _ = mock_numpy_files
+    with pytest.raises(ValueError, match="include_images must be a boolean value."):
+        NumpyFlowFieldScheduler.from_config(
+            {
+                "scheduler_files": files,
+                "include_images": bad_include_images,
+            }
+        )

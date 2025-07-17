@@ -10,7 +10,7 @@ setup(
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     install_requires=[
-        "jax>=0.4.3",
+        "jax>=0.6.0",
         "tqdm>=4.67.1",
         "h5py>=3.13.0",
         "ruamel.yaml>=0.18.10",
@@ -27,7 +27,7 @@ setup(
             "snowballstemmer",
         ],
         "cuda12": [
-            "jax[cuda12]>=0.4.3",
+            "jax[cuda12]>=0.6.0",
             "nvidia-cublas-cu12==12.8.4.1",
         ],
     },

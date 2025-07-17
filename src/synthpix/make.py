@@ -1,9 +1,10 @@
 """Make module to instantiate SynthPix."""
 import os
-from typing import Union
+
+import jax
 
 from .data_generate import generate_images_from_flow
-from .sampler import RealImageSampler, SyntheticImageSampler
+from .sampler import RealImageSampler, Sampler, SyntheticImageSampler
 from .scheduler import (
     EpisodicFlowFieldScheduler,
     FloFlowFieldScheduler,
@@ -27,7 +28,7 @@ def make(
     images_from_file: bool = False,
     buffer_size: int = 0,
     episode_length: int = 0,
-) -> Union[SyntheticImageSampler, RealImageSampler]:
+) -> Sampler:
     """Load the dataset configuration and initialize the sampler.
 
     The loading file must be a YAML file containing the dataset configuration.
@@ -41,7 +42,7 @@ def make(
         episode_length (int): Length of the episode for episodic sampling.
 
     Returns:
-        SyntheticImageSampler | RealImageSampler: The initialized sampler.
+        sampler (Sampler): The initialized sampler.
     """
     # Input validation
     if not isinstance(config, (str, dict)):
@@ -73,6 +74,12 @@ def make(
     if not isinstance(episode_length, int) or episode_length < 0:
         raise ValueError("episode_length must be a non-negative integer.")
 
+    # Initialize the random number generator
+    cpu = jax.devices("cpu")[0]
+    seed = dataset_config.get("seed", 0)
+    key = jax.random.PRNGKey(seed)
+    key = jax.device_put(key, cpu)
+
     if images_from_file:
         if dataset_config["scheduler_class"] != ".mat":
             raise ValueError(
@@ -89,16 +96,26 @@ def make(
             )
         dataset_config["include_images"] = True
 
+        key, sched_key = jax.random.split(key)
+
         # Initialize the base scheduler
-        base = MATFlowFieldScheduler.from_config(dataset_config)
+        base = MATFlowFieldScheduler(
+            file_list=dataset_config.get("scheduler_files", []),
+            randomize=dataset_config.get("randomize", False),
+            loop=dataset_config.get("loop", False),
+            include_images=True,
+            output_shape=tuple(dataset_config.get("output_shape", (256, 256))),
+            key=sched_key,
+        )
 
         # If episode_length is specified, use EpisodicFlowFieldScheduler
         if episode_length > 0:
+            key, epi_key = jax.random.split(key)
             sched = EpisodicFlowFieldScheduler(
                 base,
                 batch_size=dataset_config["batch_size"],
                 episode_length=episode_length,
-                seed=dataset_config.get("seed"),
+                key=epi_key,
             )
         else:
             sched = base
@@ -122,8 +139,15 @@ def make(
             )
         scheduler_class = SCHEDULERS.get(dataset_config["scheduler_class"])
 
+        key, sched_key = jax.random.split(key)
+
         # Initialize the base scheduler
-        base = scheduler_class.from_config(dataset_config)
+        base = scheduler_class(
+            file_list=dataset_config.get("scheduler_files", []),
+            randomize=dataset_config.get("randomize", False),
+            loop=dataset_config.get("loop", True),
+            key=sched_key,
+        )
 
         # If episode_length is specified, use EpisodicFlowFieldScheduler
         if episode_length > 0:
@@ -133,11 +157,12 @@ def make(
                     "may lead to unexpected behavior. "
                     "Consider using a single batch per flow field."
                 )
+            key, epi_key = jax.random.split(key)
             sched = EpisodicFlowFieldScheduler(
                 base,
                 batch_size=dataset_config["flow_fields_per_batch"],
                 episode_length=episode_length,
-                seed=dataset_config.get("seed"),
+                key=epi_key,
             )
         else:
             sched = base

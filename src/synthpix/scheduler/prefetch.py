@@ -2,6 +2,9 @@
 import queue
 import threading
 
+from synthpix.scheduler.base import BaseFlowFieldScheduler
+from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
+
 from ..utils import logger
 
 
@@ -12,21 +15,30 @@ class PrefetchingFlowFieldScheduler:
     background thread to keep the GPU fed.
     """
 
-    def __init__(self, scheduler, batch_size: int, buffer_size: int = 8):
+    def __init__(
+        self,
+        scheduler: BaseFlowFieldScheduler | EpisodicFlowFieldScheduler,
+        batch_size: int,
+        buffer_size: int = 8,
+    ):
         """Initializes the prefetching scheduler.
 
         If the underlying scheduler is episodic, it will recognize it and handle
         moving to the next episode seamlessly.
 
         Args:
-            scheduler:
+            scheduler (BaseFlowFieldScheduler | EpisodicFlowFieldScheduler):
                 The underlying flow field scheduler.
-            batch_size: int
+            batch_size (int):
                 Flow field slices per batch, must match the underlying scheduler.
-            buffer_size: int
-                Number of batches to prefetch.
+            buffer_size (int): Number of batches to prefetch.
         """
         self.scheduler = scheduler
+
+        if not isinstance(batch_size, int) or batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer.")
+        if not isinstance(buffer_size, int) or buffer_size <= 0:
+            raise ValueError("buffer_size must be a positive integer.")
         self.batch_size = batch_size
         self.buffer_size = buffer_size
 

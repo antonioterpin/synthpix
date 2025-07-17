@@ -29,9 +29,6 @@ class SyntheticImageSampler(Sampler):
 
     If the underlying scheduler is an episodic scheduler, it automatically outputs also a
     done flag to indicate the end of an episode.
-
-    Predefined Configurations:
-        - JHTDB: Parameters for a specific case using JHTDB data.
     """
 
     def __init__(
