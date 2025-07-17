@@ -5,6 +5,7 @@ flow_fields_per_batch: 1 # Number of flow fields used for each batch
 batches_per_flow_batch: 1 # Number of batches of (imgs1, imgs2, flows) tuples per flow batch
 randomize: false # Whether to randomize the order of the files
 loop: true # Whether to loop through the files indefinitely
+device_ids: [0]
 
 # Image generation parameters
 image_shape: [1024, 1024] # Shape of the images to be generated
