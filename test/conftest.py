@@ -14,7 +14,7 @@ TEST_FOLDER = os.path.join(
     tempfile.gettempdir(), f"synthpix_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 )
 if not os.path.exists(TEST_FOLDER):
-    os.makedirs(TEST_FOLDER)
+    os.makedirs(TEST_FOLDER, exist_ok=True)
 
 
 @pytest.fixture(scope="module")
