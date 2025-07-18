@@ -75,7 +75,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         logger.debug(f"Found {len(self.file_list)} files")
 
     @classmethod
-    def _path_is_hdf5(path: str) -> bool:
+    def _path_is_hdf5(cls, path: str) -> bool:
         return h5py.is_hdf5(path)
 
     def load_file(self, file_path: str):

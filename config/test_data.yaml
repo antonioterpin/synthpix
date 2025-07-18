@@ -37,4 +37,4 @@ output_units: "measure units per second"
 # Flows files: can be either a list of files or a directory
 # If a directory is provided, all the .h5 files in the directory will be used
 scheduler_files:
-  - "fake_file.h5"
+  - "/shared/fluids/fluids-estimation/test.h5"
