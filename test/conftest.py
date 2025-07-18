@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import gc
 import os
 import uuid
 from datetime import datetime
 from pathlib import Path
 
 import h5py
+import jax
 import numpy as np
 import pytest
 from PIL import Image
@@ -205,3 +207,9 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "run_explicitly" in item.keywords:
             item.add_marker(skip)
+
+
+def teardown_function(function):
+    """Teardown function to clean up after tests."""
+    gc.collect()
+    jax.clear_backends()
