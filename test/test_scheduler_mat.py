@@ -58,7 +58,7 @@ def test_mat_scheduler_invalid_output_shape_values(bad_output_shape, mock_mat_fi
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
 def test_mat_scheduler_iteration(mock_mat_files):
-    files, dims = mock_mat_files
+    files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler.from_config(
         {
             "scheduler_files": files,
@@ -66,12 +66,11 @@ def test_mat_scheduler_iteration(mock_mat_files):
             "loop": False,
         }
     )
-    h, w = dims["height"], dims["width"]
 
     count = 0
     for flow in scheduler:
         assert isinstance(flow, np.ndarray)
-        assert flow.shape == (h, w, 2)
+        assert flow.shape == (256, 256, 2)
         count += 1
 
     assert count == 2
