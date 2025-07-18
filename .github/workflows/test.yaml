@@ -32,6 +32,9 @@ jobs:
               --junitxml=/workspace/junit/test-results.xml \
               --ignore=test/save_ablations
 
+      # - name: Upload test results
+      #   run: codecov --token=${{ secrets.CODECOV_TOKEN }}
+
       - uses: actions/upload-artifact@v4
         with:
           name: pytest-results

@@ -1,5 +1,12 @@
 # SynthPix: A lightspeed PIV images generator 🌊
 
+<!-- Test coverage (via Codecov for pytest-cov) -->
+[![Coverage Status](https://img.shields.io/codecov/c/github/antonioterpin/synthpix.svg?branch=main)](https://codecov.io/gh/antonioterpin/synthpix)
+[![Tests](https://img.shields.io/github/actions/workflow/status/antonioterpin/synthpix/test.yaml?branch=main)](https://github.com/antonioterpin/synthpix/actions)
+[![PyPI version](https://img.shields.io/pypi/v/synthpix.svg)](https://pypi.org/project/synthpix)
+
+[![Follow @antonio_terpin](https://img.shields.io/twitter/follow/antonio_terpin.svg?style=social)](https://twitter.com/antonio_terpin)
+
 `SynthPix` is a synthetic image generator for Particle Image Velocimetry (PIV) with a focus on performance and parallelism on accelerators, implemented in [JAX](https://docs.jax.dev/en/latest/quickstart.html). `SynthPix` supports the same configuration parameters as existing tools but achieves a throughput several orders of magnitude higher in image-pair generation per second, enabling comprehensive validation and comparison of PIV algorithms, rapid experimental design iterations, and the development of data-hungry methods.
 ![The SynthPix image generation pipeline](docs/synthpix.jpg)
 
