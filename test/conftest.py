@@ -31,7 +31,7 @@ WORKER_ROOT.mkdir(exist_ok=True)
 def generate_hdf5_file(tmp_path_factory):
     """Return a callable that writes an HDF5 file and yields its Path."""
 
-    def _generate(dims: dict[str, int], stem: str = "flow") -> Path:
+    def _generate(stem: str, dims: dict[str, int]) -> Path:
         folder = tmp_path_factory.mktemp("hdf5")
         path = folder / f"{stem}_{uuid.uuid4().hex}.h5"
 
@@ -40,7 +40,7 @@ def generate_hdf5_file(tmp_path_factory):
                 dims["x_dim"], dims["y_dim"], dims["z_dim"], dims["features"]
             ).astype(np.float32)
             f.create_dataset("flow", data=data)
-        return path
+        return str(path)
 
     return _generate
 
@@ -67,7 +67,7 @@ def hdf5_test_dims() -> dict[str, int]:
 def temp_file(request, hdf5_test_dims, generate_hdf5_file):
     """Create a temporary HDF5 file with specified dimensions."""
     dims = getattr(request, "param", hdf5_test_dims)
-    yield str(generate_hdf5_file(dims, stem="flow_data"))
+    yield generate_hdf5_file(stem="flow_data", dims=dims)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ def mock_hdf5_files(request, hdf5_test_dims, generate_hdf5_file):
     """Create multiple temporary HDF5 files with specified dimensions."""
     num_files = getattr(request, "param", 1)
     paths = [
-        str(generate_hdf5_file(hdf5_test_dims, stem=f"flow_{i}"))
+        generate_hdf5_file(stem=f"flow_data_{i}", dims=hdf5_test_dims)
         for i in range(num_files)
     ]
     yield paths, hdf5_test_dims
@@ -91,7 +91,7 @@ def mock_hdf5_files(request, hdf5_test_dims, generate_hdf5_file):
 def temp_file_module(request, hdf5_test_dims, generate_hdf5_file):
     """Create a temporary HDF5 file for module scope tests."""
     dims = getattr(request, "param", hdf5_test_dims)
-    yield str(generate_hdf5_file(dims, stem="flow_module"))
+    yield generate_hdf5_file(stem="flow_data_module", dims=dims)
 
 
 @pytest.fixture(scope="session")
