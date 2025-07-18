@@ -262,7 +262,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             return super().get_batch(batch_size)
 
     @classmethod
-    def from_config(config: dict) -> "MATFlowFieldScheduler":
+    def from_config(cls, config: dict) -> "MATFlowFieldScheduler":
         """Creates a MATFlowFieldScheduler instance from a configuration dictionary.
 
         Args:

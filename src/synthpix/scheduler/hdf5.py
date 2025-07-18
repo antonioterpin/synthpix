@@ -79,7 +79,7 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         return shape
 
     @classmethod
-    def from_config(config: dict) -> "HDF5FlowFieldScheduler":
+    def from_config(cls, config: dict) -> "HDF5FlowFieldScheduler":
         """Creates a HDF5FlowFieldScheduler instance from a configuration dictionary.
 
         Args:
