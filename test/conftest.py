@@ -27,7 +27,7 @@ WORKER_ROOT.mkdir(exist_ok=True)
 # ──────────────────────────────────────────────────────────────────────────────
 # Generic random HDF5 creator
 # ──────────────────────────────────────────────────────────────────────────────
-@pytest.fixture
+@pytest.fixture(scope="session")
 def generate_hdf5_file(tmp_path_factory):
     """Return a callable that writes an HDF5 file and yields its Path."""
 
@@ -67,7 +67,7 @@ def hdf5_test_dims() -> dict[str, int]:
 def temp_file(request, hdf5_test_dims, generate_hdf5_file):
     """Create a temporary HDF5 file with specified dimensions."""
     dims = getattr(request, "param", hdf5_test_dims)
-    yield generate_hdf5_file(dims, stem="flow_data")
+    yield str(generate_hdf5_file(dims, stem="flow_data"))
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -78,22 +78,23 @@ def mock_hdf5_files(request, hdf5_test_dims, generate_hdf5_file):
     """Create multiple temporary HDF5 files with specified dimensions."""
     num_files = getattr(request, "param", 1)
     paths = [
-        generate_hdf5_file(hdf5_test_dims, stem=f"flow_{i}") for i in range(num_files)
+        str(generate_hdf5_file(hdf5_test_dims, stem=f"flow_{i}"))
+        for i in range(num_files)
     ]
     yield paths, hdf5_test_dims
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Scheduler (module scope → needs module-scope temp_file)
+# Scheduler
 # ──────────────────────────────────────────────────────────────────────────────
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def temp_file_module(request, hdf5_test_dims, generate_hdf5_file):
     """Create a temporary HDF5 file for module scope tests."""
     dims = getattr(request, "param", hdf5_test_dims)
-    yield generate_hdf5_file(dims, stem="flow_module")
+    yield str(generate_hdf5_file(dims, stem="flow_module"))
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def scheduler(temp_file_module, request):
     """Create a scheduler for module scope tests."""
     randomize = (
