@@ -1163,10 +1163,6 @@ def test_speed_sampler_real_fn(
     ), f"The average time is {avg_time}, time limit: {limit_time}"
 
 
-@pytest.mark.skipif(
-    os.getenv("CI") == "true",
-    reason="TODO: make this test work in CI.",
-)
 @pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
 def test_stop_after_max_episodes(mock_mat_files):
     """Sampler raises StopIteration after the configured `num_episodes`."""
@@ -1174,9 +1170,11 @@ def test_stop_after_max_episodes(mock_mat_files):
     files, dims = mock_mat_files
     H, W = dims["height"], dims["width"]
 
-    devices = jax.devices()
-    if len(devices) > 4:
-        devices = devices[:4]
+    devices = None
+    if os.getenv("CI") != "true":
+        devices = jax.devices()
+        if len(devices) > 4:
+            devices = devices[:4]
 
     num_episodes = 2
     batch_size = 3 * 4  # multiple of all number of devices
@@ -1217,7 +1215,7 @@ def test_stop_after_max_episodes(mock_mat_files):
         min_speed_y=0.0,
         output_units="pixels",
         noise_level=0.0,
-        device_ids=[d.id for d in devices],
+        device_ids=[d.id for d in devices] if devices is not None else None,
     )
 
     # We expect exactly num_episodes × episode_length iterations.
