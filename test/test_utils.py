@@ -730,6 +730,6 @@ def test_discover_leaf_dirs(tmp_path):
 
     paths = [str(p) for p in tmp_path.rglob("*.mat")]
     leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
+    expect = {os.path.abspath(seq_A), os.path.abspath(sub_1)}
 
-    expected = {os.path.abspath(seq_A), os.path.abspath(sub_1)}
-    assert leaves == expected, f"Expected {expected}, got {leaves}"
+    assert leaves == expect, f"Expected {expect}, got {leaves}"

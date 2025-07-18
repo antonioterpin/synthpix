@@ -87,14 +87,14 @@ def mock_hdf5_files(request, hdf5_test_dims, generate_hdf5_file):
 # ──────────────────────────────────────────────────────────────────────────────
 # Scheduler
 # ──────────────────────────────────────────────────────────────────────────────
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def temp_file_module(request, hdf5_test_dims, generate_hdf5_file):
     """Create a temporary HDF5 file for module scope tests."""
     dims = getattr(request, "param", hdf5_test_dims)
     yield generate_hdf5_file(stem="flow_data_module", dims=dims)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def scheduler(temp_file_module, request):
     """Create a scheduler for module scope tests."""
     randomize = (
