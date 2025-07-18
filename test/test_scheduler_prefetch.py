@@ -93,7 +93,7 @@ def test_next_episode_resets_thread_and_flushes_queue():
 
 
 def test_shutdown_behavior():
-    scheduler = MinimalScheduler()
+    scheduler = MinimalScheduler(total_batches=5)
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1)
     pf.get_batch(1)
 
@@ -143,8 +143,8 @@ def test_get_batch_size_mismatch_raises_value_error():
 
 
 def test_next_episode_flushes_remaining_and_restarts():
-    sched = MinimalScheduler(total_batches=5)
-    pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=5)
+    scheduler = MinimalScheduler(total_batches=10)
+    pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1, buffer_size=5)
 
     it = iter(pf)
     # consume three batches to put us mid-episode
@@ -275,7 +275,7 @@ def test_reset_when_queue_empty_and_thread_not_started():
 def test_reset_then_next_episode_three_cycles(monkeypatch):
     """Test that reset() and next_episode() work correctly in sequence."""
     shape = (8, 8, 2)
-    sched = MinimalScheduler(total_batches=9, shape=shape)
+    sched = MinimalScheduler(total_batches=10, shape=shape)
     sched.episode_length = 2  # make episodes short
 
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
