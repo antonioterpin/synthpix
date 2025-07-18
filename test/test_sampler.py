@@ -919,10 +919,6 @@ def test_sampler_switches_flow_fields(
     assert not jnp.allclose(batch1["flow_fields"], batch2["flow_fields"])
 
 
-@pytest.mark.skipif(
-    os.getenv("CI") == "true",
-    reason="TODO: make this test work in CI.",
-)
 @pytest.mark.parametrize(
     "image_shape, batches_per_flow_batch, seeding_density_range",
     [((32, 32), 4, (0.1, 0.1)), ((64, 64), 4, (0.0, 0.04))],
