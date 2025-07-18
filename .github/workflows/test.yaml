@@ -26,8 +26,9 @@ jobs:
             -e CI=true \
             -e XLA_PYTHON_CLIENT_PREALLOCATE=false \
             -v "${{ github.workspace }}/junit:/workspace/junit" \
-            synthpix pytest -x -v -n 1 \
+            synthpix pytest -x -v -n 4 \
               --max-worker-restart=0 \
+              -o "xdist.worker_timeout=120" \
               --junitxml=/workspace/junit/test-results.xml \
               --ignore=test/save_ablations
 
