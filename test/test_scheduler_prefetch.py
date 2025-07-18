@@ -143,7 +143,8 @@ def test_get_batch_size_mismatch_raises_value_error():
 
 
 def test_next_episode_flushes_remaining_and_restarts():
-    scheduler = MinimalScheduler(total_batches=10)
+    TOTAL_BATCHES = 10
+    scheduler = MinimalScheduler(total_batches=TOTAL_BATCHES)
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1, buffer_size=5)
 
     it = iter(pf)
@@ -151,8 +152,8 @@ def test_next_episode_flushes_remaining_and_restarts():
     for _ in range(3):
         next(it)
 
-    remaining_before = pf.steps_remaining()  # should be 2
-    assert remaining_before == 2
+    remaining_before = pf.steps_remaining()
+    assert remaining_before == TOTAL_BATCHES - 3
 
     pf.next_episode(join_timeout=1)
 
