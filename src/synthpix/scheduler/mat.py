@@ -74,7 +74,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
 
         logger.debug(f"Found {len(self.file_list)} files")
 
-    @staticmethod
+    @classmethod
     def _path_is_hdf5(path: str) -> bool:
         return h5py.is_hdf5(path)
 
@@ -261,7 +261,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         else:
             return super().get_batch(batch_size)
 
-    @staticmethod
+    @classmethod
     def from_config(config: dict) -> "MATFlowFieldScheduler":
         """Creates a MATFlowFieldScheduler instance from a configuration dictionary.
 

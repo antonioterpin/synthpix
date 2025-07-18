@@ -25,7 +25,7 @@ jobs:
           docker compose -f docker-compose.cpu.yaml run --rm \
             -e XLA_PYTHON_CLIENT_PREALLOCATE=false \
             -v "${{ github.workspace }}/junit:/workspace/junit" \
-            synthpix pytest test/test_scheduler.py::test_non_hdf5_file  -v -n 1 \
+            synthpix pytest test/test_scheduler.py  -v -n 1 \
               --max-worker-restart=0 \
               --junitxml=/workspace/junit/test-results.xml \
               --ignore=test/save_ablations
