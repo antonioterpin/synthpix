@@ -52,7 +52,58 @@ For more examples and tutorials to use custom flow data or real-world data, chec
 
 ## Configuring the synthetic images ⚙️
 
-TODO explain
+The configuration is made buy the use of a YAML config file.
+Your YAML config file is organized into four main groups. Here’s a quick guide to what each set of parameters does:
+
+### 1. Dataset Parameters
+| **Parameter**            | **Description**                         |
+| ------------------------ | --------------------------------------- |
+| `seed`                   | Random seed for reproducibility         |
+| `batch_size`             | Number of image pairs generated at once |
+| `flow_fields_per_batch`  | Number of unique flow fields per batch  |
+| `batches_per_flow_batch` | Batches to generate per flow batch      |
+
+By this parameters one can personilize how the extraction of the flow fields works and the shape of the output batch
+
+### 2. Image Generation Parameters
+Define the look and realism of your synthetic PIV images.
+
+| **Parameter**                 | **Description**                                           |
+| ----------------------------- | --------------------------------------------------------- |
+| `image_shape`                 | Output image size `[height, width]` (pixels)              |
+| `dt`                          | Time between frames (seconds)                             |
+| `seeding_density_range`       | Range of particle densities (particles per pixel)         |
+| `diameter_ranges`             | Range of particle sizes (pixels)                          |
+| `diameter_var`                | Variability in particle size                              |
+| `intensity_ranges`            | Range of particle brightness                              |
+| `intensity_var`               | Variability in intensity                                  |
+| `p_hide_img1` / `p_hide_img2` | Chance particles disappear between frames                 |
+| `rho_ranges`                  | Correlation between particle appearance in the two frames |
+| `rho_var`                     | Variability in correlation                                |
+| `noise_level`                 | Amplitude of image noise (simulates camera noise)         |
+
+
+
+### 3. Flow Generation Parameters
+| **Parameter**          | **Description**                          |
+| ---------------------- | ---------------------------------------- |
+| `velocities_per_pixel` | Spatial resolution of the velocity field |
+| `resolution`           | Pixels per unit of physical length       |
+
+
+### 4. Flow Field Parameters
+Describe which region of your flow field is captured, and its velocity bounds.
+
+| **Parameter**                    | **Description**                                         |
+| -------------------------------- | ------------------------------------------------------- |
+| `flow_field_size`                | Physical area imaged (units must match your flow files) |
+| `img_offset`                     | Offset for camera’s position within the flow field      |
+| `min_speed_x/y`, `max_speed_x/y` | Range of allowed velocities in each direction           |
+| `output_units`                   | Units of the output flow field ("pixels" or physical)   |
+| `scheduler_files`                | List of ground-truth flow field files (e.g. `.h5`)      |
+| `scheduler_class`                | Loader class for your flow files (usually by extension) |
+
+
 
 ## Contributing 🤗
 Contributions are more than welcome! 🙏 Please check out our [how to contribute page](docs/contributing.md), and feel free to open an issue for problems and feature requests⚠️.
