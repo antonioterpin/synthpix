@@ -10,29 +10,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Check out the repository
       - name: Check out code
         uses: actions/checkout@v4
 
-      # 2. Build the Docker image
-      - name: Build Docker image
-        run: docker build -t synthpix .
-
-      # 3. Create directory for test results
       - name: Prepare test-results directory
         run: mkdir -p junit
 
-      # 4. Run tests inside the container
-      - name: Run tests in Docker
+      - name: Build Docker image
         run: |
-          docker run --rm \
-            -v "${{ github.workspace }}/junit:/workspace/junit" \
-            synthpix \
-            pytest -v --junitxml=/workspace/junit/test-results.xml --ignore=test/save_ablations
+          docker compose -f docker-compose.cpu.yaml build
 
-      # 5. Upload JUnit test results
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
+      - name: Run tests
+        run: |
+          docker compose -f docker-compose.cpu.yaml run --rm \
+            -e CI=true \
+            -e XLA_PYTHON_CLIENT_PREALLOCATE=false \
+            -v "${{ github.workspace }}/junit:/workspace/junit" \
+            synthpix pytest -x -v -n 4 \
+              --max-worker-restart=0 \
+              -o "xdist.worker_timeout=120" \
+              --junitxml=/workspace/junit/test-results.xml \
+              --ignore=test/save_ablations
+
+      - uses: actions/upload-artifact@v4
         with:
           name: pytest-results
           path: junit/test-results.xml

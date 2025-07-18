@@ -117,8 +117,8 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
 
         raise StopIteration
 
-    @staticmethod
-    def from_config(config: dict) -> "NumpyFlowFieldScheduler":
+    @classmethod
+    def from_config(cls, config: dict) -> "NumpyFlowFieldScheduler":
         """Creates a NumpyFlowFieldScheduler instance from a configuration dictionary.
 
         Args:

@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  synthpix:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    image: synthpix:cpu
+    environment:
+      CUDA_VISIBLE_DEVICES: ""
+      TZ: Europe/Zurich
+    volumes:
+      - /shared/fluids/fluids-estimation:/shared/fluids/fluids-estimation
+      - .:/app
+    shm_size: "2g"
+    stdin_open: true
+    tty: true
+    command: >
+      synthpix pytest -v -n 8 --dist=loadfile \
+        --max-worker-restart=0 \
+        -o "xdist.worker_timeout=120" \
+        -o "xdist.worker_logfile=/workspace/junit/worker-%(workerid)s.log" \
+        --junitxml=/workspace/junit/test-results.xml \
+        --ignore=test/save_ablations

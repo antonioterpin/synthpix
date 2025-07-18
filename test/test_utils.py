@@ -481,7 +481,7 @@ def test_invalid_batch_size(batch_size):
 
 
 @pytest.mark.parametrize("output_units", [None, "invalid", 1.0])
-def test_invalid_output_units(output_units, scheduler):
+def test_invalid_output_units_adapter(output_units, scheduler):
     with pytest.raises(
         ValueError,
         match="output_units must be either 'pixels' or 'measure units per second'.",
@@ -699,8 +699,9 @@ def test_speed_flow_fields_adapter(
     ), f"The average time is {average_time_jit}, time limit: {limit_time}"
 
 
-def test__discover_leaf_dirs(tmp_path, generate_mat_file, mat_test_dims):
-    """
+def test_discover_leaf_dirs(tmp_path):
+    """Test discover_leaf_dirs function.
+
     tmp_path/
       ├── seq_A/
       │   ├── flow_0000.mat
@@ -718,35 +719,17 @@ def test__discover_leaf_dirs(tmp_path, generate_mat_file, mat_test_dims):
     seq_B.mkdir()
     sub_1 = seq_B / "sub_1"
     sub_1.mkdir()
-    str(sub_1)
     seq_C = tmp_path / "seq_C"
     seq_C.mkdir()
 
     # Drop dummy files
     for t in (0, 1):
-        generate_mat_file(seq_A, t, mat_test_dims)
-    generate_mat_file(seq_B, 0, mat_test_dims)
-    generate_mat_file(sub_1, 2, mat_test_dims)
+        (seq_A / f"flow_{t:04d}.mat").touch()
+    (seq_B / "flow_0000.mat").touch()
+    (sub_1 / "flow_0002.mat").touch()
 
-    filepath_seq_A_0 = os.path.join(seq_A, "flow_0000.mat")
-    filepath_seq_A_1 = os.path.join(seq_A, "flow_0001.mat")
-    filepath_seq_B_0 = os.path.join(seq_B, "flow_0000.mat")
-    filepath_sub_1_2 = os.path.join(sub_1, "flow_0002.mat")
+    paths = [str(p) for p in tmp_path.rglob("*.mat")]
+    leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
+    expect = {os.path.abspath(seq_A), os.path.abspath(sub_1)}
 
-    # Turn the path into a string
-    paths = [
-        str(filepath_seq_A_0),
-        str(filepath_seq_A_1),
-        str(filepath_seq_B_0),
-        str(filepath_sub_1_2),
-    ]
-
-    # What does the static helper think are leaves?
-    leaves = discover_leaf_dirs(paths)
-    leaves = set(map(os.path.abspath, leaves))
-
-    expected = {
-        os.path.abspath(seq_A),
-        os.path.abspath(sub_1),  # leaf even though parent has child dir
-    }
-    assert leaves == expected, f"Expected {expected}, got {leaves}"
+    assert leaves == expect, f"Expected {expect}, got {leaves}"

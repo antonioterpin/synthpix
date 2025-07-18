@@ -7,9 +7,15 @@ In a nutshell, if you need many synthetic PIV images and you do not want to wait
 ![Performances](docs/times.jpg)
 
 `SynthPix` is also fairly easy to use:
-```bash
-TODO
+```python
+import synthpix
+
+sampler = synthpix.make(config_path)
+for i, batch in enumerate(sampler):
+   """batch contains images1, images2, flow_fields, params"""
+sampler.shutdown()
 ```
+See `src/main.py` for a fully working example, and check out the [paper]() for more information and performance analysis 🔥.
 
 ## Getting started 🚀
 Alright, now that hopefully we convinced you to try SynthPix, let's get to it. Don't worry, installing it is even easier than using it:
@@ -39,10 +45,6 @@ For more examples and tutorials to use custom flow data or real-world data, chec
 ## Configuring the synthetic images ⚙️
 
 TODO explain
-
-### Performances 🔥
-
-TODO picture
 
 ## Contributing 🤗
 Contributions are more than welcome! 🙏 Please check out our [how to contribute page](docs/contributing.md), and feel free to open an issue for problems and feature requests⚠️.

@@ -68,10 +68,10 @@ def test_worker_eos_signal_when_queue_full():
 
 
 def test_reset_stops_and_joins():
-    scheduler = MinimalScheduler()
-    pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=2)
+    scheduler = MinimalScheduler(total_batches=5)
+    pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1, buffer_size=2)
 
-    pf.get_batch(2)
+    pf.get_batch(1)
     assert pf._thread.is_alive()
 
     pf.reset()
@@ -93,7 +93,7 @@ def test_next_episode_resets_thread_and_flushes_queue():
 
 
 def test_shutdown_behavior():
-    scheduler = MinimalScheduler()
+    scheduler = MinimalScheduler(total_batches=5)
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1)
     pf.get_batch(1)
 
@@ -143,16 +143,17 @@ def test_get_batch_size_mismatch_raises_value_error():
 
 
 def test_next_episode_flushes_remaining_and_restarts():
-    sched = MinimalScheduler(total_batches=5)
-    pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=5)
+    TOTAL_BATCHES = 10
+    scheduler = MinimalScheduler(total_batches=TOTAL_BATCHES)
+    pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1, buffer_size=5)
 
     it = iter(pf)
     # consume three batches to put us mid-episode
     for _ in range(3):
         next(it)
 
-    remaining_before = pf.steps_remaining()  # should be 2
-    assert remaining_before == 2
+    remaining_before = pf.steps_remaining()
+    assert remaining_before == TOTAL_BATCHES - 3
 
     pf.next_episode(join_timeout=1)
 
@@ -275,7 +276,7 @@ def test_reset_when_queue_empty_and_thread_not_started():
 def test_reset_then_next_episode_three_cycles(monkeypatch):
     """Test that reset() and next_episode() work correctly in sequence."""
     shape = (8, 8, 2)
-    sched = MinimalScheduler(total_batches=9, shape=shape)
+    sched = MinimalScheduler(total_batches=10, shape=shape)
     sched.episode_length = 2  # make episodes short
 
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)

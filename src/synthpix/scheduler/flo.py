@@ -97,8 +97,8 @@ class FloFlowFieldScheduler(BaseFlowFieldScheduler):
         logger.debug(f".flo flow field shape: {shape}")
         return shape
 
-    @staticmethod
-    def from_config(config: dict) -> "FloFlowFieldScheduler":
+    @classmethod
+    def from_config(cls, config: dict) -> "FloFlowFieldScheduler":
         """Factory from config dict."""
         return FloFlowFieldScheduler(
             file_list=config["scheduler_files"],
