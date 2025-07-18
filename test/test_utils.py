@@ -481,7 +481,7 @@ def test_invalid_batch_size(batch_size):
 
 
 @pytest.mark.parametrize("output_units", [None, "invalid", 1.0])
-def test_invalid_output_units(output_units, scheduler):
+def test_invalid_output_units_adapter(output_units, scheduler):
     with pytest.raises(
         ValueError,
         match="output_units must be either 'pixels' or 'measure units per second'.",
