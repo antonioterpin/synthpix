@@ -1,5 +1,3 @@
-import os
-
 import h5py
 import jax
 import numpy as np
@@ -58,10 +56,6 @@ def test_mat_scheduler_invalid_output_shape_values(bad_output_shape, mock_mat_fi
         )
 
 
-@pytest.mark.skipif(
-    os.getenv("CI") == "true",
-    reason="TODO: make this test work in CI.",
-)
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
 def test_mat_scheduler_iteration(mock_mat_files):
     files, _ = mock_mat_files

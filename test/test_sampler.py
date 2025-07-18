@@ -919,16 +919,12 @@ def test_sampler_switches_flow_fields(
     assert not jnp.allclose(batch1["flow_fields"], batch2["flow_fields"])
 
 
-@pytest.mark.skipif(
-    os.getenv("CI") == "true",
-    reason="TODO: make this test work in CI.",
-)
 @pytest.mark.parametrize(
     "image_shape, batches_per_flow_batch, seeding_density_range",
     [((32, 32), 4, (0.1, 0.1)), ((64, 64), 4, (0.0, 0.04))],
 )
 @pytest.mark.parametrize("batch_size", [12])
-@pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
+@pytest.mark.parametrize("mock_hdf5_files", [64], indirect=True)
 def test_sampler_with_real_img_gen_fn(
     image_shape,
     batches_per_flow_batch,
@@ -1167,10 +1163,6 @@ def test_speed_sampler_real_fn(
     ), f"The average time is {avg_time}, time limit: {limit_time}"
 
 
-@pytest.mark.skipif(
-    os.getenv("CI") == "true",
-    reason="TODO: make this test work in CI.",
-)
 @pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
 def test_stop_after_max_episodes(mock_mat_files):
     """Sampler raises StopIteration after the configured `num_episodes`."""
@@ -1178,9 +1170,11 @@ def test_stop_after_max_episodes(mock_mat_files):
     files, dims = mock_mat_files
     H, W = dims["height"], dims["width"]
 
-    devices = jax.devices()
-    if len(devices) > 4:
-        devices = devices[:4]
+    devices = None
+    if os.getenv("CI") != "true":
+        devices = jax.devices()
+        if len(devices) > 4:
+            devices = devices[:4]
 
     num_episodes = 2
     batch_size = 3 * 4  # multiple of all number of devices
@@ -1221,7 +1215,7 @@ def test_stop_after_max_episodes(mock_mat_files):
         min_speed_y=0.0,
         output_units="pixels",
         noise_level=0.0,
-        device_ids=[d.id for d in devices],
+        device_ids=[d.id for d in devices] if devices is not None else None,
     )
 
     # We expect exactly num_episodes × episode_length iterations.
@@ -1250,10 +1244,6 @@ def test_stop_after_max_episodes(mock_mat_files):
     sampler.scheduler.shutdown()
 
 
-@pytest.mark.skipif(
-    os.getenv("CI") == "true",
-    reason="TODO: make this test work in CI.",
-)
 @pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
 def test_index_error_if_no_next_episode(mock_mat_files):
     """Sampler raises IndexError if next_episode() is not called."""
@@ -1261,9 +1251,14 @@ def test_index_error_if_no_next_episode(mock_mat_files):
     files, dims = mock_mat_files
     H, W = dims["height"], dims["width"]
 
-    devices = jax.devices()
-    if len(devices) > 4:
-        devices = devices[:4]
+    CI = os.getenv("CI") == "true"
+
+    if CI:
+        devices = None
+    else:
+        devices = jax.devices()
+        if len(devices) > 4:
+            devices = devices[:4]
 
     batch_size = 3 * 4  # multiple of all number of devices
     base = MATFlowFieldScheduler(files, loop=True, output_shape=(H, W))
@@ -1303,7 +1298,7 @@ def test_index_error_if_no_next_episode(mock_mat_files):
         min_speed_y=0.0,
         output_units="pixels",
         noise_level=0.0,
-        device_ids=[d.id for d in devices],
+        device_ids=[d.id for d in devices] if devices is not None else None,
     )
 
     batch = sampler.next_episode()

@@ -143,7 +143,7 @@ def test_get_batch_size_mismatch_raises_value_error():
 
 
 def test_next_episode_flushes_remaining_and_restarts():
-    TOTAL_BATCHES = 10
+    TOTAL_BATCHES = 20
     scheduler = MinimalScheduler(total_batches=TOTAL_BATCHES)
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1, buffer_size=5)
 
