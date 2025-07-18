@@ -209,7 +209,15 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip)
 
 
-def teardown_function(function):
-    """Teardown function to clean up after tests."""
+@pytest.fixture(autouse=True)
+def clear_after_test():
+    """Clear JAX backends and free memory after each test."""
+    yield  # --- run the test ---
+    try:
+        # Release device buffers
+        jax.clear_backends()
+    except Exception:
+        # Just collect garbage if JAX fails
+        pass
+    # Free Python-side references
     gc.collect()
-    jax.clear_backends()
