@@ -699,7 +699,7 @@ def test_speed_flow_fields_adapter(
     ), f"The average time is {average_time_jit}, time limit: {limit_time}"
 
 
-def test_discover_leaf_dirs(tmp_path, generate_mat_file, mat_test_dims):
+def test_discover_leaf_dirs(tmp_path):
     """Test discover_leaf_dirs function.
 
     tmp_path/
