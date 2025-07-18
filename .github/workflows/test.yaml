@@ -23,8 +23,9 @@ jobs:
       - name: Run tests
         run: |
           docker compose -f docker-compose.cpu.yaml run --rm \
+            -e XLA_PYTHON_CLIENT_PREALLOCATE=false \
             -v "${{ github.workspace }}/junit:/workspace/junit" \
-            synthpix pytest -v \
+            synthpix pytest -v -n 2 --dist=loadfile \
               --junitxml=/workspace/junit/test-results.xml \
               --ignore=test/save_ablations
 
