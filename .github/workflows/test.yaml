@@ -25,7 +25,7 @@ jobs:
           docker compose -f docker-compose.cpu.yaml run --rm \
             -e XLA_PYTHON_CLIENT_PREALLOCATE=false \
             -v "${{ github.workspace }}/junit:/workspace/junit" \
-            synthpix pytest -v -n 2 --dist=loadfile \
+            synthpix pytest -v -n 1 --dist=loadfile \
               --max-worker-restart=0 \
               -o "xdist.worker_timeout=120" \
               -o "xdist.worker_logfile=/workspace/junit/worker-%(workerid)s.log" \
