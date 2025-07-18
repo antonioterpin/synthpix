@@ -924,7 +924,7 @@ def test_sampler_switches_flow_fields(
     [((32, 32), 4, (0.1, 0.1)), ((64, 64), 4, (0.0, 0.04))],
 )
 @pytest.mark.parametrize("batch_size", [12])
-@pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
+@pytest.mark.parametrize("mock_hdf5_files", [128], indirect=True)
 def test_sampler_with_real_img_gen_fn(
     image_shape,
     batches_per_flow_batch,
