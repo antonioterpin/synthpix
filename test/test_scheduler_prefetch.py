@@ -1,4 +1,3 @@
-import os
 import queue
 import time
 
@@ -68,15 +67,11 @@ def test_worker_eos_signal_when_queue_full():
     pf.shutdown()
 
 
-@pytest.mark.skipif(
-    os.getenv("CI") == "true",
-    reason="TODO: make this test pass on CI when with multiple tests.",
-)
 def test_reset_stops_and_joins():
-    scheduler = MinimalScheduler()
-    pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=2)
+    scheduler = MinimalScheduler(total_batches=5)
+    pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1, buffer_size=2)
 
-    pf.get_batch(2)
+    pf.get_batch(1)
     assert pf._thread.is_alive()
 
     pf.reset()
