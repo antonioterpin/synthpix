@@ -253,7 +253,11 @@ class PrefetchingFlowFieldScheduler:
 
     def shutdown(self, join_timeout=2):
         """Gracefully shuts down the background prefetching thread."""
-        self._stop_event.set()
+        try:
+            self._stop_event.set()
+        except AttributeError:
+            # stop event not initialized, nothing to do
+            return
 
         # If producer is stuck on put(), free up one slot
         try:
