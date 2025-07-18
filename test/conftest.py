@@ -1,7 +1,11 @@
 """Conftest.py for Sampler and Scheduler tests."""
+
+from __future__ import annotations
+
 import os
-import tempfile
+import uuid
 from datetime import datetime
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -10,38 +14,27 @@ from PIL import Image
 
 from synthpix.scheduler import HDF5FlowFieldScheduler
 
-TEST_FOLDER = os.path.join(
-    tempfile.gettempdir(), f"synthpix_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-)
-if not os.path.exists(TEST_FOLDER):
-    os.makedirs(TEST_FOLDER, exist_ok=True)
+# ──────────────────────────────────────────────────────────────────────────────
+# Helper: per-worker root directory
+# ──────────────────────────────────────────────────────────────────────────────
+_WORKER = os.getenv("PYTEST_XDIST_WORKER", "master")
+ROOT = Path(os.getenv("PYTEST_SCRATCH_DIR", Path.cwd() / ".pytest_scratch"))
+ROOT.mkdir(exist_ok=True)
+WORKER_ROOT = ROOT / f"{_WORKER}_{datetime.now():%Y%m%d_%H%M%S}"
+WORKER_ROOT.mkdir(exist_ok=True)
 
 
-@pytest.fixture(scope="module")
-def hdf5_test_dims(request):
-    """Fixture to provide default dimensions for HDF5 files.
+# ──────────────────────────────────────────────────────────────────────────────
+# Generic random HDF5 creator
+# ──────────────────────────────────────────────────────────────────────────────
+@pytest.fixture
+def generate_hdf5_file(tmp_path_factory):
+    """Return a callable that writes an HDF5 file and yields its Path."""
 
-    The dimensions are set based on the CI environment variable,
-    but can be overridden by passing parameters in the request.
-    The parameters need to be a dictionary with keys:
-    'x_dim', 'y_dim', 'z_dim', and 'features'.
-    """
-    CI = os.environ.get("CI") == "true"
-    default_dims = {
-        "x_dim": 1536 if not CI else 128,
-        "y_dim": 100 if not CI else 10,
-        "z_dim": 2048 if not CI else 128,
-        "features": 2,
-    }
-    return default_dims
+    def _generate(dims: dict[str, int], stem: str = "flow") -> Path:
+        folder = tmp_path_factory.mktemp("hdf5")
+        path = folder / f"{stem}_{uuid.uuid4().hex}.h5"
 
-
-@pytest.fixture(scope="module")
-def generate_hdf5_file():
-    """Fixture to generate a temporary HDF5 file with random data."""
-
-    def _generate(filename="test.h5", dims=None):
-        path = os.path.join(TEST_FOLDER, filename)
         with h5py.File(path, "w") as f:
             data = np.random.rand(
                 dims["x_dim"], dims["y_dim"], dims["z_dim"], dims["features"]
@@ -52,177 +45,162 @@ def generate_hdf5_file():
     return _generate
 
 
-@pytest.fixture
-def mock_hdf5_files(request, hdf5_test_dims, generate_hdf5_file, num_files=1):
-    """Fixture to create multiple HDF5 files for testing."""
-    if isinstance(request.param, int):
-        num_files = request.param
+# ──────────────────────────────────────────────────────────────────────────────
+# Default dimensions
+# ──────────────────────────────────────────────────────────────────────────────
+@pytest.fixture(scope="session")
+def hdf5_test_dims() -> dict[str, int]:
+    """Return default dimensions for HDF5 test files."""
+    CI = os.getenv("CI") == "true"
+    return {
+        "x_dim": 128 if CI else 1536,
+        "y_dim": 10 if CI else 100,
+        "z_dim": 128 if CI else 2048,
+        "features": 2,
+    }
 
-    files = []
-    try:
-        for i in range(num_files):
-            path = generate_hdf5_file(f"test_file_{i}.h5", dims=hdf5_test_dims)
-            files.append(path)
-        yield files, hdf5_test_dims
-    finally:
-        for f in files:
-            if os.path.exists(f):
-                os.remove(f)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Single temporary HDF5 file
+# ──────────────────────────────────────────────────────────────────────────────
+@pytest.fixture
+def temp_file(request, hdf5_test_dims, generate_hdf5_file):
+    """Create a temporary HDF5 file with specified dimensions."""
+    dims = getattr(request, "param", hdf5_test_dims)
+    yield generate_hdf5_file(dims, stem="flow_data")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Multiple HDF5 files
+# ──────────────────────────────────────────────────────────────────────────────
+@pytest.fixture
+def mock_hdf5_files(request, hdf5_test_dims, generate_hdf5_file):
+    """Create multiple temporary HDF5 files with specified dimensions."""
+    num_files = getattr(request, "param", 1)
+    paths = [
+        generate_hdf5_file(hdf5_test_dims, stem=f"flow_{i}") for i in range(num_files)
+    ]
+    yield paths, hdf5_test_dims
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Scheduler (module scope → needs module-scope temp_file)
+# ──────────────────────────────────────────────────────────────────────────────
+@pytest.fixture(scope="module")
+def temp_file_module(request, hdf5_test_dims, generate_hdf5_file):
+    """Create a temporary HDF5 file for module scope tests."""
+    dims = getattr(request, "param", hdf5_test_dims)
+    yield generate_hdf5_file(dims, stem="flow_module")
 
 
 @pytest.fixture(scope="module")
-def temp_file(request, generate_hdf5_file, hdf5_test_dims):
-    """Fixture to create a temporary HDF5 file for testing."""
-    if hasattr(request, "param"):
-        dims = request.param
-    else:
-        dims = hdf5_test_dims
-    filename = "mock_data_tmp.h5"
-    path = generate_hdf5_file(filename, dims=dims)
-    try:
-        yield path
-    finally:
-        if os.path.exists(path):
-            os.remove(path)
-
-
-@pytest.fixture
-def temp_txt_file(request):
-    """Fixture to create a temporary text file."""
-    filename = "mock_data.txt"
-    path = os.path.join(TEST_FOLDER, filename)
-    with open(path, "w") as f:
-        f.write("This is a test file.")
-    try:
-        yield [path]
-    finally:
-        if os.path.exists(path):
-            os.remove(path)
-
-
-@pytest.fixture(scope="module")
-def scheduler(temp_file, request):
-    """Fixture to create an HDF5FlowFieldScheduler for testing."""
-    # Default parameters for the scheduler
+def scheduler(temp_file_module, request):
+    """Create a scheduler for module scope tests."""
     randomize = (
-        request.param.get("randomize", False) if hasattr(request, "param") else False
+        getattr(request.param, "randomize", False)
+        if hasattr(request, "param")
+        else False
     )
-    loop = request.param.get("loop", False) if hasattr(request, "param") else False
-
-    # Create the scheduler using the temporary HDF5 file
-    scheduler_instance = HDF5FlowFieldScheduler(
-        [temp_file], randomize=randomize, loop=loop
-    )
-    return scheduler_instance
+    loop = getattr(request.param, "loop", False) if hasattr(request, "param") else False
+    yield HDF5FlowFieldScheduler([temp_file_module], randomize=randomize, loop=loop)
 
 
-@pytest.fixture(scope="module")
+# ──────────────────────────────────────────────────────────────────────────────
+# Text file
+# ──────────────────────────────────────────────────────────────────────────────
+@pytest.fixture
+def temp_txt_file(tmp_path):
+    """Create a temporary text file with some content."""
+    path = tmp_path / "mock_data.txt"
+    path.write_text("This is a test file.")
+    yield [str(path)]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Numpy helpers
+# ──────────────────────────────────────────────────────────────────────────────
+@pytest.fixture(scope="session")
 def numpy_test_dims():
-    """Fixture to provide default dimensions for Numpy files."""
+    """Return default dimensions for Numpy test files."""
     return {"height": 64, "width": 64}
 
 
-@pytest.fixture(scope="module")
-def generate_numpy_file():
-    """Fixture to generate a temporary Numpy file with random data."""
+@pytest.fixture
+def mock_numpy_files(tmp_path, numpy_test_dims, request):
+    """Create multiple temporary Numpy files with random data."""
+    num_files = getattr(request, "param", 2)
+    h, w = numpy_test_dims["height"], numpy_test_dims["width"]
 
-    def _generate(folder, t, dims):
-        h, w = dims["height"], dims["width"]
-
-        for img_index in [t - 1, t]:
-            img = np.random.randint(0, 255, size=(h, w, 3), dtype=np.uint8)
-            Image.fromarray(img).save(os.path.join(folder, f"img_{img_index}.jpg"))
+    paths = []
+    for t in range(1, num_files + 1):
+        img0 = np.random.randint(0, 255, size=(h, w, 3), dtype=np.uint8)
+        img1 = np.random.randint(0, 255, size=(h, w, 3), dtype=np.uint8)
+        Image.fromarray(img0).save(tmp_path / f"img_{t-1}.jpg")
+        Image.fromarray(img1).save(tmp_path / f"img_{t}.jpg")
 
         flow = np.random.rand(h, w, 2).astype(np.float32)
-        np.save(os.path.join(folder, f"flow_{t}.npy"), flow)
+        flow_path = tmp_path / f"flow_{t}.npy"
+        np.save(flow_path, flow)
+        paths.append(flow_path)
 
-    return _generate
-
-
-@pytest.fixture
-def mock_numpy_files(tmp_path, generate_numpy_file, numpy_test_dims, request):
-    """Fixture to create multiple Numpy files for testing."""
-    num_files = request.param if hasattr(request, "param") else 2
-
-    for t in range(1, num_files + 1):
-        generate_numpy_file(tmp_path, t, numpy_test_dims)
-
-    file_paths = [tmp_path / f"flow_{t}.npy" for t in range(1, num_files + 1)]
-    return [str(p) for p in file_paths], numpy_test_dims
+    yield [str(p) for p in paths], numpy_test_dims
 
 
-@pytest.fixture(scope="module")
+# ──────────────────────────────────────────────────────────────────────────────
+# .mat helpers
+# ──────────────────────────────────────────────────────────────────────────────
+@pytest.fixture(scope="session")
 def mat_test_dims():
-    """Fixture to provide default dimensions for .mat files."""
+    """Return default dimensions for .mat test files."""
     return {"height": 64, "width": 64}
 
 
-@pytest.fixture(scope="module")
-def generate_mat_file():
-    """Fixture to generate a .mat file with I0, I1, and V using a MATLAB 7.3 header."""
-
-    def _generate(folder, t, dims):
-        h, w = dims["height"], dims["width"]
-        I0 = np.random.randint(0, 255, size=(h, w), dtype=np.uint8)
-        I1 = np.random.randint(0, 255, size=(h, w), dtype=np.uint8)
-        V = np.random.rand(h, w, 2).astype(np.float32)
-
-        mat_path = os.path.join(folder, f"flow_{t:04d}.mat")
-
-        # Reserve a 512-byte user block (must be ≥116)
-        with h5py.File(mat_path, "w", libver="latest", userblock_size=512) as f:
-            f.create_dataset("I0", data=I0)
-            f.create_dataset("I1", data=I1)
-            f.create_dataset("V", data=V)
-
-        # Now write the MATLAB header into that user block:
-        header_str = (
-            "MATLAB 7.3 MAT-file, Platform: Python-h5py, "
-            f"Created on {datetime.now().strftime('%c')}"
-        )
-        hdr = header_str.encode("ascii")
-        hdr = hdr.ljust(116, b" ")  # pad to exactly 116 bytes
-        hdr = hdr + b" " * (512 - 116)  # pad out the rest of the 512-byte block
-
-        with open(mat_path, "r+b") as fp:
-            fp.write(hdr)
-
-    return _generate
-
-
 @pytest.fixture
-def mock_mat_files(tmp_path, generate_mat_file, mat_test_dims, request):
-    """Fixture to create multiple .mat files with I0, I1, and V in HDF5 format."""
-    num_files = request.param if hasattr(request, "param") else 2
+def mock_mat_files(tmp_path, mat_test_dims, request):
+    """Create multiple temporary .mat files with random data."""
+    num_files = getattr(request, "param", 2)
+    h, w = mat_test_dims["height"], mat_test_dims["width"]
 
+    paths = []
     for t in range(1, num_files + 1):
-        generate_mat_file(tmp_path, t, mat_test_dims)
+        mat_path = tmp_path / f"flow_{t:04d}.mat"
+        with h5py.File(mat_path, "w", libver="latest", userblock_size=512) as f:
+            f.create_dataset(
+                "I0", data=np.random.randint(0, 255, size=(h, w), dtype=np.uint8)
+            )
+            f.create_dataset(
+                "I1", data=np.random.randint(0, 255, size=(h, w), dtype=np.uint8)
+            )
+            f.create_dataset("V", data=np.random.rand(h, w, 2).astype(np.float32))
 
-    file_paths = [tmp_path / f"flow_{t:04d}.mat" for t in range(1, num_files + 1)]
-    return [str(p) for p in file_paths], mat_test_dims
+        # write fake MATLAB header
+        header = (
+            (
+                f"MATLAB 7.3 MAT-file, Platform: Python-h5py, "
+                f"Created on {datetime.now():%c}"
+            )
+            .encode("ascii")
+            .ljust(116, b" ")
+        )
+        header += b" " * (512 - 116)
+        with open(mat_path, "r+b") as fp:
+            fp.write(header)
+
+        paths.append(mat_path)
+
+    yield [str(p) for p in paths], mat_test_dims
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Collection modifier
+# ──────────────────────────────────────────────────────────────────────────────
 def pytest_collection_modifyitems(config, items):
-    """Modify test items to skip if marked with 'run_explicitly' and not selected."""
+    """Skip tests unless explicitly selected with -m run_explicitly."""
     if config.getoption("-m") and "run_explicitly" in config.getoption("-m"):
-        # User explicitly wants to run this test, allow it
         return
-
-    # Otherwise skip all tests marked with run_explicitly
-    skip_marker = pytest.mark.skip(
+    skip = pytest.mark.skip(
         reason="Skipped unless explicitly selected with -m run_explicitly"
     )
     for item in items:
         if "run_explicitly" in item.keywords:
-            item.add_marker(skip_marker)
-
-
-def pytest_sessionfinish(session, exitstatus):
-    """Clean up the temporary test folder after all tests have run."""
-    if os.path.exists(TEST_FOLDER):
-        for root, dirs, files in os.walk(TEST_FOLDER, topdown=False):
-            for name in files:
-                os.remove(os.path.join(root, name))
-            for name in dirs:
-                os.rmdir(os.path.join(root, name))
-        os.rmdir(TEST_FOLDER)
+            item.add_marker(skip)
