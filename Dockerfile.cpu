@@ -48,6 +48,7 @@ RUN chown -R 1000:root /app
 
 # Install project without CUDA extras
 RUN pip install -e .[dev]
+RUN pip install --no-cache-dir pytest-xdist pytest-forked
 
 # Convenience entrypoint
 ENTRYPOINT ["conda", "run", "-n", "synthpix", "--no-capture-output"]
