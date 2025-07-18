@@ -9,10 +9,6 @@ services:
     environment:
       CUDA_VISIBLE_DEVICES: ""
       TZ: Europe/Zurich
-      # Slower for CI
-      OMP_NUM_THREADS: 1
-      MKL_NUM_THREADS: 1
-      NUMEXPR_NUM_THREADS: 1
     volumes:
       - /shared/fluids/fluids-estimation:/shared/fluids/fluids-estimation
       - .:/app
