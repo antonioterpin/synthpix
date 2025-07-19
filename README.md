@@ -2,7 +2,7 @@
 
 [![GitHub stars](https://img.shields.io/github/stars/IDSCETHZurich/synthpix?style=social)](https://github.com/IDSCETHZurich/synthpix/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://creativecommons.org/licenses/by-sa/4.0/)
-[![Coverage status](https://img.shields.io/codecov/c/github/IDSCETHZurich/synthpix.svg)](https://codecov.io/gh/IDSCETHZurich/synthpix)
+[![codecov](https://codecov.io/gh/IDSCETHZurich/synthpix/graph/badge.svg?token=UQ48NNZSI4)](https://codecov.io/gh/IDSCETHZurich/synthpix)
 [![Tests](https://img.shields.io/github/actions/workflow/status/antonioterpin/synthpix/test.yaml?branch=main)](https://github.com/antonioterpin/synthpix/actions)
 [![PyPI version](https://img.shields.io/pypi/v/synthpix.svg)](https://pypi.org/project/synthpix)
 
