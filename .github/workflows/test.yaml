@@ -13,26 +13,29 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
-      - name: Prepare test-results directory
-        run: mkdir -p junit
-
       - name: Build Docker image
         run: |
           docker compose -f docker-compose.cpu.yaml build
 
-      - name: Run tests
+      - name: Run tests & collect coverage
         run: |
           docker compose -f docker-compose.cpu.yaml run --rm \
             -e CI=true \
             -e XLA_PYTHON_CLIENT_PREALLOCATE=false \
-            -v "${{ github.workspace }}/junit:/workspace/junit" \
+            -v "${{ github.workspace }}/coverage:/workspace/coverage" \
             synthpix pytest -x -v -n 4 \
               --max-worker-restart=0 \
               -o "xdist.worker_timeout=120" \
-              --junitxml=/workspace/junit/test-results.xml \
+              --cov=synthpix \
+              --cov-report=xml:/workspace/coverage/coverage.xml \
+              --cov-report=term-missing \
               --ignore=test/save_ablations
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
         with:
-          name: pytest-results
-          path: junit/test-results.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
+      - name: List files
+        run: ls -R .
