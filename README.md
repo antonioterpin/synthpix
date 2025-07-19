@@ -3,7 +3,7 @@
 <!-- Test coverage (via Codecov for pytest-cov) -->
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://creativecommons.org/licenses/by-sa/4.0/)
-[![Coverage Status](https://img.shields.io/codecov/c/github/antonioterpin/synthpix.svg?branch=main)](https://codecov.io/gh/antonioterpin/synthpix)
+[![Coverage Status](https://img.shields.io/codecov/c/github/IDSCETHZurich/synthpix.svg?branch=dev)](https://codecov.io/gh/IDSCETHZurich/synthpix)
 [![Tests](https://img.shields.io/github/actions/workflow/status/antonioterpin/synthpix/test.yaml?branch=main)](https://github.com/antonioterpin/synthpix/actions)
 [![PyPI version](https://img.shields.io/pypi/v/synthpix.svg)](https://pypi.org/project/synthpix)
 
