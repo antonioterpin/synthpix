@@ -73,11 +73,11 @@ scheduler_files: /shared/fluids/fluids-estimation/eye_candies_main
 scheduler_class: ".mat"
 ```
 
-Let's understand what some of them mean with some examples, we refer to a detailed description of all of them in the README.
+Next, we exemplify the role of these parameters. See also the description of each of them in the [README](../README.md).
 
 ### Dataset parameters
 
-To start, let's configure a dataset for training a neural net on flow data. Suppose that we want:
+To start, suppose that we want:
 
 - 64 image pairs per batch
 - 16 flows per batch, i.e. 64 / 16 = 4 image pairs will share the same flow field.
@@ -105,11 +105,11 @@ for i, batch in enumerate(sampler):
     print(f"{flows.shape=}") # shape (64, H, W, 2)
 ```
 
-With these settings, ``SynthPix`` first samples a batch of 16 unique flow fields. Each of these fields is then used multiple times within each image batch. In this case, since batch_size=64 and flow_fields_per_batch=16, each unique flow is repeated every 16 images within a batch. Thus, the 0th, 16th, 32nd, and 48th flows are identical. This same set of flow fields is repeated across 4 consecutive batches (256 total image pairs) before SynthPix samples a new set of flow fields.
+With these settings, ``SynthPix`` first samples a batch of 16 unique flow fields. Each of these fields is then used multiple times within each image batch. In this case, since `batch_size=64` and `flow_fields_per_batch=16`, each unique flow is repeated every 16 images within a batch. Thus, the 0th, 16th, 32nd, and 48th flows are identical. This same set of flow fields is repeated across four consecutive batches (256 total image pairs) before SynthPix samples a new set of flow fields.
 
 ### Image and flow generation parameters
 
-To generate images of a physical system, the workflow should be the following:
+To load images from a physical system, the workflow is the following:
 
 - set ``flow_field_size`` to the size in physical units of the area observed by your flow data.
 - set ``image_shape`` to the resolution of the camera you want to model.
@@ -121,7 +121,7 @@ To generate images of a physical system, the workflow should be the following:
 
 ## Using a custom dataset with images provided (e.g., from a real setup)
 
-To further support testing on existing datasets without significantly changing the API, ``SynthPix`` allows opening images directly from files. In particular, the most supported file format is ``.mat``. Each file should have a flat structure and the following top-level variables:
+To further support testing on existing datasets without significantly changing the API, ``SynthPix`` allows opening images directly from files. We recommend to use as file format ``.mat``. Each file should have a flat structure and the following top-level variables:
 
 - ``I0``: the first image, shape (H, W)
 - ``I1``: the second image, shape (H, W)
