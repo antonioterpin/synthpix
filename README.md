@@ -52,8 +52,7 @@ For more examples and tutorials to use custom flow data or real-world data, chec
 
 ## Configuring the synthetic images ⚙️
 
-The configuration is made by the use of a YAML config file.
-Your YAML config file is organized into four main groups. Here’s a quick guide to what each set of parameters does:
+Configuration is handled through a YAML file, organized into four main groups. Here’s a quick guide to what each set of parameters does:
 
 ### 1. Dataset Parameters
 By these parameters one can personalize how the extraction of the flow fields works and the shape of the output batch
@@ -63,7 +62,7 @@ By these parameters one can personalize how the extraction of the flow fields wo
 | `seed`                   | Random seed for reproducibility         |
 | `batch_size`             | Number of image pairs generated at once |
 | `flow_fields_per_batch`  | Number of unique flow fields per batch  |
-| `batches_per_flow_batch` | Batches to generate per flow batch      |
+| `batches_per_flow_batch` | Number of batches generated before updating to a new set of flow fields |
 
 ### 2. Image Generation Parameters
 Define the look and realism of your synthetic PIV images.
@@ -82,30 +81,29 @@ Define the look and realism of your synthetic PIV images.
 | `rho_var`                     | Variability in correlation                                  |
 | `noise_level`                 | Amplitude of image noise (simulates camera noise)           |
 
-For diameter_ranges, intensity_ranges, and rho_ranges, each parameter is a list of possible ranges. For every image, one range is randomly selected from the list, and then the particle values are sampled from this selected range.
+For diameter_ranges, intensity_ranges, and rho_ranges, each parameter is a list of possible ranges. For every image pair, one range is randomly selected from each list, and then the particle parameters are sampled from these selected ranges.
 
-Each *_var parameter controls how much the property of each particle can change between the first and second image of a pair:
+Each *_var parameter controls how much the property of each particle can change between the first and second image of a pair. The change is applied as Gaussian noise with zero mean and variance given by the corresponding *_var value.
+
+Here’s what each *_var parameter controls:
 
 diameter_var:
 Simulates changes in particle size between frames, making the effect of focus, depth movement, or slight deformations more realistic.
 
-<sub>Increasing the particle diameter makes particles appear larger and more diffuse.</sub>
-
-<p align="center"> <img src="docs/images/diam2.png" width="90" style="image-rendering: pixelated;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <img src="docs/images/base.png" width="90" style="image-rendering: pixelated;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <img src="docs/images/diam3.png" width="90" style="image-rendering: pixelated;"/> </p> <sub>Low &nbsp;&nbsp;→&nbsp;&nbsp; Medium &nbsp;&nbsp;→&nbsp;&nbsp; High diameter</sub>
+Effect of diameter_var on Particle Size
+<p align="center"> <b>Low</b> <img src="docs/images/diam2.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <b>Medium</b> <img src="docs/images/base.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <b>High</b> <img src="docs/images/diam3.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> </p> <p align="center"> <sub>Increasing the particle diameter makes particles appear larger and more diffuse.</sub> </p>
 
 intensity_var:
 Models natural brightness changes due to variations in illumination, camera response, or particles moving in and out of the light sheet mimicking out-of-plane motion.
 
-<sub>Raising the intensity parameter produces brighter particles (higher signal-to-noise).</sub>
-
-<p align="center"> <img src="docs/images/50_Int.png" width="90" style="image-rendering: pixelated;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <img src="docs/images/150_Int.png" width="90" style="image-rendering: pixelated;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <img src="docs/images/base.png" width="90" style="image-rendering: pixelated;"/> </p> <sub>Low &nbsp;&nbsp;→&nbsp;&nbsp; Medium &nbsp;&nbsp;→&nbsp;&nbsp; High intensity</sub>
+Effect of intensity_var on Particle Brightness
+<p align="center"> <b>Low</b> <img src="docs/images/50_Int.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <b>Medium</b> <img src="docs/images/150_Int.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <b>High</b> <img src="docs/images/base.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> </p> <p align="center"> <sub>Raising the intensity parameter produces brighter particles (higher signal-to-noise).</sub> </p>
 
 rho_var:
 Adds variability to the shape and orientation (elongation/rotation) of particles between frames.
 
-<sub>Increasing rho makes particle spots more elliptical and/or rotated, changing their shape from circular to stretched.</sub>
-
-<p align="center"> <img src="docs/images/rho_positive.png" width="90" style="image-rendering: pixelated;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <img src="docs/images/no_rho.png" width="90" style="image-rendering: pixelated;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <img src="docs/images/base.png" width="90" style="image-rendering: pixelated;"/> </p> <sub>Positive &nbsp;&nbsp;→&nbsp;&nbsp; Zero &nbsp;&nbsp;→&nbsp;&nbsp; Negative correlation (`rho`)</sub>
+Effect of rho_var on Particle Shape
+<p align="center"> <b>Positive</b> <img src="docs/images/rho_positive.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <b>Zero</b> <img src="docs/images/no_rho.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <b>Negative</b> <img src="docs/images/base.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> </p> <p align="center"> <sub>Increasing <code>rho</code> module makes particle spots more elliptical and/or rotated, changing their shape from circular to stretched.</sub> </p>
 
 
 ### 3. Flow Generation Parameters
