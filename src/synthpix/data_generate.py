@@ -1,5 +1,5 @@
 """Processing module for generating images from flow fields."""
-from typing import Tuple
+from typing import Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -35,6 +35,7 @@ def generate_images_from_flow(
     noise_uniform: float = 0.0,
     noise_gaussian_mean: float = 0.0,
     noise_gaussian_std: float = 0.0,
+    mask: Optional[jnp.ndarray] = None,
 ):
     """Generates a batch of grey scale image pairs from a batch of flow fields.
 
@@ -96,6 +97,8 @@ def generate_images_from_flow(
             Mean of the Gaussian noise to add.
         noise_gaussian_std: float
             Standard deviation of the Gaussian noise to add.
+        mask: Optional[jnp.ndarray]
+            Optional mask to apply to the generated images.
 
     Returns:
         batch: dict
@@ -131,6 +134,7 @@ def generate_images_from_flow(
             flow_field_res_x=flow_field_res_x,
             flow_field_res_y=flow_field_res_y,
             noise_uniform=noise_uniform,
+            mask=mask,
         )
 
     # Fix the key shape
@@ -357,6 +361,11 @@ def generate_images_from_flow(
             noise_gaussian_std=noise_gaussian_std,
         )
 
+        # If a mask is provided, apply it to the images
+        if mask is not None:
+            first_img = first_img * mask
+            second_img = second_img * mask
+
         outputs = (first_img, second_img, diameter_idx, intensity_idx, rho_idx)
         new_carry = (key,)
         return new_carry, outputs
@@ -415,6 +424,7 @@ def input_check_gen_img_from_flow(
     noise_uniform: float = 0.0,
     noise_gaussian_mean: float = 0.0,
     noise_gaussian_std: float = 0.0,
+    mask: Optional[jnp.ndarray] = None,
 ):
     """Check the input arguments for generate_images_from_flow.
 
@@ -472,6 +482,8 @@ def input_check_gen_img_from_flow(
             Mean of the Gaussian noise to add.
         noise_gaussian_std: float
             Standard deviation of the Gaussian noise to add.
+        mask: Optional[jnp.ndarray]
+            Optional mask to apply to the generated images.
     """
     # Argument checks using exceptions instead of asserts
     if not isinstance(key, jax.Array) or key.shape != (2,) or key.dtype != jnp.uint32:
@@ -598,6 +610,12 @@ def input_check_gen_img_from_flow(
         raise ValueError("intensity_var must be a non-negative number.")
     if not isinstance(rho_var, (int, float)) or rho_var < 0:
         raise ValueError("rho_var must be a non-negative number.")
+    if mask is not None and not isinstance(mask, jnp.ndarray):
+        raise ValueError("mask must be a jnp.ndarray or None.")
+    if mask is not None and mask.shape != image_shape:
+        raise ValueError(
+            f"mask shape {mask.shape} does not match image_shape {image_shape}."
+        )
 
     num_particles = int(
         position_bounds[0] * position_bounds[1] * seeding_density_range[1]
@@ -613,11 +631,16 @@ def input_check_gen_img_from_flow(
     logger.debug(f"Probability of hiding particles in image 1: {p_hide_img1}")
     logger.debug(f"Probability of hiding particles in image 2: {p_hide_img2}")
     logger.debug(f"Particle diameter ranges: {diameter_ranges}")
+    logger.debug(f"Diameter variance: {diameter_var}")
     logger.debug(f"Intensity ranges: {intensity_ranges}")
+    logger.debug(f"Intensity variance: {intensity_var}")
     logger.debug(f"Correlation coefficient ranges: {rho_ranges}")
+    logger.debug(f"Correlation coefficient variance: {rho_var}")
     logger.debug(f"Time step (dt): {dt}")
     logger.debug(f"Flow field resolution (x): {flow_field_res_x}")
     logger.debug(f"Flow field resolution (y): {flow_field_res_y}")
     logger.debug(f"Noise level: {noise_uniform}")
     logger.debug(f"Gaussian noise mean: {noise_gaussian_mean}")
     logger.debug(f"Gaussian noise std: {noise_gaussian_std}")
+    if mask is not None:
+        logger.debug(f"Mask shape: {mask.shape}")

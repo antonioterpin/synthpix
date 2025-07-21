@@ -1,8 +1,10 @@
 """SyntheticImageSampler class for generating synthetic images from flow fields."""
+import os
 from typing import Callable, List, Optional, Sequence, Tuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
 from ..data_generate import input_check_gen_img_from_flow
@@ -63,6 +65,7 @@ class SyntheticImageSampler(Sampler):
         noise_gaussian_mean: float,
         noise_gaussian_std: float,
         device_ids: Optional[Sequence[int]] = None,
+        mask: Optional[str] = None,
     ):
         """Initializes the SyntheticImageSampler.
 
@@ -132,6 +135,9 @@ class SyntheticImageSampler(Sampler):
                 Standard deviation of the Gaussian noise to add.
             device_ids: Sequence[int]
                 List of device IDs to use for sharding the flow fields and images.
+            mask: Optional[str]
+                Optional path to a .npy file containing a mask.
+                Mask must be a 2D array with 1 where unmasked, 0 where masked.
         """
         super().__init__(scheduler, batch_size)
 
@@ -363,6 +369,23 @@ class SyntheticImageSampler(Sampler):
             raise ValueError("seed must be a positive integer.")
         self.seed = seed
 
+        if mask is not None:
+            if not isinstance(mask, str):
+                raise ValueError("mask must be a string representing the mask path.")
+            if not os.path.isfile(mask):
+                raise ValueError(f"Mask file {mask} does not exist.")
+            mask_array = np.load(mask)
+            if mask_array.shape != image_shape:
+                raise ValueError(
+                    f"Mask shape {mask_array.shape} does not match image shape "
+                    f"{image_shape}."
+                )
+            if not np.isin(mask_array, [0, 1]).all():
+                raise ValueError("Mask must only contain 0 and 1 values.")
+            self.mask = jnp.array(mask_array)
+        else:
+            self.mask = None
+
         if batch_size % flow_fields_per_batch != 0:
             extra_batch_size = batch_size % flow_fields_per_batch
             logger.warning(
@@ -508,6 +531,7 @@ class SyntheticImageSampler(Sampler):
                 noise_uniform=self.noise_uniform,
                 noise_gaussian_mean=self.noise_gaussian_mean,
                 noise_gaussian_std=self.noise_gaussian_std,
+                mask=self.mask,
             )
 
             input_check_flow_field_adapter(
@@ -550,6 +574,7 @@ class SyntheticImageSampler(Sampler):
             noise_uniform=self.noise_uniform,
             noise_gaussian_mean=self.noise_gaussian_mean,
             noise_gaussian_std=self.noise_gaussian_std,
+            mask=self.mask,
         )
 
         self.flow_field_adapter_jit = lambda flow: flow_field_adapter(
@@ -633,6 +658,8 @@ class SyntheticImageSampler(Sampler):
         logger.debug(f"Background level: {self.noise_uniform}")
         logger.debug(f"Noise Gaussian mean: {self.noise_gaussian_mean}")
         logger.debug(f"Noise Gaussian std: {self.noise_gaussian_std}")
+        if mask is not None:
+            logger.debug(f"Mask path: {mask}")
         self._reset()
 
     def _reset(self):
@@ -760,6 +787,7 @@ class SyntheticImageSampler(Sampler):
                 noise_gaussian_mean=config["noise_gaussian_mean"],
                 noise_gaussian_std=config["noise_gaussian_std"],
                 device_ids=config.get("device_ids", None),
+                mask=config.get("mask", None),
             )
         except KeyError as e:
             raise KeyError(
