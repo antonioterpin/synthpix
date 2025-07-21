@@ -69,9 +69,7 @@ def _make_sampler(device_ids):
         min_speed_x=0.0,
         min_speed_y=0.0,
         output_units="pixels",
-        noise_uniform=0.0,
-        noise_gaussian_mean=0.0,
-        noise_gaussian_std=0.0,
+        noise_level=0.0,
         device_ids=device_ids,
     )
 

@@ -45,9 +45,7 @@ def dummy_img_gen_fn(
     dt,
     flow_field_res_x,
     flow_field_res_y,
-    noise_uniform,
-    noise_gaussian_mean,
-    noise_gaussian_std,
+    noise_level,
 ):
     """Simulates generating a batch of synthetic images based on a single key."""
     images1 = jnp.ones((num_images, image_shape[0], image_shape[1])) * (
@@ -652,40 +650,16 @@ def test_invalid_dt(dt, scheduler):
 
 
 @pytest.mark.parametrize(
-    "noise_uniform", [-1, "a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+    "noise_level", [-1, "a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
 )
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_noise_uniform(noise_uniform, scheduler):
-    """Test that invalid noise_uniform raises a ValueError."""
-    with pytest.raises(
-        ValueError, match="noise_uniform must be a non-negative number."
-    ):
+def test_invalid_noise_level(noise_level, scheduler):
+    """Test that invalid noise_level raises a ValueError."""
+    with pytest.raises(ValueError, match="noise_level must be a non-negative number."):
         config = sampler_config.copy()
-        config["noise_uniform"] = noise_uniform
-        SyntheticImageSampler.from_config(
-            scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
-            config=config,
-        )
-
-
-@pytest.mark.parametrize(
-    "noise_gaussian_mean, noise_gaussian_std",
-    [(-5.0, 1.0), (5.0, -1.0)],
-)
-@pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": False}], indirect=True
-)
-def test_invalid_noise_gaussian_params(
-    noise_gaussian_mean, noise_gaussian_std, scheduler
-):
-    """Test that invalid gaussian noise params raise a ValueError."""
-    with pytest.raises(ValueError):
-        config = sampler_config.copy()
-        config["noise_gaussian_mean"] = noise_gaussian_mean
-        config["noise_gaussian_std"] = noise_gaussian_std
+        config["noise_level"] = noise_level
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
@@ -1032,9 +1006,7 @@ def test_speed_sampler_dummy_fn(
     config["min_speed_x"] = -0.16
     config["min_speed_y"] = -0.72
     config["dt"] = 2.6e-2
-    config["noise_uniform"] = 0.0
-    config["noise_gaussian_mean"] = 0.0
-    config["noise_gaussian_std"] = 0.0
+    config["noise_level"] = 0.0
     config["batch_size"] = batch_size
     config["seed"] = seed
     config["device_ids"] = [d.id for d in devices]
@@ -1132,7 +1104,7 @@ def test_speed_sampler_real_fn(
     config["min_speed_x"] = -0.16
     config["min_speed_y"] = -0.72
     config["dt"] = 2.6e-2
-    config["noise_uniform"] = 0.0
+    config["noise_level"] = 0.0
     config["flow_fields_per_batch"] = 64
     config["device_ids"] = [d.id for d in devices]
 
@@ -1242,9 +1214,7 @@ def test_stop_after_max_episodes(mock_mat_files):
         min_speed_x=0.0,
         min_speed_y=0.0,
         output_units="pixels",
-        noise_uniform=0.0,
-        noise_gaussian_mean=0.0,
-        noise_gaussian_std=0.0,
+        noise_level=0.0,
         device_ids=[d.id for d in devices] if devices is not None else None,
     )
 
@@ -1327,9 +1297,7 @@ def test_index_error_if_no_next_episode(mock_mat_files):
         min_speed_x=0.0,
         min_speed_y=0.0,
         output_units="pixels",
-        noise_uniform=0.0,
-        noise_gaussian_mean=0.0,
-        noise_gaussian_std=0.0,
+        noise_level=0.0,
         device_ids=[d.id for d in devices] if devices is not None else None,
     )
 

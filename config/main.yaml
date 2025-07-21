@@ -19,9 +19,7 @@ intensity_ranges: [[150, 230]] # Range of intensity values for the particles
 intensity_var: 0.01 # Variance of the intensity of particles
 rho_ranges: [[-0.1, 0.1]] # Correlation coefficients for the particles (similarity)
 rho_var: 0.1 # Variance of the correlation coefficients for the particles
-noise_uniform: 0.001 # Maximum amplitude of the uniform noise to add.
-noise_gaussian_mean: 0.01 # Mean of the Gaussian noise to add
-noise_gaussian_std: 0.001 # Standard deviation of the Gaussian noise to add
+noise_level: 0.001 # Maximum amplitude of the uniform noise to add.
 
 # Flow generation parameters
 velocities_per_pixel: 1.0 # Number of velocities per pixel

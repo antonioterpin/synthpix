@@ -189,18 +189,9 @@ def test_invalid_clip(clip):
         jnp.array([[0.5, 0.5], [1.5, 1.5], [2.5, 2.5], [3.5, 3.5]]),
     ],
 )
-@pytest.mark.parametrize("noise_uniform", [0.0, 5.0, 255.0])
-@pytest.mark.parametrize(
-    "noise_gaussian_mean, noise_gaussian_std", [(0.0, 0.0), (10.0, 2.0)]
-)
+@pytest.mark.parametrize("noise_level", [0.0, 5.0, 255.0])
 def test_generate_image_from_data(
-    seed,
-    image_shape,
-    particle_positions,
-    noise_uniform,
-    noise_gaussian_mean,
-    noise_gaussian_std,
-    visualize=False,
+    seed, image_shape, particle_positions, noise_level, visualize=False
 ):
     """Test that we can generate a synthetic particle image."""
     key = jax.random.PRNGKey(seed)
@@ -218,13 +209,7 @@ def test_generate_image_from_data(
         rho=rho,
     )
 
-    img_background = add_noise_to_image(
-        key,
-        img,
-        noise_uniform=noise_uniform,
-        noise_gaussian_mean=noise_gaussian_mean,
-        noise_gaussian_std=noise_gaussian_std,
-    )
+    img_background = add_noise_to_image(key, img, noise_level=noise_level)
 
     if visualize:
         import matplotlib.pyplot as plt
@@ -245,18 +230,9 @@ def test_generate_image_from_data(
 @pytest.mark.parametrize("seed", [0, 1, 42])
 @pytest.mark.parametrize("image_shape", [(128, 128)])
 @pytest.mark.parametrize("seeding_density", [0.06, 0.99])
-@pytest.mark.parametrize("noise_uniform", [0.0, 5.0, 255.0])
-@pytest.mark.parametrize(
-    "noise_gaussian_mean, noise_gaussian_std", [(0.0, 0.0), (10.0, 2.0)]
-)
+@pytest.mark.parametrize("noise_level", [0.0, 5.0, 255.0])
 def test_generate_image_from_density(
-    seed,
-    image_shape,
-    seeding_density,
-    noise_uniform,
-    noise_gaussian_mean,
-    noise_gaussian_std,
-    visualize=False,
+    seed, image_shape, seeding_density, noise_level, visualize=False
 ):
     """Test that we can generate a synthetic particle image."""
     key = jax.random.PRNGKey(seed)
@@ -268,13 +244,7 @@ def test_generate_image_from_density(
         intensity_range=(500, 500),
     )
 
-    img_background = add_noise_to_image(
-        key,
-        img,
-        noise_uniform=noise_uniform,
-        noise_gaussian_mean=noise_gaussian_mean,
-        noise_gaussian_std=noise_gaussian_std,
-    )
+    img_background = add_noise_to_image(key, img, noise_level=noise_level)
 
     if visualize:
         import matplotlib.pyplot as plt
@@ -491,11 +461,5 @@ def test_speed_img_gen(
 
 if __name__ == "__main__":
     test_generate_image_from_density(
-        seed=0,
-        image_shape=(16, 16),
-        density=0.1,
-        noise_uniform=5.0,
-        noise_gaussian_mean=3.0,
-        noise_gaussian_std=1.0,
-        visualize=True,
+        seed=0, image_shape=(16, 16), density=0.1, noise_level=5.0, visualize=True
     )
