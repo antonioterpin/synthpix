@@ -34,49 +34,48 @@ def match_histogram(source: jnp.ndarray, template_hist: jnp.ndarray) -> jnp.ndar
 
     Args:
         source (jnp.ndarray): The source image (uint8 or float) with values in [0,255].
-        template_hist (jnp.ndarray): 1D target histogram of length 256.
+        template_hist (jnp.ndarray): 1D target histogram of length 256,
+            summing to number of pixels in source.
 
     Returns:
         jnp.ndarray: The source image with its histogram matched to the target histogram.
     """
-    # Ensure template_hist has 256 bins
-    if template_hist.ndim != 1 or template_hist.shape[0] != 256:
-        raise ValueError(
-            f"template_hist must be a 1D array of length 256, "
-            f"got shape {template_hist.shape}."
-        )
+    # Flatten source and cast to float32 for computation
+    flat = source.ravel().astype(jnp.float32)
 
-    # Flatten source and cast to float for computation
-    old_shape = source.shape
-    src_flat = source.ravel().astype(jnp.float32)
+    # Implicit bin edges for intensities [0..255]
+    bins = jnp.arange(257, dtype=jnp.float32)
 
-    # Implicit bin edges covering 0..255
-    bin_edges = jnp.arange(257, dtype=jnp.float32)
+    # Source histogram counts
+    s_counts, _ = jnp.histogram(flat, bins=bins)
 
-    # 1) Compute source histogram
-    s_counts, _ = jnp.histogram(src_flat, bins=bin_edges)
-
-    # 2) Compute normalized CDFs
+    # Compute source CDF (normalized)
     s_cdf = jnp.cumsum(s_counts, dtype=jnp.float32)
-    s_cdf /= s_cdf[-1]
+    s_cdf = s_cdf / s_cdf[-1]
+
+    # Compute template CDF (normalized)
     t_cdf = jnp.cumsum(template_hist.astype(jnp.float32), dtype=jnp.float32)
-    t_cdf /= t_cdf[-1]
+    t_cdf = t_cdf / t_cdf[-1]
 
-    # 3) Define discrete intensity values (0..255)
-    bin_centers = jnp.arange(256, dtype=jnp.float32)
+    # Discrete levels 0..255
+    levels = jnp.arange(256, dtype=jnp.int32)
 
-    # 4) Digitize source pixels into bins [0..255]
-    bin_idx = jnp.digitize(src_flat, bin_edges) - 1
-    bin_idx = jnp.clip(bin_idx, 0, 255)
+    # Digitize source pixels into bin indices [0..255]
+    idx = jnp.digitize(flat, bins) - 1
+    idx = jnp.clip(idx, 0, 255)
 
-    # 5) Map each pixel to its source-CDF quantile
-    src_q = s_cdf[bin_idx]
+    # Map pixels to source CDF quantiles
+    quantiles = s_cdf[idx]
 
-    # 6) Interpolate quantiles to template intensity values
-    matched_flat = jnp.interp(src_q, t_cdf, bin_centers)
+    # Map quantiles to new levels via searchsorted on template CDF
+    new_idx = jnp.searchsorted(t_cdf, quantiles, side="left")
+    new_idx = jnp.clip(new_idx, 0, 255)
 
-    # Reshape back and cast to original dtype
-    return matched_flat.reshape(old_shape).astype(source.dtype)
+    # Gather new pixel values and cast to original dtype
+    matched = levels[new_idx].astype(source.dtype)
+
+    # Reshape back to original image shape
+    return matched.reshape(source.shape)
 
 
 def bilinear_interpolate(
