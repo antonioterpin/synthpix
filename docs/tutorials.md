@@ -47,11 +47,6 @@ noise_level: 0.001                  # Maximum amplitude of the
 velocities_per_pixel: 1.0           # Number of velocities per pixel
 resolution: 1                       # Pixels per unit length
 
-# In this dataset, the velocities are already in pixels (they are displacements)
-# and, so, we set the resolution and the dt to 1, and they shouldn't be modified.
-# Same goes for image_shape and flow_field_size.
-# If your dataset has different units, you can change these parameters accordingly.
-
 # ----- Flow parameters -----------------------------------------------------------------
 flow_field_size: [1024, 1024] # Size of the flow field in "measure units" (in the case of
                               # this dataset, it is pixels, in other datasets, it may be
@@ -128,3 +123,18 @@ To further support testing on existing datasets without significantly changing t
 - ``V``: the flow field, shape (H, W, 2) or (2, H, W)
 
 Since ``SynthPix`` directly reads provided image pairs and flows, parameters related to particle simulation and flow generation are no longer applicable. The only dataset parameters still applicable are ``batch_size``, ``loop``, ``randomize``, and ``seed``.
+
+## Other File Formats
+
+- `.h5`: Expected to contain a top-level group where the **first key** holds a flow field of shape **(X, Y, Z, 2)**. The flow is automatically sliced along the y-axis to produce individual samples.
+
+- `.npy`: Each file must be named `flow_t.npy` If image loading is enabled, it will be paired automatically with `img_t-1.jpg` and `img_t.jpg` located in the **same directory**. This format assumes strict file naming.
+
+- `.flo`: Stores a single flow field of shape **(H, W, 2)** in the standard **Middlebury `.flo` format**, as used in [this dataset](https://github.com/shengzesnail/PIV_dataset). For faster loading, a [conversion script](../scripts/download_piv_1.sh) is provided to convert these files into `.mat` format.
+
+| Format | Supports Images | Multiple Frames | Read Speed | Best Use Case | Notes |
+|--------|------------------|------------------|-------------|----------------|-------|
+| `.mat` | ✅ | 🚫 (one per file) | 🚀 Fast | General use, works well with MATLAB output | v7.3 recommended for speed (HDF5); image loading supported if `I0`, `I1` present |
+| `.h5`  | ❌ | ✅ | 🚀 Fast | Bulk storage of many flow fields | Automatically sliced along the y-axis |
+| `.npy` | ✅ | 🚫 (one per file) | ⚡ Medium | Paired with external JPEG images | Requires following naming convention in same directory |
+| `.flo` | ❌ | 🚫 | 🐢 Slow | Compatibility with existing datasets (e.g., PIV) | Conversion to `.mat` recommended for speed |
