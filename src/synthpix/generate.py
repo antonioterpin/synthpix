@@ -90,13 +90,8 @@ def add_noise_to_image(
     uniform_key, gaussian_key = jax.random.split(key)
 
     # Add uniform noise
-    image = jnp.clip(
-        image
-        + jax.random.uniform(
-            uniform_key, shape=image.shape, minval=0, maxval=noise_uniform
-        ),
-        min=0,
-        max=255,
+    image += jax.random.uniform(
+        uniform_key, shape=image.shape, minval=0, maxval=noise_uniform
     )
     # Add Gaussian noise
     image += noise_gaussian_mean
