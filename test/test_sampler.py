@@ -46,6 +46,7 @@ def dummy_img_gen_fn(
     flow_field_res_x,
     flow_field_res_y,
     noise_level,
+    mask,
 ):
     """Simulates generating a batch of synthetic images based on a single key."""
     images1 = jnp.ones((num_images, image_shape[0], image_shape[1])) * (
@@ -852,6 +853,27 @@ def test_invalid_output_units(output_units, scheduler):
         config["output_units"] = output_units
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            config=config,
+        )
+
+
+@pytest.mark.parametrize(
+    "mask",
+    [
+        None,
+        jnp.zeros((256, 256)),
+        jnp.ones((256, 256)),
+        jnp.full((256, 256), 0.5),
+    ],
+)
+def test_invalid_mask_type(mask):
+    """Test that invalid mask raises a ValueError."""
+    with pytest.raises(ValueError, match="mask must be a 2D boolean array."):
+        config = sampler_config.copy()
+        config["mask"] = mask
+        SyntheticImageSampler.from_config(
+            scheduler=None,  # No scheduler needed for this test
             img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
