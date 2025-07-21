@@ -380,10 +380,7 @@ class SyntheticImageSampler(Sampler):
                     f"Mask shape {mask_array.shape} does not match image shape "
                     f"{image_shape}."
                 )
-            if not (
-                np.isin(mask_array, [0, 1]).all()
-                or ((mask_array == 0) | (mask_array == 1)).all()
-            ):
+            if not np.isin(mask_array, [0, 1]).all():
                 raise ValueError("Mask must only contain 0 and 1 values.")
             self.mask = jnp.array(mask_array)
         else:
@@ -661,7 +658,8 @@ class SyntheticImageSampler(Sampler):
         logger.debug(f"Background level: {self.noise_uniform}")
         logger.debug(f"Noise Gaussian mean: {self.noise_gaussian_mean}")
         logger.debug(f"Noise Gaussian std: {self.noise_gaussian_std}")
-        logger.debug(f"Mask path: {mask if mask else 'None'}")
+        if mask is not None:
+            logger.debug(f"Mask path: {mask}")
         self._reset()
 
     def _reset(self):

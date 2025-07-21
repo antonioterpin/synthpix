@@ -642,4 +642,5 @@ def input_check_gen_img_from_flow(
     logger.debug(f"Noise level: {noise_uniform}")
     logger.debug(f"Gaussian noise mean: {noise_gaussian_mean}")
     logger.debug(f"Gaussian noise std: {noise_gaussian_std}")
-    logger.debug(f"Mask shape: {mask.shape if mask is not None else 'None'}")
+    if mask is not None:
+        logger.debug(f"Mask shape: {mask.shape}")

@@ -953,6 +953,9 @@ def test_invalid_mask_shape(scheduler, mock_invalid_mask_file, image_shape):
             )
 
 
+@pytest.mark.parametrize(
+    "mock_invalid_mask_file", [1.1, -1, 2, 0.5, 1e-10], indirect=True
+)
 def test_invalid_mask_values(scheduler, mock_invalid_mask_file):
     """Test that mask with invalid values raises a ValueError."""
     # Create a dummy mask with an invalid shape
