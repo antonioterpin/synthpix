@@ -5,8 +5,6 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 
-from .utils import is_int
-
 
 def gaussian_2d_correlated(
     x: jnp.ndarray,
@@ -85,90 +83,6 @@ def add_noise_to_image(
 
     # Clip the final image to valid range
     return jnp.clip(image, 0, 255)
-
-
-def input_check_img_gen_from_data(
-    image_shape: Tuple[int, int],
-    particle_positions: jnp.ndarray,
-    max_diameter: float,
-    diameters_x: jnp.ndarray,
-    diameters_y: jnp.ndarray,
-    intensities: jnp.ndarray,
-    rho: jnp.ndarray,
-    clip: bool = True,
-):
-    """Check the input arguments for img_gen_from_data.
-
-    Args:
-        image_shape: Tuple[int, int]
-            (height, width) of the output image.
-        particle_positions: jnp.ndarray
-            Array of particle positions (y, x) in pixels.
-        max_diameter: float
-            Maximum particle diameter in pixels.
-        diameters_x: jnp.ndarray
-            Array of particle diameters in the x-direction.
-        diameters_y: jnp.ndarray
-            Array of particle diameters in the y-direction.
-        intensities: jnp.ndarray
-            Array of peak intensities (I0).
-        rho: jnp.ndarray
-            Array of correlation coefficients (rho).
-        clip: bool
-            If True, clip the image values to [0, 255].
-    """
-    # Argument checks using exceptions instead of asserts
-    if (
-        len(image_shape) != 2
-        or not all(s > 0 for s in image_shape)
-        or not all(is_int(s) for s in image_shape)
-    ):
-        raise ValueError("image_shape must be a tuple of two positive integers.")
-    if particle_positions is not None and (
-        not isinstance(particle_positions, jnp.ndarray)
-        or particle_positions.ndim != 2
-        or particle_positions.shape[1] != 2
-    ):
-        raise ValueError("Particle positions must be a 2D array with shape (N, 2)")
-
-    if not isinstance(max_diameter, (int, float)) or max_diameter <= 0:
-        raise ValueError("max_diameter must be a positive number.")
-
-    if (
-        not isinstance(diameters_x, jnp.ndarray)
-        or diameters_x.ndim != 1
-        or diameters_x.shape[0] != particle_positions.shape[0]
-    ):
-        raise ValueError(
-            "diameters_x must be a 1D array with the same length as particle_positions."
-        )
-    if (
-        not isinstance(diameters_y, jnp.ndarray)
-        or diameters_y.ndim != 1
-        or diameters_y.shape[0] != particle_positions.shape[0]
-    ):
-        raise ValueError(
-            "diameters_y must be a 1D array with the same length as particle_positions."
-        )
-    if (
-        not isinstance(intensities, jnp.ndarray)
-        or intensities.ndim != 1
-        or intensities.shape[0] != particle_positions.shape[0]
-    ):
-        raise ValueError(
-            "intensities must be a 1D array with the same length as particle_positions."
-        )
-    if (
-        not isinstance(rho, jnp.ndarray)
-        or rho.ndim != 1
-        or rho.shape[0] != particle_positions.shape[0]
-    ):
-        raise ValueError(
-            "rho must be a 1D array with the same length as particle_positions."
-        )
-
-    if not isinstance(clip, bool):
-        raise ValueError("clip must be a boolean value.")
 
 
 def img_gen_from_data(
