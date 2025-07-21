@@ -366,22 +366,62 @@ def test_invalid_flow_field_res_y(flow_field_res_y):
 
 
 @pytest.mark.parametrize(
-    "noise_level", [-1, "a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+    "noise_uniform", [-1, "a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
 )
-def test_invalid_noise_level(noise_level):
-    """Test that invalid noise_level raise a ValueError."""
+def test_invalid_noise_uniform(noise_uniform):
+    """Test that invalid noise_uniform raise a ValueError."""
     key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
         ValueError,
-        match="noise_level must be a non-negative number.",
+        match="noise_uniform must be a non-negative number.",
     ):
         input_check_gen_img_from_flow(
             key,
             flow_field=flow_field,
             image_shape=image_shape,
-            noise_level=noise_level,
+            noise_uniform=noise_uniform,
+        )
+
+
+@pytest.mark.parametrize(
+    "noise_gaussian_mean", ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+)
+def test_invalid_noise_gaussian_mean(noise_gaussian_mean):
+    """Test that invalid noise_gaussian_mean raise a ValueError."""
+    key = jax.random.PRNGKey(0)
+    flow_field = jnp.zeros((1, 128, 128, 2))
+    image_shape = (128, 128)
+    with pytest.raises(
+        ValueError,
+        match="noise_gaussian_mean must be a non-negative number.",
+    ):
+        input_check_gen_img_from_flow(
+            key,
+            flow_field=flow_field,
+            image_shape=image_shape,
+            noise_gaussian_mean=noise_gaussian_mean,
+        )
+
+
+@pytest.mark.parametrize(
+    "noise_gaussian_std", ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+)
+def test_invalid_noise_gaussian_std(noise_gaussian_std):
+    """Test that invalid noise_gaussian_std raise a ValueError."""
+    key = jax.random.PRNGKey(0)
+    flow_field = jnp.zeros((1, 128, 128, 2))
+    image_shape = (128, 128)
+    with pytest.raises(
+        ValueError,
+        match="noise_gaussian_std must be a non-negative number.",
+    ):
+        input_check_gen_img_from_flow(
+            key,
+            flow_field=flow_field,
+            image_shape=image_shape,
+            noise_gaussian_std=noise_gaussian_std,
         )
 
 
@@ -541,7 +581,9 @@ def test_generate_images_from_flow(monkeypatch, debug_flag):
     rho_ranges = jnp.array([[-0.2, 0.2]])  # rho cannot be -1 or 1
     rho_var = 0
     dt = 0.0
-    noise_level = 0.0
+    noise_uniform = 0.0
+    noise_gaussian_mean = 0.0
+    noise_gaussian_std = 0.0
     max_diameter = float(max((d[1] for d in diameter_ranges)))
 
     # 2. create a flow field
@@ -569,7 +611,9 @@ def test_generate_images_from_flow(monkeypatch, debug_flag):
         rho_ranges=rho_ranges,
         rho_var=rho_var,
         dt=dt,
-        noise_level=noise_level,
+        noise_uniform=noise_uniform,
+        noise_gaussian_mean=noise_gaussian_mean,
+        noise_gaussian_std=noise_gaussian_std,
     )
     img = data["images1"]
     img_warped = data["images2"]
@@ -606,7 +650,7 @@ def test_generate_images_from_flow(monkeypatch, debug_flag):
                 rho_ranges=rho_ranges,
                 rho_var=rho_var,
                 dt=dt,
-                noise_level=noise_level,
+                noise_uniform=noise_uniform,
             )
 
 
@@ -715,7 +759,9 @@ def test_speed_generate_images_from_flow(
                 diameter_var=0,
                 intensity_ranges=jnp.array([[80, 100]]),
                 intensity_var=0,
-                noise_level=0,
+                noise_uniform=0,
+                noise_gaussian_mean=0.0,
+                noise_gaussian_std=0.0,
                 rho_ranges=jnp.array([[-0.01, 0.01]]),
                 rho_var=0,
                 max_diameter=2.0,
@@ -778,7 +824,9 @@ def test_speed_generate_images_from_flow(
     "rho_ranges", [jnp.array([[-0.01, 0.01]])]
 )  # rho cannot be -1 or 1
 @pytest.mark.parametrize("rho_var", [0])
-@pytest.mark.parametrize("noise_level", [0.0])
+@pytest.mark.parametrize("noise_uniform", [0.0])
+@pytest.mark.parametrize("noise_gaussian_mean", [0.0])
+@pytest.mark.parametrize("noise_gaussian_std", [0.0])
 @pytest.mark.parametrize("img_offset", [(0, 0)])
 def test_img_parameter_combinations(
     warped,
@@ -792,7 +840,9 @@ def test_img_parameter_combinations(
     dt,
     rho_ranges,
     rho_var,
-    noise_level,
+    noise_uniform,
+    noise_gaussian_mean,
+    noise_gaussian_std,
     img_offset,
 ):
     """Test that we can generate images from a flow field."""
@@ -813,8 +863,11 @@ def test_img_parameter_combinations(
         + "-"
         + intensity_ranges[0][1].__str__()
         + "_"
-        + noise_level.__str__()
+        + noise_uniform.__str__()
         + "_"
+        + noise_gaussian_mean.__str__()
+        + "_"
+        + noise_gaussian_std.__str__()
     )
 
     max_diameter = max((d[1] for d in diameter_ranges))
@@ -845,7 +898,9 @@ def test_img_parameter_combinations(
             rho_ranges=rho_ranges,
             rho_var=rho_var,
             dt=dt,
-            noise_level=noise_level,
+            noise_uniform=noise_uniform,
+            noise_gaussian_mean=noise_gaussian_mean,
+            noise_gaussian_std=noise_gaussian_std,
         )
     )
 
