@@ -60,3 +60,25 @@ def test_jit_compatibility(random_image_uint8):
     out2 = jit_fn(src, template_hist)
 
     assert jnp.allclose(out1, out2)
+
+
+def test_invalid_template_hist_length(random_image_uint8):
+    """Passing a template_hist of wrong length should raise ValueError."""
+    src = random_image_uint8.astype(jnp.float32)
+    # Too short
+    bad_hist_short = jnp.ones(255, dtype=jnp.float32)
+    with pytest.raises(ValueError):
+        match_histogram(src, bad_hist_short)
+    # Too long
+    bad_hist_long = jnp.ones(257, dtype=jnp.float32)
+    with pytest.raises(ValueError):
+        match_histogram(src, bad_hist_long)
+
+
+def test_invalid_template_hist_ndim(random_image_uint8):
+    """Passing a multi-dimensional template_hist should raise ValueError."""
+    src = random_image_uint8.astype(jnp.float32)
+    # 2D histogram
+    bad_hist_ndim = jnp.ones((256, 1), dtype=jnp.float32)
+    with pytest.raises(ValueError):
+        match_histogram(src, bad_hist_ndim)
