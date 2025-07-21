@@ -943,6 +943,27 @@ def test_invalid_mask_values(scheduler, mock_invalid_mask_file):
         )
 
 
+def test_mask_is_right(scheduler, mock_mask_file):
+    """Test that correct mask gets loaded."""
+    # Create a dummy mask with a valid shape
+    mask = jnp.array(np.load(mock_mask_file[0]))
+
+    config = sampler_config.copy()
+    config["mask"] = mock_mask_file[0]
+    config["image_shape"] = mask.shape  # Use the shape of the mask
+    sampler = SyntheticImageSampler.from_config(
+        scheduler=scheduler,
+        img_gen_fn=dummy_img_gen_fn,
+        config=config,
+    )
+
+    assert isinstance(sampler.mask, jnp.ndarray)
+    assert sampler.mask.shape == mask.shape
+    assert jnp.array_equal(
+        sampler.mask, mask
+    ), "Mask loaded from file does not match the expected mask."
+
+
 @pytest.mark.parametrize(
     "batch_size, batches_per_flow_batch, image_shape",
     [(12, 16, (256, 256)), (12, 4, (256, 256))],
