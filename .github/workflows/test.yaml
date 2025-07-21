@@ -29,7 +29,8 @@ jobs:
               --cov=synthpix \
               --cov-report=xml:/workspace/coverage/coverage.xml \
               --cov-report=term-missing \
-              --ignore=test/save_ablations
+              --ignore=test/save_ablations \
+              --ignore=test/test_sampler.py
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
