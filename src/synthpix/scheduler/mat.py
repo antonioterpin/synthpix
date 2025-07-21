@@ -81,15 +81,11 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
     def load_file(self, file_path: str):
         """Load any MATLAB .mat file (v4, v5/6/7, or v7.3) and return its data dict.
 
-        Parameters
-        ----------
-        file_path : str
-            Path to the .mat file.
+        Args:
+        file_path (str): Path to the .mat file.
 
-        Returns
-        -------
-        dict
-            Dictionary containing at least 'V' (flow field).  When
+        Returns:
+            dict: Dictionary containing 'V' (flow field).  When
             `self.include_images` is True, it must also hold 'I0' and 'I1'.
         """
 
