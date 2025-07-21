@@ -122,19 +122,35 @@ To further support testing on existing datasets without significantly changing t
 - ``I1``: the second image, shape (H, W)
 - ``V``: the flow field, shape (H, W, 2) or (2, H, W)
 
-Since ``SynthPix`` directly reads provided image pairs and flows, parameters related to particle simulation and flow generation are no longer applicable. The only dataset parameters still applicable are ``batch_size``, ``loop``, ``randomize``, and ``seed``.
+Since ``SynthPix`` directly reads provided image pairs and flows, parameters related to particle simulation and flow generation are no longer applicable. The only dataset parameters still applicable are ``batch_size``, ``loop``, ``randomize``, and ``seed``. Moreover, `image_shape` can be used to rescale the images via bilinear interpolation. The final `.yaml` should look like:
+
+```yaml
+# Dataset parameters
+seed: 0                 # Random seed for reproducibility
+batch_size: 10          # Number of (img1, img2, flow, density) tuples per batch
+include_images: true    # Whether to include images in the dataset
+loop: false             # Whether to loop the dataset
+randomize: false        # Whether to randomize the order of the batches
+
+# Image parameters
+image_shape: [256, 256] # Shape of the images
+
+# Flows files
+scheduler_files: /shared/fluids/fluids-estimation/piv_dataset_final/test/
+scheduler_class: ".mat"
+```
 
 ## Other File Formats
 
-- `.h5`: Expected to contain a top-level group where the **first key** holds a flow field of shape **(X, Y, Z, 2)**. The flow is automatically sliced along the y-axis to produce individual samples.
+- `.h5`: Expected to contain a top-level group where the **first key** holds a flow field of shape **(X, Y, Z, 2)**. The flow is automatically sliced along the y-axis to produce individual samples. This allows for storage of flows along a 3d space, which are then sliced and used one slice at a time.
 
 - `.npy`: Each file must be named `flow_t.npy` If image loading is enabled, it will be paired automatically with `img_t-1.jpg` and `img_t.jpg` located in the **same directory**. This format assumes strict file naming.
 
 - `.flo`: Stores a single flow field of shape **(H, W, 2)** in the standard **Middlebury `.flo` format**, as used in [this dataset](https://github.com/shengzesnail/PIV_dataset). For faster loading, a [conversion script](../scripts/download_piv_1.sh) is provided to convert these files into `.mat` format.
 
-| Format | Supports Images | Multiple Frames | Read Speed | Best Use Case | Notes |
+| Format | Supports images | Multiple flows per file | Load speed | Use case | Notes |
 |--------|------------------|------------------|-------------|----------------|-------|
 | `.mat` | ✅ | 🚫 (one per file) | 🚀 Fast | General use, works well with MATLAB output | v7.3 recommended for speed (HDF5); image loading supported if `I0`, `I1` present |
-| `.h5`  | ❌ | ✅ | 🚀 Fast | Bulk storage of many flow fields | Automatically sliced along the y-axis |
-| `.npy` | ✅ | 🚫 (one per file) | ⚡ Medium | Paired with external JPEG images | Requires following naming convention in same directory |
-| `.flo` | ❌ | 🚫 | 🐢 Slow | Compatibility with existing datasets (e.g., PIV) | Conversion to `.mat` recommended for speed |
+| `.h5`  | ❌ | ✅ | 🚀 Fast | Storage of many flow fields per file | Automatically sliced along the y-axis |
+| `.npy` | ✅ | 🚫 (one per file) | ⚡ Medium | Paired with external JPEG images | Requires following a naming convention in the directory |
+| `.flo` | ❌ | 🚫 | 🐢 Slow | Compatibility with existing datasets (e.g., PIV) | [Conversion](../scripts/download_piv_1.sh) to `.mat` recommended for speed |
