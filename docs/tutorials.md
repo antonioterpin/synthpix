@@ -116,29 +116,48 @@ To load images from a physical system, the workflow is the following:
 
 ## Using a custom dataset with images provided (e.g., from a real setup)
 
-To further support testing on existing datasets without significantly changing the API, ``SynthPix`` allows opening images directly from files. We recommend to use as file format ``.mat``. Each file should have a flat structure and the following top-level variables:
+To further support testing on existing datasets without significantly changing the API, ``SynthPix`` allows opening images directly from files. We recommend to use as file format ``.mat``, but also `.flo` and `.npy` allow for direct image loading. Each `.mat` file should have a flat structure and the following top-level variables:
 
 - ``I0``: the first image, shape (H, W)
 - ``I1``: the second image, shape (H, W)
 - ``V``: the flow field, shape (H, W, 2) or (2, H, W)
 
-Since ``SynthPix`` directly reads provided image pairs and flows, parameters related to particle simulation and flow generation are no longer applicable. The only dataset parameters still applicable are ``batch_size``, ``loop``, ``randomize``, and ``seed``. Moreover, `image_shape` can be used to rescale the images via bilinear interpolation. The final `.yaml` should look like:
+Since ``SynthPix`` directly reads provided image pairs and flows, parameters related to particle simulation and flow generation are no longer applicable. The only dataset parameters still applicable are ``batch_size``, ``loop``, ``randomize``, and ``seed``. Moreover, `image_shape` can be used to rescale the images via bilinear interpolation.
+
+Let's show how to load an image pair and it's related flow from the PIV dataset. We'll use the [download script](../scripts/download_piv_1.sh) to download the files. You can already find a pair as an example in the [examples folder](./examples/), which we'll use for this example. What you need is to setup a config like:
 
 ```yaml
 # Dataset parameters
 seed: 0                 # Random seed for reproducibility
 batch_size: 10          # Number of (img1, img2, flow, density) tuples per batch
 include_images: true    # Whether to include images in the dataset
-loop: false             # Whether to loop the dataset
+loop: true              # Whether to loop the dataset (true because there's only one pair)
 randomize: false        # Whether to randomize the order of the batches
 
 # Image parameters
 image_shape: [256, 256] # Shape of the images
 
 # Flows files
-scheduler_files: /shared/fluids/fluids-estimation/piv_dataset_final/test/
-scheduler_class: ".mat"
+scheduler_files: docs/examples/
+scheduler_class: ".flo"
 ```
+
+Now by just doing:
+
+```python
+sampler = synthpix.make("docs/examples/flo/config.yaml")
+
+for batch in sampler:
+    flows = batch["flow_fields"]
+    images1 = batch["imgs1"]
+    images2 = batch["imgs2"]
+```
+
+you can load the images without any additional code.
+
+However, for faster speed times, we suggest using the [converter script](converter.py) provided. Then very simply change `scheduler_class` to `".mat"` and you're good to go!
+
+We also provide support for direct `.npy` files and include them as an example. Using the previous config, just change `scheduler_class` to `.npy` and `scheduler_files` to `"docs/examples/npy"`. Nothing else needs to change. So you can worry about your research, everything else is taken care of.
 
 ## Other File Formats
 

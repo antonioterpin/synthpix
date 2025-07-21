@@ -104,4 +104,5 @@ class FloFlowFieldScheduler(BaseFlowFieldScheduler):
             file_list=config["scheduler_files"],
             randomize=config.get("randomize", False),
             loop=config.get("loop", True),
+            key=config.get("key", None),
         )
