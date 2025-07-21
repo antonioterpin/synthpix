@@ -1,12 +1,20 @@
 import re
 from test.test_sampler import dummy_img_gen_fn
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from jax import random
 
+from synthpix.data_generate import (
+    generate_images_from_flow,
+    input_check_gen_img_from_flow,
+)
 from synthpix.sampler import SyntheticImageSampler
-from synthpix.utils import load_configuration
+
+# Import existing modules
+from synthpix.utils import load_configuration, logger
 
 sampler_config = load_configuration("config/test_data.yaml")
 
@@ -158,3 +166,113 @@ def test_mask_is_right(scheduler, mock_mask_file):
     assert jnp.array_equal(
         sampler.mask, mask
     ), "Mask loaded from file does not match the expected mask."
+
+
+def test_input_check_gen_img_from_flow_logs_mask_shape(monkeypatch):
+    """Test that the input_check_gen_img_from_flow function logs the mask shape."""
+
+    key = random.PRNGKey(0)
+    flow_field = jnp.zeros((1, 8, 8, 2))
+    image_shape = (4, 4)
+    mask = jnp.ones(image_shape)
+
+    # Collect debug messages
+    logged = []
+    monkeypatch.setattr(logger, "debug", lambda msg: logged.append(msg))
+
+    # Call the function to test
+    input_check_gen_img_from_flow(
+        key=key,
+        flow_field=flow_field,
+        image_shape=image_shape,
+        mask=mask,
+    )
+
+    # Check if the mask shape was logged
+    assert any(
+        "Mask shape: (4, 4)" in m for m in logged
+    ), f"Expected mask shape log, got: {logged}"
+
+
+@pytest.mark.parametrize("mask", ["a", [1, 2]])
+def test_invalid_mask_type_in_generate(mask):
+    """Test that invalid mask type raise a ValueError."""
+    key = jax.random.PRNGKey(0)
+    flow_field = jnp.zeros((1, 128, 128, 2))
+    image_shape = (128, 128)
+    with pytest.raises(ValueError, match="mask must be a jnp.ndarray or None."):
+        input_check_gen_img_from_flow(
+            key,
+            flow_field=flow_field,
+            image_shape=image_shape,
+            mask=mask,
+        )
+
+
+@pytest.mark.parametrize(
+    "mask",
+    [
+        jnp.zeros((356, 128)),
+        jnp.ones((128, 1)),
+        jnp.ones((128, 128, 1)),
+    ],  # Invalid shapes
+)
+def test_invalid_mask_shape_in_generate(mask):
+    """Test that invalid mask shape raise a ValueError."""
+    key = jax.random.PRNGKey(0)
+    flow_field = jnp.zeros((1, 128, 128, 2))
+    image_shape = (128, 128)
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            f"mask shape {mask.shape} does not match image_shape {image_shape}."
+        ),
+    ):
+        input_check_gen_img_from_flow(
+            key,
+            flow_field=flow_field,
+            image_shape=image_shape,
+            mask=mask,
+        )
+
+
+@pytest.mark.parametrize(
+    "mask",
+    [
+        jnp.ones((32, 32)),  # no mask: nothing is masked out
+        jnp.pad(jnp.ones((16, 32)), ((0, 16), (0, 0))),  # bottom half masked
+        jnp.eye(32),  # diagonal only
+        jnp.zeros((32, 32)),  # all masked (everything should be zero)
+    ],
+)
+def test_mask_applies_zeros(mask):
+    key = jax.random.PRNGKey(1)
+    flow_field = jnp.zeros((1, 32, 32, 2))  # no motion
+    image_shape = (32, 32)
+    image_offset = (0, 0)
+
+    batch = generate_images_from_flow(
+        key=key,
+        flow_field=flow_field,
+        image_shape=image_shape,
+        position_bounds=image_shape,
+        img_offset=image_offset,
+        num_images=1,
+        mask=mask,
+    )
+    images1 = batch["images1"][0]
+    images2 = batch["images2"][0]
+
+    # Masked regions (where mask == 0) should be exactly zero
+    masked1 = images1[mask == 0]
+    masked2 = images2[mask == 0]
+    assert jnp.all(masked1 == 0), f"Masked region in images1 is not zero: {masked1}"
+    assert jnp.all(masked2 == 0), f"Masked region in images2 is not zero: {masked2}"
+
+    # Unmasked regions (where mask == 1) should be nonzero
+    # for at least some pixels (unless all masked)
+    if jnp.any(mask == 1):
+        unmasked1 = images1[mask == 1]
+        unmasked2 = images2[mask == 1]
+        assert jnp.any(unmasked1 != 0), "All unmasked region in images1 is zero"
+        assert jnp.any(unmasked2 != 0), "All unmasked region in images2 is zero"
