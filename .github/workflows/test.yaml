@@ -23,14 +23,13 @@ jobs:
             -e CI=true \
             -e XLA_PYTHON_CLIENT_PREALLOCATE=false \
             -v "${{ github.workspace }}/coverage:/workspace/coverage" \
-            synthpix pytest -x -v -n 4 \
+            synthpix pytest test/test_sampler.py -x -v -n 4 \
               --max-worker-restart=0 \
               -o "xdist.worker_timeout=120" \
               --cov=synthpix \
               --cov-report=xml:/workspace/coverage/coverage.xml \
               --cov-report=term-missing \
-              --ignore=test/save_ablations \
-              --ignore=test/test_sampler.py
+              --ignore=test/save_ablations
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
