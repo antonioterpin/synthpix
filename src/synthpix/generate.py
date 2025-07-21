@@ -69,24 +69,41 @@ def gaussian_2d_correlated(
 
 
 def add_noise_to_image(
-    key: jax.random.PRNGKey, image: jnp.ndarray, noise_level: float = 5.0
+    key: jax.random.PRNGKey,
+    image: jnp.ndarray,
+    noise_uniform: float = 0.0,
+    noise_gaussian_mean: float = 0.0,
+    noise_gaussian_std: float = 0.0,
 ):
     """Add noise to an image.
 
     Args:
         key (jax.random.PRNGKey): Random key for reproducibility.
         image (jnp.ndarray): Input image.
-        noise_level (float): Maximum amplitude of the uniform noise to add.
+        noise_uniform (float): Maximum amplitude of the uniform noise to add.
+        noise_gaussian_mean (float): Mean of the Gaussian noise to add.
+        noise_gaussian_std (float): Standard deviation of the Gaussian noise to add.
 
     Returns:
         jnp.ndarray: Noisy image.
     """
-    return jnp.clip(
+    uniform_key, gaussian_key = jax.random.split(key)
+
+    # Add uniform noise
+    image = jnp.clip(
         image
-        + jax.random.uniform(key, shape=image.shape, minval=0, maxval=noise_level),
+        + jax.random.uniform(
+            uniform_key, shape=image.shape, minval=0, maxval=noise_uniform
+        ),
         min=0,
         max=255,
     )
+    # Add Gaussian noise
+    image += noise_gaussian_mean
+    image += jax.random.normal(gaussian_key, shape=image.shape) * noise_gaussian_std
+
+    # Clip the final image to valid range
+    return jnp.clip(image, 0, 255)
 
 
 def img_gen_from_density(
