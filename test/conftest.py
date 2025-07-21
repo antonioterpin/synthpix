@@ -149,32 +149,6 @@ def mock_numpy_files(tmp_path, numpy_test_dims, request):
     yield [str(p) for p in paths], numpy_test_dims
 
 
-@pytest.fixture
-def mock_invalid_mask_file(tmp_path, numpy_test_dims, request):
-    """Create and save a numpy invalid mask to a temporary file."""
-    shape = numpy_test_dims["height"], numpy_test_dims["width"]
-    value = getattr(request, "param", 2)
-
-    path = tmp_path / "invalid_mask.npy"
-    arr = np.full(shape, value, dtype=float)
-    np.save(path, arr)
-
-    yield str(path), numpy_test_dims
-
-
-@pytest.fixture
-def mock_mask_file(tmp_path, numpy_test_dims):
-    """Create and save a numpy mask to a temporary file."""
-    shape = numpy_test_dims["height"], numpy_test_dims["width"]
-
-    path = tmp_path / "mask.npy"
-    # Create a mask with some ones and zeros
-    arr = np.random.choice([0, 1], size=shape, p=[0.5, 0.5]).astype(int)
-    np.save(path, arr)
-
-    yield str(path), numpy_test_dims
-
-
 # ──────────────────────────────────────────────────────────────────────────────
 # .mat helpers
 # ──────────────────────────────────────────────────────────────────────────────
