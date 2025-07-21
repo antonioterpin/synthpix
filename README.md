@@ -91,19 +91,86 @@ diameter_var:
 Simulates changes in particle size between frames, making the effect of focus, depth movement, or slight deformations more realistic.
 
 Effect of diameter_var on Particle Size
-<p align="center"> <b>Low</b> <img src="docs/images/diam2.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <b>Medium</b> <img src="docs/images/base.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <b>High</b> <img src="docs/images/diam3.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> </p> <p align="center"> <sub>Increasing the particle diameter makes particles appear larger and more diffuse.</sub> </p>
+<p align="center" style="margin-bottom:0;">
+  <span style="display:inline-block; width: 90px; text-align:center;"><b>Low</b></span>
+  <span style="display:inline-block; width: 90px; text-align:center;"><b>Medium</b></span>
+  <span style="display:inline-block; width: 90px; text-align:center;"><b>High</b></span>
+</p>
+<p align="center" style="margin-top:0;">
+  <img src="docs/images/diam2.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="docs/images/base.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="docs/images/diam3.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+</p>
+<p align="center" style="margin-top:0;">
+  <span style="display:inline-block; width: 90px; text-align:center;">diameter = 2.0</span>
+  <span style="display:inline-block; width: 90px; text-align:center;">diameter = 2.5</span>
+  <span style="display:inline-block; width: 90px; text-align:center;">diameter = 3.0</span>
+</p>
+<p align="center">
+  <sub>
+    Increasing <code>diameter_var</code> makes particles appear larger and more diffuse.
+  </sub>
+</p>
 
 intensity_var:
 Models natural brightness changes due to variations in illumination, camera response, or particles moving in and out of the light sheet mimicking out-of-plane motion.
 
 Effect of intensity_var on Particle Brightness
-<p align="center"> <b>Low</b> <img src="docs/images/50_Int.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <b>Medium</b> <img src="docs/images/150_Int.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <b>High</b> <img src="docs/images/base.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> </p> <p align="center"> <sub>Raising the intensity parameter produces brighter particles (higher signal-to-noise).</sub> </p>
+<p align="center" style="margin-bottom:0;">
+  <span style="display:inline-block; width: 90px; text-align:center;"><b>Low</b></span>
+  <span style="display:inline-block; width: 90px; text-align:center;"><b>Medium</b></span>
+  <span style="display:inline-block; width: 90px; text-align:center;"><b>High</b></span>
+</p>
+<p align="center" style="margin-top:0;">
+  <img src="docs/images/50_Int.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="docs/images/150_Int.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="docs/images/base.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+</p>
+<p align="center" style="margin-top:0;">
+  <span style="display:inline-block; width: 90px; text-align:center;">intensity = 50</span>
+  <span style="display:inline-block; width: 90px; text-align:center;">intensity = 150</span>
+  <span style="display:inline-block; width: 90px; text-align:center;">intensity = 255</span>
+</p>
+<p align="center">
+  <sub>
+    Raising the <code>intensity_var</code> parameter produces brighter particles (higher signal-to-noise).
+  </sub>
+</p>
+
 
 rho_var:
 Adds variability to the shape and orientation (elongation/rotation) of particles between frames.
 
-Effect of rho_var on Particle Shape
-<p align="center"> <b>Positive</b> <img src="docs/images/rho_positive.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <b>Zero</b> <img src="docs/images/no_rho.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> <span style="font-size: 2em; vertical-align: middle;">&#8594;</span> <b>Negative</b> <img src="docs/images/base.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/> </p> <p align="center"> <sub>Increasing <code>rho</code> module makes particle spots more elliptical and/or rotated, changing their shape from circular to stretched.</sub> </p>
+Effect of rho_var on Particle Shape:
+<p align="center" style="margin-bottom:0;">
+  <span style="display:inline-block; width: 90px; text-align:center;"><b>Too Low</b></span>
+  <span style="display:inline-block; width: 90px; text-align:center;"><b>Negative</b></span>
+  <span style="display:inline-block; width: 90px; text-align:center;"><b>Zero</b></span>
+  <span style="display:inline-block; width: 90px; text-align:center;"><b>Positive</b></span>
+  <span style="display:inline-block; width: 90px; text-align:center;"><b>Too High</b></span>
+</p>
+<p align="center" style="margin-top:0;">
+  <img src="docs/images/rho_low.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="docs/images/base.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="docs/images/no_rho.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="docs/images/rho_positive.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="docs/images/rho_high.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+</p>
+<p align="center" style="margin-top:0;">
+  <span style="display:inline-block; width: 90px; text-align:center;">ρ = -0.9</span>
+  <span style="display:inline-block; width: 90px; text-align:center;">ρ = -0.5</span>
+  <span style="display:inline-block; width: 90px; text-align:center;">ρ = 0.0</span>
+  <span style="display:inline-block; width: 90px; text-align:center;">ρ = 0.5</span>
+  <span style="display:inline-block; width: 90px; text-align:center;">ρ = 0.9</span>
+</p>
+<p align="center">
+  <sub>
+    Increasing the absolute value of <code>rho</code> (correlation coefficient) makes particle spots more elliptical and/or rotated.<br>
+    Very high values (|ρ| &gt; 0.5, leftmost and rightmost) lead to elongated, line-like particles that are not realistic for PIV images.<br>
+    For best results, keep <code>rho</code> in the range <b>-0.5 ≤ ρ ≤ 0.5</b>.
+  </sub>
+</p>
+
 
 
 ### 3. Flow Generation Parameters
@@ -121,11 +188,11 @@ Describe which region of your flow field is captured, and its velocity bounds.
 | `flow_field_size`                | Physical area imaged (units must match your flow files) |
 | `img_offset`                     | Offset for camera’s position within the flow field      |
 | `min_speed_x/y`, `max_speed_x/y` | Range of allowed velocities in each direction           |
-| `output_units`                   | Units of the output flow field ("pixels" or physical)   |
-| `scheduler_files`                | List of ground-truth flow field files (e.g. `.h5`)      |
+| `output_units`                   | Units of the output flow field ("pixels" or "measure units per second")   |
+| `scheduler_files`                | List of ground-truth flow field files (e.g. `.mat`)      |
 | `scheduler_class`                | Loader class for your flow files (usually by extension) |
 
-Minimum and maximum speeds for each axis are not absolute values; they define the full range (positive and negative) of possible velocities along that axis.
+Minimum and maximum speeds are not absolute values; they define the full range (positive and negative) of possible velocities along that axis.
 
 ## Contributing 🤗
 Contributions are more than welcome! 🙏 Please check out our [how to contribute page](docs/contributing.md), and feel free to open an issue for problems and feature requests⚠️.
