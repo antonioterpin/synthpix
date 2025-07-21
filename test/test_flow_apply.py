@@ -11,7 +11,7 @@ from synthpix.apply import (
     apply_flow_to_particles,
     input_check_apply_flow,
 )
-from synthpix.generate import img_gen_from_data, img_gen_from_density
+from synthpix.generate import img_gen_from_data
 from synthpix.utils import generate_array_flow_field, load_configuration
 
 config = load_configuration("config/testing.yaml")
@@ -26,13 +26,50 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_APPLY"]
 def test_flow_apply_to_image(image_shape, visualize=False):
     """Test that we can apply a flow field to a synthetic image."""
     # 1. Generate a synthetic particle image
+    # 1. Generate random particles and their characteristics
     key = jax.random.PRNGKey(0)
-    img = img_gen_from_density(
-        key,
+    subkey1, subkey2, subkey3, subkey4, subkey5 = jax.random.split(key, 5)
+
+    particles_number = int(image_shape[0] * image_shape[1] * 0.02)
+    particles = jax.random.uniform(
+        subkey1,
+        (particles_number, 2),
+        minval=0.0,
+        maxval=jnp.array(image_shape) - 1,
+    )
+    diameters_x = jax.random.uniform(
+        subkey2,
+        (particles_number,),
+        minval=0.8,
+        maxval=1.2,
+    )
+    diameters_y = jax.random.uniform(
+        subkey3,
+        (particles_number,),
+        minval=0.8,
+        maxval=1.2,
+    )
+    intensities = jax.random.uniform(
+        subkey4,
+        (particles_number,),
+        minval=50,
+        maxval=100,
+    )
+    rho = jax.random.uniform(
+        subkey5,
+        (particles_number,),
+        minval=0.0,
+        maxval=1e-9,
+    )
+
+    # 2. create a synthetic image
+    img = img_gen_from_data(
         image_shape=image_shape,
-        seeding_density=0.1,
-        diameter_range=(0.1, 1.0),
-        intensity_range=(50, 200),
+        particle_positions=particles,
+        diameters_x=diameters_x,
+        diameters_y=diameters_y,
+        intensities=intensities,
+        rho=rho,
     )
 
     # 2. Apply a simple horizontal flow

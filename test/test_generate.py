@@ -8,7 +8,6 @@ from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from synthpix.generate import (
     add_noise_to_image,
     img_gen_from_data,
-    img_gen_from_density,
     input_check_img_gen_from_data,
 )
 from synthpix.utils import load_configuration
@@ -22,34 +21,20 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_IMG_GEN"]
 @pytest.mark.parametrize(
     "image_shape", [(-1, 128), (128, -1), (0, 128), (128, 0), (128.2, 128.2)]
 )
-def test_invalid_image_shape_img_gen_from_density(image_shape):
-    """Test that invalid image shapes raise a ValueError."""
-    key = jax.random.PRNGKey(0)
-    with pytest.raises(
-        ValueError, match="image_shape must be a tuple of two positive integers."
-    ):
-        img_gen_from_density(key, image_shape=image_shape)
-
-
-@pytest.mark.parametrize(
-    "image_shape", [(-1, 128), (128, -1), (0, 128), (128, 0), (128.2, 128.2)]
-)
 def test_invalid_image_shape_img_gen_from_data(image_shape):
     """Test that invalid image shapes raise a ValueError."""
     with pytest.raises(
         ValueError, match="image_shape must be a tuple of two positive integers."
     ):
-        input_check_img_gen_from_data(image_shape=image_shape)
-
-
-@pytest.mark.parametrize("seeding_density", [-0.1, 0, 1.1])
-def test_invalid_seeding_density(seeding_density):
-    """Test that invalid seeding densities raise a ValueError."""
-    key = jax.random.PRNGKey(0)
-    with pytest.raises(
-        ValueError, match="seeding_density must be a float between 0 and 1."
-    ):
-        img_gen_from_density(key, seeding_density=seeding_density)
+        input_check_img_gen_from_data(
+            image_shape=image_shape,
+            particle_positions=jnp.ones((2, 2)),
+            max_diameter=2.0,
+            diameters_x=jnp.ones(2),
+            diameters_y=jnp.ones(2),
+            intensities=jnp.ones(2),
+            rho=jnp.ones(2),
+        )
 
 
 @pytest.mark.parametrize("particle_positions", [jnp.array([1]), jnp.array([1, 1, 1])])
@@ -58,105 +43,103 @@ def test_invalid_particle_positions(particle_positions):
     with pytest.raises(
         ValueError, match="Particle positions must be a 2D array with shape \\(N, 2\\)"
     ):
-        input_check_img_gen_from_data(particle_positions=particle_positions)
-
-
-@pytest.mark.parametrize("diameter_range", [(0, 1), (1, 0), (-1, 1), (1, -1)])
-def test_invalid_diameter_range(diameter_range):
-    """Test that invalid diameter ranges raise a ValueError."""
-    key = jax.random.PRNGKey(0)
-    with pytest.raises(
-        ValueError, match="diameter_range must be a tuple of two positive floats."
-    ):
-        img_gen_from_density(key, diameter_range=diameter_range)
-
-
-@pytest.mark.parametrize("intensity_range", [(-1, 200), (50, -1), (1, 1, 1)])
-def test_invalid_intensity_range(intensity_range):
-    """Test that invalid intensity ranges raise a ValueError."""
-    key = jax.random.PRNGKey(0)
-    with pytest.raises(
-        ValueError, match="intensity_range must be a tuple of two positive floats"
-    ):
-        img_gen_from_density(key, intensity_range=intensity_range)
+        input_check_img_gen_from_data(
+            image_shape=(128, 128),
+            particle_positions=particle_positions,
+            diameters_x=jnp.ones(2),
+            diameters_y=jnp.ones(2),
+            max_diameter=2,
+            intensities=jnp.ones(2),
+            rho=jnp.ones(2),
+        )
 
 
 @pytest.mark.parametrize("max_diameter", [-1, 0, "invalid"])
 def test_invalid_max_diameter(max_diameter):
     """Test that invalid max_diameter values raise a ValueError."""
-    particle_positions = jnp.ones((2, 2))
     with pytest.raises(ValueError, match="max_diameter must be a positive number."):
         input_check_img_gen_from_data(
-            particle_positions=particle_positions, max_diameter=max_diameter
+            image_shape=(128, 128),
+            diameters_x=jnp.ones(2),
+            diameters_y=jnp.ones(2),
+            intensities=jnp.ones(2),
+            rho=jnp.ones(2),
+            particle_positions=jnp.ones((2, 2)),
+            max_diameter=max_diameter,
         )
 
 
 @pytest.mark.parametrize("diameters_x", [1, jnp.array([1]), jnp.array([1, 1, 1])])
 def test_invalid_diameters_x(diameters_x):
     """Test that invalid diameters_x values raise a ValueError."""
-    particle_positions = jnp.ones((2, 2))
     with pytest.raises(
         ValueError,
         match="diameters_x must be a 1D array "
         "with the same length as particle_positions.",
     ):
         input_check_img_gen_from_data(
-            particle_positions=particle_positions, diameters_x=diameters_x
+            image_shape=(128, 128),
+            particle_positions=jnp.ones((2, 2)),
+            diameters_x=diameters_x,
+            diameters_y=jnp.ones(2),
+            max_diameter=2,
+            intensities=jnp.ones(2),
+            rho=jnp.ones(2),
         )
 
 
 @pytest.mark.parametrize("diameters_y", [1, jnp.array([1]), jnp.array([1, 1, 1])])
 def test_invalid_diameters_y(diameters_y):
     """Test that invalid diameters_y values raise a ValueError."""
-    particle_positions = jnp.ones((2, 2))
-    diameters_x = jnp.ones(particle_positions.shape[0])
     with pytest.raises(
         ValueError,
         match="diameters_y must be a 1D array "
         "with the same length as particle_positions.",
     ):
         input_check_img_gen_from_data(
-            particle_positions=particle_positions,
-            diameters_x=diameters_x,
+            image_shape=(128, 128),
+            particle_positions=jnp.ones((2, 2)),
+            diameters_x=jnp.ones(2),
             diameters_y=diameters_y,
+            max_diameter=2,
+            intensities=jnp.ones(2),
+            rho=jnp.ones(2),
         )
 
 
 @pytest.mark.parametrize("intensities", [1, jnp.array([1]), jnp.array([1, 1, 1])])
 def test_invalid_intensities(intensities):
     """Test that invalid intensities values raise a ValueError."""
-    particle_positions = jnp.ones((2, 2))
-    diameters_x = jnp.ones(particle_positions.shape[0])
-    diameters_y = jnp.ones(particle_positions.shape[0])
     with pytest.raises(
         ValueError,
         match="intensities must be a 1D array "
         "with the same length as particle_positions.",
     ):
         input_check_img_gen_from_data(
-            particle_positions=particle_positions,
-            diameters_x=diameters_x,
-            diameters_y=diameters_y,
+            particle_positions=jnp.ones((2, 2)),
+            diameters_x=jnp.ones(2),
+            diameters_y=jnp.ones(2),
+            max_diameter=2,
             intensities=intensities,
+            rho=jnp.ones(2),
+            image_shape=(128, 128),
         )
 
 
 @pytest.mark.parametrize("rho", [1, jnp.array([1]), jnp.array([1, 1, 1])])
 def test_invalid_rho(rho):
     """Test that invalid rho values raise a ValueError."""
-    particle_positions = jnp.ones((2, 2))
-    diameters_x = jnp.ones(particle_positions.shape[0])
-    diameters_y = jnp.ones(particle_positions.shape[0])
-    intensities = jnp.ones(particle_positions.shape[0])
     with pytest.raises(
         ValueError,
         match="rho must be a 1D array with the same length as particle_positions.",
     ):
         input_check_img_gen_from_data(
-            particle_positions=particle_positions,
-            diameters_x=diameters_x,
-            diameters_y=diameters_y,
-            intensities=intensities,
+            image_shape=(128, 128),
+            particle_positions=jnp.ones((2, 2)),
+            diameters_x=jnp.ones(2),
+            diameters_y=jnp.ones(2),
+            max_diameter=2,
+            intensities=jnp.ones(2),
             rho=rho,
         )
 
@@ -164,19 +147,16 @@ def test_invalid_rho(rho):
 @pytest.mark.parametrize("clip", [-1, "invalid", 1.1])
 def test_invalid_clip(clip):
     """Test that invalid clip values raise a ValueError."""
-    particle_positions = jnp.ones((2, 2))
-    diameters_x = jnp.ones(particle_positions.shape[0])
-    diameters_y = jnp.ones(particle_positions.shape[0])
-    intensities = jnp.ones(particle_positions.shape[0])
-    rho = jnp.ones(particle_positions.shape[0])
     with pytest.raises(ValueError, match="clip must be a boolean value."):
         input_check_img_gen_from_data(
             clip=clip,
-            particle_positions=particle_positions,
-            diameters_x=diameters_x,
-            diameters_y=diameters_y,
-            intensities=intensities,
-            rho=rho,
+            image_shape=(128, 128),
+            particle_positions=jnp.ones((2, 2)),
+            diameters_x=jnp.ones(2),
+            diameters_y=jnp.ones(2),
+            max_diameter=2,
+            intensities=jnp.ones(2),
+            rho=jnp.ones(2),
         )
 
 
@@ -240,93 +220,6 @@ def test_generate_image_from_data(
     assert img_background.shape == image_shape, "Image shape is incorrect"
     assert img_background.min() >= 0, "Image contains negative values"
     assert img_background.max() <= 255, "Image contains values above 255"
-
-
-@pytest.mark.parametrize("seed", [0, 1, 42])
-@pytest.mark.parametrize("image_shape", [(128, 128)])
-@pytest.mark.parametrize("seeding_density", [0.06, 0.99])
-@pytest.mark.parametrize("noise_uniform", [0.0, 5.0, 255.0])
-@pytest.mark.parametrize(
-    "noise_gaussian_mean, noise_gaussian_std", [(0.0, 0.0), (10.0, 2.0)]
-)
-def test_generate_image_from_density(
-    seed,
-    image_shape,
-    seeding_density,
-    noise_uniform,
-    noise_gaussian_mean,
-    noise_gaussian_std,
-    visualize=False,
-):
-    """Test that we can generate a synthetic particle image."""
-    key = jax.random.PRNGKey(seed)
-    img = img_gen_from_density(
-        key,
-        image_shape,
-        seeding_density=seeding_density,
-        diameter_range=(0.5, 3.5),
-        intensity_range=(500, 500),
-    )
-
-    img_background = add_noise_to_image(
-        key,
-        img,
-        noise_uniform=noise_uniform,
-        noise_gaussian_mean=noise_gaussian_mean,
-        noise_gaussian_std=noise_gaussian_std,
-    )
-
-    if visualize:
-        import matplotlib.pyplot as plt
-        import numpy as np
-
-        plt.imsave("img.png", np.array(img), cmap="gray")
-        plt.imsave("img_background.png", np.array(img_background), cmap="gray")
-
-    assert img.shape == image_shape, "Image shape is incorrect"
-    assert img.min() >= 0, "Image contains negative values"
-    assert img.max() <= 255, "Image contains values above 255"
-
-    assert img_background.shape == image_shape, "Image shape is incorrect"
-    assert img_background.min() >= 0, "Image contains negative values"
-    assert img_background.max() <= 255, "Image contains values above 255"
-
-
-@pytest.mark.parametrize("seed", [0, 1])
-@pytest.mark.parametrize("image_shape", [(16, 16), (32, 32)])
-@pytest.mark.parametrize(
-    "particle_positions",
-    [
-        jnp.array([[7.0, 7.0]]),  # single particle
-        jnp.array([[4.5, 4.5], [12.3, 15.7]]),  # two particles
-    ],
-)
-def test_generate_image_from_density_with_given_positions(
-    seed, image_shape, particle_positions
-):
-    """
-    Ensure img_gen_from_density works when `particle_positions` is not None.
-
-    The test verifies:
-        * correct output shape
-        * values stay within [0, 255]
-        * at least one non-zero pixel (image is not empty)
-    """
-    key = jax.random.PRNGKey(seed)
-
-    img = img_gen_from_density(
-        key=key,
-        image_shape=image_shape,
-        seeding_density=0.01,  # ignored when positions are provided
-        diameter_range=(1.0, 3.0),
-        intensity_range=(150, 150),  # constant amplitude to simplify checks
-        particle_positions=particle_positions,
-    )
-
-    assert img.shape == image_shape, "Image shape is incorrect"
-    assert img.min() >= 0, "Image contains negative values"
-    assert img.max() <= 255, "Image contains values above 255"
-    assert jnp.count_nonzero(img) > 0, "Image appears empty (all zeros)"
 
 
 # skipif is used to skip the test if there is no GPU available
@@ -487,15 +380,3 @@ def test_speed_img_gen(
     assert (
         average_time_jit < limit_time
     ), f"The average time is {average_time_jit}, time limit: {limit_time}"
-
-
-if __name__ == "__main__":
-    test_generate_image_from_density(
-        seed=0,
-        image_shape=(16, 16),
-        density=0.1,
-        noise_uniform=5.0,
-        noise_gaussian_mean=3.0,
-        noise_gaussian_std=1.0,
-        visualize=True,
-    )
