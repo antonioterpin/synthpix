@@ -1506,3 +1506,49 @@ def test_make_done_not_implemented(sampler_class):
     sampler = sampler_class.from_config(PlainDummy(), batch_size=3)
     with pytest.raises(NotImplementedError):
         sampler._make_done()
+
+
+def test_batch_size_adjusted_when_not_divisible_by_ndevices(monkeypatch):
+    # Simulate two JAX devices on CPU
+    class FakeDevice:
+        pass
+
+    fake_devices = [FakeDevice(), FakeDevice()]
+    monkeypatch.setattr(jax, "devices", lambda: fake_devices)
+
+    # batch_size=3 is not divisible by ndevices=2 -> adjusted to 4
+    sampler = SyntheticImageSampler(
+        scheduler=_BaseDummy(),
+        img_gen_fn=dummy_img_gen_fn,
+        batches_per_flow_batch=1,
+        image_shape=(5, 5),
+        flow_field_size=(8, 8),
+        resolution=1.0,
+        velocities_per_pixel=1.0,
+        img_offset=(1.0, 1.0),
+        seeding_density_range=(1.0, 1.0),
+        p_hide_img1=0.0,
+        p_hide_img2=0.0,
+        diameter_ranges=[[1.0, 1.0]],
+        diameter_var=0.1,
+        intensity_ranges=[[1.0, 1.0]],
+        intensity_var=0.1,
+        rho_ranges=[[0.0, 0.0]],
+        rho_var=0.1,
+        dt=1.0,
+        seed=0,
+        max_speed_x=1.0,
+        max_speed_y=1.0,
+        min_speed_x=0.0,
+        min_speed_y=0.0,
+        output_units="pixels",
+        noise_uniform=0.0,
+        noise_gaussian_mean=0.0,
+        noise_gaussian_std=0.0,
+        batch_size=3,
+        flow_fields_per_batch=1,
+        device_ids=None,  # use all devices (the two fakes)
+    )
+
+    # should have bumped batch_size from 3 to 4
+    assert sampler.batch_size == 4, "Expected batch_size to be 4"
