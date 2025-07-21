@@ -4,6 +4,7 @@ import timeit
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from synthpix.data_generate import generate_images_from_flow
@@ -861,19 +862,82 @@ def test_invalid_output_units(output_units, scheduler):
 @pytest.mark.parametrize(
     "mask",
     [
-        None,
-        jnp.zeros((256, 256)),
+        1,
+        [],
+        {},
         jnp.ones((256, 256)),
         jnp.full((256, 256), 0.5),
     ],
 )
-def test_invalid_mask_type(mask):
+def test_invalid_mask_type(mask, scheduler):
     """Test that invalid mask raises a ValueError."""
-    with pytest.raises(ValueError, match="mask must be a 2D boolean array."):
+    with pytest.raises(
+        ValueError, match="mask must be a string representing the mask path."
+    ):
         config = sampler_config.copy()
         config["mask"] = mask
         SyntheticImageSampler.from_config(
-            scheduler=None,  # No scheduler needed for this test
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            config=config,
+        )
+
+
+@pytest.mark.parametrize(
+    "mask",
+    [
+        "invalid_mask_path",
+        "non_existent_mask_path.png",
+        "mask_with_invalid_format.txt",
+        "mask_with_invalid_format.jpg",
+        "mask_with_invalid_format.jpeg",
+    ],
+)
+def test_invalid_mask_path(mask, scheduler):
+    """Test that invalid mask path raises a ValueError."""
+    with pytest.raises(ValueError, match=f"Mask file {mask} does not exist."):
+        config = sampler_config.copy()
+        config["mask"] = mask
+        SyntheticImageSampler.from_config(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            config=config,
+        )
+
+
+@pytest.mark.parametrize("image_shape", [(256, 256), (128, 128), (512, 512)])
+def test_invalid_mask_shape(scheduler, mock_invalid_mask_file, image_shape):
+    """Test that mask with invalid shape raises a ValueError."""
+    # Create a dummy mask with an invalid shape
+    mask = jnp.array(np.load(mock_invalid_mask_file[0]))
+    if mask.shape != image_shape:
+        with pytest.raises(
+            ValueError,
+            match=re.escape(
+                f"Mask shape {mask.shape} does not match image shape " f"{image_shape}."
+            ),
+        ):
+            config = sampler_config.copy()
+            config["mask"] = mock_invalid_mask_file[0]
+            config["image_shape"] = image_shape
+            SyntheticImageSampler.from_config(
+                scheduler=scheduler,
+                img_gen_fn=dummy_img_gen_fn,
+                config=config,
+            )
+
+
+def test_invalid_mask_values(scheduler, mock_invalid_mask_file):
+    """Test that mask with invalid values raises a ValueError."""
+    # Create a dummy mask with an invalid shape
+    mask = jnp.array(np.load(mock_invalid_mask_file[0]))
+
+    with pytest.raises(ValueError, match="Mask must only contain 0 and 1 values."):
+        config = sampler_config.copy()
+        config["mask"] = mock_invalid_mask_file[0]
+        config["image_shape"] = mask.shape  # Use the shape of the mask
+        SyntheticImageSampler.from_config(
+            scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
