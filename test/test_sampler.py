@@ -1552,3 +1552,57 @@ def test_batch_size_adjusted_when_not_divisible_by_ndevices(monkeypatch):
 
     # should have bumped batch_size from 3 to 4
     assert sampler.batch_size == 4, "Expected batch_size to be 4"
+
+
+def test_warning_when_batch_size_not_divisible_by_flow_fields(monkeypatch):
+    # Collect warning messages
+    logged = []
+    from synthpix.utils import logger
+
+    monkeypatch.setattr(logger, "warning", lambda msg: logged.append(msg))
+
+    # Use a batch_size that isn't divisible by flow_fields_per_batch
+    sampler = SyntheticImageSampler(
+        scheduler=_BaseDummy(),
+        img_gen_fn=dummy_img_gen_fn,
+        batches_per_flow_batch=1,
+        image_shape=(5, 5),
+        flow_field_size=(8, 8),
+        resolution=1.0,
+        velocities_per_pixel=1.0,
+        img_offset=(1.0, 1.0),
+        seeding_density_range=(1.0, 1.0),
+        p_hide_img1=0.0,
+        p_hide_img2=0.0,
+        diameter_ranges=[[1.0, 1.0]],
+        diameter_var=0.1,
+        intensity_ranges=[[1.0, 1.0]],
+        intensity_var=0.1,
+        rho_ranges=[[0.0, 0.0]],
+        rho_var=0.1,
+        dt=1.0,
+        seed=0,
+        max_speed_x=1.0,
+        max_speed_y=1.0,
+        min_speed_x=0.0,
+        min_speed_y=0.0,
+        output_units="pixels",
+        noise_uniform=0.0,
+        noise_gaussian_mean=0.0,
+        noise_gaussian_std=0.0,
+        batch_size=4,
+        flow_fields_per_batch=3,
+        device_ids=None,
+    )
+
+    # batch_size itself should be unchanged (1 device)
+    assert sampler.batch_size == 4, "Expected batch_size to be 4"
+
+    # And we should have logged the expected warning
+    expected = (
+        "batch_size was not divisible by number of flows per batch. "
+        "There will be one more sample for the first 1 flow fields of each batch."
+    )
+    assert any(expected in m for m in logged), (
+        f"Expected warning: {expected}, " f"but got: {logged}"
+    )
