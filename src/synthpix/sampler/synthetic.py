@@ -61,7 +61,9 @@ class SyntheticImageSampler(Sampler):
         min_speed_x: float,
         min_speed_y: float,
         output_units: str,
-        noise_level: float,
+        noise_uniform: float,
+        noise_gaussian_mean: float,
+        noise_gaussian_std: float,
         device_ids: Optional[Sequence[int]] = None,
         mask: Optional[str] = None,
     ):
@@ -125,8 +127,12 @@ class SyntheticImageSampler(Sampler):
                 in length measure unit per seconds.
             output_units: str
                 Units of the output flow field. Can be 'pixels' or 'measure units'.
-            noise_level: float
+            noise_uniform: float
                 Maximum amplitude of the uniform noise to add.
+            noise_gaussian_mean: float
+                Mean of the Gaussian noise to add.
+            noise_gaussian_std: float
+                Standard deviation of the Gaussian noise to add.
             device_ids: Sequence[int]
                 List of device IDs to use for sharding the flow fields and images.
             mask: Optional[str]
@@ -347,9 +353,17 @@ class SyntheticImageSampler(Sampler):
             )
         self.output_units = output_units
 
-        if not isinstance(noise_level, (int, float)) or noise_level < 0:
-            raise ValueError("noise_level must be a non-negative number.")
-        self.noise_level = noise_level
+        if not isinstance(noise_uniform, (int, float)) or noise_uniform < 0:
+            raise ValueError("noise_uniform must be a non-negative number.")
+        self.noise_uniform = noise_uniform
+
+        if not isinstance(noise_gaussian_mean, (int, float)) or noise_gaussian_mean < 0:
+            raise ValueError("noise_gaussian_mean must be a non-negative number.")
+        self.noise_gaussian_mean = noise_gaussian_mean
+
+        if not isinstance(noise_gaussian_std, (int, float)) or noise_gaussian_std < 0:
+            raise ValueError("noise_gaussian_std must be a non-negative number.")
+        self.noise_gaussian_std = noise_gaussian_std
 
         if not isinstance(seed, int) or seed < 0:
             raise ValueError("seed must be a positive integer.")
@@ -517,7 +531,9 @@ class SyntheticImageSampler(Sampler):
                 dt=self.dt,
                 flow_field_res_x=self.flow_field_res_x,
                 flow_field_res_y=self.flow_field_res_y,
-                noise_level=self.noise_level,
+                noise_uniform=self.noise_uniform,
+                noise_gaussian_mean=self.noise_gaussian_mean,
+                noise_gaussian_std=self.noise_gaussian_std,
                 mask=self.mask,
             )
 
@@ -558,7 +574,9 @@ class SyntheticImageSampler(Sampler):
             dt=self.dt,
             flow_field_res_x=self.flow_field_res_x,
             flow_field_res_y=self.flow_field_res_y,
-            noise_level=self.noise_level,
+            noise_uniform=self.noise_uniform,
+            noise_gaussian_mean=self.noise_gaussian_mean,
+            noise_gaussian_std=self.noise_gaussian_std,
             mask=self.mask,
         )
 
@@ -640,7 +658,9 @@ class SyntheticImageSampler(Sampler):
         logger.debug(f"Min speed x: {min_speed_x}")
         logger.debug(f"Min speed y: {min_speed_y}")
         logger.debug(f"Output units: {self.output_units}")
-        logger.debug(f"Background level: {self.noise_level}")
+        logger.debug(f"Background level: {self.noise_uniform}")
+        logger.debug(f"Noise Gaussian mean: {self.noise_gaussian_mean}")
+        logger.debug(f"Noise Gaussian std: {self.noise_gaussian_std}")
         logger.debug(f"Mask path: {mask if mask else 'None'}")
         self._reset()
 
@@ -765,7 +785,9 @@ class SyntheticImageSampler(Sampler):
                 min_speed_x=config["min_speed_x"],
                 min_speed_y=config["min_speed_y"],
                 output_units=config["output_units"],
-                noise_level=config["noise_level"],
+                noise_uniform=config["noise_uniform"],
+                noise_gaussian_mean=config["noise_gaussian_mean"],
+                noise_gaussian_std=config["noise_gaussian_std"],
                 device_ids=config.get("device_ids", None),
                 mask=config.get("mask", None),
             )

@@ -74,7 +74,9 @@ def test_speed_sampler_sweep_all(
     config["min_speed_x"] = 10
     config["min_speed_y"] = 10
     config["dt"] = 1
-    config["noise_level"] = 0.0
+    config["noise_uniform"] = 0.0
+    config["noise_gaussian_mean"] = 0.0
+    config["noise_gaussian_std"] = 0.0
     config["flow_fields_per_batch"] = 1
     config["p_hide_img1"] = 0
     config["p_hide_img2"] = 0

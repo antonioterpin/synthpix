@@ -2,6 +2,8 @@
 import os
 
 import jax
+from rich.console import Console
+from rich.text import Text
 
 from .data_generate import generate_images_from_flow
 from .sampler import RealImageSampler, Sampler, SyntheticImageSampler
@@ -44,6 +46,32 @@ def make(
     Returns:
         sampler (Sampler): The initialized sampler.
     """
+    # Initialize console for colored output
+    console = Console()
+
+    # SynthPix Banner
+    banner = [
+        r"   ____              _   _     ____  _         ",
+        r"  / ___| _   _ _ __ | |_| |__ |  _ \(_)_  __   ",
+        r"  \___ \| | | | '_ \| __| '_ \| |_) | \ \/ /   ",
+        r"   ___) | |_| | | | | |_| | | |  __/| |>  <    ",
+        r"  |____/ \__, |_| |_|\__|_| |_|_|   |_/_/\_\   ",
+    ]
+
+    # Define rainbow color cycle
+    rainbow_colors = ["red", "yellow", "green", "cyan", "blue", "magenta"]
+
+    # Print each line with cycling rainbow colors using Rich Text
+    for line in banner:
+        text = Text()
+        for idx, char in enumerate(line):
+            if char == " ":
+                text.append(char)
+            else:
+                color = rainbow_colors[idx % len(rainbow_colors)]
+                text.append(char, style=color)
+        console.print(text)
+
     # Input validation
     if not isinstance(config, (str, dict)):
         raise TypeError("config_path must be a string or a dictionary.")

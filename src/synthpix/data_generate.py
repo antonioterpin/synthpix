@@ -32,7 +32,9 @@ def generate_images_from_flow(
     dt: float = 1.0,
     flow_field_res_x: float = 1.0,
     flow_field_res_y: float = 1.0,
-    noise_level: float = 0.0,
+    noise_uniform: float = 0.0,
+    noise_gaussian_mean: float = 0.0,
+    noise_gaussian_std: float = 0.0,
     mask: Optional[jnp.ndarray] = None,
 ):
     """Generates a batch of grey scale image pairs from a batch of flow fields.
@@ -89,8 +91,12 @@ def generate_images_from_flow(
         flow_field_res_y: float
             Resolution of the flow field in the y direction
             in grid steps per length measure unit
-        noise_level: float
+        noise_uniform: float
             Maximum amplitude of the uniform noise to add.
+        noise_gaussian_mean: float
+            Mean of the Gaussian noise to add.
+        noise_gaussian_std: float
+            Standard deviation of the Gaussian noise to add.
         mask: Optional[jnp.ndarray]
             Optional mask to apply to the generated images.
 
@@ -127,7 +133,7 @@ def generate_images_from_flow(
             dt=dt,
             flow_field_res_x=flow_field_res_x,
             flow_field_res_y=flow_field_res_y,
-            noise_level=noise_level,
+            noise_uniform=noise_uniform,
             mask=mask,
         )
 
@@ -341,10 +347,18 @@ def generate_images_from_flow(
 
         # Add noise to the images
         first_img = add_noise_to_image(
-            image=first_img, key=subkey5, noise_level=noise_level
+            image=first_img,
+            key=subkey5,
+            noise_uniform=noise_uniform,
+            noise_gaussian_mean=noise_gaussian_mean,
+            noise_gaussian_std=noise_gaussian_std,
         )
         second_img = add_noise_to_image(
-            image=second_img, key=subkey6, noise_level=noise_level
+            image=second_img,
+            key=subkey6,
+            noise_uniform=noise_uniform,
+            noise_gaussian_mean=noise_gaussian_mean,
+            noise_gaussian_std=noise_gaussian_std,
         )
 
         # If a mask is provided, apply it to the images
@@ -407,7 +421,9 @@ def input_check_gen_img_from_flow(
     dt: float = 1.0,
     flow_field_res_x: float = 1.0,
     flow_field_res_y: float = 1.0,
-    noise_level: float = 0.0,
+    noise_uniform: float = 0.0,
+    noise_gaussian_mean: float = 0.0,
+    noise_gaussian_std: float = 0.0,
     mask: Optional[jnp.ndarray] = None,
 ):
     """Check the input arguments for generate_images_from_flow.
@@ -460,8 +476,12 @@ def input_check_gen_img_from_flow(
         flow_field_res_y: float
             Resolution of the flow field in the y direction
             in grid steps per length measure unit
-        noise_level: float
+        noise_uniform: float
             Maximum amplitude of the uniform noise to add.
+        noise_gaussian_mean: float
+            Mean of the Gaussian noise to add.
+        noise_gaussian_std: float
+            Standard deviation of the Gaussian noise to add.
         mask: Optional[jnp.ndarray]
             Optional mask to apply to the generated images.
     """
@@ -574,8 +594,13 @@ def input_check_gen_img_from_flow(
     if not isinstance(max_seeding_density, (int, float)) or max_seeding_density <= 0:
         raise ValueError("max_seeding_density must be a positive number.")
 
-    if not isinstance(noise_level, (int, float)) or noise_level < 0:
-        raise ValueError("noise_level must be a non-negative number.")
+    if not isinstance(noise_uniform, (int, float)) or noise_uniform < 0:
+        raise ValueError("noise_uniform must be a non-negative number.")
+
+    if not isinstance(noise_gaussian_mean, (int, float)) or noise_gaussian_mean < 0:
+        raise ValueError("noise_gaussian_mean must be a non-negative number.")
+    if not isinstance(noise_gaussian_std, (int, float)) or noise_gaussian_std < 0:
+        raise ValueError("noise_gaussian_std must be a non-negative number.")
 
     if not isinstance(diameter_var, (int, float)) or diameter_var < 0:
         raise ValueError("diameter_var must be a non-negative number.")
@@ -614,5 +639,7 @@ def input_check_gen_img_from_flow(
     logger.debug(f"Time step (dt): {dt}")
     logger.debug(f"Flow field resolution (x): {flow_field_res_x}")
     logger.debug(f"Flow field resolution (y): {flow_field_res_y}")
-    logger.debug(f"Noise level: {noise_level}")
+    logger.debug(f"Noise level: {noise_uniform}")
+    logger.debug(f"Gaussian noise mean: {noise_gaussian_mean}")
+    logger.debug(f"Gaussian noise std: {noise_gaussian_std}")
     logger.debug(f"Mask shape: {mask.shape if mask is not None else 'None'}")
