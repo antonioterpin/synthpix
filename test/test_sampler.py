@@ -45,7 +45,9 @@ def dummy_img_gen_fn(
     dt,
     flow_field_res_x,
     flow_field_res_y,
-    noise_level,
+    noise_uniform,
+    noise_gaussian_mean,
+    noise_gaussian_std,
 ):
     """Simulates generating a batch of synthetic images based on a single key."""
     images1 = jnp.ones((num_images, image_shape[0], image_shape[1])) * (
@@ -650,16 +652,40 @@ def test_invalid_dt(dt, scheduler):
 
 
 @pytest.mark.parametrize(
-    "noise_level", [-1, "a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+    "noise_uniform", [-1, "a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
 )
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_noise_level(noise_level, scheduler):
-    """Test that invalid noise_level raises a ValueError."""
-    with pytest.raises(ValueError, match="noise_level must be a non-negative number."):
+def test_invalid_noise_uniform(noise_uniform, scheduler):
+    """Test that invalid noise_uniform raises a ValueError."""
+    with pytest.raises(
+        ValueError, match="noise_uniform must be a non-negative number."
+    ):
         config = sampler_config.copy()
-        config["noise_level"] = noise_level
+        config["noise_uniform"] = noise_uniform
+        SyntheticImageSampler.from_config(
+            scheduler=scheduler,
+            img_gen_fn=dummy_img_gen_fn,
+            config=config,
+        )
+
+
+@pytest.mark.parametrize(
+    "noise_gaussian_mean, noise_gaussian_std",
+    [(-5.0, 1.0), (5.0, -1.0)],
+)
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_invalid_noise_gaussian_params(
+    noise_gaussian_mean, noise_gaussian_std, scheduler
+):
+    """Test that invalid gaussian noise params raise a ValueError."""
+    with pytest.raises(ValueError):
+        config = sampler_config.copy()
+        config["noise_gaussian_mean"] = noise_gaussian_mean
+        config["noise_gaussian_std"] = noise_gaussian_std
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
             img_gen_fn=dummy_img_gen_fn,
@@ -1006,7 +1032,9 @@ def test_speed_sampler_dummy_fn(
     config["min_speed_x"] = -0.16
     config["min_speed_y"] = -0.72
     config["dt"] = 2.6e-2
-    config["noise_level"] = 0.0
+    config["noise_uniform"] = 0.0
+    config["noise_gaussian_mean"] = 0.0
+    config["noise_gaussian_std"] = 0.0
     config["batch_size"] = batch_size
     config["seed"] = seed
     config["device_ids"] = [d.id for d in devices]
@@ -1104,7 +1132,7 @@ def test_speed_sampler_real_fn(
     config["min_speed_x"] = -0.16
     config["min_speed_y"] = -0.72
     config["dt"] = 2.6e-2
-    config["noise_level"] = 0.0
+    config["noise_uniform"] = 0.0
     config["flow_fields_per_batch"] = 64
     config["device_ids"] = [d.id for d in devices]
 
@@ -1214,7 +1242,9 @@ def test_stop_after_max_episodes(mock_mat_files):
         min_speed_x=0.0,
         min_speed_y=0.0,
         output_units="pixels",
-        noise_level=0.0,
+        noise_uniform=0.0,
+        noise_gaussian_mean=0.0,
+        noise_gaussian_std=0.0,
         device_ids=[d.id for d in devices] if devices is not None else None,
     )
 
@@ -1297,7 +1327,9 @@ def test_index_error_if_no_next_episode(mock_mat_files):
         min_speed_x=0.0,
         min_speed_y=0.0,
         output_units="pixels",
-        noise_level=0.0,
+        noise_uniform=0.0,
+        noise_gaussian_mean=0.0,
+        noise_gaussian_std=0.0,
         device_ids=[d.id for d in devices] if devices is not None else None,
     )
 
@@ -1506,3 +1538,103 @@ def test_make_done_not_implemented(sampler_class):
     sampler = sampler_class.from_config(PlainDummy(), batch_size=3)
     with pytest.raises(NotImplementedError):
         sampler._make_done()
+
+
+def test_batch_size_adjusted_when_not_divisible_by_ndevices(monkeypatch):
+    # Simulate two JAX devices on CPU
+    class FakeDevice:
+        pass
+
+    fake_devices = [FakeDevice(), FakeDevice()]
+    monkeypatch.setattr(jax, "devices", lambda: fake_devices)
+
+    # batch_size=3 is not divisible by ndevices=2 -> adjusted to 4
+    sampler = SyntheticImageSampler(
+        scheduler=_BaseDummy(),
+        img_gen_fn=dummy_img_gen_fn,
+        batches_per_flow_batch=1,
+        image_shape=(5, 5),
+        flow_field_size=(8, 8),
+        resolution=1.0,
+        velocities_per_pixel=1.0,
+        img_offset=(1.0, 1.0),
+        seeding_density_range=(1.0, 1.0),
+        p_hide_img1=0.0,
+        p_hide_img2=0.0,
+        diameter_ranges=[[1.0, 1.0]],
+        diameter_var=0.1,
+        intensity_ranges=[[1.0, 1.0]],
+        intensity_var=0.1,
+        rho_ranges=[[0.0, 0.0]],
+        rho_var=0.1,
+        dt=1.0,
+        seed=0,
+        max_speed_x=1.0,
+        max_speed_y=1.0,
+        min_speed_x=0.0,
+        min_speed_y=0.0,
+        output_units="pixels",
+        noise_uniform=0.0,
+        noise_gaussian_mean=0.0,
+        noise_gaussian_std=0.0,
+        batch_size=3,
+        flow_fields_per_batch=1,
+        device_ids=None,  # use all devices (the two fakes)
+    )
+
+    # should have bumped batch_size from 3 to 4
+    assert sampler.batch_size == 4, "Expected batch_size to be 4"
+
+
+def test_warning_when_batch_size_not_divisible_by_flow_fields(monkeypatch):
+    # Collect warning messages
+    logged = []
+    from synthpix.utils import logger
+
+    monkeypatch.setattr(logger, "warning", lambda msg: logged.append(msg))
+
+    # Use a batch_size that isn't divisible by flow_fields_per_batch
+    sampler = SyntheticImageSampler(
+        scheduler=_BaseDummy(),
+        img_gen_fn=dummy_img_gen_fn,
+        batches_per_flow_batch=1,
+        image_shape=(5, 5),
+        flow_field_size=(8, 8),
+        resolution=1.0,
+        velocities_per_pixel=1.0,
+        img_offset=(1.0, 1.0),
+        seeding_density_range=(1.0, 1.0),
+        p_hide_img1=0.0,
+        p_hide_img2=0.0,
+        diameter_ranges=[[1.0, 1.0]],
+        diameter_var=0.1,
+        intensity_ranges=[[1.0, 1.0]],
+        intensity_var=0.1,
+        rho_ranges=[[0.0, 0.0]],
+        rho_var=0.1,
+        dt=1.0,
+        seed=0,
+        max_speed_x=1.0,
+        max_speed_y=1.0,
+        min_speed_x=0.0,
+        min_speed_y=0.0,
+        output_units="pixels",
+        noise_uniform=0.0,
+        noise_gaussian_mean=0.0,
+        noise_gaussian_std=0.0,
+        batch_size=4,
+        flow_fields_per_batch=3,
+        device_ids=None,
+    )
+
+    # batch_size itself should be unchanged (1 device)
+    assert sampler.batch_size == 4, "Expected batch_size to be 4"
+
+    # And we should have logged the expected warning
+    expected = (
+        "batch_size was not divisible by number of flows per batch. "
+        "There will be one more sample for the first 1 flow fields of each batch."
+    )
+    assert any(expected in m for m in logged), (
+        f"Expected warning: {expected}, " f"but got: {logged}"
+    )
