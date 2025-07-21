@@ -895,6 +895,9 @@ def test_invalid_output_units(output_units, scheduler):
         jnp.full((256, 256), 0.5),
     ],
 )
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
 def test_invalid_mask_type(mask, scheduler):
     """Test that invalid mask raises a ValueError."""
     with pytest.raises(
@@ -919,6 +922,9 @@ def test_invalid_mask_type(mask, scheduler):
         "mask_with_invalid_format.jpeg",
     ],
 )
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
 def test_invalid_mask_path(mask, scheduler):
     """Test that invalid mask path raises a ValueError."""
     with pytest.raises(ValueError, match=f"Mask file {mask} does not exist."):
@@ -932,6 +938,9 @@ def test_invalid_mask_path(mask, scheduler):
 
 
 @pytest.mark.parametrize("image_shape", [(256, 256), (128, 128), (512, 512)])
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
 def test_invalid_mask_shape(scheduler, mock_invalid_mask_file, image_shape):
     """Test that mask with invalid shape raises a ValueError."""
     # Create a dummy mask with an invalid shape
@@ -956,6 +965,9 @@ def test_invalid_mask_shape(scheduler, mock_invalid_mask_file, image_shape):
 @pytest.mark.parametrize(
     "mock_invalid_mask_file", [1.1, -1, 2, 0.5, 1e-10], indirect=True
 )
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
 def test_invalid_mask_values(scheduler, mock_invalid_mask_file):
     """Test that mask with invalid values raises a ValueError."""
     # Create a dummy mask with an invalid shape
@@ -972,6 +984,9 @@ def test_invalid_mask_values(scheduler, mock_invalid_mask_file):
         )
 
 
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
 def test_mask_is_right(scheduler, mock_mask_file):
     """Test that correct mask gets loaded."""
     # Create a dummy mask with a valid shape
