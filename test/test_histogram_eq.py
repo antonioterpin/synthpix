@@ -23,7 +23,7 @@ def mock_histogram_file(tmp_path, numpy_test_dims):
     """Create and save a numpy valid histogram to a temporary file."""
     shape = numpy_test_dims["height"], numpy_test_dims["width"]
 
-    path = tmp_path / "invalid_histogram.npy"
+    path = tmp_path / "histogram.npy"
     arr = np.zeros((256,))
     arr[0] = shape[0] * shape[1]  # Set the first bin to the total number of pixels
     np.save(path, arr)
