@@ -49,6 +49,7 @@ def dummy_img_gen_fn(
     noise_gaussian_mean,
     noise_gaussian_std,
     mask,
+    histogram,
 ):
     """Simulates generating a batch of synthetic images based on a single key."""
     images1 = jnp.ones((num_images, image_shape[0], image_shape[1])) * (

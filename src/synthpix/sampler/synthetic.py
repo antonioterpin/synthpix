@@ -66,6 +66,7 @@ class SyntheticImageSampler(Sampler):
         noise_gaussian_std: float,
         device_ids: Optional[Sequence[int]] = None,
         mask: Optional[str] = None,
+        histogram: Optional[str] = None,
     ):
         """Initializes the SyntheticImageSampler.
 
@@ -138,6 +139,10 @@ class SyntheticImageSampler(Sampler):
             mask: Optional[str]
                 Optional path to a .npy file containing a mask.
                 Mask must be a 2D array with 1 where unmasked, 0 where masked.
+            histogram: Optional[str]
+                Optional path to a .npy file containing a histogram of the flow field.
+                Histogram must be a 1D array with 256 bins, summing to number of pixels.
+                NOTE: Histogram equalization is very slow!
         """
         super().__init__(scheduler, batch_size)
 
@@ -386,6 +391,25 @@ class SyntheticImageSampler(Sampler):
         else:
             self.mask = None
 
+        if histogram is not None:
+            if not isinstance(histogram, str):
+                raise ValueError(
+                    "histogram must be a string representing the histogram path."
+                )
+            if not os.path.isfile(histogram):
+                raise ValueError(f"Histogram file {histogram} does not exist.")
+            hist_array = np.load(histogram)
+            if hist_array.shape != (256,) or not np.isclose(
+                hist_array.sum(), image_shape[0] * image_shape[1]
+            ):
+                raise ValueError(
+                    "Histogram must be a (256,) array and "
+                    "sum to the number of pixels in the image."
+                )
+            self.histogram = jnp.array(hist_array)
+        else:
+            self.histogram = None
+
         if batch_size % flow_fields_per_batch != 0:
             extra_batch_size = batch_size % flow_fields_per_batch
             logger.warning(
@@ -532,6 +556,7 @@ class SyntheticImageSampler(Sampler):
                 noise_gaussian_mean=self.noise_gaussian_mean,
                 noise_gaussian_std=self.noise_gaussian_std,
                 mask=self.mask,
+                histogram=histogram,
             )
 
             input_check_flow_field_adapter(
@@ -575,6 +600,7 @@ class SyntheticImageSampler(Sampler):
             noise_gaussian_mean=self.noise_gaussian_mean,
             noise_gaussian_std=self.noise_gaussian_std,
             mask=self.mask,
+            histogram=self.histogram,
         )
 
         self.flow_field_adapter_jit = lambda flow: flow_field_adapter(
@@ -660,6 +686,8 @@ class SyntheticImageSampler(Sampler):
         logger.debug(f"Noise Gaussian std: {self.noise_gaussian_std}")
         if mask is not None:
             logger.debug(f"Mask path: {mask}")
+        if histogram is not None:
+            logger.debug(f"Histogram path: {histogram}")
         self._reset()
 
     def _reset(self):
@@ -788,6 +816,7 @@ class SyntheticImageSampler(Sampler):
                 noise_gaussian_std=config["noise_gaussian_std"],
                 device_ids=config.get("device_ids", None),
                 mask=config.get("mask", None),
+                histogram=config.get("histogram", None),
             )
         except KeyError as e:
             raise KeyError(

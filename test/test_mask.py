@@ -147,7 +147,7 @@ def test_invalid_mask_values(scheduler, mock_invalid_mask_file):
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_mask_is_right(scheduler, mock_mask_file):
+def test_mask_is_correct(scheduler, mock_mask_file):
     """Test that correct mask gets loaded."""
     # Create a dummy mask with a valid shape
     mask = jnp.array(np.load(mock_mask_file[0]))
@@ -168,7 +168,7 @@ def test_mask_is_right(scheduler, mock_mask_file):
     ), "Mask loaded from file does not match the expected mask."
 
 
-def test_input_check_gen_img_from_flow_logs_mask_shape(monkeypatch):
+def test_input_check_gen_img_from_flow_logs_mask(monkeypatch):
     """Test that the input_check_gen_img_from_flow function logs the mask shape."""
 
     key = random.PRNGKey(0)
@@ -189,9 +189,10 @@ def test_input_check_gen_img_from_flow_logs_mask_shape(monkeypatch):
     )
 
     # Check if the mask shape was logged
+    expected_msg = f"Masking out {16 - jnp.sum(mask)} pixels " "in the images."
     assert any(
-        "Mask shape: (4, 4)" in m for m in logged
-    ), f"Expected mask shape log, got: {logged}"
+        expected_msg in m for m in logged
+    ), f"Expected :{expected_msg}, got: {logged}"
 
 
 @pytest.mark.parametrize("mask", ["a", [1, 2]])
