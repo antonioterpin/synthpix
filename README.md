@@ -55,7 +55,7 @@ For more examples and tutorials to use custom flow data or real-world data, chec
 Configuration is handled through a YAML file, organized into four main groups. Here’s a quick guide to what each set of parameters does:
 
 ### 1. Dataset Parameters
-By these parameters one can personalize how the extraction of the flow fields works and the shape of the output batch
+These parameters allow you to customize how flow field extraction works and the shape of the output batch.
 
 | **Parameter**            | **Description**                         |
 | ------------------------ | --------------------------------------- |
@@ -87,7 +87,7 @@ Each *_var parameter controls how much the property of each particle can change 
 
 Here’s what each *_var parameter controls:
 
-diameter_var:
+**diameter_var:**:
 Simulates changes in particle size between frames, making the effect of focus, depth movement, or slight deformations more realistic.
 
 Effect of diameter_var on Particle Size
@@ -112,7 +112,7 @@ Effect of diameter_var on Particle Size
   </sub>
 </p>
 
-intensity_var:
+**intensity_var**:
 Models natural brightness changes due to variations in illumination, camera response, or particles moving in and out of the light sheet mimicking out-of-plane motion.
 
 Effect of intensity_var on Particle Brightness
@@ -138,7 +138,7 @@ Effect of intensity_var on Particle Brightness
 </p>
 
 
-rho_var:
+**rho_var**:
 Adds variability to the shape and orientation (elongation/rotation) of particles between frames.
 
 Effect of rho_var on Particle Shape:
