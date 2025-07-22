@@ -9,7 +9,6 @@ from .data_generate import generate_images_from_flow
 from .sampler import RealImageSampler, Sampler, SyntheticImageSampler
 from .scheduler import (
     EpisodicFlowFieldScheduler,
-    FloFlowFieldScheduler,
     HDF5FlowFieldScheduler,
     MATFlowFieldScheduler,
     NumpyFlowFieldScheduler,
@@ -21,7 +20,6 @@ SCHEDULERS = {
     ".h5": HDF5FlowFieldScheduler,
     ".mat": MATFlowFieldScheduler,
     ".npy": NumpyFlowFieldScheduler,
-    ".flo": FloFlowFieldScheduler,
 }
 
 
