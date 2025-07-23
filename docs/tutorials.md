@@ -163,11 +163,8 @@ We also provide support for direct `.npy` files and include them as an example. 
 
 - `.npy`: Each file must be named `flow_t.npy` If image loading is enabled, it will be paired automatically with `img_t-1.jpg` and `img_t.jpg` located in the **same directory**. This format assumes strict file naming.
 
-- `.flo`: Stores a single flow field of shape **(H, W, 2)** in the standard **Middlebury `.flo` format**, as used in [this dataset](https://github.com/shengzesnail/PIV_dataset). For faster loading, a [conversion script](../scripts/download_piv_1.sh) is provided to convert these files into `.mat` format.
-
 | Format | Supports images | Multiple flows per file | Load speed | Use case | Notes |
 |--------|------------------|------------------|-------------|----------------|-------|
 | `.mat` | ✅ | 🚫 (one per file) | 🚀 Fast | General use, works well with MATLAB output | v7.3 recommended for speed (HDF5); image loading supported if `I0`, `I1` present |
 | `.h5`  | ❌ | ✅ | 🚀 Fast | Storage of many flow fields per file | Automatically sliced along the y-axis |
 | `.npy` | ✅ | 🚫 (one per file) | ⚡ Medium | Paired with external JPEG images | Requires following a naming convention in the directory |
-| `.flo` | ❌ | 🚫 | 🐢 Slow | Compatibility with existing datasets (e.g., PIV) | [Conversion](../scripts/download_piv_1.sh) to `.mat` recommended for speed |
