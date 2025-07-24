@@ -29,6 +29,55 @@ def is_int(val: Union[int, float]) -> bool:
     return False
 
 
+def match_histogram(source: jnp.ndarray, template_hist: jnp.ndarray) -> jnp.ndarray:
+    """Match the histogram of `source` to a desired histogram.
+
+    Args:
+        source (jnp.ndarray): The source image (uint8 or float) with values in [0,255].
+        template_hist (jnp.ndarray): 1D target histogram of length 256,
+            summing to number of pixels in source.
+
+    Returns:
+        jnp.ndarray: The source image with its histogram matched to the target histogram.
+    """
+    # Flatten source and cast to float32 for computation
+    flat = source.ravel().astype(jnp.float32)
+
+    # Implicit bin edges for intensities [0..255]
+    bins = jnp.arange(257, dtype=jnp.float32)
+
+    # Source histogram counts
+    s_counts, _ = jnp.histogram(flat, bins=bins)
+
+    # Compute source CDF (normalized)
+    s_cdf = jnp.cumsum(s_counts, dtype=jnp.float32)
+    s_cdf = s_cdf / s_cdf[-1]
+
+    # Compute template CDF (normalized)
+    t_cdf = jnp.cumsum(template_hist.astype(jnp.float32), dtype=jnp.float32)
+    t_cdf = t_cdf / t_cdf[-1]
+
+    # Discrete levels 0..255
+    levels = jnp.arange(256, dtype=jnp.int32)
+
+    # Digitize source pixels into bin indices [0..255]
+    idx = jnp.digitize(flat, bins) - 1
+    idx = jnp.clip(idx, 0, 255)
+
+    # Map pixels to source CDF quantiles
+    quantiles = s_cdf[idx]
+
+    # Map quantiles to new levels via searchsorted on template CDF
+    new_idx = jnp.searchsorted(t_cdf, quantiles, side="left")
+    new_idx = jnp.clip(new_idx, 0, 255)
+
+    # Gather new pixel values and cast to original dtype
+    matched = levels[new_idx].astype(source.dtype)
+
+    # Reshape back to original image shape
+    return matched.reshape(source.shape)
+
+
 def bilinear_interpolate(
     image: jnp.ndarray, x_f: jnp.ndarray, y_f: jnp.ndarray
 ) -> jnp.ndarray:
