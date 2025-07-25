@@ -91,7 +91,7 @@ Each *_var parameter controls how much the property of each particle can change 
 
 Here’s what each *_var parameter controls:
 
-**diameter_var:**:
+**diameter_var:**
 Simulates changes in particle size between frames, making the effect of focus, depth movement, or slight deformations more realistic.
 
 Effect of diameter_var on particle size
@@ -191,7 +191,7 @@ Effect of rho_var on particle shape:
 | --------------------------- | ---------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------- |
 | **Normalized flow field**   | 1.0                    | 100          | Flow field has 1 velocity vector per pixel; 100 px = 1 unit of length and flow velocity vectors are in units/s.                          |
 | **Real-world flow in m/s**  | 10.0                   | 50           | Flow field has 10 velocity vectors per image pixel (very fine spatial resolution); 50 px = 1 meter and flow in m/s. |
-| **Pixel displacement flow** | 1.0                    | 1.0          | Flow field has 1 velocity per pixel; 1 px = 1 unit → flow directly describes pixels/seconds displacements. (use dt = 1 to convert it in pixels/frame)           |
+| **Pixel displacement flow** | 1.0                    | 1.0          | Flow field has 1 velocity per pixel; 1 px = 1 unit → flow directly describes pixels/second displacements. (use dt = 1 to convert it in pixels/frame)           |
 
 
 
