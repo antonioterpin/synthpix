@@ -195,3 +195,6 @@ data/
 # Images
 *.png
 *.jpg
+
+# Track documentation images
+!docs/images/*.png
