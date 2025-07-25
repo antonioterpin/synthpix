@@ -70,6 +70,10 @@ def main(config_path: str, output_dir: str, num_images_to_display: int):
             # logger.info(f"Flow field batch shape: {batch['flow_fields'].shape}")
 
             for j in range(min(num_images_to_display, batch["images1"].shape[0])):
+                # Visualize and save the images
+                # We visualize the images in ij coordinates, so
+                # batch["flow_fields"][j, 0, 0] is the flow on the top left pixel
+                # of the j-th element of the batch
                 visualize_and_save(
                     f"batch_{i}_sample_{j}",
                     batch["images1"][j],
