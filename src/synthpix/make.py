@@ -9,7 +9,6 @@ from .data_generate import generate_images_from_flow
 from .sampler import RealImageSampler, Sampler, SyntheticImageSampler
 from .scheduler import (
     EpisodicFlowFieldScheduler,
-    FloFlowFieldScheduler,
     HDF5FlowFieldScheduler,
     MATFlowFieldScheduler,
     NumpyFlowFieldScheduler,
@@ -21,7 +20,6 @@ SCHEDULERS = {
     ".h5": HDF5FlowFieldScheduler,
     ".mat": MATFlowFieldScheduler,
     ".npy": NumpyFlowFieldScheduler,
-    ".flo": FloFlowFieldScheduler,
 }
 
 
@@ -56,6 +54,7 @@ def make(
         r"  \___ \| | | | '_ \| __| '_ \| |_) | \ \/ /   ",
         r"   ___) | |_| | | | | |_| | | |  __/| |>  <    ",
         r"  |____/ \__, |_| |_|\__|_| |_|_|   |_/_/\_\   ",
+        r"         |___/                           ",
     ]
 
     # Define rainbow color cycle
@@ -132,7 +131,7 @@ def make(
             randomize=dataset_config.get("randomize", False),
             loop=dataset_config.get("loop", False),
             include_images=True,
-            output_shape=tuple(dataset_config.get("output_shape", (256, 256))),
+            output_shape=tuple(dataset_config.get("image_shape", (256, 256))),
             key=sched_key,
         )
 
