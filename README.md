@@ -85,7 +85,7 @@ Define the look and realism of your synthetic PIV images.
 | `mask` (optional)                |  Path to a `.npy` file containing a binary mask (0 and 1) with shape `image_shape`.|
 | `histogram` (optional)                |  Path to a `.npy` file with a 1D array of shape `(256,)`, summing to the number of image pixels. Used to remap output intensities.           |
 
-For diameter_ranges, intensity_ranges, and rho_ranges, each parameter is a list of possible ranges. For every image pair, one range is randomly selected (uniformly) from each list, and then the particle parameters are sampled from these selected ranges.
+For `diameter_ranges`, `intensity_ranges`, and `rho_ranges`, each parameter is a list of possible ranges. For every image pair, one range is randomly selected (uniformly) from each list, and then the particle parameters are sampled from these selected ranges.
 
 Each *_var parameter controls how much the property of each particle can change between the first and second image of a pair. The change is applied as Gaussian noise with zero mean and variance given by the corresponding *_var value.
 
@@ -94,7 +94,7 @@ Here’s what each *_var parameter controls:
 **diameter_var:**
 Simulates changes in particle size between frames, making the effect of focus, depth movement, or slight deformations more realistic.
 
-Effect of diameter_var on particle size
+Effect of `diameter_var` on particle size
 <p align="center" style="margin-bottom:0;">
   <span style="display:inline-block; width: 90px; text-align:center;"><b>Low</b></span>
   <span style="display:inline-block; width: 90px; text-align:center;"><b>Medium</b></span>
@@ -119,7 +119,7 @@ Effect of diameter_var on particle size
 **intensity_var**:
 Models natural brightness changes due to variations in illumination, camera response, or particles moving in and out of the light sheet mimicking out-of-plane motion.
 
-Effect of intensity_var on particle brightness
+Effect of `intensity_var` on particle brightness
 <p align="center" style="margin-bottom:0;">
   <span style="display:inline-block; width: 90px; text-align:center;"><b>Low</b></span>
   <span style="display:inline-block; width: 90px; text-align:center;"><b>Medium</b></span>
@@ -145,7 +145,7 @@ Effect of intensity_var on particle brightness
 **rho_var**:
 Adds variability to the shape and orientation (elongation/rotation) of particles between frames.
 
-Effect of rho_var on particle shape:
+Effect of `rho_var` on particle shape:
 <p align="center" style="margin-bottom:0;">
   <span style="display:inline-block; width: 90px; text-align:center;"><b>Too Low</b></span>
   <span style="display:inline-block; width: 90px; text-align:center;"><b>Negative</b></span>
@@ -177,7 +177,7 @@ Effect of rho_var on particle shape:
 
 
   Note: The example above uses particles with diameter 2.5. The visual effect of ρ also depends on particle size, larger diameters make elongation more noticeable.
-  As a result, the recommended "safe range" for realistic particle shapes may vary depending on your chosen diameter_ranges.
+  As a result, the recommended "safe range" for realistic particle shapes may vary depending on your chosen `diameter_ranges`.
 
 ### 3. Flow generation parameters
 | **Parameter**          | **Description**                          |
@@ -191,7 +191,7 @@ Effect of rho_var on particle shape:
 | --------------------------- | ---------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------- |
 | **Normalized flow field**   | 1.0                    | 100          | Flow field has 1 velocity vector per pixel; 100 px = 1 unit of length and flow velocity vectors are in units/s.                          |
 | **Real-world flow in m/s**  | 10.0                   | 50           | Flow field has 10 velocity vectors per image pixel (very fine spatial resolution); 50 px = 1 meter and flow in m/s. |
-| **Pixel displacement flow** | 1.0                    | 1.0          | Flow field has 1 velocity per pixel; 1 px = 1 unit → flow directly describes pixels/second displacements. (use dt = 1 to convert it in pixels/frame)           |
+| **Pixel displacement flow** | 1.0                    | 1.0          | Flow field has 1 velocity per pixel; 1 px = 1 unit → flow directly describes pixels/second displacements. (use `dt` = 1 to convert it in pixels/frame)           |
 
 
 
@@ -202,15 +202,15 @@ Describe which region of your flow field is captured, and its velocity bounds.
 | **Parameter**                    | **Description**                                         |
 | -------------------------------- | ------------------------------------------------------- |
 | `flow_field_size`                | Physical size of the entire flow field (e.g., in mm × mm). Units must match those in your flow files. |
-| `img_offset` | 2D offset (in physical units, matching flow_field_size) specifying the top-left corner of the region of interest to extract from the flow field. |
+| `img_offset` | 2D offset (in physical units, matching `flow_field_size`) specifying the top-left corner of the region of interest to extract from the flow field. |
 | `min_speed_x/y`, `max_speed_x/y` | Range of allowed velocities in each direction,           |
 | `output_units`                   | Units used in the returned flow field: `"pixels"` (converts physical velocities to displacements in pixels using `dt` and `resolution`), or `"measure units per second"` (same units as the input flow field, e.g., mm/s). |
 | `scheduler_files`                | List of ground-truth flow field files (e.g. `.mat`)      |
 | `scheduler_class`                | Loader class for your flow files (usually by extension). See [tutorials](docs/tutorials.md) for detailed explanations. |
 
-Note: min_speed_x/y and max_speed_x/y are not absolute cutoffs, but define the full expected velocity range (positive and negative) along each axis.
+Note: `min_speed_x/y` and `max_speed_x/y` are not absolute cutoffs, but define the full expected velocity range (positive and negative) along each axis.
 
-These bounds are used to estimate the maximum particle displacement over time (dt). A larger intermediate image is generated accordingly, and the final image pair is cropped from this larger region. This ensures that particles entering the visible frame (image 2) have realistic origins — possibly outside the region of interest in image 1 — making particle "appearance" at the boundaries realistic.
+These bounds are used to estimate the maximum particle displacement over time (`dt`). A larger intermediate image is generated accordingly, and the final image pair is cropped from this larger region. This ensures that particles entering the visible frame (image 2) have realistic origins — possibly outside the region of interest in image 1 — making particle "appearance" at the boundaries realistic.
 
 ## Contributing 🤗
 Contributions are more than welcome! 🙏 Please check out our [how to contribute page](docs/contributing.md), and feel free to open an issue for problems and feature requests⚠️.
