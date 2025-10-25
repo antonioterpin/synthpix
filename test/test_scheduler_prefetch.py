@@ -373,6 +373,57 @@ def test_next_raises_stop_iteration_when_queue_empty(monkeypatch):
     pf.shutdown()
 
 
+def test_next_episode_immediate_timeout_break():
+    """If join_timeout is 0 the loop should hit the immediate timeout break."""
+    sched = MinimalScheduler(total_batches=10)
+    pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
+
+    # Start the iterator so _started becomes True
+    iter(pf)
+
+    # Call next_episode with zero timeout to hit the `remaining_time <= 0` branch
+    pf.next_episode(join_timeout=0)
+
+    # After calling next_episode the internal counter must be reset
+    assert pf._t == 0
+    pf.shutdown()
+
+
+def test_next_episode_handles_queue_empty(monkeypatch):
+    """Simulate queue.get raising queue.Empty to exercise the except branch."""
+    sched = MinimalScheduler(total_batches=10)
+    pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
+
+    # Ensure the wrapper is marked as started so the discard loop runs
+    pf._started = True
+
+    # Make get() raise queue.Empty to trigger the except/continue branch
+    def always_empty(*_a, **_kw):
+        raise queue.Empty
+
+    monkeypatch.setattr(pf._queue, "get", always_empty, raising=True)
+
+    # This should complete without raising and reset the internal counter
+    pf.next_episode(join_timeout=0.05)
+    assert pf._t == 0
+    pf.shutdown()
+
+
+def test_next_episode_breaks_on_eos_sentinel():
+    """If an EOS (None) is found in the queue, the flush loop must break."""
+    sched = MinimalScheduler(total_batches=5)
+    pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
+
+    # Mark started so the discard loop activates and push an EOS sentinel
+    pf._started = True
+    pf._queue.put(None)
+
+    # This should notice the EOS and break out, resetting _t
+    pf.next_episode(join_timeout=1)
+    assert pf._t == 0
+    pf.shutdown()
+
+
 class AlwaysEmptyScheduler:
     """A scheduler that immediately raises StopIteration."""
 

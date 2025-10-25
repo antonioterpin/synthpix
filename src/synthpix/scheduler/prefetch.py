@@ -1,6 +1,7 @@
 """PrefetchingFlowFieldScheduler to asynchronously prefetch flow fields."""
 import queue
 import threading
+import time
 
 from synthpix.scheduler.base import BaseFlowFieldScheduler
 from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
@@ -193,9 +194,13 @@ class PrefetchingFlowFieldScheduler:
         if self._started and self.steps_remaining() > 0:
             to_discard = self.steps_remaining()
             discarded = 0
+            deadline = time.time() + join_timeout
             while discarded < to_discard:
+                remaining_time = deadline - time.time()
+                if remaining_time <= 0:
+                    break
                 try:
-                    item = self._queue.get(block=True, timeout=join_timeout)
+                    item = self._queue.get(block=True, timeout=remaining_time)
                 except queue.Empty:
                     continue
                 if item is None:  # End-of-stream signal
@@ -206,7 +211,8 @@ class PrefetchingFlowFieldScheduler:
         self._t = 0
 
         # Start the prefetching thread if not already started
-        self.__iter__()
+        if not self._started:
+            self.__iter__()
 
         logger.debug("Next episode started.")
 
