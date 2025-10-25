@@ -947,6 +947,7 @@ def test_sampler_switches_flow_fields(
     assert not jnp.allclose(batch1["flow_fields"], batch2["flow_fields"])
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "image_shape, batches_per_flow_batch, seeding_density_range",
     [((32, 32), 4, (0.1, 0.1)), ((64, 64), 4, (0.0, 0.04))],
@@ -998,6 +999,7 @@ def test_sampler_with_real_img_gen_fn(
     assert jnp.allclose(output_size, expected_size, atol=0.01)
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connect to the server.",
@@ -1098,6 +1100,7 @@ def test_speed_sampler_dummy_fn(
     ), f"The average time is {avg_time}, time limit: {limit_time}"
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connect to the server.",
