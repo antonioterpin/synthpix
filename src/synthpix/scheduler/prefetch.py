@@ -183,63 +183,30 @@ class PrefetchingFlowFieldScheduler:
 
         logger.debug("Prefetching thread reinitialized, scheduler reset.")
 
-    def next_episode(self, join_timeout=2):
-        """Flush the remaining items of the current episode and restart.
-
-        This method removes the remaining items from the current episode from
-        the queue but does not inform the underlying scheduler.
-        This implementation works as far as the buffer size is larger than
-        the episode length.
+    def next_episode(self, join_timeout: float = 2.0):
+        """Flush the remaining items of the current episode and proceed to the next one.
 
         Args:
-            join_timeout: float
-                Timeout for the thread to join.
+            join_timeout (float):
+                Timeout in seconds for joining the thread. Defaults to 2.
         """
         if self._started and self.steps_remaining() > 0:
-            # if this is a premature halt, I need to eliminate the first
-            # steps_remaining batches from the queue.
-            # Two cases:
-            # 1. If the prefetching thread is already at the next episode,
-            # I can just flush the queue.
-            # 2. If the prefetching thread is still in the current episode,
-            # I need to stop it and then flush the queue.
-            # Both cases can be handled by stopping the thread and flushing
-            # steps_remaining items from the queue, or until the queue is empty.
-            # If the thread is stuck on put(),
-            # I need to free up one slot in the queue, which is safe since
-            # I am going to discard the items anyway.
-            self._stop_event.set()
-            if self._thread.is_alive():
+            to_discard = self.steps_remaining()
+            discarded = 0
+            while discarded < to_discard:
                 try:
-                    self._queue.get_nowait()  # Free up one slot in the queue
-                    self._t += 1  # Increment t to account for the discarded batch
+                    item = self._queue.get(block=True, timeout=join_timeout)
                 except queue.Empty:
-                    logger.debug("Queue is empty, no need to free up a slot.")
-                    pass
-                self._thread.join(timeout=join_timeout)
-
-            # Drain the part of the queue that belongs to the unfinished episode
-            # discard up to steps_remaing batches (may be fewer if prefetching is
-            # slower than consuming)
-            for i in range(self.steps_remaining()):
-                logger.debug(
-                    "Moving to next episode, "
-                    f"of length {self.episode_length}, "
-                    f"while {self._t} steps have been taken so far"
-                )
-                try:
-                    self._queue.get_nowait()
-                except queue.Empty:
+                    continue
+                if item is None:  # End-of-stream signal
                     break
+                discarded += 1
 
+        # Proceed to the next episode in the underlying scheduler
         self._t = 0
-        # restart producer thread
-        if self._started:
-            self._stop_event.clear()
-        else:
-            self._started = True
-        self._thread = threading.Thread(target=self._worker, daemon=True)
-        self._thread.start()
+
+        # Start the prefetching thread if not already started
+        self.__iter__()
 
         logger.debug("Next episode started.")
 

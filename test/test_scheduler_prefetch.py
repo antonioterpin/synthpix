@@ -29,6 +29,45 @@ class MinimalScheduler:
         return self.shape
 
 
+def test_single_producer_thread_across_episodes():
+    import threading
+
+    shape = (8, 8, 2)
+    sched = MinimalScheduler(total_batches=50, shape=shape)
+    sched.episode_length = 3  # short episodes to exercise next_episode() often
+
+    pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=4)
+
+    it = iter(pf)  # start producer
+    time.sleep(0.1)  # let it prefetch a bit
+
+    first_ident = pf._thread.ident
+    assert pf._thread.is_alive() and first_ident is not None
+
+    # Run several cycles: consume a bit, jump to next episode, repeat.
+    for _ in range(5):
+        # consume up to two steps in the episode
+        for __ in range(2):
+            try:
+                next(it)
+            except StopIteration:
+                break
+
+        pf.next_episode(join_timeout=0.2)
+
+        # The same producer thread should still be alive (no restart)
+        assert pf._thread.is_alive()
+        assert pf._thread.ident == first_ident
+
+        # Ensure only one worker is alive globally
+        workers = [
+            t for t in threading.enumerate() if t.is_alive() and "(_worker)" in t.name
+        ]
+        assert len(workers) == 1
+
+    pf.shutdown()
+
+
 def test_iter_and_next():
     scheduler = MinimalScheduler()
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=2, buffer_size=2)
@@ -248,8 +287,6 @@ def test_shutdown_when_queue_full():
     assert pf._queue.full()
 
     pf.shutdown()
-
-    # All worked out fine
 
 
 def test_reset_when_queue_empty_and_thread_not_started():
