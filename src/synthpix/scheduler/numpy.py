@@ -4,10 +4,12 @@ import re
 
 import jax
 import numpy as np
+from goggles import get_logger
 from PIL import Image
 
-from ..utils import logger
 from .base import BaseFlowFieldScheduler
+
+logger = get_logger(__name__)
 
 
 class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):

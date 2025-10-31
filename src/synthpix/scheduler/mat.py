@@ -6,10 +6,12 @@ import h5py
 import jax
 import numpy as np
 import scipy.io
+from goggles import get_logger
 from PIL import Image
 
-from ..utils import logger
 from .base import BaseFlowFieldScheduler
+
+logger = get_logger(__name__)
 
 
 class MATFlowFieldScheduler(BaseFlowFieldScheduler):

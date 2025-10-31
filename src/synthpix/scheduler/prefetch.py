@@ -3,10 +3,12 @@ import queue
 import threading
 import time
 
+from goggles import get_logger
+
 from synthpix.scheduler.base import BaseFlowFieldScheduler
 from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
 
-from ..utils import logger
+logger = get_logger(__name__)
 
 
 class PrefetchingFlowFieldScheduler:

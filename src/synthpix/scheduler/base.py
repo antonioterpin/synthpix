@@ -6,8 +6,9 @@ from abc import ABC, abstractmethod
 import jax
 import jax.numpy as jnp
 import numpy as np
+from goggles import get_logger
 
-from ..utils import logger
+logger = get_logger(__name__)
 
 
 class BaseFlowFieldScheduler(ABC):

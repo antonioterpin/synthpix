@@ -2,6 +2,7 @@
 import os
 
 import jax
+from goggles import get_logger
 from rich.console import Console
 from rich.text import Text
 
@@ -14,7 +15,9 @@ from .scheduler import (
     NumpyFlowFieldScheduler,
     PrefetchingFlowFieldScheduler,
 )
-from .utils import load_configuration, logger
+from .utils import load_configuration
+
+logger = get_logger(__name__)
 
 SCHEDULERS = {
     ".h5": HDF5FlowFieldScheduler,

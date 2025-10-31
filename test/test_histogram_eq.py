@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from goggles import get_logger
 from jax import jit, random
 
 from synthpix.data_generate import (
@@ -12,7 +13,9 @@ from synthpix.data_generate import (
     input_check_gen_img_from_flow,
 )
 from synthpix.sampler import SyntheticImageSampler
-from synthpix.utils import load_configuration, logger, match_histogram
+from synthpix.utils import load_configuration, match_histogram
+
+logger = get_logger(__name__)
 
 TARGET_SHAPE = (64, 64)
 sampler_config = load_configuration("config/test_data.yaml")

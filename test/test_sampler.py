@@ -5,6 +5,7 @@ import timeit
 import jax
 import jax.numpy as jnp
 import pytest
+from goggles import get_logger
 
 from synthpix.data_generate import generate_images_from_flow
 from synthpix.sampler import RealImageSampler, SyntheticImageSampler
@@ -14,7 +15,7 @@ from synthpix.scheduler import (
     MATFlowFieldScheduler,
     PrefetchingFlowFieldScheduler,
 )
-from synthpix.utils import load_configuration, logger
+from synthpix.utils import load_configuration
 
 config = load_configuration("config/testing.yaml")
 
@@ -22,6 +23,8 @@ REPETITIONS = config["REPETITIONS"]
 NUMBER_OF_EXECUTIONS = config["EXECUTIONS_SAMPLER"]
 
 sampler_config = load_configuration("config/test_data.yaml")
+
+logger = get_logger(__name__)
 
 
 def dummy_img_gen_fn(
@@ -1594,10 +1597,15 @@ def test_batch_size_adjusted_when_not_divisible_by_ndevices(monkeypatch):
 def test_warning_when_batch_size_not_divisible_by_flow_fields(monkeypatch):
     # Collect warning messages
     logged = []
-    from synthpix.utils import logger
 
-    monkeypatch.setattr(logger, "warning", lambda msg: logged.append(msg))
+    import synthpix.sampler.synthetic as sampler_mod
 
+    # Patch the logger that that module is already using
+    monkeypatch.setattr(
+        sampler_mod.logger,
+        "warning",
+        lambda msg: logged.append(msg),
+    )
     # Use a batch_size that isn't divisible by flow_fields_per_batch
     sampler = SyntheticImageSampler(
         scheduler=_BaseDummy(),

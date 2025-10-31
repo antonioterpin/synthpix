@@ -2,9 +2,11 @@
 import h5py
 import jax
 import numpy as np
+from goggles import get_logger
 
 from ..scheduler import BaseFlowFieldScheduler
-from ..utils import logger
+
+logger = get_logger(__name__)
 
 
 class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
