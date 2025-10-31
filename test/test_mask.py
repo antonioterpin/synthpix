@@ -179,12 +179,14 @@ def test_input_check_gen_img_from_flow_logs_mask(monkeypatch):
     image_shape = (4, 4)
     mask = jnp.ones(image_shape)
 
+    import synthpix.data_generate as generate_mod
+
     # Collect debug messages
     logged = []
-    monkeypatch.setattr(logger, "debug", lambda msg: logged.append(msg))
+    monkeypatch.setattr(generate_mod.logger, "debug", lambda msg: logged.append(msg))
 
     # Call the function to test
-    input_check_gen_img_from_flow(
+    generate_mod.input_check_gen_img_from_flow(
         key=key,
         flow_field=flow_field,
         image_shape=image_shape,
