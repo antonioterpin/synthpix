@@ -17,7 +17,7 @@ setup(
         "imageio>=2.37.0",
         "matplotlib>=3.10.1",
         "opencv-python-headless>=4.5.5",
-        "robo-goggles>=0.1.2",
+        "robo-goggles @ git+https://github.com/antonioterpin/goggles.git@feature-46",
     ],
     extras_require={
         "dev": [
