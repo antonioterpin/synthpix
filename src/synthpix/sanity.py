@@ -7,12 +7,15 @@ import sys
 import h5py
 import jax.numpy as jnp
 import numpy as np
+from goggles import get_logger
 from tqdm import tqdm
 
 from .data_generate import generate_images_from_flow
 from .sampler import SyntheticImageSampler
 from .scheduler import HDF5FlowFieldScheduler
-from .utils import load_configuration, logger
+from .utils import load_configuration
+
+logger = get_logger(__name__)
 
 
 def update_config_file(config_path: str, updated_values: dict):

@@ -29,6 +29,45 @@ class MinimalScheduler:
         return self.shape
 
 
+def test_single_producer_thread_across_episodes():
+    import threading
+
+    shape = (8, 8, 2)
+    sched = MinimalScheduler(total_batches=50, shape=shape)
+    sched.episode_length = 3  # short episodes to exercise next_episode() often
+
+    pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=4)
+
+    it = iter(pf)  # start producer
+    time.sleep(0.1)  # let it prefetch a bit
+
+    first_ident = pf._thread.ident
+    assert pf._thread.is_alive() and first_ident is not None
+
+    # Run several cycles: consume a bit, jump to next episode, repeat.
+    for _ in range(5):
+        # consume up to two steps in the episode
+        for __ in range(2):
+            try:
+                next(it)
+            except StopIteration:
+                break
+
+        pf.next_episode(join_timeout=0.2)
+
+        # The same producer thread should still be alive (no restart)
+        assert pf._thread.is_alive()
+        assert pf._thread.ident == first_ident
+
+        # Ensure only one worker is alive globally
+        workers = [
+            t for t in threading.enumerate() if t.is_alive() and "(_worker)" in t.name
+        ]
+        assert len(workers) == 1
+
+    pf.shutdown()
+
+
 def test_iter_and_next():
     scheduler = MinimalScheduler()
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=2, buffer_size=2)
@@ -159,8 +198,10 @@ def test_next_episode_flushes_remaining_and_restarts():
 
     # After next_episode() we must be at t == 0 and the queue empty/new thread alive
     assert pf._t == 0
-    assert pf._thread.is_alive()
-    pf.shutdown()
+    deadline = time.time() + 0.5
+    while time.time() < deadline and not pf.is_running():
+        time.sleep(0.01)
+    assert pf.is_running()
 
 
 def test_reset_stops_thread_and_clears_queue():
@@ -249,8 +290,6 @@ def test_shutdown_when_queue_full():
 
     pf.shutdown()
 
-    # All worked out fine
-
 
 def test_reset_when_queue_empty_and_thread_not_started():
     sched = MinimalScheduler(total_batches=2)
@@ -333,6 +372,57 @@ def test_next_raises_stop_iteration_when_queue_empty(monkeypatch):
     with pytest.raises(StopIteration):
         next(iter(pf))
 
+    pf.shutdown()
+
+
+def test_next_episode_immediate_timeout_break():
+    """If join_timeout is 0 the loop should hit the immediate timeout break."""
+    sched = MinimalScheduler(total_batches=10)
+    pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
+
+    # Start the iterator so _started becomes True
+    iter(pf)
+
+    # Call next_episode with zero timeout to hit the `remaining_time <= 0` branch
+    pf.next_episode(join_timeout=0)
+
+    # After calling next_episode the internal counter must be reset
+    assert pf._t == 0
+    pf.shutdown()
+
+
+def test_next_episode_handles_queue_empty(monkeypatch):
+    """Simulate queue.get raising queue.Empty to exercise the except branch."""
+    sched = MinimalScheduler(total_batches=10)
+    pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
+
+    # Ensure the wrapper is marked as started so the discard loop runs
+    pf._started = True
+
+    # Make get() raise queue.Empty to trigger the except/continue branch
+    def always_empty(*_a, **_kw):
+        raise queue.Empty
+
+    monkeypatch.setattr(pf._queue, "get", always_empty, raising=True)
+
+    # This should complete without raising and reset the internal counter
+    pf.next_episode(join_timeout=0.05)
+    assert pf._t == 0
+    pf.shutdown()
+
+
+def test_next_episode_breaks_on_eos_sentinel():
+    """If an EOS (None) is found in the queue, the flush loop must break."""
+    sched = MinimalScheduler(total_batches=5)
+    pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
+
+    # Mark started so the discard loop activates and push an EOS sentinel
+    pf._started = True
+    pf._queue.put(None)
+
+    # This should notice the EOS and break out, resetting _t
+    pf.next_episode(join_timeout=1)
+    assert pf._t == 0
     pf.shutdown()
 
 

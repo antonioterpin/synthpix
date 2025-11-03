@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from goggles import get_logger
 from jax import random
 
 from synthpix.data_generate import (
@@ -14,7 +15,9 @@ from synthpix.data_generate import (
 from synthpix.sampler import SyntheticImageSampler
 
 # Import existing modules
-from synthpix.utils import load_configuration, logger
+from synthpix.utils import load_configuration
+
+logger = get_logger(__name__)
 
 sampler_config = load_configuration("config/test_data.yaml")
 
@@ -176,12 +179,14 @@ def test_input_check_gen_img_from_flow_logs_mask(monkeypatch):
     image_shape = (4, 4)
     mask = jnp.ones(image_shape)
 
+    import synthpix.data_generate as generate_mod
+
     # Collect debug messages
     logged = []
-    monkeypatch.setattr(logger, "debug", lambda msg: logged.append(msg))
+    monkeypatch.setattr(generate_mod.logger, "debug", lambda msg: logged.append(msg))
 
     # Call the function to test
-    input_check_gen_img_from_flow(
+    generate_mod.input_check_gen_img_from_flow(
         key=key,
         flow_field=flow_field,
         image_shape=image_shape,

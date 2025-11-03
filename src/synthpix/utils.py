@@ -3,13 +3,13 @@
 import os
 from typing import Tuple, Union
 
-import goggles as logger
+import goggles as gg
 import jax
 import jax.numpy as jnp
 
 DEBUG_JIT = False
 
-load_configuration = logger.load_configuration
+load_configuration = gg.load_configuration
 
 
 def is_int(val: Union[int, float]) -> bool:

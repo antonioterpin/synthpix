@@ -1,12 +1,18 @@
 """Main file to run the SyntheticImageSampler pipeline."""
 import argparse
+import logging
 import os
 
+import goggles as gg
 import matplotlib.pyplot as plt
 import numpy as np
 
 import synthpix
-from synthpix.utils import logger
+
+logger = gg.get_logger(__name__)
+gg.attach(
+    gg.ConsoleHandler(level=logging.INFO),
+)
 
 
 def visualize_and_save(name, image1, image2, flow_field, output_dir="output_images"):

@@ -5,16 +5,14 @@ from typing import Callable, List, Optional, Sequence, Tuple
 import jax
 import jax.numpy as jnp
 import numpy as np
+from goggles import get_logger
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
 from ..data_generate import input_check_gen_img_from_flow
-from ..utils import (
-    DEBUG_JIT,
-    flow_field_adapter,
-    input_check_flow_field_adapter,
-    logger,
-)
+from ..utils import DEBUG_JIT, flow_field_adapter, input_check_flow_field_adapter
 from .base import Sampler
+
+logger = get_logger(__name__)
 
 
 class SyntheticImageSampler(Sampler):

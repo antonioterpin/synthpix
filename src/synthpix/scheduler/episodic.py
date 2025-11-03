@@ -4,9 +4,12 @@ import os
 
 import jax
 import jax.numpy as jnp
+from goggles import get_logger
 
-from ..utils import discover_leaf_dirs, is_int, logger
+from ..utils import discover_leaf_dirs, is_int
 from .base import BaseFlowFieldScheduler
+
+logger = get_logger(__name__)
 
 
 class EpisodicFlowFieldScheduler:

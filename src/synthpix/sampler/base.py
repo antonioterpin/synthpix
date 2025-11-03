@@ -3,8 +3,9 @@
 from abc import abstractmethod
 
 import jax.numpy as jnp
+from goggles import get_logger
 
-from synthpix.utils import logger
+logger = get_logger(__name__)
 
 
 class Sampler:
