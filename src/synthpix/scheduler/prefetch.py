@@ -253,3 +253,12 @@ class PrefetchingFlowFieldScheduler:
     def __del__(self):
         """Gracefully shuts down the scheduler upon deletion."""
         self.shutdown()
+
+    def is_running(self) -> bool:
+        """Check if the prefetching thread is currently running.
+
+        Returns:
+            bool: True if the prefetching thread is alive, False otherwise.
+        """
+        t = self._thread
+        return t is not None and t.is_alive()

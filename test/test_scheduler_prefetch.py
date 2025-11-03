@@ -198,8 +198,10 @@ def test_next_episode_flushes_remaining_and_restarts():
 
     # After next_episode() we must be at t == 0 and the queue empty/new thread alive
     assert pf._t == 0
-    assert pf._thread.is_alive()
-    pf.shutdown()
+    deadline = time.time() + 0.5
+    while time.time() < deadline and not pf.is_running():
+        time.sleep(0.01)
+    assert pf.is_running()
 
 
 def test_reset_stops_thread_and_clears_queue():
