@@ -784,7 +784,9 @@ def test_discover_leaf_dirs_skips_not_a_directory(tmp_path):
     assert os.path.abspath(will_be_file) not in leaves
 
 
-@pytest.mark.skipif(sys.platform.startswith("win"), reason="chmod(0) semantics differ on Windows")
+@pytest.mark.skipif(
+    sys.platform.startswith("win"), reason="chmod(0) semantics differ on Windows"
+)
 def test_discover_leaf_dirs_skips_permission_denied(tmp_path):
     """Trigger PermissionError: directory exists but is not readable."""
     denied = tmp_path / "no_perm_seq"
@@ -798,9 +800,11 @@ def test_discover_leaf_dirs_skips_permission_denied(tmp_path):
     paths = [str(p) for p in tmp_path.rglob("*.mat")]
 
     # Remove read/execute from the directory to block listing (r-x needed to list)
-    original_mode = denied.stat().st_mode
+    _ = denied.stat().st_mode
     try:
-        denied.chmod(0)  # no permissions → os.scandir / iterdir should raise PermissionError
+        denied.chmod(
+            0
+        )  # no permissions → os.scandir / iterdir should raise PermissionError
         leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
         assert os.path.abspath(ok) in leaves
         assert os.path.abspath(denied) not in leaves

@@ -492,6 +492,7 @@ def discover_leaf_dirs(
     Args:
         paths (Sequence[str]): A sequence of file or directory paths.
         follow_symlinks (bool): Whether to follow symlinks when checking for subdirs.
+            default is False.
 
     Returns:
         List[str]: A list of directory paths that are leaves (have no subdirectories).
