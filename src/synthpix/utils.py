@@ -1,7 +1,7 @@
 """Utility functions for the vision module."""
 
 import os
-from typing import Tuple, Union
+from typing import List, Sequence, Tuple, Union
 
 import goggles as gg
 import jax
@@ -484,27 +484,30 @@ def input_check_flow_field_adapter(
         raise ValueError("zero_padding must be a tuple of two non-negative integers.")
 
 
-def discover_leaf_dirs(paths: list[str]) -> list[str]:
-    """Return every directory that contains data but *no* sub-directories.
+def discover_leaf_dirs(
+    paths: Sequence[str], *, follow_symlinks: bool = False
+) -> List[str]:
+    """Return every directory that appears in `paths` and has no sub-directories on disk.
 
-    Parameters
-    ----------
-    paths
-        Any list of file paths (e.g. ``scheduler.file_list``).
+    Args:
+        paths (Sequence[str]): A sequence of file or directory paths.
+        follow_symlinks (bool): Whether to follow symlinks when checking for subdirs.
 
-    Returns
-    -------
-    list[str]
-        Deduplicated list of leaf directory paths.
+    Returns:
+        List[str]: A list of directory paths that are leaves (have no subdirectories).
     """
-    leaf_dirs = set()
-    for path in paths:
-        dir_path = os.path.dirname(path)
-        # A leaf dir has *no* child directories
-        has_subdirs = any(
-            os.path.isdir(os.path.join(dir_path, entry))
-            for entry in os.listdir(dir_path)
-        )
-        if not has_subdirs:
-            leaf_dirs.add(dir_path)
-    return list(leaf_dirs)
+    dir_paths = {os.path.normpath(os.path.dirname(p)) for p in paths}  # dedupe upfront
+    leaves: List[str] = []
+
+    for d in dir_paths:
+        try:
+            with os.scandir(d) as it:
+                # Early-exit on the first subdirectory
+                if any(entry.is_dir(follow_symlinks=follow_symlinks) for entry in it):
+                    continue
+            leaves.append(d)  # No subdirs found
+        except (FileNotFoundError, NotADirectoryError, PermissionError):
+            # Skip dirs that vanished, aren't dirs, or we can't read
+            continue
+
+    return leaves
