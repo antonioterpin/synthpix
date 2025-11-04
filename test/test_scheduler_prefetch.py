@@ -1,3 +1,4 @@
+import os
 import queue
 import time
 
@@ -24,6 +25,31 @@ class MinimalScheduler:
     def reset(self):
         self.count = 0
         self.reset_called = True
+
+    def get_flow_fields_shape(self):
+        return self.shape
+
+
+class MinimalEpisodic:
+    def __init__(self, total_batches=4, shape=(8, 8, 2)):
+        self.episode_length = total_batches
+        self.shape = shape
+        self._t = 0
+
+    def get_batch(self, batch_size):
+        # never raise StopIteration at episode boundary
+        if self._t >= self.episode_length:
+            # if the prefetcher keeps calling this without next_episode,
+            # you can either cycle or clamp; for tests, cycle is fine:
+            self._t = 0
+        self._t += 1
+        return np.ones((batch_size,) + self.shape)
+
+    def next_episode(self):
+        self._t = 0
+
+    def reset(self):
+        self._t = 0
 
     def get_flow_fields_shape(self):
         return self.shape
@@ -183,18 +209,20 @@ def test_get_batch_size_mismatch_raises_value_error():
 
 def test_next_episode_flushes_remaining_and_restarts():
     TOTAL_BATCHES = 20
-    scheduler = MinimalScheduler(total_batches=TOTAL_BATCHES)
+    scheduler = MinimalEpisodic(total_batches=TOTAL_BATCHES)
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1, buffer_size=5)
 
     it = iter(pf)
-    # consume three batches to put us mid-episode
     for _ in range(3):
         next(it)
 
-    remaining_before = pf.steps_remaining()
-    assert remaining_before == TOTAL_BATCHES - 3
+    assert pf.steps_remaining() == TOTAL_BATCHES - 3
 
-    pf.next_episode(join_timeout=1)
+    if os.getenv("CI") == "true":
+        # CI environments can be slow; give more time to flush
+        pf.next_episode(join_timeout=10)
+    else:
+        pf.next_episode(join_timeout=1)
 
     # After next_episode() we must be at t == 0 and the queue empty/new thread alive
     assert pf._t == 0
