@@ -1,4 +1,5 @@
 """Script to check the sanity of the configuration file."""
+
 import argparse
 import collections
 import os
@@ -18,8 +19,14 @@ from .utils import load_configuration
 logger = get_logger(__name__)
 
 
-def update_config_file(config_path: str, updated_values: dict):
-    """Update the YAML configuration file with new values."""
+def update_config_file(config_path: str, updated_values: dict) -> None:
+    """Update the YAML configuration file with new values.
+
+    Args:
+        config_path: The path to the configuration file.
+        updated_values: A dictionary of values to update
+            in the configuration file.
+    """
     config_data = load_configuration(config_path)
 
     # Convert to OrderedDict to preserve order
@@ -60,16 +67,15 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
     """Calculate the missing speeds for a list of files.
 
     Args:
-        file_list: list[str]
-            The list of files.
+        file_list: The list of files.
 
     Returns:
-        dict[str, float]: A dictionary containing the minimum and maximum speeds
-            in the x and y directions with keys:
-            - "min_speed_x"
-            - "max_speed_x"
-            - "min_speed_y"
-            - "max_speed_y"
+        A dictionary containing the minimum and maximum speeds in the x and y
+            directions with keys:
+                - "min_speed_x"
+                - "max_speed_x"
+                - "min_speed_y"
+                - "max_speed_y"
     """
     running_max_speed_x = float("-inf")
     running_max_speed_y = float("-inf")
@@ -96,16 +102,14 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
     }
 
 
-def missing_speeds_panel(config_path) -> tuple[float, float, float, float]:
+def missing_speeds_panel(config_path: str) -> tuple[float, float, float, float]:
     """Check for missing speeds in the configuration file.
 
     Args:
-        config_path: str
-            The path to the configuration file.
+        config_path: The path to the configuration file.
 
     Returns:
-        speeds: tuple[float, float, float, float]
-            The maximum and minimum speeds in the x and y directions.
+        speeds: The maximum and minimum speeds in the x and y directions.
     """
     config = load_configuration(config_path)
 
@@ -180,7 +184,7 @@ def missing_speeds_panel(config_path) -> tuple[float, float, float, float]:
         )
 
 
-def main():  # pragma: no cover
+def main() -> None:  # pragma: no cover
     """Main function to check the sanity of the configuration file."""
     parser = argparse.ArgumentParser(
         description="Check the sanity of the configuration file."

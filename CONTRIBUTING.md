@@ -14,7 +14,7 @@ This page summarizes the development workflow and software engineering practices
 ├── src/                    # Source code
 ├── tests/                  # Test suite
 ├── docs/                   # Documentation
-├── scripts/                # Utils, like custom hooks
+├── scripts/                # Downloaders
 ├── .pre-commit-config.yaml # Code quality hooks
 ├── pyproject.toml          # Project configuration
 └── CONTRIBUTING.md         # Development guidelines
@@ -28,13 +28,9 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 To provision the local environment with development tools:
 ```sh
-uv sync --extra dev
+uv sync --extra dev --extra cuda12
 ```
 
-Run the application with (see the [README.md](README.md) for details on the usage):
-```sh
-uv run examples/<the-example>.py
-```
 To run the pytests:
 ```sh
 uv run pytest

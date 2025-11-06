@@ -1,4 +1,5 @@
 """Main file to run the SyntheticImageSampler pipeline."""
+
 import argparse
 import logging
 import os
@@ -15,15 +16,21 @@ gg.attach(
 )
 
 
-def visualize_and_save(name, image1, image2, flow_field, output_dir="output_images"):
+def visualize_and_save(
+    name: str,
+    image1: np.ndarray,
+    image2: np.ndarray,
+    flow_field: np.ndarray,
+    output_dir: str = "output_images",
+) -> None:
     """Visualizes and saves a specified number of images from a batch.
 
     Args:
-        name (str): The name of the batch.
-        image1 (jnp.ndarray): The first image to visualize.
-        image2 (jnp.ndarray): The second image to visualize.
-        flow_field (jnp.ndarray): The flow field to visualize.
-        output_dir (str): Directory to save the images.
+        name: The name of the batch.
+        image1: The first image to visualize.
+        image2: The second image to visualize.
+        flow_field: The flow field to visualize.
+        output_dir: Directory to save the images.
     """
     os.makedirs(output_dir, exist_ok=True)
 
@@ -59,9 +66,9 @@ def main(config_path: str, output_dir: str, num_images_to_display: int):
     """Main function to run the SyntheticImageSampler pipeline.
 
     Args:
-        config_path (string): Configuration file path.
-        output_dir (str): Directory to save visualized images.
-        num_images_to_display (int): Number of images to display and save per batch.
+        config_path: Configuration file path.
+        output_dir: Directory to save visualized images.
+        num_images_to_display: Number of images to display and save per batch.
     """
     # Initialize the sampler
     sampler = synthpix.make(config_path, buffer_size=10, images_from_file=False)

@@ -1,7 +1,10 @@
 """PrefetchingFlowFieldScheduler to asynchronously prefetch flow fields."""
+
 import queue
 import threading
 import time
+from typing_extensions import Self
+import numpy as np
 
 from goggles import get_logger
 
@@ -30,11 +33,10 @@ class PrefetchingFlowFieldScheduler:
         moving to the next episode seamlessly.
 
         Args:
-            scheduler (BaseFlowFieldScheduler | EpisodicFlowFieldScheduler):
-                The underlying flow field scheduler.
-            batch_size (int):
-                Flow field slices per batch, must match the underlying scheduler.
-            buffer_size (int): Number of batches to prefetch.
+            scheduler: The underlying flow field scheduler.
+            batch_size: Flow field slices per batch.
+                Must match the underlying scheduler.
+            buffer_size: Number of batches to prefetch.
         """
         self.scheduler = scheduler
 
@@ -56,12 +58,13 @@ class PrefetchingFlowFieldScheduler:
 
         self._started = False
 
-    def __iter__(self):
-        """Returns the iterator instance itself and starts the background thread.
+    def __iter__(self) -> Self:
+        """Returns the iterator instance and starts the background thread.
 
         If the background thread is not started yet, it will be started.
-        This behavior also takes care of the case where there has been an Exception
-        in the previous run, and the thread needs to be restarted.
+        This behavior also takes care of the case where there has been an Exception in the previous run, and the thread needs to be restarted.
+
+        Returns: The iterator instance itself.
         """
         if not self._started:
             self._started = True
@@ -69,8 +72,10 @@ class PrefetchingFlowFieldScheduler:
             logger.debug("Background thread started.")
         return self
 
-    def __next__(self):
+    def __next__(self) -> np.ndarray:
         """Returns the next batch of flow fields from the prefetch queue.
+
+        Returns: The next batch of flow fields.
 
         Raises:
             StopIteration: If the queue is empty or no more data is available.
@@ -91,11 +96,12 @@ class PrefetchingFlowFieldScheduler:
             logger.info("Unable to get data.")
             raise StopIteration
 
-    def get_batch(self, batch_size):
-        """Return the next batch from the prefetch queue, matching scheduler interface.
+    def get_batch(self, batch_size: int) -> np.ndarray:
+        """Return the next batch from the prefetch queue.
 
-        Returns:
-            np.ndarray: A preloaded batch of flow fields.
+        The batch matches the underlying scheduler's interface.
+
+        Returns: A preloaded batch of flow fields.
         """
         if batch_size != self.batch_size:
             raise ValueError(
@@ -106,16 +112,21 @@ class PrefetchingFlowFieldScheduler:
             self.__iter__()
         return next(self)
 
-    def get_flow_fields_shape(self):
+    def get_flow_fields_shape(self) -> tuple[int, ...]:
         """Return the shape of the flow fields from the underlying scheduler.
 
         Returns:
-            tuple: Shape of the flow fields as returned by the underlying scheduler.
+            Shape of the flow fields as returned by the underlying scheduler.
         """
         return self.scheduler.get_flow_fields_shape()
 
-    def _worker(self, eos_timeout=2):
-        """Background thread that continuously fetches batches from the scheduler."""
+    def _worker(self, eos_timeout: float = 2.0) -> None:
+        """Background thread that fetches batches from the scheduler.
+
+        Args:
+            eos_timeout: Timeout in seconds for putting the end-of-stream
+                signal in the queue.
+        """
         while not self._stop_event.is_set():
             try:
                 batch = self.scheduler.get_batch(self.batch_size)
@@ -155,7 +166,7 @@ class PrefetchingFlowFieldScheduler:
             # Exception cannot be raised here, would be dead code.
             self._queue.put(batch, block=True)
 
-    def reset(self):
+    def reset(self) -> None:
         """Resets the prefetching scheduler and underlying scheduler."""
         # Set the stop event to stop the current thread
         self._stop_event.set()
@@ -186,12 +197,13 @@ class PrefetchingFlowFieldScheduler:
 
         logger.debug("Prefetching thread reinitialized, scheduler reset.")
 
-    def next_episode(self, join_timeout: float = 2.0):
-        """Flush the remaining items of the current episode and proceed to the next one.
+    def next_episode(self, join_timeout: float = 2.0) -> None:
+        """Finish current episode and proceed to the next one.
+
+        Flushes the remaining items of the current episode.
 
         Args:
-            join_timeout (float):
-                Timeout in seconds for joining the thread. Defaults to 2.
+            join_timeout: Timeout in seconds for joining the thread.
         """
         if self._started and self.steps_remaining() > 0:
             to_discard = self.steps_remaining()
@@ -221,13 +233,16 @@ class PrefetchingFlowFieldScheduler:
     def steps_remaining(self) -> int:
         """Return the number of steps remaining in the current episode.
 
-        Returns:
-            int: Number of steps remaining in the current episode.
+        Returns: Number of steps remaining in the current episode.
         """
         return self.episode_length - self._t
 
-    def shutdown(self, join_timeout=2):
-        """Gracefully shuts down the background prefetching thread."""
+    def shutdown(self, join_timeout: float = 2.0) -> None:
+        """Gracefully shuts down the background prefetching thread.
+
+        Args:
+            join_timeout: Timeout in seconds for joining the thread.
+        """
         try:
             self._stop_event.set()
         except AttributeError:
@@ -250,15 +265,14 @@ class PrefetchingFlowFieldScheduler:
         if self._thread.is_alive():
             self._thread.join(timeout=join_timeout)
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Gracefully shuts down the scheduler upon deletion."""
         self.shutdown()
 
     def is_running(self) -> bool:
         """Check if the prefetching thread is currently running.
 
-        Returns:
-            bool: True if the prefetching thread is alive, False otherwise.
+        Returns: True if the prefetching thread is alive, False otherwise.
         """
         t = self._thread
         return t is not None and t.is_alive()

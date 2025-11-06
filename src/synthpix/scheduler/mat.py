@@ -1,6 +1,7 @@
 """FlowFieldScheduler to load the flow field data from files."""
-import itertools as it
 
+import itertools as it
+from typing_extensions import Self
 import cv2
 import h5py
 import jax
@@ -34,24 +35,23 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
 
     def __init__(
         self,
-        file_list,
-        randomize=False,
-        loop=False,
+        file_list: list[str] | str,
+        randomize: bool = False,
+        loop: bool = False,
         include_images: bool = False,
-        output_shape=(256, 256),
+        output_shape: tuple[int, int] = (256, 256),
         key: jax.random.PRNGKey = None,
     ):
         """Initializes the MATFlowFieldScheduler.
 
         Args:
-            file_list (list):
-                A directory, single .mat file, or list of .mat paths.
-            randomize (bool): If True, shuffle file order per epoch.
-            loop (bool): If True, cycle indefinitely by wrapping around.
-            include_images (bool): If True, return a tuple (I0, I1, V).
-            output_shape (tuple): The desired output shape for the flow fields.
+            file_list: A directory, single .mat file, or list of .mat paths.
+            randomize: If True, shuffle file order per epoch.
+            loop: If True, cycle indefinitely by wrapping around.
+            include_images: If True, return a tuple (I0, I1, V).
+            output_shape: The desired output shape for the flow fields.
                 Must be a tuple of two integers (height, width).
-            key (jax.random.PRNGKey): Random key for reproducibility.
+            key: Random key for reproducibility.
         """
         if not isinstance(include_images, bool):
             raise ValueError("include_images must be a boolean value.")
@@ -78,21 +78,27 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
 
     @classmethod
     def _path_is_hdf5(cls, path: str) -> bool:
+        """Check if a file is in HDF5 format.
+
+        Args:
+            path: Path to the file.
+
+        Returns: True if the file is in HDF5 format, False otherwise.
+        """
         return h5py.is_hdf5(path)
 
     def load_file(self, file_path: str):
         """Load any MATLAB .mat file (v4, v5/6/7, or v7.3) and return its data dict.
 
         Args:
-        file_path (str): Path to the .mat file.
+            file_path: Path to the .mat file.
 
-        Returns:
-            dict: Dictionary containing 'V' (flow field).  When
+        Returns: Dictionary containing 'V' (flow field).  When
             `self.include_images` is True, it must also hold 'I0' and 'I1'.
         """
 
         def recursively_load_hdf5_group(group, prefix=""):
-            """Flatten all datasets in an HDF5 tree into a dict keyed by full path."""
+            """Flatten all datasets in an HDF5 tree into a dict."""
             out = {}
             for name, item in group.items():
                 path = f"{prefix}/{name}" if prefix else name
@@ -166,12 +172,12 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         logger.debug(f"Loaded {file_path} with keys {list(data.keys())}")
         return data
 
-    def get_next_slice(self):
+    def get_next_slice(self) -> np.ndarray | dict:
         """Retrieves the flow field slice and optionally the images.
 
         Returns:
-            np.ndarray or dict: Flow field with shape (X, Y, Z, 2) or a dict
-            containing the flow field and images.
+            Flow field with shape (X, Y, Z, 2) or
+            a dict containing the flow field and images.
         """
         data = self._cached_data
         flow_field = data["V"]
@@ -183,16 +189,20 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         img_next = data["I1"]
         return {"flow": flow_field, "img_prev": img_prev, "img_next": img_next}
 
-    def get_flow_fields_shape(self):
+    def get_flow_fields_shape(self) -> tuple[int, ...]:
         """Returns the shape of the flow field.
 
-        Returns:
-            tuple: Shape of the flow field.
+        Returns: Shape of the flow field.
         """
         return self.output_shape + (2,)
 
-    def __next__(self):
-        """Iterate over .mat files, returning flow or flow+images."""
+    def __next__(self) -> np.ndarray | tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Iterate over .mat files, returning flow or flow+images.
+
+        Returns:
+            Flow field with shape (X, Y, Z, 2) or
+            a tuple (I0, I1, V) if `include_images` is True.
+        """
         while self.index < len(self.file_list) or self.loop:
             if self.index >= len(self.file_list):
                 self.reset(reset_epoch=False)
@@ -216,7 +226,9 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
 
         raise StopIteration
 
-    def get_batch(self, batch_size: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def get_batch(
+        self, batch_size: int
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | np.ndarray:
         """Retrieves a batch of flow fields using the current scheduler state.
 
         Args:
@@ -224,16 +236,16 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                 The number of flow fields to retrieve in the batch.
 
         Returns:
-            tuple[np.ndarray, np.ndarray, np.ndarray] | np.ndarray:
-                A tuple containing:
-                - img_prevs: np.ndarray of previous images
-                - img_nexts: np.ndarray of next images
-                - flows: np.ndarray of flow fields
-                If `include_images` is False, it only returns a batch of flow fields.
+            A tuple containing:
+            - img_prevs: np.ndarray of previous images
+            - img_nexts: np.ndarray of next images
+            - flows: np.ndarray of flow fields
+            or, `include_images` is False, a batch of flow fields.
 
         Raises:
             StopIteration: If the iterator is fully exhausted.
-            Warning: If fewer slices than `batch_size` are available and `loop` is False
+            Warning: If fewer slices than `batch_size` are available
+                and `loop` is False
         """
         if self.include_images:
             batch = [
@@ -260,15 +272,15 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             return super().get_batch(batch_size)
 
     @classmethod
-    def from_config(cls, config: dict) -> "MATFlowFieldScheduler":
+    def from_config(cls, config: dict) -> Self:
         """Creates a MATFlowFieldScheduler instance from a configuration dictionary.
 
         Args:
-            config: dict
+            config:
                 Configuration dictionary containing the scheduler parameters.
 
         Returns:
-            MATFlowFieldScheduler: An instance of the scheduler.
+            An instance of the scheduler.
         """
         return MATFlowFieldScheduler(
             file_list=config["scheduler_files"],

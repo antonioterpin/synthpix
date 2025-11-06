@@ -26,16 +26,16 @@ See `src/main.py` for a fully working example, and check out the [paper]() for m
 ## Getting started 🚀
 Alright, now that hopefully we convinced you to try SynthPix, let's get to it. Don't worry, installing it is even easier than using it:
 ```bash
-pip install synthpix
+uv add synthpix
 ```
 If you have CUDA GPUs,
 ```bash
-pip install "synthpix[cuda12]"
+uv add "synthpix[cuda12]"
 ```
 If you have issues with CUDA drivers, please follow the official instructions for [cuda12](https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local) and [cudnn](https://developer.nvidia.com/cudnn-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local)
 (*Note: wheels only available on linux*).
 
-Check out our [instructions](docs/installing.md) for installing `SynthPix` with Docker and from source.
+Check out our [instructions](./CONTRIBUTING.md) for installing `SynthPix` from source. You can of course also use pip.
 
 To generate the images, you need flow data. We provide two scripts to download the commonly used PIV datasets:
 ```bash

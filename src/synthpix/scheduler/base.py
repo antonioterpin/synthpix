@@ -1,7 +1,9 @@
 """BaseFlowFieldScheduler abstract class."""
+
 import glob
 import os
 from abc import ABC, abstractmethod
+from typing_extensions import Self
 
 import jax
 import jax.numpy as jnp
@@ -12,28 +14,30 @@ logger = get_logger(__name__)
 
 
 class BaseFlowFieldScheduler(ABC):
-    """Abstract class for scheduling access to flow field data from various file formats.
+    """Abstract class for scheduling access to flow field data.
 
-    This class provides iteration, looping, caching, and batch loading capabilities.
-    Subclasses must implement file-specific loading and y-slice extraction logic.
+    This class provides iteration, looping, caching, and batch loading.
+    Subclasses must implement:
+    - file-specific loading
+    - y-slice extraction logic.
     """
 
     _file_pattern = "*"
 
     def __init__(
         self,
-        file_list: list,
+        file_list: list[str] | str,
         randomize: bool = False,
         loop: bool = False,
         key: jax.random.PRNGKey = None,
-    ):
+    ) -> None:
         """Initializes the scheduler.
 
         Args:
-            file_list (list):  List of file paths to flow field datasets.
-            randomize (bool): If True, shuffle the order of files each epoch.
-            loop (bool): If True, loop over the dataset indefinitely.
-            key (jax.random.PRNGKey): Random key for reproducibility.
+            file_list:  List of file paths to flow field datasets.
+            randomize: If True, shuffle the order of files each epoch.
+            loop: If True, loop over the dataset indefinitely.
+            key: Random key for reproducibility.
         """
         # Check if file_list is a directory or a list of files
         if isinstance(file_list, str) and os.path.isdir(file_list):
@@ -90,24 +94,26 @@ class BaseFlowFieldScheduler(ABC):
             f"randomize={self.randomize}, loop={self.loop}"
         )
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Returns the number of files in the dataset.
 
-        Returns:
-            int: Number of files in file_list.
+        Returns: Number of files in file_list.
         """
         return len(self.file_list)
 
-    def __iter__(self):
+    def __iter__(self) -> Self:
         """Returns the iterator instance itself.
 
-        Returns:
-            BaseFlowFieldScheduler: The iterator instance.
+        Returns: The iterator instance.
         """
         return self
 
-    def reset(self, reset_epoch=True):
-        """Resets the state, including file pointers and, optionally, epoch count."""
+    def reset(self, reset_epoch: bool = True) -> None:
+        """Resets the state and, optionally, epoch count.
+
+        Args:
+            reset_epoch: If True, resets the epoch counter to zero.
+        """
         if reset_epoch:
             self.epoch = 0
         self.index = 0
@@ -126,8 +132,7 @@ class BaseFlowFieldScheduler(ABC):
     def __next__(self) -> np.ndarray:
         """Returns the next flow field slice from the dataset.
 
-        Returns:
-            np.ndarray: A single flow field slice.
+        Returns: A single flow field slice.
 
         Raises:
             StopIteration: If no more data and loop is False.
@@ -167,21 +172,20 @@ class BaseFlowFieldScheduler(ABC):
 
         raise StopIteration
 
-    def get_batch(self, batch_size) -> np.ndarray:
+    def get_batch(self, batch_size: int) -> np.ndarray:
         """Retrieves a batch of flow fields using the current scheduler state.
 
-        This method repeatedly calls `__next__()` to store a batch of flow field slices.
+        This method repeatedly calls `__next__()` to store a batch
+        of flow field slices.
 
         Args:
-            batch_size: int
-                Number of flow field slices to retrieve.
+            batch_size: Number of flow field slices to retrieve.
 
-        Returns:
-            np.ndarray: A np.ndarray of flow field slices with length `batch_size`.
+        Returns: A np.ndarray of flow field slices with length `batch_size`.
 
         Raises:
             StopIteration: If the dataset is exhausted before reaching the
-                           desired batch size and `loop` is set to False.
+                desired batch size and `loop` is set to False.
         """
         batch = []
         try:
@@ -200,29 +204,25 @@ class BaseFlowFieldScheduler(ABC):
         return np.array(batch)
 
     @abstractmethod
-    def load_file(self, file_path):
+    def load_file(self, file_path: str) -> np.ndarray:
         """Loads a file and returns the dataset for caching.
 
         Args:
-            file_path: str
-                Path to the file to be loaded.
+            file_path: Path to the file to be loaded.
 
-        Returns:
-            np.ndarray: The loaded dataset.
+        Returns: The loaded dataset.
         """
 
     @abstractmethod
-    def get_next_slice(self):
+    def get_next_slice(self) -> np.ndarray:
         """Extracts the next slice from the cached data.
 
-        Returns:
-            np.ndarray: A 2D flow field slice.
+        Returns: A 2D flow field slice.
         """
 
     @abstractmethod
-    def get_flow_fields_shape(self):
+    def get_flow_fields_shape(self) -> tuple[int, ...]:
         """Returns the shape of the flow field.
 
-        Returns:
-            tuple: Shape of the flow field.
+        Returns: Shape of the flow field.
         """

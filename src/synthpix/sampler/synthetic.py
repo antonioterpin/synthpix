@@ -1,6 +1,8 @@
-"""SyntheticImageSampler class for generating synthetic images from flow fields."""
+"""Class for generating synthetic images from flow fields."""
+
 import os
-from typing import Callable, List, Optional, Sequence, Tuple
+from collections.abc import Callable, Sequence
+from typing_extensions import Self
 
 import jax
 import jax.numpy as jnp
@@ -8,8 +10,9 @@ import numpy as np
 from goggles import get_logger
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
-from ..data_generate import input_check_gen_img_from_flow
-from ..utils import DEBUG_JIT, flow_field_adapter, input_check_flow_field_adapter
+from synthpix.data_generate import input_check_gen_img_from_flow
+from synthpix.utils import DEBUG_JIT, flow_field_adapter, input_check_flow_field_adapter
+from synthpix.scheduler.base import BaseFlowFieldScheduler
 from .base import Sampler
 
 logger = get_logger(__name__)
@@ -18,39 +21,42 @@ logger = get_logger(__name__)
 class SyntheticImageSampler(Sampler):
     """Iterator class that generates synthetic images from flow fields.
 
-    This class repeatedly samples flow fields from a FlowFieldScheduler, and for each,
-    generates a specified number of synthetic images using JAX random keys.
-    The generation is performed by a JAX-compatible synthesis function passed by the user.
-    The sampler yields batches of synthetic images, and automatically switches to a new
-    flow field after generating a defined number of images from the current one.
+    This class repeatedly samples flow fields from a FlowFieldScheduler,
+    and for each, generates a specified number of synthetic images using
+    JAX random keys.
+    The generation is performed by a JAX-compatible synthesis function
+    passed by the user.
+    The sampler yields batches of synthetic images, and automatically switches
+    to a new flow field after generating a defined number of images from the
+    current one.
 
-    Typical usage involves feeding the resulting batches into a model training loop or
-    downstream processing pipeline.
+    Typical usage involves feeding the resulting batches into a model training
+    loop or downstream processing pipeline.
 
-    If the underlying scheduler is an episodic scheduler, it automatically outputs also a
-    done flag to indicate the end of an episode.
+    If the underlying scheduler is an episodic scheduler, it automatically
+    outputs also a done flag to indicate the end of an episode.
     """
 
     def __init__(
         self,
-        scheduler,
+        scheduler: BaseFlowFieldScheduler,
         img_gen_fn: Callable[..., jnp.ndarray],
         batches_per_flow_batch: int,
         batch_size: int,
         flow_fields_per_batch: int,
-        flow_field_size: Tuple[float, float],
-        image_shape: Tuple[int, int],
+        flow_field_size: tuple[float, float],
+        image_shape: tuple[int, int],
         resolution: float,
         velocities_per_pixel: float,
-        img_offset: Tuple[float, float],
-        seeding_density_range: Tuple[float, float],
+        img_offset: tuple[float, float],
+        seeding_density_range: tuple[float, float],
         p_hide_img1: float,
         p_hide_img2: float,
-        diameter_ranges: List[List[float]],
+        diameter_ranges: list[tuple[float, float]],
         diameter_var: float,
-        intensity_ranges: List[List[float]],
+        intensity_ranges: list[tuple[float, float]],
         intensity_var: float,
-        rho_ranges: List[List[float]],
+        rho_ranges: list[tuple[float, float]],
         rho_var: float,
         dt: float,
         seed: int,
@@ -62,84 +68,63 @@ class SyntheticImageSampler(Sampler):
         noise_uniform: float,
         noise_gaussian_mean: float,
         noise_gaussian_std: float,
-        device_ids: Optional[Sequence[int]] = None,
-        mask: Optional[str] = None,
-        histogram: Optional[str] = None,
+        device_ids: Sequence[int] | None = None,
+        mask: str | None = None,
+        histogram: str | None = None,
     ):
         """Initializes the SyntheticImageSampler.
 
         Args:
-            scheduler: An instance of FlowFieldScheduler that provides flow fields.
-            img_gen_fn: Callable[..., jnp.ndarray]
-                JAX-compatible function (flow_field, key, ...) -> batch of images.
-            batches_per_flow_batch: int
-                Number of batches of (imgs1, imgs2, flows) tuples per flow field batch.
-            batch_size: int
-                Number of synthetic image couples per batch.
-            flow_fields_per_batch: int
-                Number of flow fields to use per batch.
-            flow_field_size: Tuple[float, float]
-                Area in which the flow field has been calculated
+            scheduler:
+                An instance of FlowFieldScheduler that provides flow fields.
+            img_gen_fn: JAX-compatible function to generate images.
+            batches_per_flow_batch:
+                Number of batches of (imgs1, imgs2, flows) tuples
+                per flow field batch.
+            batch_size: Number of synthetic image couples per batch.
+            flow_fields_per_batch: Number of flow fields to use per batch.
+            flow_field_size: Area in which the flow field has been calculated
                 in a length measure unit. (e.g in meters, cm, etc.)
-            image_shape: Tuple[int, int]
-                Shape of the synthetic images.
-            resolution: float
-                Resolution of the images in pixels per unit length.
-            velocities_per_pixel: float
+            image_shape: Shape of the synthetic images.
+            resolution: Resolution of the images in pixels per unit length.
+            velocities_per_pixel:
                 Number of velocities per pixel in the output flow field.
-            img_offset: Tuple[float, float]
-                Distance in the two axes from the top left corner of the flow field
-                and the top left corner of the image a length measure unit.
-            seeding_density_range: Tuple[float, float]
-                Range of density of particles in the images.
-            p_hide_img1: float
-                Probability of hiding particles in the first image.
-            p_hide_img2: float
-                Probability of hiding particles in the second image.
-            diameter_ranges: List[List[float, float], ...]
-                List of ranges of diameters for particles.
-            diameter_var: float
-                Variance of the diameters for particles.
-            intensity_ranges: List[List[float, float], ...]
-                List of ranges of intensities for particles.
-            intensity_var: float
-                Variance of the intensities for particles.
-            rho_ranges: List[List[float, float], ...]
+            img_offset: Distance in the two axes from the top left corner
+                of the flow field and the top left corner of the image
+                a length measure unit.
+            seeding_density_range: Range of density of particles in the images.
+            p_hide_img1: Probability of hiding particles in the first image.
+            p_hide_img2: Probability of hiding particles in the second image.
+            diameter_ranges: List of ranges of diameters for particles.
+            diameter_var: Variance of the diameters for particles.
+            intensity_ranges: List of ranges of intensities for particles.
+            intensity_var: Variance of the intensities for particles.
+            rho_ranges:
                 List of ranges of correlation coefficients for particles.
-            rho_var: float
-                Variance of the correlation coefficients for particles.
-            dt: float
-                Time step for the simulation.
-            seed: int
-                Random seed for JAX PRNG.
-            max_speed_x: float
-                Maximum speed in the x-direction for the flow field
+            rho_var: Variance of the correlation coefficients for particles.
+            dt: Time step for the simulation.
+            seed: Random seed for JAX PRNG.
+            max_speed_x: Maximum speed in the x-direction for the flow field
                 in length measure unit per seconds.
-            max_speed_y: float
-                Maximum speed in the y-direction for the flow field
+            max_speed_y: Maximum speed in the y-direction for the flow field
                 in length measure unit per seconds.
-            min_speed_x: float
-                Minimum speed in the x-direction for the flow field
+            min_speed_x: Minimum speed in the x-direction for the flow field
                 in length measure unit per seconds.
-            min_speed_y: float
-                Minimum speed in the y-direction for the flow field
+            min_speed_y: Minimum speed in the y-direction for the flow field
                 in length measure unit per seconds.
-            output_units: str
-                Units of the output flow field. Can be 'pixels' or 'measure units'.
-            noise_uniform: float
-                Maximum amplitude of the uniform noise to add.
-            noise_gaussian_mean: float
-                Mean of the Gaussian noise to add.
-            noise_gaussian_std: float
-                Standard deviation of the Gaussian noise to add.
-            device_ids: Sequence[int]
-                List of device IDs to use for sharding the flow fields and images.
-            mask: Optional[str]
-                Optional path to a .npy file containing a mask.
+            output_units: Units of the output flow field.
+                Can be 'pixels' or 'measure units'.
+            noise_uniform: Maximum amplitude of the uniform noise to add.
+            noise_gaussian_mean: Mean of the Gaussian noise to add.
+            noise_gaussian_std: Standard deviation of the Gaussian noise to add.
+            device_ids: List of device IDs to use for sharding the
+                flow fields and images.
+            mask: Optional path to a .npy file containing a mask.
                 Mask must be a 2D array with 1 where unmasked, 0 where masked.
-            histogram: Optional[str]
-                Optional path to a .npy file containing a histogram of the flow field.
-                Histogram must be a 1D array with 256 bins, summing to number of pixels.
+            histogram: Optional path to a .npy file containing a
+                histogram of the flow field.
+                Histogram must be a 1D array with 256 bins,
+                summing to number of pixels.
                 NOTE: Histogram equalization is very slow!
         """
         super().__init__(scheduler, batch_size)
@@ -188,9 +173,7 @@ class SyntheticImageSampler(Sampler):
         if not isinstance(flow_fields_per_batch, int) or flow_fields_per_batch <= 0:
             raise ValueError("flow_fields_per_batch must be a positive integer.")
         if flow_fields_per_batch > batch_size:
-            raise ValueError(
-                "flow_fields_per_batch must be less than or equal to batch_size."
-            )
+            raise ValueError("flow_fields_per_batch must be <= to batch_size.")
         self.flow_fields_per_batch = flow_fields_per_batch
 
         # Make sure the batch size is divisible by the number of devices
@@ -688,13 +671,13 @@ class SyntheticImageSampler(Sampler):
             logger.debug(f"Histogram path: {histogram}")
         self._reset()
 
-    def _reset(self):
+    def _reset(self) -> None:
         """Resets the state variables to their initial values."""
         self._rng = jax.random.PRNGKey(self.seed)
         self._current_flows = None
         self._batches_generated = 0
 
-    def ___next__(self):
+    def __next__(self) -> dict[str, jnp.ndarray]:
         """Generates the next batch of synthetic images.
 
         Raises:
@@ -706,8 +689,9 @@ class SyntheticImageSampler(Sampler):
                 - "images1": First images of the batch.
                 - "images2": Second images of the batch.
                 - "flow_fields": Flow fields used to generate the images.
-                - "done": (optional) A boolean array indicating if the episode is done.
-                - "params": A dictionary with parameters used for image generation.
+                - "done": A boolean array indicating if the episode is done.
+                - "params":
+                    A dictionary with parameters used for image generation.
         """
         # Check if we need to initialize or switch to a new batch of flow fields
         if (
@@ -767,19 +751,17 @@ class SyntheticImageSampler(Sampler):
         return batch
 
     @classmethod
-    def from_config(cls, scheduler, img_gen_fn, config) -> "SyntheticImageSampler":
+    def from_config(cls, scheduler, img_gen_fn, config) -> Self:
         """Creates a SyntheticImageSampler instance from a configuration dictionary.
 
         Args:
-            scheduler: FlowFieldScheduler
+            scheduler:
                 An instance of FlowFieldScheduler that provides flow fields.
-            img_gen_fn: Callable[..., jnp.ndarray]
-                JAX-compatible function (flow_field, key, ...) -> batch of images.
-            config: dict
-                Configuration dictionary containing the parameters for the sampler.
+            img_gen_fn: JAX-compatible function to generate images.
+            config: Configuration dictionary containing the parameters
+                for the sampler.
 
-        Returns:
-            SyntheticImageSampler: An instance of SyntheticImageSampler.
+        Returns: An instance of SyntheticImageSampler.
         """
         try:
             return SyntheticImageSampler(

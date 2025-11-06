@@ -1,15 +1,19 @@
 """EpisodicFlowFieldScheduler to organize flow fields in episodes."""
+
 import glob
 import os
 
+from typing_extensions import Self
+
 import jax
 import jax.numpy as jnp
-from goggles import get_logger
+import numpy as np
+import goggles as gg
 
-from ..utils import discover_leaf_dirs, is_int
+from synthpix.utils import discover_leaf_dirs
 from .base import BaseFlowFieldScheduler
 
-logger = get_logger(__name__)
+logger = gg.get_logger(__name__)
 
 
 class EpisodicFlowFieldScheduler:
@@ -35,7 +39,7 @@ class EpisodicFlowFieldScheduler:
     The files inside each leaf directory must already be in temporal order when
     sorted alphabetically (e.g. zero-padded integers in the file name).
 
-    Example
+    Example:
     -------
     >>> base = MATFlowFieldScheduler("/data/flows")
     >>> episodic  = EpisodicFlowFieldScheduler(
@@ -47,7 +51,7 @@ class EpisodicFlowFieldScheduler:
     >>> batch_t1 = next(episodic)        # second time-step
     >>> episodic.reset()                 # start 16 fresh episodes
 
-    Notes
+    Notes:
     -----
     * The underlying scheduler (and its prefetching thread) are **not** initialized
       on every episode reset—only the order of ``file_list`` is mutated.  This
@@ -67,29 +71,29 @@ class EpisodicFlowFieldScheduler:
         """Constructs an episodic scheduler wrapper.
 
         Args:
-            scheduler (BaseFlowFieldScheduler):
-                Any concrete subclass of :class:`BaseFlowFieldScheduler`
+            scheduler: Any concrete subclass of :class:`BaseFlowFieldScheduler`
                 (e.g. :class:`MATFlowFieldScheduler`).
-            batch_size (int): episodes to run in parallel (== first dim of each batch).
-            episode_length (int):
-                Number of consecutive flow-fields that make up *one* episode.
-            key (jax.random.PRNGKey, optional):
-                Random key for reproducibility.
+            batch_size: episodes to run in parallel
+                (== first dim of each batch).
+            episode_length: Number of consecutive flow-fields that
+                make up *one* episode.
+            key: Random key for reproducibility.
 
         Raises:
-            ValueError: If ``batch_size`` or ``episode_length`` are not positive,
-                or if the dataset does not contain enough distinct starting positions
-                to form at least one complete batch of episodes.
+            ValueError: If ``batch_size`` or ``episode_length`` are
+            not positive, or if the dataset does not contain enough
+            distinct starting positions to form at least one complete
+            batch of episodes.
         """
         if not isinstance(scheduler, BaseFlowFieldScheduler):
             raise TypeError(
                 f"Expected scheduler to be a BaseFlowFieldScheduler, "
                 f"got {type(scheduler)}"
             )
-        if not is_int(batch_size) or batch_size <= 0:
+        if not isinstance(batch_size, int) or batch_size <= 0:
             raise ValueError("batch_size must be a positive integer")
 
-        if not is_int(episode_length) or episode_length <= 0:
+        if not isinstance(episode_length, int) or episode_length <= 0:
             raise ValueError("episode_length must be a positive integer")
 
         self.scheduler = scheduler
@@ -103,16 +107,17 @@ class EpisodicFlowFieldScheduler:
         self.dir2files, self._starts = self._calculate_starts()
         self._sample_new_episodes()
 
-    def __iter__(self) -> "EpisodicFlowFieldScheduler":
+    def __iter__(self) -> Self:
         """Returns self so the object can be used in a ``for`` loop."""
         self._t = 0
         return self
 
-    def __next__(self):
-        """Return one time-step of shape ``(batch_size, …)``.
+    def __next__(self) -> np.ndarray:
+        """Return one time-step of shape ``(batch_size, ...)``.
 
         Returns:
-            batch: A `(batch_size, …)` tensor that holds one flow-field per episode.
+            batch: A `(batch_size, ...)` tensor that holds one
+                flow-field per episode.
         """
         # If we’ve exhausted the current horizon, start fresh episodes
         if self._t >= self.episode_length:
@@ -126,7 +131,7 @@ class EpisodicFlowFieldScheduler:
         logger.debug(f"timestep: {self._t}")
         return batch
 
-    def get_batch(self, batch_size: int):
+    def get_batch(self, batch_size: int) -> np.ndarray:
         """Return exactly one time-step for `batch_size` parallel episodes.
 
         *Does not* loop internally, we delegate to the wrapped base
@@ -144,12 +149,11 @@ class EpisodicFlowFieldScheduler:
     def __len__(self) -> int:
         """Return the episode length.
 
-        Returns:
-            int: The length of the episode.
+        Returns: The length of the episode.
         """
         return self.episode_length
 
-    def reset_episode(self):
+    def reset_episode(self) -> None:
         """Start *batch_size* brand-new episodes.
 
         The call is cheap: it only reshuffles ``file_list`` and resets cursors
@@ -160,12 +164,11 @@ class EpisodicFlowFieldScheduler:
     def steps_remaining(self) -> int:
         """Return the number of steps remaining in the current episode.
 
-        Returns:
-            int: Number of steps remaining in the current episode.
+        Returns: Number of steps remaining in the current episode.
         """
         return self.episode_length - self._t
 
-    def next_episode(self):
+    def next_episode(self) -> None:
         """Advance to the next episode, independent of the current step.
 
         This method is useful when you want to skip to the next episode
@@ -174,11 +177,11 @@ class EpisodicFlowFieldScheduler:
         self._sample_new_episodes()
         self._t = 0
 
-    def get_flow_fields_shape(self):
+    def get_flow_fields_shape(self) -> tuple[int, ...]:
         """Return the shape of the flow fields from the underlying scheduler.
 
         Returns:
-            tuple: Shape of the flow fields as returned by the underlying scheduler.
+            Shape of the flow fields as returned by the underlying scheduler.
         """
         return self.scheduler.get_flow_fields_shape()
 
@@ -186,9 +189,9 @@ class EpisodicFlowFieldScheduler:
         """Calculate the possible starting positions for the episodes.
 
         Returns:
-            list[tuple[str, int]]:
-                A list of tuples containing the directory and the starting index
-                for each episode.
+            - A dictionary mapping directories to their sorted file lists
+            - A list of tuples containing the directory and the starting index
+                for each possible episode start position.
         """
         # Extract the leaf directories from the file list
         leaf_dirs = discover_leaf_dirs(self.scheduler.file_list)
@@ -209,8 +212,8 @@ class EpisodicFlowFieldScheduler:
 
         return dir2files, starts
 
-    def _sample_new_episodes(self):
-        """Create a new interleaved file order and push it into ``scheduler``."""
+    def _sample_new_episodes(self) -> None:
+        """Create a new interleaved file order for the ``scheduler``."""
         # Randomly choose batch_size starts indices without replacement
         cpu = jax.devices("cpu")[0]
         indices = jnp.arange(len(self._starts), device=cpu)

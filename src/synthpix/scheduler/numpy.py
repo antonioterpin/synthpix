@@ -1,6 +1,8 @@
 """NumpyFlowFieldScheduler to load flow fields from .npy files."""
+
 import os
 import re
+from typing_extensions import Self
 
 import jax
 import numpy as np
@@ -13,7 +15,10 @@ logger = get_logger(__name__)
 
 
 class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
-    """Scheduler for loading flow fields from .npy files, with optional image pairing.
+    """Scheduler for loading flow fields from .npy files.
+
+    Optionally, paired JPEG images can be validated and returned
+    alongside the flow fields.
 
     Each .npy file must be named 'flow_<t>.npy' and, if images are enabled,
     will be paired with 'img_<t-1>.jpg' and 'img_<t>.jpg' in the same folder.
@@ -24,7 +29,7 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
 
     def __init__(
         self,
-        file_list: list,
+        file_list: list[str] | str,
         randomize: bool = False,
         loop: bool = False,
         include_images: bool = False,
@@ -38,12 +43,11 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         named 'img_<t-1>.jpg' and 'img_<t>.jpg' in the same folder.
 
         Args:
-            file_list (str | list of str):
-                A directory, single .npy file, or list of .npy paths.
-            randomize (bool): If True, shuffle file order per epoch.
-            loop (bool): If True, cycle indefinitely.
-            include_images (bool): If True, validate and return paired JPEG images.
-            key (jax.random.PRNGKey): Random key for reproducibility.
+            file_list: A directory, single .npy file, or list of .npy paths.
+            randomize: If True, shuffle file order per epoch.
+            loop: If True, cycle indefinitely.
+            include_images: If True, validate and return paired JPEG images.
+            key: Random key for reproducibility.
         """
         if not isinstance(include_images, bool):
             raise ValueError("include_images must be a boolean value.")
@@ -70,12 +74,22 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
                         f"Missing images for frame {t}: {prev_img}, {next_img}"
                     )
 
-    def load_file(self, file_path: str):
-        """Load the raw flow array from .npy."""
+    def load_file(self, file_path: str) -> np.ndarray:
+        """Load the raw flow array from .npy.
+
+        Args:
+            file_path: Path to the .npy file.
+
+        Returns: Loaded flow array.
+        """
         return np.load(file_path)
 
-    def get_next_slice(self):
-        """Return either the flow array or, if enabled, flow plus images."""
+    def get_next_slice(self) -> np.ndarray | dict[str, np.ndarray]:
+        """Return either the flow array or, if enabled, flow plus images.
+
+        Returns:
+            Either the flow array or a dictionary with flow and images.
+        """
         flow = self._cached_data
         if not self.include_images:
             return flow
@@ -90,12 +104,18 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         nxt = np.array(Image.open(os.path.join(folder, f"img_{t}.jpg")).convert("RGB"))
         return {"flow": flow, "img_prev": prev, "img_next": nxt}
 
-    def get_flow_fields_shape(self):
-        """Return the shape of a single flow array."""
+    def get_flow_fields_shape(self) -> tuple[int, ...]:
+        """Return the shape of a single flow array.
+
+        Returns: Shape of the flow array.
+        """
         return np.load(self.file_list[0]).shape
 
-    def __next__(self):
-        """Iterate over .npy files, returning flow or flow+images."""
+    def __next__(self) -> np.ndarray | dict[str, np.ndarray]:
+        """Iterate over .npy files, returning flow or flow+images.
+
+        Returns: Either the flow array or a dictionary with flow and images.
+        """
         while self.index < len(self.file_list) or self.loop:
             if self.index >= len(self.file_list):
                 self.reset(reset_epoch=False)
@@ -120,15 +140,14 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         raise StopIteration
 
     @classmethod
-    def from_config(cls, config: dict) -> "NumpyFlowFieldScheduler":
-        """Creates a NumpyFlowFieldScheduler instance from a configuration dictionary.
+    def from_config(cls, config: dict) -> Self:
+        """Creates a NumpyFlowFieldScheduler instance from a configuration.
 
         Args:
-            config: dict
+            config:
                 Configuration dictionary containing the scheduler parameters.
 
-        Returns:
-            NumpyFlowFieldScheduler: An instance of the scheduler.
+        Returns: An instance of the scheduler.
         """
         return NumpyFlowFieldScheduler(
             file_list=config["scheduler_files"],

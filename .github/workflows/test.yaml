@@ -28,9 +28,7 @@ jobs:
 
             # Step 4: Install dependencies (+ JAX cpu version)
             - name: Install dependencies
-              run: |
-                uv sync --extra dev --extra jax --extra wandb
-                uv pip install -e .
+              run: uv sync --extra dev
 
             # Step 5: Run tests
             - name: Run tests with coverage

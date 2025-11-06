@@ -1,7 +1,5 @@
 """Module to generate synthetic images for testing and debugging."""
 
-from typing import Tuple
-
 import jax
 import jax.numpy as jnp
 
@@ -19,17 +17,16 @@ def gaussian_2d_correlated(
     """Generate a 2D Gaussian function.
 
     Args:
-        x (jnp.ndarray): 2D coordinate grid for x-axis.
-        y (jnp.ndarray): 2D coordinate grid for y-axis.
-        x0 (float): Center position of the Gaussian on the x-axis.
-        y0 (float): Center position of the Gaussian on the y-axis.
-        sigma_x (float): Standard deviation of the Gaussian on the x-axis.
-        sigma_y (float): Standard deviation of the Gaussian on the y-axis.
-        rho (float): Correlation coefficient between x and y.
-        amplitude (float): Peak intensity (I0).
+        x: 2D coordinate grid for x-axis.
+        y: 2D coordinate grid for y-axis.
+        x0: Center position of the Gaussian on the x-axis.
+        y0: Center position of the Gaussian on the y-axis.
+        sigma_x: Standard deviation of the Gaussian on the x-axis.
+        sigma_y: Standard deviation of the Gaussian on the y-axis.
+        rho: Correlation coefficient between x and y.
+        amplitude: Peak intensity (I0).
 
-    Returns:
-        jnp.ndarray: 2D array representing the Gaussian function.
+    Returns: 2D array representing the Gaussian function.
     """
     x_shifted = x - x0
     y_shifted = y - y0
@@ -57,14 +54,13 @@ def add_noise_to_image(
     """Add noise to an image.
 
     Args:
-        key (jax.random.PRNGKey): Random key for reproducibility.
-        image (jnp.ndarray): Input image.
-        noise_uniform (float): Maximum amplitude of the uniform noise to add.
-        noise_gaussian_mean (float): Mean of the Gaussian noise to add.
-        noise_gaussian_std (float): Standard deviation of the Gaussian noise to add.
+        key: Random key for reproducibility.
+        image: Input image.
+        noise_uniform: Maximum amplitude of the uniform noise to add.
+        noise_gaussian_mean: Mean of the Gaussian noise to add.
+        noise_gaussian_std: Standard deviation of the Gaussian noise to add.
 
-    Returns:
-        jnp.ndarray: Noisy image.
+    Returns: The noisy image.
     """
     uniform_key, gaussian_key = jax.random.split(key)
 
@@ -81,7 +77,7 @@ def add_noise_to_image(
 
 
 def img_gen_from_data(
-    image_shape: Tuple[int, int] = (256, 256),
+    image_shape: tuple[int, int] = (256, 256),
     particle_positions: jnp.ndarray = None,
     max_diameter: float = 1.0,
     diameters_x: jnp.ndarray = None,
@@ -100,25 +96,16 @@ def img_gen_from_data(
         - Out-of-bounds particles are clipped to ensure valid rendering.
 
     Args:
-        image_shape: Tuple[int, int]
-            (height, width) of the output image.
-        particle_positions: jnp.ndarray
-            Array of particle positions (y, x) in pixels.
-        max_diameter: float
-            Maximum particle diameter in pixels.
-        diameters_x: jnp.ndarray
-            Array of particle diameters in the x-direction.
-        diameters_y: jnp.ndarray
-            Array of particle diameters in the y-direction.
-        intensities: jnp.ndarray
-            Array of peak intensities (I0).
-        rho: jnp.ndarray
-            Array of correlation coefficients (rho).
-        clip: bool
-            If True, clip the image values to [0, 255].
+        image_shape: (height, width) of the output image.
+        particle_positions: Array of particle positions (y, x) in pixels.
+        max_diameter: Maximum particle diameter in pixels.
+        diameters_x: Array of particle diameters in the x-direction.
+        diameters_y: Array of particle diameters in the y-direction.
+        intensities: Array of peak intensities (I0).
+        rho: Array of correlation coefficients (rho).
+        clip: If True, clip the image values to [0, 255].
 
-    Returns:
-        jnp.ndarray: Synthetic particle image of shape `image_shape`.
+    Returns: Synthetic particle image of shape `image_shape`.
     """
     H, W = image_shape
 

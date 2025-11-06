@@ -1,6 +1,7 @@
 """Base class for Samplers in the SynthPix framework."""
 
 from abc import abstractmethod
+from typing_extensions import Self
 
 import jax.numpy as jnp
 from goggles import get_logger
@@ -11,12 +12,12 @@ logger = get_logger(__name__)
 class Sampler:
     """Base class for Samplers in the SynthPix framework."""
 
-    def __init__(self, scheduler, batch_size=1):
+    def __init__(self, scheduler, batch_size: int = 1):
         """Initialize the sampler.
 
         Args:
             scheduler: Scheduler instance that provides data.
-            batch_size (int): Number of samples to return in each batch.
+            batch_size: Number of samples to return in each batch.
         """
         if not hasattr(scheduler, "__iter__"):
             raise ValueError("scheduler must be an iterable object.")
@@ -33,19 +34,20 @@ class Sampler:
 
         self._episodic = hasattr(scheduler, "episode_length")
         logger.info(
-            f"The underlying scheduler is {'' if self._episodic else 'not'} episodic."
+            "The underlying scheduler is "
+            f"{'' if self._episodic else 'not'} episodic."
         )  # pragma: no cover
 
         self.batch_size = batch_size
         logger.debug(f"Scheduler class: {self.scheduler.__class__.__name__}")
 
-    def _shutdown(self):
+    def _shutdown(self) -> None:
         """Custom shutdown logic for the sampler."""
 
-    def _reset(self):
+    def _reset(self) -> None:
         """Custom reset logic for the sampler."""
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Shutdown the sampler."""
         logger.info(f"Shutting down {self.__class__.__name__}.")
         self._shutdown()
@@ -53,16 +55,34 @@ class Sampler:
             self.scheduler.shutdown()
         logger.info(f"{self.__class__.__name__} shutdown complete.")
 
-    def __iter__(self):
+    def __iter__(self) -> Self:
         """Returns the iterator instance itself."""
         return self
 
     @abstractmethod
-    def ___next__(self):
-        """Generates the next batch of data."""
+    def ___next__(self) -> dict[str, jnp.ndarray]:
+        """Generates the next batch of data.
 
-    def __next__(self):
-        """Return the next batch of data."""
+        Returns: A dictionary containing the next batch of data.
+            - "images1": First images of the batch.
+            - "images2": Second images of the batch.
+            - "flow_fields": Flow fields used to generate the images.
+            - "done": A boolean array indicating if the episode is done.
+            - "params": A dictionary with parameters used for image generation,
+                if applicable.
+        """
+
+    def __next__(self) -> dict[str, jnp.ndarray]:
+        """Return the next batch of data.
+
+        Returns: A dictionary containing the next batch of data.
+            - "images1": First images of the batch.
+            - "images2": Second images of the batch.
+            - "flow_fields": Flow fields used to generate the images.
+            - "done": A boolean array indicating if the episode is done.
+            - "params": A dictionary with parameters used for image generation,
+                if applicable.
+        """
         if self._episodic and self.scheduler.steps_remaining() == 0:
             raise IndexError(
                 "Episode ended. No more flow fields available. "
@@ -77,21 +97,23 @@ class Sampler:
 
         return batch
 
-    def reset(self, scheduler_reset: bool = True):
-        """Reset the sampler to its initial state."""
+    def reset(self, scheduler_reset: bool = True) -> None:
+        """Reset the sampler to its initial state.
+
+        Args:
+            scheduler_reset: If True, also resets the underlying scheduler.
+        """
         self._reset()
         if scheduler_reset:
             self.scheduler.reset()
         logger.debug(f"{self.__class__.__name__} has been reset.")
 
-    def next_episode(self):
+    def next_episode(self) -> dict[str, jnp.ndarray]:
         """Flush the current episode and return the first batch of the next one.
 
         The underlying scheduler is expected to be the prefetching scheduler.
 
-        Returns:
-            next(self): dict
-                The first batch of the next episode.
+        Returns: The first batch of the next episode.
         """
         if not hasattr(self.scheduler, "next_episode"):
             raise AttributeError("Underlying scheduler lacks next_episode() method.")
@@ -100,7 +122,7 @@ class Sampler:
 
         return next(self)
 
-    def _make_done(self):
+    def _make_done(self) -> jnp.ndarray:
         """Return a `(batch_size,)` bool array if episodic, else None."""
         if not self._episodic:
             raise NotImplementedError("The underlying scheduler is not episodic.")

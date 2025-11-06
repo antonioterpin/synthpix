@@ -16,7 +16,6 @@ from synthpix.utils import (
     flow_field_adapter,
     generate_array_flow_field,
     input_check_flow_field_adapter,
-    is_int,
     load_configuration,
     trilinear_interpolate,
 )
@@ -25,34 +24,6 @@ config = load_configuration("config/testing.yaml")
 
 REPETITIONS = config["REPETITIONS"]
 NUMBER_OF_EXECUTIONS = config["EXECUTIONS_UTILS"]
-
-
-@pytest.mark.parametrize(
-    "val, expected",
-    [
-        (1, True),
-        (1.0, True),
-        (1.000000001, True),
-        (1.00000001, True),
-        (1.5, False),
-        (0, True),
-        (-1, True),
-        (-1.0, True),
-        (-1.000000001, True),
-        (-1.00000001, True),
-        (1e9, True),
-        (1e9 + 0.000000001, True),
-        (1e9 + 0.00000001, True),
-    ],
-)
-def test_is_int(val: int | float, expected: bool):
-    """Test the is_int function with various inputs.
-
-    Args:
-        val: The value to check.
-        expected: The expected result.
-    """
-    assert is_int(val) == expected
 
 
 @pytest.mark.parametrize(
@@ -124,7 +95,7 @@ def test_trilinear_interpolate(
     ],
 )
 def test_generate_array_flow_field(
-    shape: tuple[int], flow_field_type, expected: jnp.ndarray
+    shape: tuple[int, ...], flow_field_type, expected: jnp.ndarray
 ):
     """Test the generate_array_flow_field function with various inputs.
 

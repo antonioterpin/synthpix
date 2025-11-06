@@ -1,8 +1,9 @@
 """Make module to instantiate SynthPix."""
+
 import os
 
 import jax
-from goggles import get_logger
+import goggles as gg
 from rich.console import Console
 from rich.text import Text
 
@@ -17,7 +18,7 @@ from .scheduler import (
 )
 from .utils import load_configuration
 
-logger = get_logger(__name__)
+logger = gg.get_logger(__name__)
 
 SCHEDULERS = {
     ".h5": HDF5FlowFieldScheduler,
@@ -38,14 +39,13 @@ def make(
     Extracting images from files is supported only for .mat files.
 
     Args:
-        config (str | dict): The dataset configuration.
-        images_from_file (bool): If true, images are loaded from files.
-        buffer_size (int): Size of the buffer (in batches) for prefetching.
+        config: The dataset configuration.
+        images_from_file: If true, images are loaded from files.
+        buffer_size: Size of the buffer (in batches) for prefetching.
             If 0, no prefetching is used.
-        episode_length (int): Length of the episode for episodic sampling.
+        episode_length: Length of the episode for episodic sampling.
 
-    Returns:
-        sampler (Sampler): The initialized sampler.
+    Returns: The initialized sampler.
     """
     # Initialize console for colored output
     console = Console()
