@@ -10,7 +10,10 @@ import jax.numpy as jnp
 import numpy as np
 from goggles import get_logger
 
-logger = get_logger(__name__)
+from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.types import PRNGKey
+
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class BaseFlowFieldScheduler(ABC):
@@ -29,7 +32,7 @@ class BaseFlowFieldScheduler(ABC):
         file_list: list[str] | str,
         randomize: bool = False,
         loop: bool = False,
-        key: jax.random.PRNGKey = None,
+        key: PRNGKey | None = None,
     ) -> None:
         """Initializes the scheduler.
 
@@ -149,6 +152,7 @@ class BaseFlowFieldScheduler(ABC):
                     self._cached_file = file_path
                     self._slice_idx = 0
 
+                assert self._cached_data is not None
                 if self._slice_idx >= self._cached_data.shape[1]:
                     self.index += 1
                     self._cached_file = None

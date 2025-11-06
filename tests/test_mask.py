@@ -5,7 +5,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from goggles import get_logger
 from jax import random
 
 from synthpix.data_generate import (
@@ -16,8 +15,6 @@ from synthpix.sampler import SyntheticImageSampler
 
 # Import existing modules
 from synthpix.utils import load_configuration
-
-logger = get_logger(__name__)
 
 sampler_config = load_configuration("config/test_data.yaml")
 

@@ -3,6 +3,8 @@
 import jax
 import jax.numpy as jnp
 
+from synthpix.types import PRNGKey
+
 
 def gaussian_2d_correlated(
     x: jnp.ndarray,
@@ -45,7 +47,7 @@ def gaussian_2d_correlated(
 
 
 def add_noise_to_image(
-    key: jax.random.PRNGKey,
+    key: PRNGKey,
     image: jnp.ndarray,
     noise_uniform: float = 0.0,
     noise_gaussian_mean: float = 0.0,
@@ -78,12 +80,12 @@ def add_noise_to_image(
 
 def img_gen_from_data(
     image_shape: tuple[int, int] = (256, 256),
-    particle_positions: jnp.ndarray = None,
+    particle_positions: jnp.ndarray | None = None,
     max_diameter: float = 1.0,
-    diameters_x: jnp.ndarray = None,
-    diameters_y: jnp.ndarray = None,
-    intensities: jnp.ndarray = None,
-    rho: jnp.ndarray = None,
+    diameters_x: jnp.ndarray | None = None,
+    diameters_y: jnp.ndarray | None = None,
+    intensities: jnp.ndarray | None = None,
+    rho: jnp.ndarray | None = None,
     clip: bool = True,
 ) -> jnp.ndarray:
     """Generate a synthetic particle image from particles positions.

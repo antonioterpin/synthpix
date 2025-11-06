@@ -6,7 +6,9 @@ from typing_extensions import Self
 import jax.numpy as jnp
 from goggles import get_logger
 
-logger = get_logger(__name__)
+from synthpix.utils import SYNTHPIX_SCOPE
+
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class Sampler:

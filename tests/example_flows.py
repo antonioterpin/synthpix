@@ -1,5 +1,6 @@
 """Example flow functions for testing purposes."""
 
+from collections.abc import Callable
 import jax.numpy as jnp
 
 
@@ -39,7 +40,9 @@ def pipe_horizontal_flow(t: float, x: float, y: float) -> tuple[float, float]:
     return (1 - y**2, 0.0)
 
 
-def vortex_flow(t: float, x: float, y: float) -> tuple[float, float]:
+def vortex_flow(
+    t: jnp.ndarray, x: jnp.ndarray, y: jnp.ndarray
+) -> tuple[jnp.ndarray, jnp.ndarray]:
     """A time-varying vortex flow.
 
     The flow field is given by:
@@ -60,14 +63,19 @@ def vortex_flow(t: float, x: float, y: float) -> tuple[float, float]:
     return u, v
 
 
-def get_flow_function(selected_flow, image_shape=(128, 128)):
+def get_flow_function(
+    selected_flow: str, image_shape: tuple[int, int] = (128, 128)
+) -> Callable[
+    [jnp.ndarray, jnp.ndarray, jnp.ndarray], 
+    tuple[jnp.ndarray, jnp.ndarray]
+]:
     """Generate a flow field for testing purposes.
 
     It creates a flow field function based on the selected_flow.
 
     Args:
-        selected_flow (str): The selected flow field type.
-        image_shape (tuple[int, int]): The image shape.
+        selected_flow: The selected flow field type.
+        image_shape: The image shape.
 
     Returns:
         Tuple[float, float]: The flow field components.

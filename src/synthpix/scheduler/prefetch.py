@@ -10,8 +10,9 @@ from goggles import get_logger
 
 from synthpix.scheduler.base import BaseFlowFieldScheduler
 from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
+from synthpix.utils import SYNTHPIX_SCOPE
 
-logger = get_logger(__name__)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class PrefetchingFlowFieldScheduler:

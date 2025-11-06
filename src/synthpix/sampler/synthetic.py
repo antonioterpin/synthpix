@@ -11,11 +11,16 @@ from goggles import get_logger
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
 from synthpix.data_generate import input_check_gen_img_from_flow
-from synthpix.utils import DEBUG_JIT, flow_field_adapter, input_check_flow_field_adapter
+from synthpix.utils import (
+    DEBUG_JIT,
+    flow_field_adapter,
+    input_check_flow_field_adapter,
+    SYNTHPIX_SCOPE,
+)
 from synthpix.scheduler.base import BaseFlowFieldScheduler
 from .base import Sampler
 
-logger = get_logger(__name__)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class SyntheticImageSampler(Sampler):
@@ -173,7 +178,7 @@ class SyntheticImageSampler(Sampler):
         if not isinstance(flow_fields_per_batch, int) or flow_fields_per_batch <= 0:
             raise ValueError("flow_fields_per_batch must be a positive integer.")
         if flow_fields_per_batch > batch_size:
-            raise ValueError("flow_fields_per_batch must be <= to batch_size.")
+            raise ValueError("flow_fields_per_batch must be <= batch_size.")
         self.flow_fields_per_batch = flow_fields_per_batch
 
         # Make sure the batch size is divisible by the number of devices
@@ -505,7 +510,9 @@ class SyntheticImageSampler(Sampler):
         )
 
         # Calculate the position bounds in pixels
-        self.position_bounds = tuple(int(x * resolution) for x in position_bounds)
+        self.position_bounds = tuple(
+            int(x * resolution) for x in position_bounds
+        )
 
         if DEBUG_JIT:  # pragma: no cover
             _current_flows = jnp.asarray(
@@ -764,7 +771,7 @@ class SyntheticImageSampler(Sampler):
         Returns: An instance of SyntheticImageSampler.
         """
         try:
-            return SyntheticImageSampler(
+            return cls(
                 scheduler=scheduler,
                 img_gen_fn=img_gen_fn,
                 batches_per_flow_batch=config["batches_per_flow_batch"],

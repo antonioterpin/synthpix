@@ -95,7 +95,7 @@ def test_trilinear_interpolate(
     ],
 )
 def test_generate_array_flow_field(
-    shape: tuple[int, ...], flow_field_type, expected: jnp.ndarray
+    shape: tuple[int, int], flow_field_type, expected: jnp.ndarray
 ):
     """Test the generate_array_flow_field function with various inputs.
 

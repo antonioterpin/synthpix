@@ -1069,4 +1069,4 @@ def test_speed_parameter_combinations(
     average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
 
     # Print the average time for evaluation purposes
-    assert False(average_time_jit), f"The average time is {average_time_jit}"
+    assert False, f"The average time is {average_time_jit}"

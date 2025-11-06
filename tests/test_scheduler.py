@@ -299,9 +299,11 @@ class DummyScheduler(BaseFlowFieldScheduler):
         return np.random.rand(4, 2, 4, 3).astype(np.float32)
 
     def get_next_slice(self):
+        assert self._cached_data is not None
         return self._cached_data[:, self._slice_idx, :, :][:, :, :2]
 
     def get_flow_fields_shape(self):
+        assert self._cached_data is not None
         return self._cached_data.shape[0], self._cached_data.shape[2] // 2, 2
 
 
@@ -346,6 +348,7 @@ def test_reset_calls_random_shuffle(monkeypatch, tmp_path):
     key = jax.random.PRNGKey(0)
     sch = DummyScheduler([str(f) for f in files], randomize=True, key=key)
 
+    assert isinstance(sch.file_list, list)
     original = sch.file_list.copy()
     sch.reset(reset_epoch=True)
 

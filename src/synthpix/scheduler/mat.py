@@ -4,15 +4,16 @@ import itertools as it
 from typing_extensions import Self
 import cv2
 import h5py
-import jax
 import numpy as np
 import scipy.io
 from goggles import get_logger
 from PIL import Image
 
 from .base import BaseFlowFieldScheduler
+from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.types import PRNGKey
 
-logger = get_logger(__name__)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class MATFlowFieldScheduler(BaseFlowFieldScheduler):
@@ -40,7 +41,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         loop: bool = False,
         include_images: bool = False,
         output_shape: tuple[int, int] = (256, 256),
-        key: jax.random.PRNGKey = None,
+        key: PRNGKey | None = None,
     ):
         """Initializes the MATFlowFieldScheduler.
 
@@ -172,7 +173,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         logger.debug(f"Loaded {file_path} with keys {list(data.keys())}")
         return data
 
-    def get_next_slice(self) -> np.ndarray | dict:
+    def get_next_slice(self) -> dict[str, np.ndarray]:
         """Retrieves the flow field slice and optionally the images.
 
         Returns:
@@ -196,7 +197,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         """
         return self.output_shape + (2,)
 
-    def __next__(self) -> np.ndarray | tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def __next__(self) -> dict[str, np.ndarray]:
         """Iterate over .mat files, returning flow or flow+images.
 
         Returns:
@@ -282,7 +283,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         Returns:
             An instance of the scheduler.
         """
-        return MATFlowFieldScheduler(
+        return cls(
             file_list=config["scheduler_files"],
             randomize=config.get("randomize", False),
             loop=config.get("loop", False),

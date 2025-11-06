@@ -33,7 +33,10 @@ If you have CUDA GPUs,
 uv add "synthpix[cuda12]"
 ```
 If you have issues with CUDA drivers, please follow the official instructions for [cuda12](https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local) and [cudnn](https://developer.nvidia.com/cudnn-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local)
-(*Note: wheels only available on linux*).
+(*Note: wheels only available on linux*). Make sure that `LD_LIBRARY_PATH` is not set; see the [JAX docs](https://docs.jax.dev/en/latest/installation.html):
+```bash
+unset LD_LIBRARY_PATH
+```
 
 Check out our [instructions](./CONTRIBUTING.md) for installing `SynthPix` from source. You can of course also use pip.
 

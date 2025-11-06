@@ -14,9 +14,9 @@ from tqdm import tqdm
 from .data_generate import generate_images_from_flow
 from .sampler import SyntheticImageSampler
 from .scheduler import HDF5FlowFieldScheduler
-from .utils import load_configuration
+from .utils import load_configuration, SYNTHPIX_SCOPE
 
-logger = get_logger(__name__)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 def update_config_file(config_path: str, updated_values: dict) -> None:

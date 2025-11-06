@@ -4,14 +4,15 @@ import os
 import re
 from typing_extensions import Self
 
-import jax
 import numpy as np
 from goggles import get_logger
 from PIL import Image
 
 from .base import BaseFlowFieldScheduler
+from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.types import PRNGKey
 
-logger = get_logger(__name__)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
@@ -33,7 +34,7 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         randomize: bool = False,
         loop: bool = False,
         include_images: bool = False,
-        key: jax.random.PRNGKey = None,
+        key: PRNGKey | None = None,
     ):
         """Initializes the Numpy scheduler.
 
@@ -149,7 +150,7 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
 
         Returns: An instance of the scheduler.
         """
-        return NumpyFlowFieldScheduler(
+        return cls(
             file_list=config["scheduler_files"],
             randomize=config.get("randomize", False),
             loop=config.get("loop", True),

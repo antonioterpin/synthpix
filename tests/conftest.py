@@ -213,11 +213,13 @@ def pytest_collection_modifyitems(config, items):
 def clear_after_test():
     """Clear JAX backends and free memory after each test."""
     yield  # --- run the test ---
-    try:
-        # Release device buffers
-        jax.clear_backends()
-    except Exception:
-        # Just collect garbage if JAX fails
-        pass
     # Free Python-side references
     gc.collect()
+    
+    # Finish goggles session
+    try:
+        import goggles as gg
+        gg.finish()
+    except Exception:
+        # Silently continue if goggles is not available or fails
+        pass

@@ -1,14 +1,15 @@
 """HDF5FlowFieldScheduler to load flow fields from .h5 files."""
 
 import h5py
-import jax
 import numpy as np
 from typing_extensions import Self
 from goggles import get_logger
 
-from ..scheduler import BaseFlowFieldScheduler
+from synthpix.scheduler import BaseFlowFieldScheduler
+from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.types import PRNGKey
 
-logger = get_logger(__name__)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
@@ -25,7 +26,7 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         file_list: list,
         randomize: bool = False,
         loop: bool = False,
-        key: jax.random.PRNGKey = None,
+        key: PRNGKey | None = None,
     ):
         """Initializes the HDF5 scheduler.
 
@@ -62,6 +63,8 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
 
         Returns: Flow field with shape (X, Z, 2).
         """
+        if self._cached_data is None:
+            raise RuntimeError("No data is currently cached.")
         data_slice = self._cached_data[:, self._slice_idx, :, :]
 
         return data_slice
@@ -91,7 +94,7 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
 
         Returns: An instance of the scheduler.
         """
-        return HDF5FlowFieldScheduler(
+        return cls(
             file_list=config["scheduler_files"],
             randomize=config.get("randomize", False),
             loop=config.get("loop", True),

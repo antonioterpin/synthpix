@@ -10,7 +10,7 @@ import numpy as np
 
 import synthpix
 
-logger = gg.get_logger(__name__)
+logger = gg.get_logger(__name__, scope=synthpix.utils.SYNTHPIX_SCOPE)
 gg.attach(
     gg.ConsoleHandler(level=logging.INFO),
 )
@@ -145,3 +145,5 @@ if __name__ == "__main__":
         output_dir=args.output_dir,
         num_images_to_display=args.visualize,
     )
+
+    gg.finish()

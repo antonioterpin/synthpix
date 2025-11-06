@@ -10,10 +10,11 @@ import jax.numpy as jnp
 import numpy as np
 import goggles as gg
 
-from synthpix.utils import discover_leaf_dirs
+from synthpix.utils import discover_leaf_dirs, SYNTHPIX_SCOPE
+from synthpix.types import PRNGKey
 from .base import BaseFlowFieldScheduler
 
-logger = gg.get_logger(__name__)
+logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class EpisodicFlowFieldScheduler:
@@ -66,7 +67,7 @@ class EpisodicFlowFieldScheduler:
         scheduler: BaseFlowFieldScheduler,
         batch_size: int,
         episode_length: int,
-        key: jax.random.PRNGKey = None,
+        key: PRNGKey | None = None,
     ):
         """Constructs an episodic scheduler wrapper.
 

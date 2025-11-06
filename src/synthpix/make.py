@@ -16,9 +16,9 @@ from .scheduler import (
     NumpyFlowFieldScheduler,
     PrefetchingFlowFieldScheduler,
 )
-from .utils import load_configuration
+from .utils import load_configuration, SYNTHPIX_SCOPE
 
-logger = gg.get_logger(__name__)
+logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 SCHEDULERS = {
     ".h5": HDF5FlowFieldScheduler,

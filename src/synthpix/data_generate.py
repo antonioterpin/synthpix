@@ -6,16 +6,17 @@ import jax.numpy as jnp
 import goggles as gg
 
 from .apply import apply_flow_to_particles
+from synthpix.types import PRNGKey
 
 # Import existing modules
 from .generate import add_noise_to_image, img_gen_from_data
-from .utils import DEBUG_JIT, match_histogram
+from .utils import DEBUG_JIT, match_histogram, SYNTHPIX_SCOPE
 
-logger = gg.get_logger(__name__)
+logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 def generate_images_from_flow(
-    key: jax.random.PRNGKey,
+    key: PRNGKey,
     flow_field: jnp.ndarray,
     position_bounds: tuple[int, int] = (512, 512),
     image_shape: tuple[int, int] = (256, 256),
@@ -390,9 +391,9 @@ def generate_images_from_flow(
 
 
 def input_check_gen_img_from_flow(
-    key: jax.random.PRNGKey,
+    key: PRNGKey,
     flow_field: jnp.ndarray,
-    position_bounds: tuple[int, int] = (512, 512),
+    position_bounds: tuple[int, ...] = (512, 512),
     image_shape: tuple[int, int] = (256, 256),
     num_images: int = 300,
     img_offset: tuple[int, int] = (128, 128),

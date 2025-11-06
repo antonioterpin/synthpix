@@ -5,7 +5,6 @@ import timeit
 import jax
 import jax.numpy as jnp
 import pytest
-from goggles import get_logger
 
 from synthpix.data_generate import generate_images_from_flow
 from synthpix.sampler import RealImageSampler, SyntheticImageSampler
@@ -23,8 +22,6 @@ REPETITIONS = config["REPETITIONS"]
 NUMBER_OF_EXECUTIONS = config["EXECUTIONS_SAMPLER"]
 
 sampler_config = load_configuration("config/test_data.yaml")
-
-logger = get_logger(__name__)
 
 
 def dummy_img_gen_fn(
@@ -259,10 +256,10 @@ def test_invalid_flow_fields_per_batch(flow_fields_per_batch, scheduler):
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_more_flows_per_batch_than_batch_size(flow_fields_per_batch, scheduler):
-    """Test that flow_fields_per_batch is less than or equal to batch_size."""
+    """Test that flow_fields_per_batch is <= batch_size."""
     with pytest.raises(
         ValueError,
-        match="flow_fields_per_batch must be less than or equal to batch_size.",
+        match="flow_fields_per_batch must be <= batch_size.",
     ):
         config = sampler_config.copy()
         config["flow_fields_per_batch"] = flow_fields_per_batch
@@ -849,8 +846,8 @@ def test_invalid_flow_field_size_and_img_offset(
         f"{position_bounds[1] + position_bounds_offset[1]})."
     )
 
-    logger.debug("test: " + str(position_bounds_offset))
-    logger.debug(position_bounds)
+    print("test: " + str(position_bounds_offset))
+    print(position_bounds)
 
     config = sampler_config.copy()
     config["flow_field_size"] = flow_field_size

@@ -9,6 +9,7 @@ import jax
 import jax.numpy as jnp
 
 DEBUG_JIT = False
+SYNTHPIX_SCOPE = "synthpix"
 
 load_configuration = gg.load_configuration
 
@@ -169,7 +170,10 @@ def trilinear_interpolate(
 
 
 def generate_array_flow_field(
-    flow_f: Callable[[float, float, float], jnp.ndarray],
+    flow_f: Callable[
+        [jnp.ndarray, jnp.ndarray, jnp.ndarray], 
+        tuple[jnp.ndarray, jnp.ndarray]
+    ],
     grid_shape: tuple[int, int] = (128, 128),
 ) -> jnp.ndarray:
     """Generate a array flow field from a flow field function.
@@ -188,7 +192,7 @@ def generate_array_flow_field(
     cols = jnp.arange(W)
 
     # vmap over both axes, and apply the flow function at time t=1
-    arr = jax.vmap(lambda i: jax.vmap(lambda j: jnp.array(flow_f(1, i, j)))(cols))(rows)
+    arr = jax.vmap(lambda i: jax.vmap(lambda j: jnp.array(flow_f(jnp.ones((1)), i, j)))(cols))(rows)
 
     return arr
 
@@ -334,12 +338,12 @@ def input_check_flow_field_adapter(
     resolution: float,
     res_x: float,
     res_y: float,
-    position_bounds: tuple[int, int],
-    position_bounds_offset: tuple[int, int],
+    position_bounds: tuple[int, ...],
+    position_bounds_offset: tuple[int, ...],
     batch_size: int,
     output_units: str,
     dt: float,
-    zero_padding: tuple[int, int],
+    zero_padding: tuple[int, ...],
 ):
     """Checks the input arguments of the flow field adapter function.
 
