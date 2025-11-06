@@ -10,7 +10,9 @@ import numpy as np
 
 import synthpix
 
-logger = gg.get_logger(__name__, scope=synthpix.utils.SYNTHPIX_SCOPE)
+# To see logs in the console, we need to attach a handler to
+# the Synthpix scope: synthpix.SYNTHPIX_SCOPE
+logger = gg.get_logger(__name__, scope=synthpix.SYNTHPIX_SCOPE)
 gg.attach(
     gg.ConsoleHandler(level=logging.INFO),
 )
@@ -77,21 +79,17 @@ def main(config_path: str, output_dir: str, num_images_to_display: int):
         # Run the sampler and print results
         logger.info(f"Starting the {sampler.__class__.__name__} pipeline...")
         for i, batch in enumerate(sampler):
-            # logger.info(f"Batch {i + 1} generated.")
-            # logger.info(f"Image 1 batch shape: {batch['images1'].shape}")
-            # logger.info(f"Image 2 batch shape: {batch['images2'].shape}")
-            # logger.info(f"Flow field batch shape: {batch['flow_fields'].shape}")
-
-            for j in range(min(num_images_to_display, batch["images1"].shape[0])):
+            # Batch is of type SynthpixBatch and we can access its fields
+            for j in range(min(num_images_to_display, batch.images1.shape[0])):
                 # Visualize and save the images
                 # We visualize the images in ij coordinates, so
-                # batch["flow_fields"][j, 0, 0] is the flow on the top left pixel
-                # of the j-th element of the batch
+                # batch.flow_fields[j, 0, 0] is the flow on the 
+                # top left pixel of the j-th element of the batch
                 visualize_and_save(
                     f"batch_{i}_sample_{j}",
-                    batch["images1"][j],
-                    batch["images2"][j],
-                    batch["flow_fields"][j],
+                    np.asarray(batch.images1[j]),
+                    np.asarray(batch.images2[j]),
+                    np.asarray(batch.flow_fields[j]),
                     output_dir,
                 )
 

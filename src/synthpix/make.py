@@ -7,9 +7,10 @@ import goggles as gg
 from rich.console import Console
 from rich.text import Text
 
-from .data_generate import generate_images_from_flow
-from .sampler import RealImageSampler, Sampler, SyntheticImageSampler
-from .scheduler import (
+from synthpix.data_generate import generate_images_from_flow
+from synthpix.sampler import RealImageSampler, Sampler, SyntheticImageSampler
+from synthpix.scheduler import (
+    BaseFlowFieldScheduler,
     EpisodicFlowFieldScheduler,
     HDF5FlowFieldScheduler,
     MATFlowFieldScheduler,
@@ -20,12 +21,28 @@ from .utils import load_configuration, SYNTHPIX_SCOPE
 
 logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
-SCHEDULERS = {
-    ".h5": HDF5FlowFieldScheduler,
-    ".mat": MATFlowFieldScheduler,
-    ".npy": NumpyFlowFieldScheduler,
-}
+def get_base_scheduler(name: str) -> BaseFlowFieldScheduler:
+    """Get the base scheduler class by name.
 
+    Args:
+        name: Name of the scheduler class.
+
+    Returns:
+        The scheduler class.
+
+    Raises:
+        ValueError: If the scheduler class is not found.
+    """
+    SCHEDULERS = {
+        ".h5": HDF5FlowFieldScheduler,
+        ".mat": MATFlowFieldScheduler,
+        ".npy": NumpyFlowFieldScheduler,
+    }
+
+    if name not in SCHEDULERS:
+        raise ValueError(f"Scheduler class {name} not found.")
+
+    return SCHEDULERS[name]
 
 def make(
     config: str | dict,
@@ -97,12 +114,23 @@ def make(
         raise TypeError("dataset_config must be a dictionary.")
     if "scheduler_class" not in dataset_config:
         raise ValueError("dataset_config must contain 'scheduler_class' key.")
+    scheduler_class_name = dataset_config["scheduler_class"]
+    scheduler_class = get_base_scheduler(scheduler_class_name)
+    if "batch_size" not in dataset_config:
+        raise ValueError("dataset_config must contain 'batch_size' key.")
+    batch_size = dataset_config["batch_size"]
+    if not isinstance(batch_size, int) or batch_size <= 0:
+        raise ValueError("batch_size must be a positive integer.")
     if not isinstance(images_from_file, bool):
         raise TypeError("images_from_file must be a boolean.")
     if not isinstance(buffer_size, int) or buffer_size < 0:
         raise ValueError("buffer_size must be a non-negative integer.")
     if not isinstance(episode_length, int) or episode_length < 0:
         raise ValueError("episode_length must be a non-negative integer.")
+    if "flow_fields_per_batch" not in dataset_config:
+        raise ValueError(
+            "dataset_config must contain 'flow_fields_per_batch' key."
+        )
 
     # Initialize the random number generator
     cpu = jax.devices("cpu")[0]
@@ -110,10 +138,19 @@ def make(
     key = jax.random.PRNGKey(seed)
     key = jax.device_put(key, cpu)
 
+    key, sched_key = jax.random.split(key)
+
+    kwargs = {
+        "file_list": dataset_config.get("scheduler_files", []),
+        "randomize": dataset_config.get("randomize", False),
+        "loop": dataset_config.get("loop", True),
+        "key": sched_key,
+    }
+
     if images_from_file:
-        if dataset_config["scheduler_class"] != ".mat":
+        if scheduler_class_name != ".mat":
             raise ValueError(
-                f"Scheduler class {dataset_config['scheduler_class']} "
+                f"Scheduler class {scheduler_class_name} "
                 "is not supported for file images."
             )
         if (
@@ -125,87 +162,46 @@ def make(
                 "It will be set to True by default."
             )
         dataset_config["include_images"] = True
+        kwargs = {
+            **kwargs,
+            "include_images": True,
+            "output_shape": tuple(
+                dataset_config.get("image_shape", (256, 256))
+            ),
+        }
 
-        key, sched_key = jax.random.split(key)
+    scheduler = scheduler_class.from_config(kwargs)
 
-        # Initialize the base scheduler
-        base = MATFlowFieldScheduler(
-            file_list=dataset_config.get("scheduler_files", []),
-            randomize=dataset_config.get("randomize", False),
-            loop=dataset_config.get("loop", False),
-            include_images=True,
-            output_shape=tuple(dataset_config.get("image_shape", (256, 256))),
-            key=sched_key,
+    # If episode_length is specified, use EpisodicFlowFieldScheduler
+    if episode_length > 0:
+        key, epi_key = jax.random.split(key)
+        scheduler = EpisodicFlowFieldScheduler(
+            scheduler=scheduler,
+            batch_size=batch_size,
+            episode_length=episode_length,
+            key=epi_key,
         )
 
-        # If episode_length is specified, use EpisodicFlowFieldScheduler
-        if episode_length > 0:
-            key, epi_key = jax.random.split(key)
-            sched = EpisodicFlowFieldScheduler(
-                base,
-                batch_size=dataset_config["batch_size"],
-                episode_length=episode_length,
-                key=epi_key,
-            )
-        else:
-            sched = base
+    # If buffer_size is specified, use PrefetchingFlowFieldScheduler
+    if buffer_size > 0:
+        scheduler = PrefetchingFlowFieldScheduler(
+            scheduler=scheduler,
+            batch_size=batch_size,
+            buffer_size=buffer_size,
+        )
 
-        # If buffer_size is specified, use PrefetchingFlowFieldScheduler
-        if buffer_size > 0:
-            scheduler = PrefetchingFlowFieldScheduler(
-                sched,
-                batch_size=dataset_config["batch_size"],
-                buffer_size=buffer_size,
-            )
-        else:
-            scheduler = sched
-
-        # Initialize the sampler
-        sampler = RealImageSampler(scheduler, batch_size=dataset_config["batch_size"])
+    if images_from_file:
+        sampler = RealImageSampler(scheduler, batch_size=batch_size)
     else:
-        if dataset_config["scheduler_class"] not in SCHEDULERS:
-            raise ValueError(
-                f"Scheduler class {dataset_config['scheduler_class']} not found."
-            )
-        scheduler_class = SCHEDULERS.get(dataset_config["scheduler_class"])
-
-        key, sched_key = jax.random.split(key)
-
-        # Initialize the base scheduler
-        base = scheduler_class(
-            file_list=dataset_config.get("scheduler_files", []),
-            randomize=dataset_config.get("randomize", False),
-            loop=dataset_config.get("loop", True),
-            key=sched_key,
-        )
-
         # If episode_length is specified, use EpisodicFlowFieldScheduler
-        if episode_length > 0:
-            if dataset_config.get("batches_per_flow_batch") > 1:
-                logger.warning(
-                    "Using EpisodicFlowFieldScheduler with batches_per_flow_batch > 1 "
-                    "may lead to unexpected behavior. "
-                    "Consider using a single batch per flow field."
-                )
-            key, epi_key = jax.random.split(key)
-            sched = EpisodicFlowFieldScheduler(
-                base,
-                batch_size=dataset_config["flow_fields_per_batch"],
-                episode_length=episode_length,
-                key=epi_key,
+        if episode_length > 0 and dataset_config["batches_per_flow_batch"] > 1:
+            # NOTE: batches_per_flow_batch is used below by the 
+            # synthetic sampler
+            logger.warning(
+                "Using EpisodicFlowFieldScheduler with batches_per_flow_batch > 1 "
+                "may lead to unexpected behavior. "
+                "Consider using a single batch per flow field."
             )
-        else:
-            sched = base
-
-        # If buffer_size is specified, use PrefetchingFlowFieldScheduler
-        if buffer_size > 0:
-            scheduler = PrefetchingFlowFieldScheduler(
-                scheduler=sched,
-                batch_size=dataset_config["flow_fields_per_batch"],
-                buffer_size=buffer_size,
-            )
-        else:
-            scheduler = sched
 
         # Initialize the sampler
         sampler = SyntheticImageSampler.from_config(
@@ -214,6 +210,8 @@ def make(
             config=dataset_config,
         )
 
-    logger.info(f"--- SynthPix sampler and scheduler initialized ---\n{dataset_config}")
+    logger.info(
+        f"--- SynthPix sampler and scheduler initialized ---\n{dataset_config}"
+    )
 
     return sampler
