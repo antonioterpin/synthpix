@@ -1,5 +1,7 @@
 import os
 import re
+import stat
+import sys
 import timeit
 from test.example_flows import get_flow_function
 
@@ -733,3 +735,83 @@ def test_discover_leaf_dirs(tmp_path):
     expect = {os.path.abspath(seq_A), os.path.abspath(sub_1)}
 
     assert leaves == expect, f"Expected {expect}, got {leaves}"
+
+
+def test_discover_leaf_dirs_skips_missing_dirs(tmp_path):
+    """Trigger FileNotFoundError: directory disappears after path collection."""
+    gone = tmp_path / "gone_seq"
+    gone.mkdir()
+    (gone / "flow_0000.mat").touch()
+
+    keep = tmp_path / "keep_seq"
+    keep.mkdir()
+    (keep / "flow_0000.mat").touch()
+
+    # Collect paths, then remove 'gone' entirely so listing it raises FileNotFoundError
+    paths = [str(p) for p in tmp_path.rglob("*.mat")]
+    for p in gone.glob("*"):
+        p.unlink()
+    gone.rmdir()
+
+    leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
+    assert os.path.abspath(keep) in leaves
+    # The deleted dir must not appear
+    assert os.path.abspath(gone) not in leaves
+
+
+def test_discover_leaf_dirs_skips_not_a_directory(tmp_path):
+    """Trigger NotADirectoryError: path collected as a dir becomes a file later."""
+    will_be_file = tmp_path / "turns_into_file"
+    will_be_file.mkdir()
+    (will_be_file / "flow_0000.mat").touch()
+
+    ok = tmp_path / "ok_seq"
+    ok.mkdir()
+    (ok / "flow_0000.mat").touch()
+
+    # Collect paths first
+    paths = [str(p) for p in tmp_path.rglob("*.mat")]
+
+    # Replace the directory with a file at the same path
+    for p in will_be_file.glob("*"):
+        p.unlink()
+    will_be_file.rmdir()
+    will_be_file.write_text("I am a file now")  # same path, not a dir anymore
+
+    leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
+    assert os.path.abspath(ok) in leaves
+    # The path that became a file should be skipped silently by the except block
+    assert os.path.abspath(will_be_file) not in leaves
+
+
+@pytest.mark.skipif(
+    sys.platform.startswith("win"), reason="chmod(0) semantics differ on Windows"
+)
+@pytest.mark.skipif(
+    os.getenv("CI") == "true",
+    reason="CI environments may have different permission handling",
+)
+def test_discover_leaf_dirs_skips_permission_denied(tmp_path):
+    """Trigger PermissionError: directory exists but is not readable."""
+    denied = tmp_path / "no_perm_seq"
+    denied.mkdir()
+    (denied / "flow_0000.mat").touch()
+
+    ok = tmp_path / "ok_seq"
+    ok.mkdir()
+    (ok / "flow_0000.mat").touch()
+
+    paths = [str(p) for p in tmp_path.rglob("*.mat")]
+
+    # Remove read/execute from the directory to block listing (r-x needed to list)
+    _ = denied.stat().st_mode
+    try:
+        denied.chmod(
+            0
+        )  # no permissions → os.scandir / iterdir should raise PermissionError
+        leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
+        assert os.path.abspath(ok) in leaves
+        assert os.path.abspath(denied) not in leaves
+    finally:
+        # Restore perms so tmp cleanup can remove the directory
+        denied.chmod(stat.S_IRWXU)
