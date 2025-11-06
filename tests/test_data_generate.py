@@ -1,6 +1,6 @@
 import re
 import timeit
-from test.example_flows import get_flow_function
+from tests.example_flows import get_flow_function
 
 import jax
 import jax.numpy as jnp
@@ -584,7 +584,7 @@ def test_generate_images_from_flow(monkeypatch, debug_flag):
     noise_uniform = 0.0
     noise_gaussian_mean = 0.0
     noise_gaussian_std = 0.0
-    max_diameter = float(max((d[1] for d in diameter_ranges)))
+    max_diameter = float(max(d[1] for d in diameter_ranges))
 
     # 2. create a flow field
     flow_field = generate_array_flow_field(
@@ -870,7 +870,7 @@ def test_img_parameter_combinations(
         + noise_gaussian_std.__str__()
     )
 
-    max_diameter = max((d[1] for d in diameter_ranges))
+    max_diameter = max(d[1] for d in diameter_ranges)
 
     # 2. create a flow field
     flow_field = generate_array_flow_field(
@@ -958,7 +958,7 @@ def test_speed_parameter_combinations(
     """Test that generate_images_from_flow is faster than a limit time."""
 
     # Set the max diameter to the maximum of the diameter ranges
-    max_diameter = max((d[1] for d in diameter_ranges))
+    max_diameter = max(d[1] for d in diameter_ranges)
 
     # Name of the axis for the device mesh
     shard_fields = "fields"

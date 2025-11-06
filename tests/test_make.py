@@ -20,7 +20,7 @@ class DummyScheduler:
         self.kwargs = kwargs
 
     @classmethod
-    def from_config(cls, cfg: dict) -> "DummyScheduler":
+    def from_config(cls, cfg: dict) -> DummyScheduler:
         return cls(cfg)
 
 
@@ -44,7 +44,7 @@ class DummySampler:
     @classmethod
     def from_config(
         cls, scheduler: DummyScheduler, *args: Any, **kwargs: Any
-    ) -> "DummySampler":
+    ) -> DummySampler:
         return cls(scheduler=scheduler, batch_size=kwargs["config"]["batch_size"])
 
 

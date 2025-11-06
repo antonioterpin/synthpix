@@ -1,11 +1,9 @@
 """Example flow functions for testing purposes."""
 
-from typing import Tuple
-
 import jax.numpy as jnp
 
 
-def horizontal_flow(t: float, x: float, y: float) -> Tuple[float, float]:
+def horizontal_flow(t: float, x: float, y: float) -> tuple[float, float]:
     """A simple horizontal flow: constant unit speed in the x-direction.
 
     The flow field is given by:
@@ -23,7 +21,7 @@ def horizontal_flow(t: float, x: float, y: float) -> Tuple[float, float]:
     return (1.0, 0.0)
 
 
-def pipe_horizontal_flow(t: float, x: float, y: float) -> Tuple[float, float]:
+def pipe_horizontal_flow(t: float, x: float, y: float) -> tuple[float, float]:
     """A parabolic (pipe) horizontal flow.
 
     The flow field is given by:
@@ -41,7 +39,7 @@ def pipe_horizontal_flow(t: float, x: float, y: float) -> Tuple[float, float]:
     return (1 - y**2, 0.0)
 
 
-def vortex_flow(t: float, x: float, y: float) -> Tuple[float, float]:
+def vortex_flow(t: float, x: float, y: float) -> tuple[float, float]:
     """A time-varying vortex flow.
 
     The flow field is given by:

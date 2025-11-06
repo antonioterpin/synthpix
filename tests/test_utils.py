@@ -3,7 +3,7 @@ import re
 import stat
 import sys
 import timeit
-from test.example_flows import get_flow_function
+from tests.example_flows import get_flow_function
 
 import jax
 import jax.numpy as jnp
@@ -45,12 +45,12 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_UTILS"]
         (1e9 + 0.00000001, True),
     ],
 )
-def test_is_int(val, expected):
+def test_is_int(val: int | float, expected: bool):
     """Test the is_int function with various inputs.
 
     Args:
-        val (Union[int, float]): The value to check.
-        expected (bool): The expected result.
+        val: The value to check.
+        expected: The expected result.
     """
     assert is_int(val) == expected
 
@@ -64,14 +64,16 @@ def test_is_int(val, expected):
         (jnp.array([[0, 1], [2, 3]]), -0.5, -0.5, 0.0),
     ],
 )
-def test_bilinear_interpolate(image, x, y, expected):
+def test_bilinear_interpolate(
+    image: jnp.ndarray, x: jnp.ndarray, y: jnp.ndarray, expected: jnp.ndarray
+):
     """Test the bilinear_interpolate function with various inputs
 
     Args:
-        image (jnp.ndarray): The input image.
-        x (jnp.ndarray): The x-coordinates for interpolation.
-        y (jnp.ndarray): The y-coordinates for interpolation.
-        expected (jnp.ndarray): The expected interpolated values.
+        image: The input image.
+        x: The x-coordinates for interpolation.
+        y: The y-coordinates for interpolation.
+        expected: The expected interpolated values.
     """
     res = bilinear_interpolate(image, x, y)
     assert res == expected, f"Expected {expected} but got {res}"
@@ -85,15 +87,21 @@ def test_bilinear_interpolate(image, x, y, expected):
         (jnp.array([[[0, 1], [2, 3]], [[4, 5], [6, 7]]]), -0.5, -0.5, -0.5, 0.0),
     ],
 )
-def test_trilinear_interpolate(image, x, y, z, expected):
+def test_trilinear_interpolate(
+    image: jnp.ndarray,
+    x: jnp.ndarray,
+    y: jnp.ndarray,
+    z: jnp.ndarray,
+    expected: jnp.ndarray,
+):
     """Test the trilinear_interpolate function with various inputs.
 
     Args:
-        image (jnp.ndarray): The input image.
-        x (jnp.ndarray): The x-coordinates for interpolation.
-        y (jnp.ndarray): The y-coordinates for interpolation.
-        z (jnp.ndarray): The z-coordinates for interpolation.
-        expected (jnp.ndarray): The expected interpolated values.
+        image: The input image.
+        x: The x-coordinates for interpolation.
+        y: The y-coordinates for interpolation.
+        z: The z-coordinates for interpolation.
+        expected: The expected interpolated values.
     """
     assert trilinear_interpolate(image, x, y, z) == expected
 
@@ -115,7 +123,9 @@ def test_trilinear_interpolate(image, x, y, z, expected):
         ),
     ],
 )
-def test_generate_array_flow_field(shape, flow_field_type, expected):
+def test_generate_array_flow_field(
+    shape: tuple[int], flow_field_type, expected: jnp.ndarray
+):
     """Test the generate_array_flow_field function with various inputs.
 
     Args:

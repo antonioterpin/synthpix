@@ -1,5 +1,5 @@
 import timeit
-from test.example_flows import get_flow_function
+from tests.example_flows import get_flow_function
 
 import jax
 import jax.numpy as jnp

@@ -1,41 +1,49 @@
 name: Python CI
 
 on:
-  push:
-    branches:
-      - '**'
+    push:
+        branches:
+            - '**'
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+    test:
+        runs-on: ubuntu-latest
 
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
+        steps:
+            # Step 1: Check out the repository code
+            - name: Check out code
+              uses: actions/checkout@v3
 
-      - name: Build Docker image
-        run: |
-          docker compose -f docker-compose.cpu.yaml build
+            # Step 2: Set up Python
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: '3.10'
 
-      - name: Run tests & collect coverage
-        run: |
-          docker compose -f docker-compose.cpu.yaml run --rm \
-            -e CI=true \
-            -e XLA_PYTHON_CLIENT_PREALLOCATE=false \
-            -v "${{ github.workspace }}/coverage:/workspace/coverage" \
-            synthpix pytest -x -v -n 1 \
-              --max-worker-restart=0 \
-              -o "xdist.worker_timeout=120" \
-              --cov=synthpix \
-              --cov-report=xml:/workspace/coverage/coverage.xml \
-              --cov-report=term-missing \
-              --ignore=test/save_ablations
+            # Step 3: Install uv
+            - name: Install uv
+              uses: astral-sh/setup-uv@v3
+              with:
+                  version: "latest"
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
+            # Step 4: Install dependencies (+ JAX cpu version)
+            - name: Install dependencies
+              run: |
+                uv sync --extra dev --extra jax --extra wandb
+                uv pip install -e .
 
-      - name: List files
-        run: ls -R .
+            # Step 5: Run tests
+            - name: Run tests with coverage
+              run: uv run pytest
+
+            # Upload the XML as a build artifact so we
+            # (and Codecov) can inspect it
+            - name: Upload coverage.xml artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: coverage-xml
+                  path: coverage.xml
+            - name: Upload coverage reports to Codecov
+              uses: codecov/codecov-action@v5
+              with:
+                token: ${{ secrets.CODECOV_TOKEN }}

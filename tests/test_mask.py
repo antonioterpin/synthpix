@@ -1,5 +1,5 @@
 import re
-from test.test_sampler import dummy_img_gen_fn
+from tests.test_sampler import dummy_img_gen_fn
 
 import jax
 import jax.numpy as jnp
