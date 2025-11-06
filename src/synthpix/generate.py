@@ -79,8 +79,8 @@ def add_noise_to_image(
 
 
 def img_gen_from_data(
+    particle_positions: jnp.ndarray,
     image_shape: tuple[int, int] = (256, 256),
-    particle_positions: jnp.ndarray | None = None,
     max_diameter: float = 1.0,
     diameters_x: jnp.ndarray | None = None,
     diameters_y: jnp.ndarray | None = None,
