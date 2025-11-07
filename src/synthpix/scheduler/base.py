@@ -57,7 +57,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
 
         Args:
             file_list:  List of file paths to flow field datasets.
-            randomize: If True, shuffle the order of files each epoch.
+            randomize: If True, shuffle the order of files.
             loop: If True, loop over the dataset indefinitely.
             key: Random key for reproducibility.
         """

@@ -33,12 +33,8 @@ class SchedulerProtocol(Protocol):
         """
         ...
 
-    def reset(self, reset_epoch: bool = True) -> None:
-        """Resets the state and, optionally, epoch count.
-
-        Args:
-            reset_epoch: If True, resets the epoch counter to zero.
-        """
+    def reset(self) -> None:
+        """Resets the state and, optionally, epoch count."""
         ...
 
     @property

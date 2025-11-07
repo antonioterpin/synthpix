@@ -46,7 +46,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
 
         Args:
             file_list: A list of (directories containing) .mat paths.
-            randomize: If True, shuffle file order per epoch.
+            randomize: If True, shuffle file order.
             loop: If True, cycle indefinitely by wrapping around.
             include_images: If True, return a tuple (I0, I1, V).
             output_shape: The desired output shape for the flow fields.

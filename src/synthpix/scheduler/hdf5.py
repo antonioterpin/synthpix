@@ -31,7 +31,7 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
 
         Args:
             file_list: A list of (directories containing) .h5 paths.
-            randomize: If True, shuffle file order per epoch.
+            randomize: If True, shuffle file order.
             loop: If True, cycle indefinitely.
             key: Random key for reproducibility.
         """

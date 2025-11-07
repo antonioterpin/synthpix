@@ -278,4 +278,4 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
 
         # Inject new order and reset cursors without reshuffling internally
         self.scheduler.file_list = interleaved
-        self.scheduler.reset(reset_epoch=False)
+        self.scheduler.reset()
