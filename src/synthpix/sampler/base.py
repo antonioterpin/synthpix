@@ -1,18 +1,26 @@
 """Base class for Samplers in the SynthPix framework."""
 
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing_extensions import Self
 
 import jax.numpy as jnp
 from goggles import get_logger
 
 from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.types import SynthpixBatch
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
-class Sampler:
+class Sampler(ABC):
     """Base class for Samplers in the SynthPix framework."""
+
+    @abstractmethod
+    def _get_next(self) -> SynthpixBatch:
+        """Generates the next batch of data.
+
+        Returns: The next batch of data as a SynthpixBatch instance.
+        """
 
     def __init__(self, scheduler, batch_size: int = 1):
         """Initialize the sampler.
@@ -61,29 +69,10 @@ class Sampler:
         """Returns the iterator instance itself."""
         return self
 
-    @abstractmethod
-    def ___next__(self) -> dict[str, jnp.ndarray]:
-        """Generates the next batch of data.
-
-        Returns: A dictionary containing the next batch of data.
-            - "images1": First images of the batch.
-            - "images2": Second images of the batch.
-            - "flow_fields": Flow fields used to generate the images.
-            - "done": A boolean array indicating if the episode is done.
-            - "params": A dictionary with parameters used for image generation,
-                if applicable.
-        """
-
-    def __next__(self) -> dict[str, jnp.ndarray]:
+    def __next__(self) -> SynthpixBatch:
         """Return the next batch of data.
 
-        Returns: A dictionary containing the next batch of data.
-            - "images1": First images of the batch.
-            - "images2": Second images of the batch.
-            - "flow_fields": Flow fields used to generate the images.
-            - "done": A boolean array indicating if the episode is done.
-            - "params": A dictionary with parameters used for image generation,
-                if applicable.
+        Returns: The next batch of data as a SynthpixBatch instance.
         """
         if self._episodic and self.scheduler.steps_remaining() == 0:
             raise IndexError(
@@ -91,11 +80,11 @@ class Sampler:
                 "Use next_episode() to continue."
             )
 
-        batch = self.___next__()
+        batch = self._get_next()
 
         if self._episodic:
             done = self._make_done()
-            batch["done"] = done
+            batch = batch.update(done=done)
 
         return batch
 
@@ -110,7 +99,7 @@ class Sampler:
             self.scheduler.reset()
         logger.debug(f"{self.__class__.__name__} has been reset.")
 
-    def next_episode(self) -> dict[str, jnp.ndarray]:
+    def next_episode(self) -> SynthpixBatch:
         """Flush the current episode and return the first batch of the next one.
 
         The underlying scheduler is expected to be the prefetching scheduler.
@@ -118,7 +107,9 @@ class Sampler:
         Returns: The first batch of the next episode.
         """
         if not hasattr(self.scheduler, "next_episode"):
-            raise AttributeError("Underlying scheduler lacks next_episode() method.")
+            raise AttributeError(
+                "Underlying scheduler lacks next_episode() method."
+            )
 
         self.scheduler.next_episode()
 
@@ -127,7 +118,9 @@ class Sampler:
     def _make_done(self) -> jnp.ndarray:
         """Return a `(batch_size,)` bool array if episodic, else None."""
         if not self._episodic:
-            raise NotImplementedError("The underlying scheduler is not episodic.")
+            raise NotImplementedError(
+                "The underlying scheduler is not episodic."
+            )
 
         is_last_step = self.scheduler.steps_remaining() == 0
         logger.debug(f"Is last step: {is_last_step}")

@@ -7,7 +7,6 @@ import goggles as gg
 from rich.console import Console
 from rich.text import Text
 
-from synthpix.data_generate import generate_images_from_flow
 from synthpix.sampler import RealImageSampler, Sampler, SyntheticImageSampler
 from synthpix.scheduler import (
     BaseFlowFieldScheduler,
@@ -206,7 +205,6 @@ def make(
         # Initialize the sampler
         sampler = SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=generate_images_from_flow,
             config=dataset_config,
         )
 
