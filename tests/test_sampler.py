@@ -1054,7 +1054,6 @@ def test_stop_after_max_episodes(mock_mat_files):
         assert done is not None
         n_batches += 1
         while not any(done):
-            print(f"episode {i} batch {n_batches}")
             batch = next(sampler)
             imgs1 = batch.images1
             done = batch.done
@@ -1062,6 +1061,7 @@ def test_stop_after_max_episodes(mock_mat_files):
             assert imgs1[0].shape == (H, W)
             assert isinstance(imgs1, jnp.ndarray)
             n_batches += 1
+            assert done is not None
 
     assert (
         n_batches == epi.episode_length * num_episodes
@@ -1142,6 +1142,7 @@ def test_index_error_if_no_next_episode(mock_mat_files):
         assert imgs1.shape[0] == batch_size
         assert imgs1[0].shape == (H, W)
         assert isinstance(imgs1, jnp.ndarray)
+        assert done is not None
     with pytest.raises(
         IndexError,
         match=re.escape(
