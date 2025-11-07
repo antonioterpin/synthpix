@@ -61,8 +61,7 @@ class Sampler(ABC):
         """Shutdown the sampler."""
         logger.info(f"Shutting down {self.__class__.__name__}.")
         self._shutdown()
-        if isinstance(self.scheduler, PrefetchedSchedulerProtocol):
-            self.scheduler.shutdown()
+        self.scheduler.shutdown()
         logger.info(f"{self.__class__.__name__} shutdown complete.")
 
     def __iter__(self) -> Self:
