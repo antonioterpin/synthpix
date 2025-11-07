@@ -15,7 +15,7 @@ from synthpix.scheduler import (
     PrefetchingFlowFieldScheduler,
 )
 from synthpix.scheduler.base import BaseFlowFieldScheduler
-from synthpix.scheduler.protocol import EpisodicSchedulerProtocol
+from synthpix.scheduler.protocol import EpisodeEnd, EpisodicSchedulerProtocol
 from synthpix.types import ImageGenerationSpecification, SchedulerData
 from synthpix.utils import load_configuration
 
@@ -1325,7 +1325,7 @@ def test_episodic_done_and_episode_end(sampler_class):
     last = next(sampler)
     assert last.done is not None and last.done.all()  # last step → all True
 
-    with pytest.raises(IndexError, match="Episode ended"):
+    with pytest.raises(EpisodeEnd):
         next(sampler)  # overrun episode
 
 
