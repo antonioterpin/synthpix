@@ -11,12 +11,13 @@ import numpy as np
 from goggles import get_logger
 
 from synthpix.utils import SYNTHPIX_SCOPE
-from synthpix.types import PRNGKey
+from synthpix.types import PRNGKey, SchedulerData
+from synthpix.scheduler.protocol import SchedulerProtocol
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
-class BaseFlowFieldScheduler(ABC):
+class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
     """Abstract class for scheduling access to flow field data.
 
     This class provides iteration, looping, caching, and batch loading.
@@ -132,7 +133,7 @@ class BaseFlowFieldScheduler(ABC):
         if reset_epoch:
             logger.info("Scheduler state has been reset.")
 
-    def __next__(self) -> np.ndarray:
+    def __next__(self):
         """Returns the next flow field slice from the dataset.
 
         Returns: A single flow field slice.
@@ -159,13 +160,13 @@ class BaseFlowFieldScheduler(ABC):
                     self._cached_data = None
                     continue
 
-                flow_field = self.get_next_slice()
+                scheduler_data = self.get_next_slice()
                 logger.debug(
                     f"Loaded slice y={self._slice_idx} from {file_path}, "
-                    f"shape {flow_field.shape}"
+                    f"shape {scheduler_data.flow_fields.shape}"
                 )
                 self._slice_idx += 1
-                return flow_field
+                yield scheduler_data
 
             except Exception as e:
                 logger.error(f"Error loading {file_path}: {e}")
@@ -176,7 +177,7 @@ class BaseFlowFieldScheduler(ABC):
 
         raise StopIteration
 
-    def get_batch(self, batch_size: int) -> np.ndarray:
+    def get_batch(self, batch_size: int) -> list[SchedulerData]:
         """Retrieves a batch of flow fields using the current scheduler state.
 
         This method repeatedly calls `__next__()` to store a batch
@@ -205,7 +206,7 @@ class BaseFlowFieldScheduler(ABC):
             raise
 
         logger.debug(f"Loaded batch of {len(batch)} flow field slices.")
-        return np.array(batch)
+        return batch
 
     @abstractmethod
     def load_file(self, file_path: str) -> np.ndarray:
@@ -218,15 +219,28 @@ class BaseFlowFieldScheduler(ABC):
         """
 
     @abstractmethod
-    def get_next_slice(self) -> np.ndarray:
+    def get_next_slice(self) -> SchedulerData:
         """Extracts the next slice from the cached data.
 
-        Returns: A 2D flow field slice.
+        Returns: SchedulerData containing the next flow field slice
+            (and optionally images).
         """
 
     @abstractmethod
-    def get_flow_fields_shape(self) -> tuple[int, ...]:
+    def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Returns the shape of the flow field.
 
         Returns: Shape of the flow field.
+        """
+
+    @abstractmethod
+    @classmethod
+    def from_config(cls, config: dict) -> Self:
+        """Creates a BaseFlowFieldScheduler instance from a configuration.
+
+        Args:
+            config:
+                Configuration dictionary containing the scheduler parameters.
+
+        Returns: A BaseFlowFieldScheduler instance.
         """
