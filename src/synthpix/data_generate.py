@@ -389,10 +389,11 @@ def input_check_gen_img_from_flow(
             "than the width of the image plus the offset."
         )
 
+    if mask is not None and not isinstance(mask, jnp.ndarray):
+        raise ValueError("mask must be a jnp.ndarray or None.")
     if mask is not None and mask.shape != parameters.image_shape:
         raise ValueError(
-            f"mask shape {mask.shape} does not match "
-            f"image_shape {parameters.image_shape}."
+            f"mask shape {mask.shape} does not match image_shape {parameters.image_shape}."
         )
     if histogram is not None and not isinstance(histogram, jnp.ndarray):
         raise ValueError("histogram must be a jnp.ndarray or None.")

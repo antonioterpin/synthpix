@@ -34,12 +34,6 @@ class Sampler(ABC):
             scheduler: Scheduler instance that provides data.
             batch_size: Number of samples to return in each batch.
         """
-        if not hasattr(scheduler, "__iter__"):
-            raise ValueError("scheduler must be an iterable object.")
-        if not hasattr(scheduler, "__next__"):
-            raise ValueError(
-                "scheduler must be an iterable object with __next__ method."
-            )
         if not isinstance(batch_size, int) or batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
 

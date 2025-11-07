@@ -20,6 +20,12 @@ from .utils import load_configuration, SYNTHPIX_SCOPE
 
 logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
+SCHEDULERS = {
+    ".h5": HDF5FlowFieldScheduler,
+    ".mat": MATFlowFieldScheduler,
+    ".npy": NumpyFlowFieldScheduler,
+}
+
 def get_base_scheduler(name: str) -> BaseFlowFieldScheduler:
     """Get the base scheduler class by name.
 
@@ -32,12 +38,6 @@ def get_base_scheduler(name: str) -> BaseFlowFieldScheduler:
     Raises:
         ValueError: If the scheduler class is not found.
     """
-    SCHEDULERS = {
-        ".h5": HDF5FlowFieldScheduler,
-        ".mat": MATFlowFieldScheduler,
-        ".npy": NumpyFlowFieldScheduler,
-    }
-
     if name not in SCHEDULERS:
         raise ValueError(f"Scheduler class {name} not found.")
 
@@ -171,6 +171,14 @@ def make(
 
     scheduler = scheduler_class.from_config(kwargs)
 
+    # If buffer_size is specified, use PrefetchingFlowFieldScheduler
+    if buffer_size > 0:
+        scheduler = PrefetchingFlowFieldScheduler(
+            scheduler=scheduler,
+            batch_size=batch_size,
+            buffer_size=buffer_size,
+        )
+
     # If episode_length is specified, use EpisodicFlowFieldScheduler
     if episode_length > 0:
         key, epi_key = jax.random.split(key)
@@ -179,14 +187,6 @@ def make(
             batch_size=batch_size,
             episode_length=episode_length,
             key=epi_key,
-        )
-
-    # If buffer_size is specified, use PrefetchingFlowFieldScheduler
-    if buffer_size > 0:
-        scheduler = PrefetchingFlowFieldScheduler(
-            scheduler=scheduler,
-            batch_size=batch_size,
-            buffer_size=buffer_size,
         )
 
     if images_from_file:

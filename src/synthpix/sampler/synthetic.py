@@ -13,6 +13,7 @@ from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from synthpix.data_generate import (
     input_check_gen_img_from_flow, generate_images_from_flow
 )
+from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
 from synthpix.types import ImageGenerationSpecification, SynthpixBatch
 from synthpix.utils import (
     DEBUG_JIT,
@@ -161,7 +162,9 @@ class SyntheticImageSampler(Sampler):
         if not isinstance(batches_per_flow_batch, int) or batches_per_flow_batch <= 0:
             raise ValueError("batches_per_flow_batch must be a positive integer.")
         self.batches_per_flow_batch = batches_per_flow_batch
-        if self._episodic and batches_per_flow_batch != 1:
+        if (
+            isinstance(self.scheduler, EpisodicFlowFieldScheduler) and batches_per_flow_batch != 1
+        ):
             self.batches_per_flow_batch = 1
             logger.warning("Using batches_per_flow_batch = 1 for episodic setting.")
 

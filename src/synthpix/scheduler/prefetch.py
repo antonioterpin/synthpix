@@ -10,6 +10,7 @@ from goggles import get_logger
 
 from synthpix.utils import SYNTHPIX_SCOPE
 from synthpix.scheduler.protocol import (
+    EpisodicSchedulerProtocol,
     SchedulerProtocol,
     PrefetchedSchedulerProtocol
 )
@@ -50,11 +51,6 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         self.batch_size = batch_size
         self.buffer_size = buffer_size
 
-        # Episodic behavior
-        if hasattr(self.scheduler, "episode_length"):
-            self.episode_length = getattr(self.scheduler, "episode_length")
-            self._t = 0
-
         self._queue = queue.Queue(maxsize=buffer_size)
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._worker, daemon=True)
@@ -85,12 +81,6 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         """
         try:
             batch = self._queue.get(block=True, timeout=2)
-            if hasattr(self.scheduler, "episode_length"):
-                if self._t >= self.episode_length:
-                    self._t = 0
-                self._t += 1
-            if hasattr(self.scheduler, "episode_length"):
-                logger.debug(f"t = {self._t}")
             if batch is None:
                 logger.info("End of stream reached, stopping iteration.")
                 raise StopIteration
@@ -199,46 +189,6 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         self._thread = threading.Thread(target=self._worker, daemon=True)
 
         logger.debug("Prefetching thread reinitialized, scheduler reset.")
-
-    def next_episode(self, join_timeout: float = 2.0) -> None:
-        """Finish current episode and proceed to the next one.
-
-        Flushes the remaining items of the current episode.
-
-        Args:
-            join_timeout: Timeout in seconds for joining the thread.
-        """
-        if self._started and self.steps_remaining() > 0:
-            to_discard = self.steps_remaining()
-            discarded = 0
-            deadline = time.time() + join_timeout
-            while discarded < to_discard:
-                remaining_time = deadline - time.time()
-                if remaining_time <= 0:
-                    break
-                try:
-                    item = self._queue.get(block=True, timeout=remaining_time)
-                except queue.Empty:
-                    continue
-                if item is None:  # End-of-stream signal
-                    break
-                discarded += 1
-
-        # Proceed to the next episode in the underlying scheduler
-        self._t = 0
-
-        # Start the prefetching thread if not already started
-        if not self._started:
-            self.__iter__()
-
-        logger.debug("Next episode started.")
-
-    def steps_remaining(self) -> int:
-        """Return the number of steps remaining in the current episode.
-
-        Returns: Number of steps remaining in the current episode.
-        """
-        return self.episode_length - self._t
 
     def shutdown(self, join_timeout: float = 2.0) -> None:
         """Gracefully shuts down the background prefetching thread.

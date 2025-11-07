@@ -1,6 +1,6 @@
 """Type aliases for SynthPix library."""
 
-from typing import TypeAlias
+from typing import Sequence, TypeAlias
 import numpy as np
 from typing_extensions import Self
 import jax.numpy as jnp
@@ -120,14 +120,14 @@ class ImageGenerationSpecification:
     batch_size: int = 300
     image_shape: tuple[int, int] = (256, 256)
     img_offset: tuple[int, int] = (128, 128)
-    seeding_density_range: tuple[float, float] = (0.01, 0.02)
+    seeding_density_range: tuple[int|float, int|float] = (0.01, 0.02)
     p_hide_img1: float = 0.01
     p_hide_img2: float = 0.01
-    diameter_ranges: list[tuple[float, float]] = field(default_factory=lambda: [(0.1, 1.0)])
+    diameter_ranges: Sequence[tuple[int|float, int|float]] = field(default_factory=lambda: [(0.1, 1.0)])
     diameter_var: float = 1.0
-    intensity_ranges: list[tuple[float, float]] = field(default_factory=lambda: [(50, 200)])
+    intensity_ranges: Sequence[tuple[int|float, int|float]] = field(default_factory=lambda: [(50, 200)])
     intensity_var: float = 1.0
-    rho_ranges: list[tuple[float, float]] = field(default_factory=lambda: [(-0.99, 0.99)])
+    rho_ranges: Sequence[tuple[int|float, int|float]] = field(default_factory=lambda: [(-0.99, 0.99)])
     rho_var: float = 1.0
     dt: float = 1.0
     noise_uniform: float = 0.0

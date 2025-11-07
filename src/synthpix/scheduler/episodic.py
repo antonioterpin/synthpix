@@ -12,9 +12,8 @@ import goggles as gg
 
 from synthpix.utils import discover_leaf_dirs, SYNTHPIX_SCOPE
 from synthpix.types import PRNGKey, SchedulerData
-from synthpix.scheduler.base import BaseFlowFieldScheduler
 from synthpix.scheduler.protocol import (
-    EpisodicSchedulerProtocol
+    EpisodicSchedulerProtocol, SchedulerProtocol
 )
 
 logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
@@ -67,7 +66,8 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
 
     def __init__(
         self,
-        scheduler: BaseFlowFieldScheduler,
+        scheduler: SchedulerProtocol,
+        file_list: list[str],
         batch_size: int,
         episode_length: int,
         key: PRNGKey | None = None,
@@ -89,9 +89,9 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
             distinct starting positions to form at least one complete
             batch of episodes.
         """
-        if not isinstance(scheduler, BaseFlowFieldScheduler):
+        if not isinstance(scheduler, SchedulerProtocol):
             raise TypeError(
-                f"Expected scheduler to be a BaseFlowFieldScheduler, "
+                f"Expected scheduler to be a SchedulerProtocol, "
                 f"got {type(scheduler)}"
             )
         if not isinstance(batch_size, int) or batch_size <= 0:
@@ -102,10 +102,11 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
 
         self.scheduler = scheduler
         self.batch_size = batch_size
-        self.episode_length = episode_length
+        self._episode_length = episode_length
 
         self._key = key if key is not None else jax.random.PRNGKey(0)
         self._t = 0
+        self.file_list = file_list
 
         # Calculate the possible starting positions to sample from
         self.dir2files, self._starts = self._calculate_starts()
@@ -126,6 +127,7 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
             batch_size: Must match the ``batch_size`` used at initialization.
 
         Returns: SchedulerData containing the flow fields for the current time-step
+            across all episodes.
         """
         if batch_size != self.batch_size:
             raise ValueError(
@@ -153,6 +155,14 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         Returns: The length of the episode.
         """
         return self.episode_length
+    
+    @property
+    def episode_length(self) -> int:
+        """Return the length of the episode.
+
+        Returns: The length of the episode.
+        """
+        return self._episode_length
 
     def reset_episode(self) -> None:
         """Start *batch_size* brand-new episodes.
@@ -202,7 +212,7 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
                 for each possible episode start position.
         """
         # Extract the leaf directories from the file list
-        leaf_dirs = discover_leaf_dirs(self.scheduler.file_list)
+        leaf_dirs = discover_leaf_dirs(self.file_list)
         dir2files = {d: sorted(glob.glob(os.path.join(d, "*.mat"))) for d in leaf_dirs}
 
         # Sanity-check: all directories must contain enough frames
@@ -255,5 +265,5 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         )
 
         # Inject new order and reset cursors without reshuffling internally
-        self.scheduler.file_list = interleaved
+        self.file_list = interleaved
         self.scheduler.reset(reset_epoch=False)

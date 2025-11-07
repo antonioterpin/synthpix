@@ -15,7 +15,7 @@ class SchedulerProtocol(Protocol):
         """
         ...
 
-    def get_batch(self, batch_size: int) -> list[SchedulerData]:
+    def get_batch(self, batch_size: int) -> SchedulerData:
         """Retrieves a batch of flow fields using the current scheduler state.
 
         This method repeatedly calls `__next__()` to store a batch
@@ -24,7 +24,7 @@ class SchedulerProtocol(Protocol):
         Args:
             batch_size: Number of flow field slices to retrieve.
 
-        Returns: A list of SchedulerData containing the batch of flow fields 
+        Returns: SchedulerData containing the batch of flow fields 
             and, optionally, images.
         """
         ...
@@ -53,6 +53,14 @@ class EpisodicSchedulerProtocol(SchedulerProtocol, Protocol):
 
         The scheduler should reset any internal state necessary for
         starting a new episode.
+        """
+        ...
+
+    @property
+    def episode_length(self) -> int:
+        """Returns the length of the episode.
+
+        Returns: The length of the episode.
         """
         ...
 
