@@ -9,9 +9,10 @@ from goggles import get_logger
 from synthpix.types import SchedulerData
 from synthpix.utils import SYNTHPIX_SCOPE
 from synthpix.scheduler.protocol import (
+    EpisodeEnd,
     EpisodicSchedulerProtocol,
     SchedulerProtocol,
-    PrefetchedSchedulerProtocol
+    PrefetchedSchedulerProtocol,
 )
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
@@ -61,14 +62,14 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         """Return the next batch from the prefetch queue.
 
         The batch matches the underlying scheduler's interface.
-        
+
         Args:
             batch_size: Number of flow field slices to retrieve.
 
         Returns: A preloaded batch of flow fields.
-        
+
         Raises:
-            ValueError: If the requested batch_size does not match 
+            ValueError: If the requested batch_size does not match
                 the prefetching batch size.
         """
         if batch_size != self.batch_size:
@@ -102,7 +103,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             Shape of the flow fields as returned by the underlying scheduler.
         """
         return self.scheduler.get_flow_fields_shape()
-    
+
     def _start_worker(self) -> None:
         """Starts the background prefetching thread if not already started."""
         if not self._started:
@@ -256,7 +257,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
             # do nothing if not episodic
             return
-        
+
         print("Called next_episode() in prefetching scheduler")
         print(f"steps remaining before next_episode(): {self.steps_remaining()}")
         if self._started and self.steps_remaining() > 0:
@@ -274,7 +275,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
                 if item is None:  # End-of-stream signal
                     break
                 discarded += 1
-        
+
         self._t = 0
 
         self._start_worker()
@@ -286,11 +287,9 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         Returns: The length of the episode.
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
-            raise AttributeError(
-                "Underlying scheduler lacks episode_length property."
-            )
+            raise AttributeError("Underlying scheduler lacks episode_length property.")
         return self.scheduler.episode_length
-    
+
     @property
     def file_list(self) -> list[str]:
         """Returns the list of files used by the underlying scheduler.
@@ -298,7 +297,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         Returns: The list of files.
         """
         return self.scheduler.file_list
-    
+
     @file_list.setter
     def file_list(self, new_file_list: list[str]) -> None:
         """Sets a new list of files for the underlying scheduler.
