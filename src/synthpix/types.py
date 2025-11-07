@@ -73,6 +73,7 @@ class SchedulerData:
     flow_fields: np.ndarray
     images1: np.ndarray | None = None
     images2: np.ndarray | None = None
+    mask: np.ndarray | None = None
 
     def update(self, **kwargs) -> Self:
         """Return a new SchedulerBatch with updated fields.
@@ -87,6 +88,7 @@ class SchedulerData:
             flow_fields=kwargs.get("flow_fields", self.flow_fields),
             images1=kwargs.get("images1", self.images1),
             images2=kwargs.get("images2", self.images2),
+            mask=kwargs.get("mask", self.mask),
         )
     
 @dataclass(frozen=True)

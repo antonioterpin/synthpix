@@ -39,27 +39,24 @@ def get_base_scheduler(name: str) -> BaseFlowFieldScheduler:
         ValueError: If the scheduler class is not found.
     """
     if name not in SCHEDULERS:
-        raise ValueError(f"Scheduler class {name} not found.")
+        raise ValueError(f"Scheduler class {name} not found. Should be one of {list(SCHEDULERS.keys())}.")
 
     return SCHEDULERS[name]
 
 def make(
     config: str | dict,
-    images_from_file: bool = False,
-    buffer_size: int = 0,
-    episode_length: int = 0,
 ) -> Sampler:
     """Load the dataset configuration and initialize the sampler.
 
     The loading file must be a YAML file containing the dataset configuration.
     Extracting images from files is supported only for .mat files.
-
+    The configuration dictionary must contain at least the following
+    keys:
+    - scheduler_class: The class of the scheduler to use.
+    - batch_size: The batch size for training.
+    
     Args:
         config: The dataset configuration.
-        images_from_file: If true, images are loaded from files.
-        buffer_size: Size of the buffer (in batches) for prefetching.
-            If 0, no prefetching is used.
-        episode_length: Length of the episode for episodic sampling.
 
     Returns: The initialized sampler.
     """
@@ -92,7 +89,7 @@ def make(
 
     # Input validation
     if not isinstance(config, (str, dict)):
-        raise TypeError("config_path must be a string or a dictionary.")
+        raise TypeError("config must be a string or a dictionary.")
     if isinstance(config, str):
         if not config.endswith(".yaml"):
             raise ValueError("config must point to a .yaml file.")
@@ -110,25 +107,30 @@ def make(
 
     # Configuration validation
     if not isinstance(dataset_config, dict):
-        raise TypeError("dataset_config must be a dictionary.")
+        raise TypeError("config must be a dictionary.")
     if "scheduler_class" not in dataset_config:
-        raise ValueError("dataset_config must contain 'scheduler_class' key.")
+        raise ValueError("config must contain 'scheduler_class' key.")
     scheduler_class_name = dataset_config["scheduler_class"]
     scheduler_class = get_base_scheduler(scheduler_class_name)
     if "batch_size" not in dataset_config:
-        raise ValueError("dataset_config must contain 'batch_size' key.")
+        raise ValueError("config must contain 'batch_size' key.")
     batch_size = dataset_config["batch_size"]
     if not isinstance(batch_size, int) or batch_size <= 0:
         raise ValueError("batch_size must be a positive integer.")
-    if not isinstance(images_from_file, bool):
-        raise TypeError("images_from_file must be a boolean.")
+    
+    # Optional parameters
+    include_images = dataset_config.get("include_images", False)
+    if not isinstance(include_images, bool):
+        raise TypeError("include_images must be a boolean.")
+    buffer_size = dataset_config.get("buffer_size", 0)
     if not isinstance(buffer_size, int) or buffer_size < 0:
         raise ValueError("buffer_size must be a non-negative integer.")
+    episode_length = dataset_config.get("episode_length", 0)
     if not isinstance(episode_length, int) or episode_length < 0:
         raise ValueError("episode_length must be a non-negative integer.")
     if "flow_fields_per_batch" not in dataset_config:
         raise ValueError(
-            "dataset_config must contain 'flow_fields_per_batch' key."
+            "config must contain 'flow_fields_per_batch' key."
         )
 
     # Initialize the random number generator
@@ -146,29 +148,20 @@ def make(
         "key": sched_key,
     }
 
-    if images_from_file:
+    if include_images:
         if scheduler_class_name != ".mat":
             raise ValueError(
                 f"Scheduler class {scheduler_class_name} "
                 "is not supported for file images."
             )
-        if (
-            "include_images" not in dataset_config
-            or not dataset_config["include_images"]
-        ):
-            logger.warning(
-                "The dataset configuration does not have 'include_images' set to True. "
-                "It will be set to True by default."
-            )
-        dataset_config["include_images"] = True
         kwargs = {
             **kwargs,
-            "include_images": True,
             "output_shape": tuple(
                 dataset_config.get("image_shape", (256, 256))
             ),
         }
 
+    # Initialize the base scheduler
     scheduler = scheduler_class.from_config(kwargs)
 
     # If episode_length is specified, use EpisodicFlowFieldScheduler
@@ -189,13 +182,18 @@ def make(
             buffer_size=buffer_size,
         )
 
-    if images_from_file:
+    if include_images:
         sampler = RealImageSampler(scheduler, batch_size=batch_size)
     else:
+        batches_per_flow_batch = dataset_config.get("batches_per_flow_batch", None)
+        if batches_per_flow_batch is None:
+            raise ValueError(
+                "config must contain the 'batches_per_flow_batch' key when"
+                " generating synthetic images."
+            )
         # If episode_length is specified, use EpisodicFlowFieldScheduler
-        if episode_length > 0 and dataset_config["batches_per_flow_batch"] > 1:
-            # NOTE: batches_per_flow_batch is used below by the 
-            # synthetic sampler
+        if episode_length > 0 and batches_per_flow_batch > 1:
+            # NOTE: batches_per_flow_batch is used below by the synthetic sampler
             logger.warning(
                 "Using EpisodicFlowFieldScheduler with batches_per_flow_batch > 1 "
                 "may lead to unexpected behavior. "

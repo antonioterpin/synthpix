@@ -19,7 +19,7 @@ logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
-    """Prefetching Wrapper around a FlowFieldScheduler.
+    """Prefetching Wrapper around a FlowFieldScheduler or an EpisodicScheduler.
 
     It asynchronously prefetches batches of flow fields using a
     background thread to keep the GPU fed.
@@ -93,8 +93,15 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         """Return the next batch from the prefetch queue.
 
         The batch matches the underlying scheduler's interface.
+        
+        Args:
+            batch_size: Number of flow field slices to retrieve.
 
         Returns: A preloaded batch of flow fields.
+        
+        Raises:
+            ValueError: If the requested batch_size does not match 
+                the prefetching batch size.
         """
         if batch_size != self.batch_size:
             raise ValueError(
@@ -135,7 +142,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
                 try:
                     self._queue.put(None, block=True, timeout=eos_timeout)
                 except queue.Full:
-                    # If the queue is full for <timeout>, I remove one item
+                    # If the queue is full for <eos_timeout>, I remove one item
                     # before I can put the end‑of‑stream signal.
 
                     # Acquire the mutex to ensure atomicity
@@ -245,6 +252,9 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
 
         The scheduler should reset any internal state necessary for
         starting a new episode.
+        
+        Args:
+            join_timeout: Timeout in seconds for joining the thread.
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
             # do nothing if not episodic

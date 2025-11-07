@@ -209,6 +209,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
                 desired batch size and `loop` is set to False.
         """
         batch = []
+        mask = None
         for _ in range(batch_size):
             try:
                 scheduler_data = self._get_next()
@@ -216,12 +217,9 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             except StopIteration:
                 break
         if len(batch) < batch_size and not self.loop:
-            logger.warning(
-                f"Skipping the last {len(batch)} slices."
-                "If undesired, use loop or a batch size dividing "
-                "the number of slices in the dataset."
-            )
-            raise StopIteration
+            mask = np.zeros((batch_size,), dtype=bool)
+            mask[: len(batch)] = True
+                
 
         logger.debug(f"Loaded batch of {len(batch)} flow field slices.")
 
@@ -235,10 +233,37 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         ):
             images2 = np.stack([data.images2 for data in batch])
 
+        flow_fields=np.stack([data.flow_fields for data in batch])
+        
+        # Pad if needed
+        if len(batch) < batch_size:
+            pad_size = batch_size - len(batch)
+            flow_fields = np.pad(
+                flow_fields,
+                ((0, pad_size), (0, 0), (0, 0), (0, 0)),
+                mode="constant",
+                constant_values=0,
+            )
+            if images1 is not None:
+                images1 = np.pad(
+                    images1,
+                    ((0, pad_size), (0, 0), (0, 0), (0, 0)),
+                    mode="constant",
+                    constant_values=0,
+                )
+            if images2 is not None:
+                images2 = np.pad(
+                    images2,
+                    ((0, pad_size), (0, 0), (0, 0), (0, 0)),
+                    mode="constant",
+                    constant_values=0,
+                ) 
+        
         return SchedulerData(
-            flow_fields=np.stack([data.flow_fields for data in batch]),
+            flow_fields=flow_fields,
             images1=images1,
             images2=images2,
+            mask=mask,
         )
 
     @abstractmethod
