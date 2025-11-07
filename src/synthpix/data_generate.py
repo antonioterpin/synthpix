@@ -374,9 +374,13 @@ def input_check_gen_img_from_flow(
     ):
         raise ValueError("position_bounds must be a tuple of two positive integers.")
 
-    if not (0 < flow_field_res_x):
+    if not (
+        isinstance(flow_field_res_x, (int, float)) and flow_field_res_x > 0
+    ):
         raise ValueError("flow_field_res_x must be a positive scalar (int or float)")
-    if not (0 < flow_field_res_y):
+    if not (
+        isinstance(flow_field_res_y, (int, float)) and 0 < flow_field_res_y
+    ):
         raise ValueError("flow_field_res_y must be a positive scalar (int or float)")
     if position_bounds[0] < parameters.image_shape[0] + parameters.img_offset[0]:
         raise ValueError(

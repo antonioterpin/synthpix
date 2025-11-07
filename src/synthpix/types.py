@@ -138,8 +138,8 @@ class ImageGenerationSpecification:
         if not isinstance(self.batch_size, int) or self.batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
         if (
-            # not isinstance(self.image_shape, tuple)
-            # or len(self.image_shape) != 2 or
+            not isinstance(self.image_shape, tuple)
+            or len(self.image_shape) != 2 or
             not all(isinstance(s, int) and s > 0 for s in self.image_shape)
         ):
             raise ValueError("image_shape must be a tuple of two positive integers.")
@@ -149,23 +149,20 @@ class ImageGenerationSpecification:
             raise ValueError("p_hide_img2 must be between 0 and 1.")
         
         if (
-            # not isinstance(image_shape, tuple)
-            # or len(image_shape) != 2 or 
+            not isinstance(self.image_shape, tuple)
+            or len(self.image_shape) != 2 or 
             not all(isinstance(s, int) and s > 0 for s in self.image_shape)
         ):
             raise ValueError(
                 "image_shape must be a tuple of two positive integers."
             )
         
-        if (
-            # not isinstance(img_offset, tuple)
-            # or len(img_offset) != 2
-            # or not all(isinstance(s, (int, float)) and s >= 0 for s in img_offset)
-            not all(
-                isinstance(s, (int, float)) and s >= 0 for s in self.img_offset
-            )
+        if not (
+            isinstance(self.img_offset, tuple)
+            and len(self.img_offset) == 2
+            and all(isinstance(s, int) and s >= 0 for s in self.img_offset)
         ):
-            raise ValueError("img_offset must be a tuple of two non-negative numbers.")
+            raise ValueError("img_offset must be a tuple of two non-negative integers.")
         
         if (
             # not isinstance(seeding_density_range, tuple) or 
@@ -183,34 +180,78 @@ class ImageGenerationSpecification:
                 "seeding_density_range must be in the form (min, max)."
             )
         
+        # Check diameter_ranges
+        if not (
+            isinstance(self.diameter_ranges, list)
+            and len(self.diameter_ranges) > 0
+            and all(
+                isinstance(r, tuple) and len(r) == 2 for r in self.diameter_ranges
+            )
+        ):
+            raise ValueError("diameter_ranges must be a list of (min, max) tuples.")
         if not all(0 < d1 <= d2 for d1, d2 in self.diameter_ranges):
             raise ValueError("Each diameter_range must satisfy 0 < min <= max.")
 
-        if not all(0 <= d1 <= d2 for d1, d2 in self.intensity_ranges):
-            raise ValueError(
-                "Each intensity_range must satisfy 0 <= min <= max."
+        if not (
+            isinstance(self.intensity_ranges, list)
+            and len(self.intensity_ranges) > 0
+            and all(
+                isinstance(r, tuple) and len(r) == 2
+                for r in self.intensity_ranges
             )
-        
+        ):
+            raise ValueError("intensity_ranges must be a list of (min, max) tuples.")
+        if not all(0 < d1 <= d2 for d1, d2 in self.intensity_ranges):
+            raise ValueError(
+                "Each intensity_range must satisfy 0 < min <= max."
+            )
+
+        if not (
+            isinstance(self.rho_ranges, list)
+            and len(self.rho_ranges) > 0
+            and all(
+                isinstance(r, tuple) and len(r) == 2 for r in self.rho_ranges
+            )
+        ):
+            raise ValueError("rho_ranges must be a list of (min, max) tuples.")
+
         if not all(-1 < r1 <= r2 < 1 for r1, r2 in self.rho_ranges):
             raise ValueError(
-                "All values in rho_ranges must be in the open interval (-1, 1)."
+                "Each rho_range must satisfy -1 < min <= max < 1."
             )
         
-        if not (0 <= self.diameter_var):
+        if not (
+            isinstance(self.diameter_var, (int, float))
+            and 0 <= self.diameter_var
+        ):
             raise ValueError("diameter_var must be a non-negative number.")
-        if not (0 <= self.intensity_var):
+        if not (
+            isinstance(self.intensity_var, (int, float))
+            and 0 <= self.intensity_var
+        ):
             raise ValueError("intensity_var must be a non-negative number.")
-        if not (0 <= self.rho_var):
+        if not (isinstance(self.rho_var, (int, float)) and 0 <= self.rho_var):
             raise ValueError("rho_var must be a non-negative number.")
         
-        if not (0 <= self.noise_uniform):
+        if not(
+            isinstance(self.noise_uniform, (int, float))
+            and (0 <= self.noise_uniform)
+        ):
             raise ValueError("noise_uniform must be a non-negative number.")
 
-        if self.noise_gaussian_mean < 0:
+        if not (
+            isinstance(self.noise_gaussian_mean, (int, float))
+            and self.noise_gaussian_mean >= 0
+        ):
             raise ValueError("noise_gaussian_mean must be a non-negative number.")
-        if self.noise_gaussian_std < 0:
+        if (
+            not isinstance(self.noise_gaussian_std, (int, float)) 
+            or self.noise_gaussian_std < 0
+        ):
             raise ValueError("noise_gaussian_std must be a non-negative number.")
-        if self.dt <= 0:
+        if (
+            not isinstance(self.dt, (int, float)) or self.dt <= 0
+        ):
             raise ValueError("dt must be a positive number.")
         
     def update(self, **kwargs) -> Self:
