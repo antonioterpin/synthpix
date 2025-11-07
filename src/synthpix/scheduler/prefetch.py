@@ -77,10 +77,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
                 f"Batch size {batch_size} does not match the "
                 f"prefetching batch size {self.batch_size}."
             )
-        if not self._started:
-            self._started = True
-            self._thread.start()
-            logger.debug("Background thread started.")
+        self._start_worker()
 
         if isinstance(self.scheduler, EpisodicSchedulerProtocol):
             if self._t >= self.scheduler.episode_length:
@@ -106,6 +103,13 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             Shape of the flow fields as returned by the underlying scheduler.
         """
         return self.scheduler.get_flow_fields_shape()
+    
+    def _start_worker(self) -> None:
+        """Starts the background prefetching thread if not already started."""
+        if not self._started:
+            self._started = True
+            self._thread.start()
+            logger.debug("Background thread started.")
 
     def _worker(self, eos_timeout: float = 2.0) -> None:
         """Background thread that fetches batches from the scheduler.
@@ -240,7 +244,9 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
 
         The scheduler should reset any internal state necessary for
         starting a new episode.
-        
+
+        Also it starts the worker if not already started.
+
         Args:
             join_timeout: Timeout in seconds for joining the thread.
         """
@@ -266,6 +272,8 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         
         self.scheduler.next_episode()
         self._t = 0
+
+        self._start_worker()
 
     @property
     def episode_length(self) -> int:
