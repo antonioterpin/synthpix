@@ -7,7 +7,7 @@ from goggles import get_logger
 
 from synthpix.scheduler import BaseFlowFieldScheduler
 from synthpix.utils import SYNTHPIX_SCOPE
-from synthpix.types import PRNGKey
+from synthpix.types import PRNGKey, SchedulerData
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -51,11 +51,13 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         with h5py.File(file_path, "r") as file:
             dataset_key = list(file)[0]
             dset = file[dataset_key]
+            if not isinstance(dset, h5py.Dataset):
+                raise ValueError(f"Expected Dataset but got {type(dset)} for key '{dataset_key}' in {file_path}")
             data = dset[...]
             logger.debug(f"Loading file {file_path} with shape {data.shape}")
         return data
 
-    def get_next_slice(self) -> np.ndarray:
+    def get_next_slice(self) -> SchedulerData:
         """Retrieves a flow field slice.
 
         The flow field slice consists of the x and z components
@@ -67,9 +69,11 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
             raise RuntimeError("No data is currently cached.")
         data_slice = self._cached_data[:, self._slice_idx, :, :]
 
-        return data_slice
+        return SchedulerData(
+            flow_fields=data_slice,
+        )
 
-    def get_flow_fields_shape(self) -> tuple[int, ...]:
+    def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Returns the shape of all the flow fields.
 
         NOTE: It is assumed that all the flow fields have the same shape.
@@ -80,6 +84,8 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         with h5py.File(file_path, "r") as file:
             dataset_key = list(file)[0]
             dset = file[dataset_key]
+            if not isinstance(dset, h5py.Dataset):
+                raise ValueError(f"Expected Dataset but got {type(dset)} for key '{dataset_key}' in {file_path}")
             shape = dset.shape[0], dset.shape[2], 2  # (X, Z, 2)
             logger.debug(f"Flow field shape: {shape}")
         return shape
