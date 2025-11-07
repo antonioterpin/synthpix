@@ -509,9 +509,9 @@ class SyntheticImageSampler(Sampler):
             # Reset the batch counter
             self._batches_generated = 0
 
-            scheduler_batch: SchedulerData = self.scheduler.get_batch(self.flow_fields_per_batch)
+            scheduler_batch = self.scheduler.get_batch(self.flow_fields_per_batch)
             _current_flows = scheduler_batch.flow_fields
-            
+
             # Shard the flow fields across devices
             _current_flows = jnp.array(_current_flows, device=self.sharding)
 

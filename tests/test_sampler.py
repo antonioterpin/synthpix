@@ -4,6 +4,7 @@ import timeit
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from synthpix.sampler import RealImageSampler, SyntheticImageSampler
@@ -1231,17 +1232,22 @@ class _BaseDummy(BaseFlowFieldScheduler):
     def get_next_slice(self) -> SchedulerData:
         assert False, "Not implemented for dummy scheduler."
 
-    def _make_arrays(self, batch_size):
+    def _make_arrays(self, batch_size) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Return three arrays that differ per call so we can detect resets."""
         val = float(self._batch_ctr)
         self._batch_ctr += 1
-        imgs1 = jnp.full((batch_size, 2, 2), val, dtype=jnp.float32)
+        imgs1 = np.full((batch_size, 2, 2), val, dtype=np.float32)
         imgs2 = imgs1 + 1.0
-        flows = jnp.full((batch_size, 2, 2, 2), -val, dtype=jnp.float32)
+        flows = np.full((batch_size, 2, 2, 2), -val, dtype=np.float32)
         return imgs1, imgs2, flows
 
-    def get_batch(self, batch_size):
-        return self._make_arrays(batch_size)
+    def get_batch(self, batch_size) -> SchedulerData:
+        imgs1, imgs2, flows = self._make_arrays(batch_size)
+        return SchedulerData(
+            flow_fields=flows,
+            images1=imgs1,
+            images2=imgs2
+        )
 
     def get_flow_fields_shape(self):
         """Return the shape of the flow fields."""
@@ -1266,9 +1272,10 @@ class EpisodicDummy(_BaseDummy):
         return max(self.episode_length - self._step, 0)
 
     def get_batch(self, batch_size):
-        arrays = super().get_batch(batch_size=batch_size)
+        batch = super().get_batch(batch_size=batch_size)
         self._step += 1
-        return arrays
+        done = jnp.array(self._step >= self.episode_length)
+        return batch.update(done=jnp.full((batch_size,), done))
 
     def next_episode(self):
         self._step = 0
@@ -1313,9 +1320,6 @@ class SyntheticImageSamplerWrapper:
 )
 def test_episodic_done_and_episode_end(sampler_class):
     sched = EpisodicDummy(episode_length=2)
-    if sampler_class is SyntheticImageSamplerWrapper:
-        old_get_batch = sched.get_batch
-        sched.get_batch = lambda batch_size: old_get_batch(batch_size=batch_size)
     sampler = sampler_class.from_config(sched, {"batch_size": 4})
 
     first = next(sampler)
