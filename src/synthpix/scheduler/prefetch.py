@@ -81,7 +81,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
 
         if isinstance(self.scheduler, EpisodicSchedulerProtocol):
             if self._t >= self.scheduler.episode_length:
-                raise StopIteration(
+                raise EpisodeEnd(
                     "Episode ended. No more flow fields available. "
                     "Use next_episode() to continue."
                 )

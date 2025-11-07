@@ -86,8 +86,9 @@ class EpisodicSchedulerProtocol(SchedulerProtocol, Protocol):
 @runtime_checkable
 class PrefetchedSchedulerProtocol(EpisodicSchedulerProtocol, Protocol):
     """Protocol that needs to be followed by prefetched schedulers."""
-    
-    
+
+
 class EpisodeEnd(Exception):
     """Exception raised when an episode ends in a prefetched scheduler."""
+
     pass

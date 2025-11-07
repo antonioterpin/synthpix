@@ -9,9 +9,9 @@ from goggles import get_logger
 from synthpix.utils import SYNTHPIX_SCOPE
 from synthpix.types import SynthpixBatch
 from synthpix.scheduler.protocol import (
+    EpisodeEnd,
     SchedulerProtocol,
     EpisodicSchedulerProtocol,
-    PrefetchedSchedulerProtocol,
 )
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
@@ -77,7 +77,7 @@ class Sampler(ABC):
             isinstance(self.scheduler, EpisodicSchedulerProtocol)
             and self.scheduler.steps_remaining() == 0
         ):
-            raise IndexError(
+            raise EpisodeEnd(
                 "Episode ended. No more flow fields available. "
                 "Use next_episode() to continue."
             )

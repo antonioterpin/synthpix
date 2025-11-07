@@ -11,7 +11,11 @@ import goggles as gg
 
 from synthpix.utils import discover_leaf_dirs, SYNTHPIX_SCOPE
 from synthpix.types import PRNGKey, SchedulerData
-from synthpix.scheduler.protocol import EpisodeEnd, EpisodicSchedulerProtocol, SchedulerProtocol
+from synthpix.scheduler.protocol import (
+    EpisodeEnd,
+    EpisodicSchedulerProtocol,
+    SchedulerProtocol,
+)
 
 logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -148,7 +152,7 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
                 f"{self.batch_size}"
             )
         logger.debug(f"get_batch() called with batch_size {batch_size}")
-        
+
         if self._t >= self.episode_length:
             # If we’ve exhausted the current horizon,
             # wait for the next episode

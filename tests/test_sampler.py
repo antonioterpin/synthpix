@@ -278,9 +278,7 @@ def test_invalid_resolution(resolution, scheduler):
 )
 def test_invalid_velocities_per_pixel(velocities_per_pixel, scheduler):
     """Test that invalid velocities_per_pixel raises a ValueError."""
-    with pytest.raises(
-        ValueError, match="velocities_per_pixel must be a number."
-    ):
+    with pytest.raises(ValueError, match="velocities_per_pixel must be a number."):
         config = sampler_config.copy()
         config["velocities_per_pixel"] = velocities_per_pixel
         SyntheticImageSampler.from_config(
@@ -288,9 +286,8 @@ def test_invalid_velocities_per_pixel(velocities_per_pixel, scheduler):
             config=config,
         )
 
-@pytest.mark.parametrize(
-    "velocities_per_pixel", [0, -1, -0.5]
-)
+
+@pytest.mark.parametrize("velocities_per_pixel", [0, -1, -0.5])
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
@@ -820,7 +817,7 @@ def test_synthetic_sampler_batches(
 def test_sampler_switches_flow_fields(
     batch_size, batches_per_flow_batch, flow_fields_per_batch, mock_mat_files
 ):
-    
+
     files, dims = mock_mat_files
     H, W = dims["height"], dims["width"]
 
@@ -1249,11 +1246,7 @@ class _BaseDummy(BaseFlowFieldScheduler):
 
     def get_batch(self, batch_size) -> SchedulerData:
         imgs1, imgs2, flows = self._make_arrays(batch_size)
-        return SchedulerData(
-            flow_fields=flows,
-            images1=imgs1,
-            images2=imgs2
-        )
+        return SchedulerData(flow_fields=flows, images1=imgs1, images2=imgs2)
 
     def get_flow_fields_shape(self):
         """Return the shape of the flow fields."""
