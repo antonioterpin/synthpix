@@ -23,7 +23,7 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
 
     def __init__(
         self,
-        file_list: list,
+        file_list: list[str],
         randomize: bool = False,
         loop: bool = False,
         key: PRNGKey | None = None,
@@ -31,7 +31,7 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         """Initializes the HDF5 scheduler.
 
         Args:
-            file_list: A directory, single .h5 file, or list of .h5 paths.
+            file_list: A list of (directories containing) .h5 paths.
             randomize: If True, shuffle file order per epoch.
             loop: If True, cycle indefinitely.
             key: Random key for reproducibility.

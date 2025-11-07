@@ -229,3 +229,72 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         """
         t = self._thread
         return t is not None and t.is_alive()
+
+    def steps_remaining(self) -> int:
+        """Returns the number of steps remaining in the current episode.
+
+        Returns: Number of steps remaining.
+        """
+        if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
+            raise AttributeError(
+                "Underlying scheduler lacks steps_remaining() method."
+            )
+        return self.scheduler.steps_remaining()
+
+    def next_episode(self, join_timeout: float = 2.0) -> None:
+        """Flush the current episode and prepare for the next one.
+
+        The scheduler should reset any internal state necessary for
+        starting a new episode.
+        """
+        if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
+            raise AttributeError(
+                "Underlying scheduler lacks next_episode() method."
+            )
+        
+        if self._started and self.steps_remaining() > 0:
+            to_discard = self.steps_remaining()
+            discarded = 0
+            deadline = time.time() + join_timeout
+            while discarded < to_discard:
+                remaining_time = deadline - time.time()
+                if remaining_time <= 0:
+                    break
+                try:
+                    item = self._queue.get(block=True, timeout=remaining_time)
+                except queue.Empty:
+                    continue
+                if item is None:  # End-of-stream signal
+                    break
+                discarded += 1
+        
+        self.scheduler.next_episode()
+
+    @property
+    def episode_length(self) -> int:
+        """Returns the length of the episode.
+
+        Returns: The length of the episode.
+        """
+        if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
+            raise AttributeError(
+                "Underlying scheduler lacks episode_length property."
+            )
+        return self.scheduler.episode_length
+    
+    @property
+    def file_list(self) -> list[str]:
+        """Returns the list of files used by the underlying scheduler.
+
+        Returns: The list of files.
+        """
+        return self.scheduler.file_list
+    
+    @file_list.setter
+    def file_list(self, new_file_list: list[str]) -> None:
+        """Sets a new list of files for the underlying scheduler.
+
+        Args:
+            new_file_list: The new list of files to set.
+        """
+        self.scheduler.file_list = new_file_list

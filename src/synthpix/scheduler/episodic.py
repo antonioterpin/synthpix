@@ -7,7 +7,6 @@ from typing_extensions import Self
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import goggles as gg
 
 from synthpix.utils import discover_leaf_dirs, SYNTHPIX_SCOPE
@@ -67,7 +66,6 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
     def __init__(
         self,
         scheduler: SchedulerProtocol,
-        file_list: list[str],
         batch_size: int,
         episode_length: int,
         key: PRNGKey | None = None,
@@ -106,7 +104,6 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
 
         self._key = key if key is not None else jax.random.PRNGKey(0)
         self._t = 0
-        self.file_list = file_list
 
         # Calculate the possible starting positions to sample from
         self.dir2files, self._starts = self._calculate_starts()
@@ -116,6 +113,23 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         """Returns self so the object can be used in a ``for`` loop."""
         self._t = 0
         return self
+    
+    @property
+    def file_list(self) -> list[str]:
+        """Return the current file list from the underlying scheduler.
+
+        Returns: The current file list.
+        """
+        return self.scheduler.file_list
+    
+    @file_list.setter
+    def file_list(self, value: list[str]) -> None:
+        """Set the file list in the underlying scheduler.
+
+        Args:
+            value: New file list to set.
+        """
+        self.scheduler.file_list = value
 
     def get_batch(self, batch_size: int) -> SchedulerData:
         """Return exactly one time-step for `batch_size` parallel episodes.
@@ -265,5 +279,5 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         )
 
         # Inject new order and reset cursors without reshuffling internally
-        self.file_list = interleaved
+        self.scheduler.file_list = interleaved
         self.scheduler.reset(reset_epoch=False)

@@ -30,7 +30,7 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
 
     def __init__(
         self,
-        file_list: list[str] | str,
+        file_list: list[str],
         randomize: bool = False,
         loop: bool = False,
         include_images: bool = False,
@@ -44,7 +44,7 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         named 'img_<t-1>.jpg' and 'img_<t>.jpg' in the same folder.
 
         Args:
-            file_list: A directory, single .npy file, or list of .npy paths.
+            file_list: A list of (directories containing) .npy paths.
             randomize: If True, shuffle file order per epoch.
             loop: If True, cycle indefinitely.
             include_images: If True, validate and return paired JPEG images.

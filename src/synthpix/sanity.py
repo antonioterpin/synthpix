@@ -11,7 +11,6 @@ import numpy as np
 from goggles import get_logger
 from tqdm import tqdm
 
-from .data_generate import generate_images_from_flow
 from .sampler import SyntheticImageSampler
 from .scheduler import HDF5FlowFieldScheduler
 from .utils import load_configuration, SYNTHPIX_SCOPE
@@ -57,10 +56,10 @@ def update_config_file(config_path: str, updated_values: dict) -> None:
     with open(config_path, "w") as file:
         for key, value in config_data.items():
             file.write(f"{key}: {value}\n")
-        if scheduler_files:
+        if scheduler_files and isinstance(scheduler_files, list):
             file.write("scheduler_files:\n")
             for item in scheduler_files:
-                file.write(f"  - {item}\n")
+                file.write(f"  - {str(item)}\n")
 
 
 def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
@@ -86,13 +85,32 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
         with h5py.File(file, "r") as f:
             # Read the file
             dataset_name = list(f.keys())[0]
-            data = f[dataset_name][:]
+            dataset = f[dataset_name]
+            
+            # Ensure we have a dataset, not a group or datatype
+            if not isinstance(dataset, h5py.Dataset):
+                raise ValueError(f"Expected dataset, got {type(dataset)} in file {file}")
+            
+            # Convert to numpy array if needed
+            data = np.array(dataset)
+            
+            # Check data shape and handle different formats
+            if data.ndim == 4:
+                # Standard 4D format: (batch, height, width, channels)
+                x_data = data[..., 0]  # All x components
+                y_data = data[..., 1]  # All y components
+            elif data.ndim == 3 and data.shape[-1] == 2:
+                # 3D format: (height, width, channels)
+                x_data = data[..., 0]
+                y_data = data[..., 1]
+            else:
+                raise ValueError(f"Unexpected data shape: {data.shape} in file {file}")
 
             # Find the min and max speeds along each axis
-            running_max_speed_x = max(running_max_speed_x, np.max(data[:, :, :, 0]))
-            running_max_speed_y = max(running_max_speed_y, np.max(data[:, :, :, 1]))
-            running_min_speed_x = min(running_min_speed_x, np.min(data[:, :, :, 0]))
-            running_min_speed_y = min(running_min_speed_y, np.min(data[:, :, :, 1]))
+            running_max_speed_x = max(running_max_speed_x, float(np.max(x_data)))
+            running_max_speed_y = max(running_max_speed_y, float(np.max(y_data)))
+            running_min_speed_x = min(running_min_speed_x, float(np.min(x_data)))
+            running_min_speed_y = min(running_min_speed_y, float(np.min(y_data)))
 
     return {
         "min_speed_x": running_min_speed_x,
@@ -222,7 +240,6 @@ def main() -> None:  # pragma: no cover
     try:
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=generate_images_from_flow,
             config=config,
         )
     except Exception as e:

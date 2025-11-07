@@ -35,7 +35,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
 
     def __init__(
         self,
-        file_list: list[str] | str,
+        file_list: list[str],
         randomize: bool = False,
         loop: bool = False,
         include_images: bool = False,
@@ -45,7 +45,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         """Initializes the MATFlowFieldScheduler.
 
         Args:
-            file_list: A directory, single .mat file, or list of .mat paths.
+            file_list: A list of (directories containing) .mat paths.
             randomize: If True, shuffle file order per epoch.
             loop: If True, cycle indefinitely by wrapping around.
             include_images: If True, return a tuple (I0, I1, V).

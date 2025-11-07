@@ -171,14 +171,6 @@ def make(
 
     scheduler = scheduler_class.from_config(kwargs)
 
-    # If buffer_size is specified, use PrefetchingFlowFieldScheduler
-    if buffer_size > 0:
-        scheduler = PrefetchingFlowFieldScheduler(
-            scheduler=scheduler,
-            batch_size=batch_size,
-            buffer_size=buffer_size,
-        )
-
     # If episode_length is specified, use EpisodicFlowFieldScheduler
     if episode_length > 0:
         key, epi_key = jax.random.split(key)
@@ -187,6 +179,14 @@ def make(
             batch_size=batch_size,
             episode_length=episode_length,
             key=epi_key,
+        )
+
+    # If buffer_size is specified, use PrefetchingFlowFieldScheduler
+    if buffer_size > 0:
+        scheduler = PrefetchingFlowFieldScheduler(
+            scheduler=scheduler,
+            batch_size=batch_size,
+            buffer_size=buffer_size,
         )
 
     if images_from_file:

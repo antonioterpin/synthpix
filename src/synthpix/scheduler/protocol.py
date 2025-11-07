@@ -37,6 +37,23 @@ class SchedulerProtocol(Protocol):
         """
         ...
 
+    @property
+    def file_list(self) -> list[str]:
+        """Returns the list of files used by the scheduler.
+
+        Returns: List of file paths.
+        """
+        ...
+
+    @file_list.setter
+    def file_list(self, value: list[str]) -> None:
+        """Sets the list of files used by the scheduler.
+
+        Args:
+            value: List of file paths to set.
+        """
+        ...
+
 @runtime_checkable
 class EpisodicSchedulerProtocol(SchedulerProtocol, Protocol):
     """Protocol that needs to be followed by episodic schedulers."""
@@ -65,7 +82,9 @@ class EpisodicSchedulerProtocol(SchedulerProtocol, Protocol):
         ...
 
 @runtime_checkable
-class PrefetchedSchedulerProtocol(SchedulerProtocol, Protocol):
+class PrefetchedSchedulerProtocol(
+    EpisodicSchedulerProtocol, Protocol
+):
     """Protocol that needs to be followed by prefetched schedulers."""
 
     def shutdown(self) -> None:

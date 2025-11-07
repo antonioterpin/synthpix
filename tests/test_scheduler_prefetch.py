@@ -6,15 +6,15 @@ import numpy as np
 import pytest
 
 from synthpix.scheduler import PrefetchingFlowFieldScheduler
+from synthpix.scheduler.protocol import SchedulerProtocol
 
 
-class MinimalScheduler:
+class MinimalScheduler(SchedulerProtocol):
     def __init__(self, total_batches=4, shape=(8, 8, 2)):
         self.total = total_batches
         self.count = 0
         self.shape = shape
         self.reset_called = False
-        self.episode_length = total_batches
 
     def get_batch(self, batch_size):
         if self.count >= self.total:
@@ -28,6 +28,23 @@ class MinimalScheduler:
 
     def get_flow_fields_shape(self):
         return self.shape
+
+    @property
+    def file_list(self) -> list[str]:
+        """Returns the list of files used by the underlying scheduler.
+
+        Returns: The list of files.
+        """
+        return ["dummy_file.npy"]
+
+    @file_list.setter
+    def file_list(self, new_file_list: list[str]) -> None:
+        """Sets a new list of files for the underlying scheduler.
+
+        Args:
+            new_file_list: The new list of files to set.
+        """
+        pass
 
 
 class MinimalEpisodic:

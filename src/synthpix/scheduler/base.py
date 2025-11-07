@@ -28,10 +28,28 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
     """
 
     _file_pattern = "*"
+    _file_list: list[str]
+
+    @property
+    def file_list(self) -> list[str]:
+        """Returns the list of files used by the scheduler.
+
+        Returns: List of file paths.
+        """
+        return self._file_list
+    
+    @file_list.setter
+    def file_list(self, value: list[str]) -> None:
+        """Sets the list of files used by the scheduler.
+
+        Args:
+            value: List of file paths.
+        """
+        self._file_list = value
 
     def __init__(
         self,
-        file_list: list[str] | str,
+        file_list: list[str],
         randomize: bool = False,
         loop: bool = False,
         key: PRNGKey | None = None,
@@ -44,26 +62,32 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             loop: If True, loop over the dataset indefinitely.
             key: Random key for reproducibility.
         """
-        # Check if file_list is a directory or a list of files
-        if isinstance(file_list, str) and os.path.isdir(file_list):
-            logger.debug(f"Searching for files in {file_list}")
-            file_path = file_list
-            pattern = os.path.join(file_list, self._file_pattern)
-            file_list = sorted(glob.glob(pattern, recursive=True))
-            logger.debug(f"Found {len(file_list)} files in {file_path}")
-        elif isinstance(file_list, str) and os.path.isfile(file_list):
-            file_list = [file_list]
+        # Check if file_list is a list of files or directories
+        self._file_list = []
+        if (
+            file_list is None 
+            or not isinstance(file_list, list)
+            or not all(isinstance(f, str) for f in file_list)
+        ):
+            raise ValueError("file_list must be a list of file paths.")
+        for file_path in file_list:
+            if os.path.isdir(file_path):
+                logger.debug(f"Searching for files in {file_path}")
+                pattern = os.path.join(file_path, self._file_pattern)
+                found_files = sorted(glob.glob(pattern, recursive=True))
+                logger.debug(f"Found {len(found_files)} files in {file_path}")
+                self._file_list.extend(found_files)
+            else:
+                self._file_list.append(file_path)
 
-        if not file_list:
+        if not self._file_list:
             raise ValueError("The file_list must not be empty.")
 
-        for file_path in file_list:
+        for file_path in self._file_list:
             if not isinstance(file_path, str):
                 raise ValueError("All file paths must be strings.")
             if not os.path.isfile(file_path):
                 raise ValueError(f"File {file_path} does not exist.")
-
-        self.file_list = file_list
 
         if not isinstance(randomize, bool):
             raise ValueError("randomize must be a boolean value.")
@@ -88,7 +112,9 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             cpu = jax.devices("cpu")[0]
             file_list_indices = jnp.arange(len(self.file_list), device=cpu)
             file_list_indices = jax.random.permutation(shuffle_key, file_list_indices)
-            self.file_list = [self.file_list[i] for i in file_list_indices.tolist()]
+            self.file_list = [
+                self.file_list[i] for i in file_list_indices.tolist()
+            ]
 
         self._cached_data = None
         self._cached_file = None

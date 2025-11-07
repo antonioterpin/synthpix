@@ -2,7 +2,6 @@ import os
 import timeit
 from pathlib import Path
 
-import h5py
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -29,7 +28,7 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_SCHEDULER"]
 
 @pytest.mark.parametrize("file_list", [[None], [123, "invalid"], [123, "invalid"]])
 def test_invalid_file_list_type(file_list):
-    with pytest.raises(ValueError, match="All file paths must be strings."):
+    with pytest.raises(ValueError, match="file_list must be a list of file paths."):
         HDF5FlowFieldScheduler.from_config({"scheduler_files": file_list})
 
 
@@ -335,14 +334,6 @@ def test_abstract_scheduler_iteration(generate_hdf5_file):
     assert count == 2
     os.remove(tmp_file)
 
-
-def test_init_with_single_file_string(tmp_path):
-    f = tmp_path / "flow.dat"
-    f.write_text("dummy")
-    sch = DummyScheduler(str(f))
-    assert sch.file_list == [str(f)]
-
-
 def test_reset_calls_random_shuffle(monkeypatch, tmp_path):
     files = [tmp_path / f"f{i}.dat" for i in range(3)]
     for f in files:
@@ -370,7 +361,7 @@ def test_directory_initialisation(tmp_path):
     for idx in range(3):  # create three dummy files in a tmp dir
         (tmp_path / f"flow_{idx}.dat").write_text("irrelevant")
 
-    scheduler = DummyScheduler(str(tmp_path))  # pass *directory* not list
+    scheduler = DummyScheduler([str(tmp_path)])  # pass *directory*
     assert len(scheduler) == 3
     # file_list must be sorted (the Base class guarantees this)
     assert scheduler.file_list == sorted(map(str, tmp_path.iterdir()))
