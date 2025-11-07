@@ -56,38 +56,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         self._thread = threading.Thread(target=self._worker, daemon=True)
 
         self._started = False
-
-    def __iter__(self) -> Self:
-        """Returns the iterator instance and starts the background thread.
-
-        If the background thread is not started yet, it will be started.
-        This behavior also takes care of the case where there has been an Exception in the previous run, and the thread needs to be restarted.
-
-        Returns: The iterator instance itself.
-        """
-        if not self._started:
-            self._started = True
-            self._thread.start()
-            logger.debug("Background thread started.")
-        return self
-
-    def __next__(self) -> np.ndarray:
-        """Returns the next batch of flow fields from the prefetch queue.
-
-        Returns: The next batch of flow fields.
-
-        Raises:
-            StopIteration: If the queue is empty or no more data is available.
-        """
-        try:
-            batch = self._queue.get(block=True, timeout=2)
-            if batch is None:
-                logger.info("End of stream reached, stopping iteration.")
-                raise StopIteration
-            return batch
-        except queue.Empty:
-            logger.info("Unable to get data.")
-            raise StopIteration
+        self._t = 0
 
     def get_batch(self, batch_size: int) -> np.ndarray:
         """Return the next batch from the prefetch queue.
@@ -108,9 +77,20 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
                 f"Batch size {batch_size} does not match the "
                 f"prefetching batch size {self.batch_size}."
             )
-        if not self._started:
-            self.__iter__()
-        return next(self)
+        try:
+            if not self._started:
+                self._started = True
+                self._thread.start()
+                logger.debug("Background thread started.")
+            batch = self._queue.get(block=True, timeout=2)
+            self._t += 1
+            if batch is None:
+                logger.info("End of stream reached, stopping iteration.")
+                raise StopIteration
+            return batch
+        except queue.Empty:
+            logger.info("Unable to get data.")
+            raise StopIteration
 
     def get_flow_fields_shape(self) -> tuple[int, ...]:
         """Return the shape of the flow fields from the underlying scheduler.
@@ -190,6 +170,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
 
         # Reinitialize the scheduler and start the thread
         self.scheduler.reset()
+        self._t = 0
         self._started = False
         self._stop_event.clear()
         self._queue = queue.Queue(maxsize=self.buffer_size)
@@ -245,7 +226,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
             # return 1 if not episodic... never ending ;)
             return 1
-        return self.scheduler.steps_remaining()
+        return self.scheduler.episode_length - self._t
 
     def next_episode(self, join_timeout: float = 2.0) -> None:
         """Flush the current episode and prepare for the next one.
@@ -277,6 +258,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
                 discarded += 1
         
         self.scheduler.next_episode()
+        self._t = 0
 
     @property
     def episode_length(self) -> int:

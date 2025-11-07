@@ -97,7 +97,7 @@ def test_single_producer_thread_across_episodes():
 
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=4)
 
-    it = iter(pf)  # start producer
+    pf.get_batch(1)  # start the thread
     time.sleep(0.1)  # let it prefetch a bit
 
     first_ident = pf._thread.ident
@@ -108,7 +108,7 @@ def test_single_producer_thread_across_episodes():
         # consume up to two steps in the episode
         for __ in range(2):
             try:
-                next(it)
+                pf.get_batch(1)
             except StopIteration:
                 break
 
@@ -126,23 +126,12 @@ def test_single_producer_thread_across_episodes():
 
     pf.shutdown()
 
-
-def test_iter_and_next():
-    scheduler = MinimalScheduler()
-    pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=2, buffer_size=2)
-
-    pf_iter = iter(pf)
-    batch = next(pf_iter)
-    assert batch.shape == (2, 8, 8, 2)
-    pf.shutdown()
-
-
 def test_stop_iteration_from_queue_empty():
     scheduler = MinimalScheduler(total_batches=0)
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=2)
 
     with pytest.raises(StopIteration):
-        next(iter(pf))
+        pf.get_batch(2)
     pf.shutdown()
 
 
@@ -150,7 +139,7 @@ def test_worker_eos_signal_when_queue_full():
     scheduler = MinimalScheduler(total_batches=0)
 
     pf = PrefetchingFlowFieldScheduler(scheduler=scheduler, batch_size=1, buffer_size=1)
-    iter(pf)  # Starts the thread
+    pf.get_batch(1)  # Starts the thread
 
     # Wait until EOS is in queue or timeout
     for _ in range(20):
@@ -161,7 +150,7 @@ def test_worker_eos_signal_when_queue_full():
         pytest.fail("Timeout waiting for worker to produce EOS.")
 
     with pytest.raises(StopIteration):
-        next(pf)
+        pf.get_batch(1)
     pf.shutdown()
 
 
@@ -181,7 +170,7 @@ def test_next_episode_resets_thread_and_flushes_queue():
     scheduler = MinimalEpisodic(total_batches=5)
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1, buffer_size=5)
 
-    next(iter(pf))  # start thread
+    pf.get_batch(1) # start the thread
     time.sleep(0.2)  # allow prefetch
 
     pf.scheduler._t = 3 # type: ignore[attr-defined]
@@ -205,6 +194,7 @@ def test_t_counter_wraps_after_episode():
 
     print(f"Initial t: {pf.scheduler._t}")  # type: ignore[attr-defined]
     pf.get_batch(1) # _t becomes 1
+    print(f"Initial t: {pf.scheduler._t}")  # type: ignore[attr-defined]
     assert pf.scheduler._t == 1  # type: ignore[attr-defined]
     print(f"t after 1st get_batch: {pf.scheduler._t}")  # type: ignore[attr-defined]
     pf.get_batch(1) # _t becomes 2
@@ -245,9 +235,8 @@ def test_next_episode_flushes_remaining_and_restarts():
     scheduler = MinimalEpisodic(total_batches=TOTAL_BATCHES)
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1, buffer_size=5)
 
-    it = iter(pf)
     for _ in range(3):
-        next(it)
+        pf.get_batch(1)
 
     assert pf.steps_remaining() == TOTAL_BATCHES - 3
 
@@ -270,8 +259,7 @@ def test_reset_stops_thread_and_clears_queue():
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=3)
 
     # prime the queue with two prefetched batches
-    it = iter(pf)
-    next(it)
+    _ = pf.get_batch(1)
     for _ in range(40):
         if not pf._queue.empty():
             break
@@ -296,7 +284,6 @@ def test_worker_handles_full_queue_on_eos():
     # but EOS is already injected via the queue.Full branch.
     pf.get_batch(1)
 
-    # next() must now raise StopIteration coming from the sentinel None.
     with pytest.raises(StopIteration):
         pf.get_batch(1)
 
@@ -429,7 +416,7 @@ def test_next_raises_stop_iteration_when_queue_empty(monkeypatch):
 
     # Iteration must now fail with StopIteration via the Empty-queue branch.
     with pytest.raises(StopIteration):
-        next(iter(pf))
+        pf.get_batch(1)
 
     pf.shutdown()
 
@@ -539,6 +526,6 @@ def test_worker_eos_signal_via_full_queue_branch_direct():
 
     # 5) And consuming it via __next__ raises StopIteration.
     with pytest.raises(StopIteration):
-        next(pf)
+        pf.get_batch(1)
 
     pf.shutdown()
