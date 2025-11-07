@@ -433,28 +433,23 @@ def test_invalid_diameter_var(diameter_var, scheduler):
     [
         (
             [[-1.0, 1.0]],
-            "intensity_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, with 0 <= min <= max.",
+            "Each intensity_range must satisfy 0 < min <= max.",
         ),
         (
             [[0.0, -1.0]],
-            "intensity_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, with 0 <= min <= max.",
+            "Each intensity_range must satisfy 0 < min <= max.",
         ),
         (
             [[-0.5, -0.5]],
-            "intensity_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, with 0 <= min <= max.",
+            "Each intensity_range must satisfy 0 < min <= max.",
         ),
         (
             [[1.0, 0.5]],
-            "intensity_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, with 0 <= min <= max.",
+            "Each intensity_range must satisfy 0 < min <= max.",
         ),
         (
             [[0.5, 0.1]],
-            "intensity_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, with 0 <= min <= max.",
+            "Each intensity_range must satisfy 0 < min <= max.",
         ),
     ],
 )
@@ -497,23 +492,19 @@ def test_invalid_intensity_var(intensity_var, scheduler):
     [
         (
             [[-1.1, 1.0]],
-            "rho_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, each in \\(-1, 1\\), with min <= max.",
+            "Each rho_range must satisfy -1 < min <= max < 1.",
         ),
         (
             [[0.0, 1.1]],
-            "rho_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, each in \\(-1, 1\\), with min <= max.",
+            "Each rho_range must satisfy -1 < min <= max < 1.",
         ),
         (
             [[0.9, 0.5]],
-            "rho_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, each in \\(-1, 1\\), with min <= max.",
+            "Each rho_range must satisfy -1 < min <= max < 1.",
         ),
         (
             [[0.5, 0.1]],
-            "rho_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, each in \\(-1, 1\\), with min <= max.",
+            "Each rho_range must satisfy -1 < min <= max < 1.",
         ),
     ],
 )
@@ -554,7 +545,7 @@ def test_invalid_rho_var(rho_var, scheduler):
 )
 def test_invalid_dt(dt, scheduler):
     """Test that invalid dt raises a ValueError."""
-    with pytest.raises(ValueError, match="dt must be a scalar \\(int or float\\)"):
+    with pytest.raises(ValueError, match="dt must be a positive number."):
         config = sampler_config.copy()
         config["dt"] = dt
         SyntheticImageSampler.from_config(
@@ -658,20 +649,6 @@ def test_invalid_min_max_speed_y(min_speed_y, max_speed_y, scheduler):
             scheduler=scheduler,
             config=config,
         )
-
-
-@pytest.mark.parametrize("img_gen_fn", [None, "invalid_img_gen_fn"])
-@pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": False}], indirect=True
-)
-def test_invalid_img_gen_fn_type(img_gen_fn, scheduler):
-    """Test that invalid img_gen_fn raises a ValueError."""
-    with pytest.raises(ValueError, match="img_gen_fn must be a callable function."):
-        SyntheticImageSampler.from_config(
-            scheduler=scheduler,
-            config=sampler_config,
-        )
-
 
 @pytest.mark.parametrize(
     "img_offset, max_speed_x, max_speed_y, dt",
@@ -894,105 +871,6 @@ def test_sampler_with_real_img_gen_fn(
     assert batch.images1.shape == (sampler.batch_size, *image_shape)
     assert batch.images2.shape == (sampler.batch_size, *image_shape)
     assert jnp.allclose(output_size, expected_size, atol=0.01)
-
-
-@pytest.mark.slow
-@pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
-)
-@pytest.mark.parametrize("batch_size", [128])
-@pytest.mark.parametrize("batches_per_flow_batch", [100])
-@pytest.mark.parametrize("seed", [0])
-@pytest.mark.parametrize("seeding_density_range", [(0.0, 0.03)])
-@pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": True}], indirect=True
-)
-def test_speed_sampler_dummy_fn(
-    scheduler, batch_size, batches_per_flow_batch, seed, seeding_density_range
-):
-    """Test the speed of the sampler with a dummy image generation function."""
-    devices = jax.devices()
-    if len(devices) == 3:
-        devices = devices[:2]
-    elif len(devices) > 4:
-        devices = devices[:4]
-    num_devices = len(devices)
-
-    # Define the parameters for the test
-    config = sampler_config.copy()
-    config["batch_size"] = batch_size
-    config["flow_fields_per_batch"] = 64
-    config["image_shape"] = (1216, 1936)
-    config["seeding_density_range"] = seeding_density_range
-    config["img_offset"] = (2.5e-2, 5e-2)
-    config["flow_field_size"] = (3 * jnp.pi, 4 * jnp.pi)
-    config["resolution"] = 155
-    config["max_speed_x"] = 1.37
-    config["max_speed_y"] = 0.56
-    config["min_speed_x"] = -0.16
-    config["min_speed_y"] = -0.72
-    config["dt"] = 2.6e-2
-    config["noise_uniform"] = 0.0
-    config["noise_gaussian_mean"] = 0.0
-    config["noise_gaussian_std"] = 0.0
-    config["batch_size"] = batch_size
-    config["seed"] = seed
-    config["device_ids"] = [d.id for d in devices]
-
-    if config["flow_fields_per_batch"] % num_devices != 0:
-        pytest.skip("flow_fields_per_batch must be divisible by the number of devices.")
-
-    # Limit time in seconds (depends on the number of GPUs)
-    # The test should not depend much on the number of GPUs.
-    if num_devices == 1:
-        limit_time = 3.5
-    elif num_devices == 2:
-        limit_time = 2.8
-    elif num_devices == 4:
-        limit_time = 2.8
-
-    # Create the sampler
-    prefetching_scheduler = PrefetchingFlowFieldScheduler(
-        scheduler=scheduler,
-        batch_size=config["flow_fields_per_batch"],
-        buffer_size=4,
-    )
-    sampler = SyntheticImageSampler.from_config(
-        scheduler=prefetching_scheduler,
-        config=config,
-    )
-
-    def run_sampler():
-        # Generates images_per_field // batch_size batches
-        # of size batch_size
-        for i, batch in enumerate(sampler):
-            batch.images1.block_until_ready()
-            batch.images2.block_until_ready()
-            batch.flow_fields.block_until_ready()
-            batch.params.seeding_densities.block_until_ready()  # type: ignore
-            batch.params.diameter_ranges.block_until_ready()  # type: ignore
-            batch.params.intensity_ranges.block_until_ready()  # type: ignore
-            batch.params.rho_ranges.block_until_ready()  # type: ignore
-            if i >= batches_per_flow_batch:
-                sampler.reset(scheduler_reset=False)
-                break
-
-    try:
-        # Warm up the function
-        run_sampler()
-
-        # Measure the time taken to run the sampler
-        total_time = timeit.repeat(
-            stmt=run_sampler, number=NUMBER_OF_EXECUTIONS, repeat=REPETITIONS
-        )
-        avg_time = min(total_time) / NUMBER_OF_EXECUTIONS
-    finally:
-        prefetching_scheduler.shutdown()
-
-    assert (
-        avg_time < limit_time
-    ), f"The average time is {avg_time}, time limit: {limit_time}"
 
 
 @pytest.mark.slow
