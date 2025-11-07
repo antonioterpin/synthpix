@@ -356,7 +356,7 @@ def test_reset_when_queue_empty_and_thread_not_started():
 
     # Ensure wrapper still works end-to-end
     batch = pf.get_batch(1)
-    assert batch.shape == (1,) + sched.shape
+    assert batch.flow_fields.shape == (1,) + sched.shape
     pf.shutdown()
 
 
@@ -370,7 +370,7 @@ def test_reset_then_next_episode_three_cycles(monkeypatch):
 
     # ---------------- Episode 1 ----------------
     first_batch = pf.get_batch(1)
-    assert first_batch.shape == (1,) + shape
+    assert first_batch.flow_fields.shape == (1,) + shape
     assert pf._t == 1  # type: ignore[attr-defined]
 
     pf.reset()
@@ -383,7 +383,7 @@ def test_reset_then_next_episode_three_cycles(monkeypatch):
     assert pf._t == 0 and pf._thread.is_alive()
 
     # Consume one batch
-    assert pf.get_batch(1).shape == (1,) + shape
+    assert pf.get_batch(1).flow_fields.shape == (1,) + shape
     assert pf._t == 1  # type: ignore[attr-defined]
     # Case when queue NOT empty
     pf.next_episode(join_timeout=1)  # flush unfinished episode
@@ -395,7 +395,7 @@ def test_reset_then_next_episode_three_cycles(monkeypatch):
 
     monkeypatch.setattr(pf._queue, "get_nowait", always_empty, raising=True)
     # Consume one batch so we are mid-episode again (_t == 1)
-    assert pf.get_batch(1).shape == (1,) + shape
+    assert pf.get_batch(1).flow_fields.shape == (1,) + shape
     assert pf._t == 1  # type: ignore[attr-defined]
     assert pf._thread.is_alive()
 
