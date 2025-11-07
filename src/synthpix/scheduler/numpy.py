@@ -45,7 +45,7 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
 
         Args:
             file_list: A list of (directories containing) .npy paths.
-            randomize: If True, shuffle file order per epoch.
+            randomize: If True, shuffle file order each reset.
             loop: If True, cycle indefinitely.
             include_images: If True, validate and return paired JPEG images.
             key: Random key for reproducibility.

@@ -108,7 +108,6 @@ def test_mat_scheduler_init_flags(mock_mat_files):
 
     assert scheduler.randomize is True
     assert scheduler.loop is True
-    assert scheduler.epoch == 0
     assert scheduler.index == 0
 
 

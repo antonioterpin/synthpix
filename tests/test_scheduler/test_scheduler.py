@@ -136,7 +136,6 @@ def test_numpy_scheduler_init_flags(mock_numpy_files):
 
     assert scheduler.randomize is True
     assert scheduler.loop is True
-    assert scheduler.epoch == 0
     assert scheduler.index == 0
 
 
@@ -219,8 +218,7 @@ def test_numpy_scheduler_loop_reset(mock_numpy_files):
     """Cover the branch where `index >= len(file_list)` and `loop is True`.
 
     We iterate twice through the same small dataset.  The first time the
-    pointer reaches the end of the list, the scheduler should call
-    `reset(reset_epoch=False)` and start a new epoch without raising StopIteration.
+    pointer reaches the end of the list, the scheduler should call `reset()`.
     """
     files, dims = mock_numpy_files
     scheduler = NumpyFlowFieldScheduler(
@@ -229,7 +227,6 @@ def test_numpy_scheduler_loop_reset(mock_numpy_files):
         randomize=False,
     )
 
-    # Read exactly two full epochs
     expected_total = len(files) * 2
     out_shapes = [
         scheduler.get_batch(1).flow_fields.shape 
@@ -242,8 +239,6 @@ def test_numpy_scheduler_loop_reset(mock_numpy_files):
     # Every returned flow must have the correct shape
     assert set(out_shapes) == {(1, dims["height"], dims["width"], 2)}
 
-    # After two complete epochs the internal index should be back at 0
-    # (because reset was called when the first epoch ended).
     assert scheduler.index == len(files)
 
 
@@ -351,7 +346,6 @@ def test_reset_calls_random_shuffle(monkeypatch, tmp_path):
 
     assert isinstance(sch.file_list, list)
     original = sch.file_list.copy()
-    sch.reset(reset_epoch=True)
 
     assert call_flag["called"]
     assert sch.file_list == list(reversed(original))
@@ -365,30 +359,6 @@ def test_directory_initialisation(tmp_path):
     assert len(scheduler) == 3
     # file_list must be sorted (the Base class guarantees this)
     assert scheduler.file_list == sorted(map(str, tmp_path.iterdir()))
-
-
-def test_reset_preserves_or_resets_epoch(tmp_path):
-    files = [tmp_path / f"file_{i}.dat" for i in range(2)]
-    for f in files:
-        f.write_text("x")
-
-    scheduler = DummyScheduler([str(f) for f in files], randomize=False, loop=False)
-
-    # simulate progress
-    scheduler.epoch = 7
-    scheduler.index = 1
-    scheduler._slice_idx = 1
-
-    # --- reset without touching epoch
-    scheduler.reset(reset_epoch=False)
-    assert scheduler.epoch == 7  # epoch untouched
-    assert scheduler.index == 0  # index rewound
-    assert scheduler._slice_idx == 0  # slice counter rewound
-
-    # --- reset with epoch reset
-    scheduler.epoch = 5
-    scheduler.reset(reset_epoch=True)
-    assert scheduler.epoch == 0
 
 
 def test_error_branch_skips_bad_file(tmp_path):
@@ -454,7 +424,6 @@ def test_loop_resets_and_continues_dummy(tmp_path):
     third = sch.get_batch(1)  # after reset → slice 0 again
 
     assert third.flow_fields.shape == (1, 4, 4, 2)
-    # internal state: back at first file, having emitted first slice of epoch 2
     assert sch.index == 0 and sch._slice_idx == 1
 
 
@@ -465,7 +434,6 @@ def test_flow_field_scheduler_init(randomize, loop, temp_file):
     scheduler = HDF5FlowFieldScheduler([temp_file], randomize, loop)
     assert scheduler.randomize is randomize
     assert scheduler.loop is loop
-    assert scheduler.epoch == 0
     assert scheduler.index == 0
     assert scheduler._slice_idx == 0
 
@@ -543,7 +511,6 @@ def test_scheduler_time(randomize, mock_hdf5_files):
                 _ = scheduler.get_batch(1)
             except StopIteration:
                 break
-        scheduler.epoch = 0
         scheduler.index = 0
         scheduler._slice_idx = 0
 

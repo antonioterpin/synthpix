@@ -136,11 +136,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         return self
 
     def reset(self) -> None:
-        """Resets the state and, optionally, epoch count.
-
-        Args:
-            reset_epoch: If True, resets the epoch counter to zero.
-        """
+        """Resets the state."""
         self.index = 0
         self._slice_idx = 0
         self._cached_data = None

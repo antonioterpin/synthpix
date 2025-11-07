@@ -34,7 +34,7 @@ class SchedulerProtocol(Protocol):
         ...
 
     def reset(self) -> None:
-        """Resets the state and, optionally, epoch count."""
+        """Resets the state."""
         ...
 
     @property
