@@ -231,14 +231,14 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             if images1 is not None:
                 images1 = np.pad(
                     images1,
-                    ((0, pad_size), (0, 0), (0, 0), (0, 0)),
+                    ((0, pad_size), (0, 0), (0, 0)),
                     mode="constant",
                     constant_values=0,
                 )
             if images2 is not None:
                 images2 = np.pad(
                     images2,
-                    ((0, pad_size), (0, 0), (0, 0), (0, 0)),
+                    ((0, pad_size), (0, 0), (0, 0)),
                     mode="constant",
                     constant_values=0,
                 )

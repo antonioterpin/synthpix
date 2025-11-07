@@ -475,7 +475,7 @@ def test_next_skip_on_error(tmp_path):
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
-def test_mat_scheduler_get_batch_too_large_raises_stopiteration(mock_mat_files, caplog):
+def test_mat_scheduler_get_batch_too_large_pads_correctly(mock_mat_files, caplog):
     """Ask for a batch that is larger than the number of remaining slices.
 
     Because loop=False, the scheduler should raise StopIteration.
@@ -490,8 +490,16 @@ def test_mat_scheduler_get_batch_too_large_raises_stopiteration(mock_mat_files, 
 
     batch_size = len(files) + 3  # deliberately larger than the dataset
 
-    with pytest.raises(StopIteration):
-        scheduler.get_batch(batch_size)
+    batch = scheduler.get_batch(batch_size)
+    assert batch.mask is not None
+    assert np.sum(batch.mask) == len(files)  # only 'len(files)' valid entries
+    assert batch.flow_fields.shape == (batch_size, 256, 256, 2)
+    assert batch.images1 is not None
+    assert batch.images2 is not None
+    assert batch.images1.shape == (batch_size, 256, 256)
+    assert batch.images2.shape == (batch_size, 256, 256)
+    assert batch.flow_fields[len(files) :, ...].sum() == 0.0  # padded entries are zeroed out
+    
 
 
 def test_hdf5_recursive_group(monkeypatch, tmp_path):
