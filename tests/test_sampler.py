@@ -15,6 +15,7 @@ from synthpix.scheduler import (
     PrefetchingFlowFieldScheduler,
 )
 from synthpix.scheduler.base import BaseFlowFieldScheduler
+from synthpix.scheduler.protocol import EpisodicSchedulerProtocol
 from synthpix.types import ImageGenerationSpecification, SchedulerData
 from synthpix.utils import load_configuration
 
@@ -1258,14 +1259,18 @@ class _BaseDummy(BaseFlowFieldScheduler):
         return cls()
 
 
-class EpisodicDummy(_BaseDummy):
+class EpisodicDummy(_BaseDummy, EpisodicSchedulerProtocol):
     """Implements the full episodic API."""
 
     def __init__(self, episode_length=3):
-        self.episode_length = episode_length
+        self._episode_length = episode_length
         self._step = 0
         self.reset_called = False
         self.shutdown_called = False
+
+    @property
+    def episode_length(self):
+        return self._episode_length
 
     # ---------- RealImageSampler hooks ---------------------------------
     def steps_remaining(self):

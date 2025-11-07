@@ -3,8 +3,6 @@
 import queue
 import threading
 import time
-from typing_extensions import Self
-import numpy as np
 
 from goggles import get_logger
 
