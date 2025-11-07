@@ -211,6 +211,8 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
                 batch.append(scheduler_data)
             except StopIteration:
                 break
+        if len(batch) == 0:
+            raise StopIteration
         if len(batch) < batch_size and not self.loop:
             mask = np.zeros((batch_size,), dtype=bool)
             mask[: len(batch)] = True
@@ -218,7 +220,6 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         logger.debug(f"Loaded batch of {len(batch)} flow field slices.")
 
         images1, images2 = None, None
-        print([data.images1 for data in batch])
         if all(data.images1 is not None for data in batch):
             images1 = np.stack([data.images1 for data in batch])
         if all(data.images2 is not None for data in batch):
