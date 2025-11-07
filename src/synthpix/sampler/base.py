@@ -82,6 +82,7 @@ class Sampler(ABC):
                 "Episode ended. No more flow fields available. "
                 "Use next_episode() to continue."
             )
+        print("Called __next__")
 
         batch = self._get_next()
 
@@ -111,7 +112,9 @@ class Sampler(ABC):
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
             raise AttributeError("Underlying scheduler lacks next_episode() method.")
-
+        print("Called next_episode()")
+        print("About to call scheduler.next_episode()")
+        print(f"Scheduler class: {self.scheduler.__class__.__name__}")
         self.scheduler.next_episode()
 
         return next(self)

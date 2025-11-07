@@ -11,7 +11,7 @@ import goggles as gg
 
 from synthpix.utils import discover_leaf_dirs, SYNTHPIX_SCOPE
 from synthpix.types import PRNGKey, SchedulerData
-from synthpix.scheduler.protocol import EpisodicSchedulerProtocol, SchedulerProtocol
+from synthpix.scheduler.protocol import EpisodeEnd, EpisodicSchedulerProtocol, SchedulerProtocol
 
 logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -152,7 +152,7 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         if self._t >= self.episode_length:
             # If we’ve exhausted the current horizon,
             # wait for the next episode
-            raise StopIteration
+            raise EpisodeEnd
 
         self._t += 1
 
@@ -204,6 +204,7 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         This method is useful when you want to skip to the next episode
         without waiting for the current episode to finish.
         """
+        print("Called next_episode()")
         self._sample_new_episodes()
         self._t = 0
 

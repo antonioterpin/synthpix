@@ -121,6 +121,10 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         while not self._stop_event.is_set():
             try:
                 batch = self.scheduler.get_batch(self.batch_size)
+            except EpisodeEnd as e:
+                assert isinstance(self.scheduler, EpisodicSchedulerProtocol)
+                self.scheduler.next_episode()
+                continue
             except StopIteration:
                 # Intended behavior here:
                 # I called get_batch() and ran into a StopIteration,
@@ -254,6 +258,8 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             # do nothing if not episodic
             return
         
+        print("Called next_episode() in prefetching scheduler")
+        print(f"steps remaining before next_episode(): {self.steps_remaining()}")
         if self._started and self.steps_remaining() > 0:
             to_discard = self.steps_remaining()
             discarded = 0
@@ -270,7 +276,6 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
                     break
                 discarded += 1
         
-        self.scheduler.next_episode()
         self._t = 0
 
         self._start_worker()
