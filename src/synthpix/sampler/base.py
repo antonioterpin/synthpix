@@ -8,6 +8,11 @@ from goggles import get_logger
 
 from synthpix.utils import SYNTHPIX_SCOPE
 from synthpix.types import SynthpixBatch
+from synthpix.scheduler.protocol import (
+    SchedulerProtocol,
+    EpisodicSchedulerProtocol,
+    PrefetchedSchedulerProtocol
+)
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -22,7 +27,7 @@ class Sampler(ABC):
         Returns: The next batch of data as a SynthpixBatch instance.
         """
 
-    def __init__(self, scheduler, batch_size: int = 1):
+    def __init__(self, scheduler: SchedulerProtocol, batch_size: int = 1):
         """Initialize the sampler.
 
         Args:
@@ -40,12 +45,11 @@ class Sampler(ABC):
 
         self.scheduler = scheduler
         self.batch_size = batch_size
-        self._episodic = False
 
-        self._episodic = hasattr(scheduler, "episode_length")
+        episodic = isinstance(self.scheduler, EpisodicSchedulerProtocol)
         logger.info(
             "The underlying scheduler is "
-            f"{'' if self._episodic else 'not'} episodic."
+            f"{'' if episodic else 'not'} episodic."
         )  # pragma: no cover
 
         self.batch_size = batch_size
@@ -61,7 +65,7 @@ class Sampler(ABC):
         """Shutdown the sampler."""
         logger.info(f"Shutting down {self.__class__.__name__}.")
         self._shutdown()
-        if hasattr(self.scheduler, "shutdown"):
+        if isinstance(self.scheduler, PrefetchedSchedulerProtocol):
             self.scheduler.shutdown()
         logger.info(f"{self.__class__.__name__} shutdown complete.")
 
@@ -74,7 +78,10 @@ class Sampler(ABC):
 
         Returns: The next batch of data as a SynthpixBatch instance.
         """
-        if self._episodic and self.scheduler.steps_remaining() == 0:
+        if (
+            isinstance(self.scheduler, EpisodicSchedulerProtocol)
+            and self.scheduler.steps_remaining() == 0
+        ):
             raise IndexError(
                 "Episode ended. No more flow fields available. "
                 "Use next_episode() to continue."
@@ -82,7 +89,7 @@ class Sampler(ABC):
 
         batch = self._get_next()
 
-        if self._episodic:
+        if isinstance(self.scheduler, EpisodicSchedulerProtocol):
             done = self._make_done()
             batch = batch.update(done=done)
 
@@ -106,7 +113,7 @@ class Sampler(ABC):
 
         Returns: The first batch of the next episode.
         """
-        if not hasattr(self.scheduler, "next_episode"):
+        if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
             raise AttributeError(
                 "Underlying scheduler lacks next_episode() method."
             )
@@ -117,7 +124,7 @@ class Sampler(ABC):
 
     def _make_done(self) -> jnp.ndarray:
         """Return a `(batch_size,)` bool array if episodic, else None."""
-        if not self._episodic:
+        if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
             raise NotImplementedError(
                 "The underlying scheduler is not episodic."
             )

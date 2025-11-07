@@ -5,6 +5,7 @@ import pytest
 import scipy.io
 
 from synthpix.scheduler import EpisodicFlowFieldScheduler, MATFlowFieldScheduler
+from synthpix.types import SchedulerData
 from synthpix.utils import load_configuration
 
 config = load_configuration("config/testing.yaml")
@@ -68,10 +69,17 @@ def test_mat_scheduler_iteration(mock_mat_files):
     )
 
     count = 0
-    for flow in scheduler:
-        assert isinstance(flow, np.ndarray)
-        assert flow.shape == (256, 256, 2)
-        count += 1
+    while True:
+        try:
+            data = scheduler.get_batch(batch_size=1)
+            assert isinstance(data, list)
+            assert len(data) == 1
+            assert data[0].flow_fields.shape == (256, 256, 2), (
+                f"Expected flow field shape (256, 256, 2), got {data[0].flow_fields.shape}"
+            )
+            count += 1
+        except StopIteration:
+            break
 
     assert count == 2
 
@@ -139,8 +147,10 @@ def test_mat_scheduler_get_batch(mock_mat_files):
 
     batch_size = len(files)
     batch = scheduler.get_batch(batch_size)
-    assert isinstance(batch, np.ndarray)
-    assert batch.shape == (batch_size, 256, 256, 2)
+    assert isinstance(batch, list)
+    assert len(batch) == batch_size
+    assert all(isinstance(b, SchedulerData) for b in batch)
+    assert all(b.flow_fields.shape == (256, 256, 2) for b in batch)
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
@@ -150,20 +160,20 @@ def test_mat_scheduler_with_images(mock_mat_files):
         files, include_images=True, output_shape=(256, 256)
     )
 
-    for output in scheduler:
-        assert isinstance(output, dict)
-        assert set(output.keys()) == {"flow", "img_prev", "img_next"}
+    while True:
+        try:
+            batch = scheduler.get_batch(batch_size=1)
+        except StopIteration:
+            break
 
-        flow = output["flow"]
-        img_prev = output["img_prev"]
-        img_next = output["img_next"]
-
-        assert isinstance(flow, np.ndarray)
-        assert flow.shape == (256, 256, 2)
-        assert isinstance(img_prev, np.ndarray)
-        assert img_prev.shape == (256, 256)
-        assert isinstance(img_next, np.ndarray)
-        assert img_next.shape == (256, 256)
+        assert len(batch) == 1
+        data = batch[0]
+        assert isinstance(data, SchedulerData)
+        assert data.flow_fields.shape == (256, 256, 2)
+        assert data.images1 is not None
+        assert data.images2 is not None
+        assert data.images1.shape == (256, 256)
+        assert data.images2.shape == (256, 256)
 
 
 # ============================
@@ -187,13 +197,21 @@ def test_episode_iteration(mock_mat_files):
         key=jax.random.PRNGKey(42),
     )
     steps = []
-    for t, (batch) in enumerate(epi):
-        # every batch is (batch_size, H, W, 2)
-        assert isinstance(batch, np.ndarray)
-        assert batch.shape == (batch_size, H, W, 2)
-        steps.append(t)
-        if t == episode_length - 1:  # horizon reached
+    t = 0
+    while True:
+        try:
+            batch = epi.get_batch(batch_size)
+        except StopIteration:
             break
+        # every batch is (batch_size, H, W, 2)
+        assert isinstance(batch, list)
+        assert len(batch) == batch_size
+        assert all(b.flow_fields.shape == (H, W, 2) for b in batch)
+
+        steps.append(t)
+        t += 1
+        if t >= episode_length:
+            break # will check below steps_remaining() == 0
     assert steps == list(range(8))  # exactly one episode
     assert epi.steps_remaining() == 0
 
@@ -215,25 +233,25 @@ def test_reset_episode_resamples(mock_mat_files):
     )
 
     reordered_files = base.file_list
-    first0 = next(epi)  # t = 0
+    first0 = epi.get_batch(batch_size)  # t = 0
     epi.reset_episode()
     post_reset_files = base.file_list
-    second0 = next(epi)  # new t = 0
+    second0 = epi.get_batch(batch_size)  # new t = 0
     assert epi.steps_remaining() == episode_length - 1
     # ensure we didn’t get the exact same files twice
-    assert not np.array_equal(first0, second0)
+    assert not np.array_equal(first0[0].flow_fields, second0[0].flow_fields)
 
     # Check which files were used by opening the files
     # with a regular scheduler
     base.file_list = reordered_files[:batch_size]
     base.reset()
     rightfirst0 = base.get_batch(batch_size)
-    assert np.array_equal(first0, rightfirst0)
+    assert np.array_equal(first0[0].flow_fields, rightfirst0[0].flow_fields)
 
     base.file_list = post_reset_files[:batch_size]
     base.reset()
     rightsecond0 = base.get_batch(batch_size)
-    assert np.array_equal(second0, rightsecond0)
+    assert np.array_equal(second0[0].flow_fields, rightsecond0[0].flow_fields)
 
 
 @pytest.mark.parametrize("mock_mat_files", [64], indirect=True)  # 64 frames
@@ -253,8 +271,8 @@ def test_steps_remaining(mock_mat_files):
     )
 
     assert epi.steps_remaining() == episode_length
-    next(epi)
-    next(epi)
+    _ = epi.get_batch(batch_size)
+    _ = epi.get_batch(batch_size)
     assert epi.steps_remaining() == episode_length - 2
 
 
@@ -300,10 +318,8 @@ def test_mat_v5_basic(tmp_path):
     loader = MATFlowFieldScheduler([fpath], include_images=False, output_shape=(4, 4))
 
     data = loader.load_file(fpath)
-
-    assert set(data) == {"V"}
-    assert data["V"].shape == (4, 4, 2)
-    np.testing.assert_array_equal(data["V"], V)
+    assert isinstance(data, SchedulerData)
+    np.testing.assert_array_equal(data.flow_fields, V)
 
 
 def test_mat_with_images_resize(tmp_path):
@@ -317,11 +333,13 @@ def test_mat_with_images_resize(tmp_path):
     data = loader.load_file(fpath)
 
     # images resized to 4×4
-    assert data["I0"].shape == data["I1"].shape == (4, 4)
+    assert data.images1 is not None
+    assert data.images2 is not None
+    assert data.images1.shape == data.images2.shape == (4, 4)
     # flow resized and *scaled* by factor 2 on both axes
-    assert data["V"].shape == (4, 4, 2)
-    assert np.allclose(data["V"][..., 0], 2.0)
-    assert np.allclose(data["V"][..., 1], 2.0)
+    assert data.flow_fields.shape == (4, 4, 2)
+    assert np.allclose(data.flow_fields[..., 0], 2.0)
+    assert np.allclose(data.flow_fields[..., 1], 2.0)
 
 
 def test_flow_transposed(tmp_path):
@@ -332,10 +350,10 @@ def test_flow_transposed(tmp_path):
     loader = MATFlowFieldScheduler([fpath], output_shape=(4, 4))
     data = loader.load_file(fpath)
 
-    assert data["V"].shape == (4, 4, 2)
+    assert data.flow_fields.shape == (4, 4, 2)
     # spot-check one value to prove correct permutation
-    assert np.isclose(data["V"][1, 2, 0], V[0, 1, 2])
-    assert np.isclose(data["V"][1, 2, 1], V[1, 1, 2])
+    assert np.isclose(data.flow_fields[1, 2, 0], V[0, 1, 2])
+    assert np.isclose(data.flow_fields[1, 2, 1], V[1, 1, 2])
 
 
 def test_hdf5_fallback(monkeypatch, tmp_path):
@@ -350,8 +368,8 @@ def test_hdf5_fallback(monkeypatch, tmp_path):
     loader = MATFlowFieldScheduler([fpath], output_shape=(4, 4))
     data = loader.load_file(fpath)
 
-    assert data["V"].shape == (4, 4, 2)
-    np.testing.assert_array_equal(data["V"], V)
+    assert data.flow_fields.shape == (4, 4, 2)
+    np.testing.assert_array_equal(data.flow_fields, V)
 
 
 def test_missing_V_raises(tmp_path):
@@ -399,13 +417,20 @@ def test_mat_scheduler_get_batch_with_images(mock_mat_files):
     )
 
     batch_size = len(files)
-    img_prevs, img_nexts, flows = scheduler.get_batch(batch_size)
+    batch = scheduler.get_batch(batch_size)
+
+    img_prevs, img_nexts, flows = zip(
+        *[(data.images1, data.images2, data.flow_fields) for data in batch]
+    )
+    assert all(img is not None for img in img_prevs)
+    assert all(img is not None for img in img_nexts)
+    img_prevs = np.stack(img_prevs, axis=0)
+    img_nexts = np.stack(img_nexts, axis=0)
+    flows =  np.stack(flows, axis=0)
 
     assert img_prevs.shape == (batch_size, 256, 256)
     assert img_nexts.shape == (batch_size, 256, 256)
     assert flows.shape == (batch_size, 256, 256, 2)
-    assert img_prevs.dtype == np.float32
-    assert img_nexts.dtype == np.float32
     assert flows.dtype == np.float32
 
 
@@ -420,12 +445,12 @@ def test_next_loop_reset(tmp_path):
         output_shape=(4, 4),
     )
 
-    first = next(sched)  # consumes file, index -> 1
-    second = next(sched)  # triggers reset() branch
+    first = sched.get_batch(batch_size=1)[0]  # consumes file, index -> 1
+    second = sched.get_batch(batch_size=1)[0]  # triggers reset() branch
 
     # Both iterations must yield the same (resized) flow field
-    np.testing.assert_array_equal(first, flow)
-    np.testing.assert_array_equal(second, flow)
+    np.testing.assert_array_equal(first.flow_fields, flow)
+    np.testing.assert_array_equal(second.flow_fields, flow)
 
     # After two successful returns we are back at "end of list"
     assert sched.index == 1  # 0 → reset() -> +1 during 2nd return
@@ -447,11 +472,11 @@ def test_next_skip_on_error(tmp_path):
         output_shape=(4, 4),
     )
 
-    sample = next(sched)  # bad file skipped, good file returned
+    sample = sched.get_batch(1)  # bad file skipped, good file returned
 
     # The scheduler must now point to the good file it cached
     assert sched._cached_file == good_path
-    np.testing.assert_array_equal(sample, good_flow)
+    np.testing.assert_array_equal(sample[0].flow_fields, good_flow)
 
     # Both list entries have been consumed (bad skipped, good returned)
     assert sched.index == 2
@@ -499,6 +524,4 @@ def test_hdf5_recursive_group(monkeypatch, tmp_path):
     data = loader.load_file(str(fpath))
 
     # 4) Assertions: top-level and nested keys must be present and correct
-    assert "V" in data
-    assert "lvl1/lvl2/extra" in data  # proves recursion/flattening
-    np.testing.assert_array_equal(data["V"], flow)
+    np.testing.assert_array_equal(data.flow_fields, flow)

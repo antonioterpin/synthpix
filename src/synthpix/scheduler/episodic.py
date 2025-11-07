@@ -11,14 +11,16 @@ import numpy as np
 import goggles as gg
 
 from synthpix.utils import discover_leaf_dirs, SYNTHPIX_SCOPE
-from synthpix.types import PRNGKey
+from synthpix.types import PRNGKey, SchedulerData
 from synthpix.scheduler.base import BaseFlowFieldScheduler
-from synthpix.scheduler.protocol import SchedulerProtocol
+from synthpix.scheduler.protocol import (
+    EpisodicSchedulerProtocol
+)
 
 logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
-class EpisodicFlowFieldScheduler(SchedulerProtocol):
+class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
     """Wrapper that serves flow-field *episodes* in parallel batches.
 
     The wrapper rearranges the ``file_list`` of an underlying
@@ -114,26 +116,7 @@ class EpisodicFlowFieldScheduler(SchedulerProtocol):
         self._t = 0
         return self
 
-    def __next__(self) -> np.ndarray:
-        """Return one time-step of shape ``(batch_size, ...)``.
-
-        Returns:
-            batch: A `(batch_size, ...)` tensor that holds one
-                flow-field per episode.
-        """
-        # If we’ve exhausted the current horizon, start fresh episodes
-        if self._t >= self.episode_length:
-            self.next_episode()
-
-        self._t += 1
-
-        batch = self.scheduler.get_batch(self.batch_size)
-
-        logger.debug("__next__() called, returning batch of shape {batch.shape}")
-        logger.debug(f"timestep: {self._t}")
-        return batch
-
-    def get_batch(self, batch_size: int) -> np.ndarray:
+    def get_batch(self, batch_size: int) -> list[SchedulerData]:
         """Return exactly one time-step for `batch_size` parallel episodes.
 
         *Does not* loop internally, we delegate to the wrapped base
@@ -146,7 +129,18 @@ class EpisodicFlowFieldScheduler(SchedulerProtocol):
                 f"{self.batch_size}"
             )
         logger.debug(f"get_batch() called with batch_size {batch_size}")
-        return next(self)
+        
+        # If we’ve exhausted the current horizon, start fresh episodes
+        if self._t >= self.episode_length:
+            self.next_episode()
+
+        self._t += 1
+
+        batch = self.scheduler.get_batch(batch_size)
+
+        logger.debug(f"timestep: {self._t}")
+        return batch
+
 
     def __len__(self) -> int:
         """Return the episode length.

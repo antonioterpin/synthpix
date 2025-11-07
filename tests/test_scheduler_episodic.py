@@ -54,9 +54,12 @@ def test_invalid_batch_size_in_get_batch(invalid_batch_size, mock_mat_files):
 @pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
 def test_steps_remaining(episode_length, mock_mat_files):
     files, dims = mock_mat_files
+    batch_size = 2
     H, W = dims["height"], dims["width"]
     base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
-    epi = EpisodicFlowFieldScheduler(base, batch_size=2, episode_length=episode_length)
+    epi = EpisodicFlowFieldScheduler(
+        base, batch_size=batch_size, episode_length=episode_length
+    )
     assert (
         epi.steps_remaining() == episode_length
     ), f"Expected {episode_length} steps remaining, got {epi.steps_remaining()}"
@@ -65,7 +68,7 @@ def test_steps_remaining(episode_length, mock_mat_files):
     ), f"Expected length {episode_length}, got {len(epi)}"
 
     for _ in range(episode_length):
-        next(epi)
+        _ = epi.get_batch(batch_size=batch_size)
     assert epi.steps_remaining() == 0, (
         f"Expected 0 steps remaining after {episode_length} iterations, "
         f"got {epi.steps_remaining()}"

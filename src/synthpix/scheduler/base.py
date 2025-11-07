@@ -135,7 +135,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         if reset_epoch:
             logger.info("Scheduler state has been reset.")
 
-    def __next__(self):
+    def _get_next(self):
         """Returns the next flow field slice from the dataset.
 
         Returns: A single flow field slice.
@@ -157,7 +157,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
                 # extract and return
                 sample = self.get_next_slice()
                 self.index += 1
-                yield sample
+                return sample
 
             except Exception as e:
                 logger.error(f"Skipping {path}: {e}")
@@ -182,8 +182,12 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
                 desired batch size and `loop` is set to False.
         """
         batch = []
-        for scheduler_data in it.islice(self, batch_size):
-            batch.append(scheduler_data)
+        for _ in range(batch_size):
+            try:
+                scheduler_data = self._get_next()
+                batch.append(scheduler_data)
+            except StopIteration:
+                break
         if len(batch) < batch_size and not self.loop:
             logger.warning(
                 f"Skipping the last {len(batch)} slices."

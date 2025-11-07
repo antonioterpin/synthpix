@@ -36,3 +36,30 @@ class SchedulerProtocol(Protocol):
             reset_epoch: If True, resets the epoch counter to zero.
         """
         ...
+
+@runtime_checkable
+class EpisodicSchedulerProtocol(SchedulerProtocol, Protocol):
+    """Protocol that needs to be followed by episodic schedulers."""
+
+    def steps_remaining(self) -> int:
+        """Returns the number of steps remaining in the current episode.
+
+        Returns: Number of steps remaining.
+        """
+        ...
+
+    def next_episode(self) -> None:
+        """Flush the current episode and prepare for the next one.
+
+        The scheduler should reset any internal state necessary for
+        starting a new episode.
+        """
+        ...
+
+@runtime_checkable
+class PrefetchedSchedulerProtocol(SchedulerProtocol, Protocol):
+    """Protocol that needs to be followed by prefetched schedulers."""
+
+    def shutdown(self) -> None:
+        """Shuts down any background processes or threads used for prefetching."""
+        ...

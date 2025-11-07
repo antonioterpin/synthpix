@@ -9,12 +9,15 @@ import numpy as np
 from goggles import get_logger
 
 from synthpix.utils import SYNTHPIX_SCOPE
-from synthpix.scheduler.protocol import SchedulerProtocol
+from synthpix.scheduler.protocol import (
+    SchedulerProtocol,
+    PrefetchedSchedulerProtocol
+)
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
-class PrefetchingFlowFieldScheduler(SchedulerProtocol):
+class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
     """Prefetching Wrapper around a FlowFieldScheduler.
 
     It asynchronously prefetches batches of flow fields using a
