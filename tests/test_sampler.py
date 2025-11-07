@@ -1150,7 +1150,9 @@ def test_index_error_if_no_next_episode(mock_mat_files):
         device_ids=[d.id for d in devices] if devices is not None else None,
     )
 
-    batch = sampler.next_episode()
+    sampler.next_episode()
+    batch = next(sampler)
+    assert batch is not None
     imgs1 = batch.images1
     done = batch.done
     assert done is not None
@@ -1163,7 +1165,7 @@ def test_index_error_if_no_next_episode(mock_mat_files):
         assert isinstance(imgs1, jnp.ndarray)
         assert done is not None
     with pytest.raises(
-        IndexError,
+        EpisodeEnd,
         match=re.escape(
             "Episode ended. No more flow fields available. "
             "Use next_episode() to continue."
