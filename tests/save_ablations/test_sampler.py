@@ -5,7 +5,6 @@ import jax
 import numpy as np
 import pytest
 
-from synthpix.data_generate import generate_images_from_flow
 from synthpix.sampler import SyntheticImageSampler
 from synthpix.scheduler import PrefetchingFlowFieldScheduler
 from synthpix.utils import load_configuration
@@ -102,7 +101,6 @@ def test_speed_sampler_sweep_all(
     )
     sampler = SyntheticImageSampler.from_config(
         scheduler=prefetching_scheduler,
-        img_gen_fn=generate_images_from_flow,
         config=config,
     )
 
@@ -111,13 +109,13 @@ def test_speed_sampler_sweep_all(
     def run_sampler():
         # Time the data sampling (batch_size batches)
         for i, batch in enumerate(sampler):
-            batch["images1"].block_until_ready()
-            batch["images2"].block_until_ready()
-            batch["flow_fields"].block_until_ready()
-            batch["params"]["seeding_densities"].block_until_ready()
-            batch["params"]["diameter_ranges"].block_until_ready()
-            batch["params"]["intensity_ranges"].block_until_ready()
-            batch["params"]["rho_ranges"].block_until_ready()
+            batch.images1.block_until_ready()
+            batch.images2.block_until_ready()
+            batch.flow_fields.block_until_ready()
+            batch.params.seeding_densities.block_until_ready() # type: ignore
+            batch.params.diameter_ranges.block_until_ready() # type: ignore
+            batch.params.intensity_ranges.block_until_ready() # type: ignore
+            batch.params.rho_ranges.block_until_ready() # type: ignore
             if i + 1 >= NUMBER_OF_EXECUTIONS:
                 sampler.reset(scheduler_reset=False)
                 break

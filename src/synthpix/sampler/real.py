@@ -48,9 +48,8 @@ class RealImageSampler(Sampler):
             images2=jnp.array(batch.images2, dtype=jnp.float32),
             flow_fields=jnp.array(batch.flow_fields, dtype=jnp.float32),
             params=None,
-            done=None,  # Done is handled in the Episodic wrapper if needed
+            done=None,
         )
-
         return batch
 
     @classmethod

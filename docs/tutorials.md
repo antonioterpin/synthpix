@@ -92,9 +92,9 @@ To check what we're generating you can run:
 sampler = synthpix.make(config_path)
 
 for i, batch in enumerate(sampler):
-    imgs1 = batch["images1"]
-    imgs2 = batch["images2"]
-    flows = batch["flow_fields"]
+    imgs1 = batch.images1
+    imgs2 = batch.images2
+    flows = batch.flow_fields
     print(f"{imgs1.shape=}") # shape (64, H, W)
     print(f"{imgs2.shape=}") # shape (64, H, W)
     print(f"{flows.shape=}") # shape (64, H, W, 2)
@@ -148,9 +148,9 @@ Now by just doing:
 sampler = synthpix.make("docs/examples/mat/config.yaml")
 
 for batch in sampler:
-    flows = batch["flow_fields"]
-    images1 = batch["imgs1"]
-    images2 = batch["imgs2"]
+    flows = batch.flow_fields
+    images1 = batch.images1
+    images2 = batch.images2
 ```
 
 you can load the images without any additional code.

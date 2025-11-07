@@ -3,11 +3,10 @@
 import queue
 import threading
 import time
-from typing_extensions import Self
-import numpy as np
 
 from goggles import get_logger
 
+from synthpix.types import SchedulerData
 from synthpix.utils import SYNTHPIX_SCOPE
 from synthpix.scheduler.protocol import (
     EpisodicSchedulerProtocol,
@@ -58,7 +57,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         self._started = False
         self._t = 0
 
-    def get_batch(self, batch_size: int) -> np.ndarray:
+    def get_batch(self, batch_size: int) -> SchedulerData:
         """Return the next batch from the prefetch queue.
 
         The batch matches the underlying scheduler's interface.

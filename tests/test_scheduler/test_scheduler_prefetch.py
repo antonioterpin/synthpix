@@ -7,6 +7,7 @@ import pytest
 
 from synthpix.scheduler import PrefetchingFlowFieldScheduler
 from synthpix.scheduler.protocol import EpisodicSchedulerProtocol, SchedulerProtocol
+from synthpix.types import SchedulerData
 
 
 class MinimalScheduler(SchedulerProtocol):
@@ -20,7 +21,9 @@ class MinimalScheduler(SchedulerProtocol):
         if self.count >= self.total:
             raise StopIteration
         self.count += 1
-        return np.ones((batch_size,) + self.shape)
+        return SchedulerData(
+            flow_fields=np.ones((batch_size,) + self.shape)
+        )
 
     def reset(self):
         self.count = 0
@@ -60,7 +63,9 @@ class MinimalEpisodic(EpisodicSchedulerProtocol):
             # you can either cycle or clamp; for tests, cycle is fine:
             self._t = 0
         self._t += 1
-        return np.ones((batch_size,) + self.shape)
+        return SchedulerData(
+            flow_fields=np.ones((batch_size,) + self.shape)
+        )
 
     def next_episode(self):
         self._t = 0
