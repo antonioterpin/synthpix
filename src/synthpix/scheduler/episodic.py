@@ -208,7 +208,6 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         This method is useful when you want to skip to the next episode
         without waiting for the current episode to finish.
         """
-        print("Called next_episode()")
         self._sample_new_episodes()
         self._t = 0
 

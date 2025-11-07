@@ -743,9 +743,6 @@ def test_invalid_flow_field_size_and_img_offset(
         f"{position_bounds[1] + position_bounds_offset[1]})."
     )
 
-    print("test: " + str(position_bounds_offset))
-    print(position_bounds)
-
     config = sampler_config.copy()
     config["flow_field_size"] = flow_field_size
     config["img_offset"] = img_offset
@@ -1073,11 +1070,9 @@ def test_stop_after_max_episodes(mock_mat_files):
         batch = next(sampler)
         imgs1 = batch.images1
         done = batch.done
-        print(f"done before while: {done}")
         assert done is not None
         n_batches += 1
         while not any(done):
-            print(f"  Batch {n_batches} in episode {i+1}")
             batch = next(sampler)
             imgs1 = batch.images1
             done = batch.done
@@ -1085,7 +1080,6 @@ def test_stop_after_max_episodes(mock_mat_files):
             assert imgs1[0].shape == (H, W)
             assert isinstance(imgs1, jnp.ndarray)
             n_batches += 1
-            print(f"  done: {done}")
             assert done is not None
 
     assert (

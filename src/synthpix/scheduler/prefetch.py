@@ -258,8 +258,6 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             # do nothing if not episodic
             return
 
-        print("Called next_episode() in prefetching scheduler")
-        print(f"steps remaining before next_episode(): {self.steps_remaining()}")
         if self._started and self.steps_remaining() > 0:
             to_discard = self.steps_remaining()
             discarded = 0

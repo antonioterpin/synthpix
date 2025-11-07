@@ -81,7 +81,6 @@ class Sampler(ABC):
                 "Episode ended. No more flow fields available. "
                 "Use next_episode() to continue."
             )
-        print("Called __next__")
 
         batch = self._get_next()
 
@@ -102,21 +101,17 @@ class Sampler(ABC):
             self.scheduler.reset()
         logger.debug(f"{self.__class__.__name__} has been reset.")
 
-    def next_episode(self) -> SynthpixBatch:
+    def next_episode(self) -> None:
         """Flush the current episode and return the first batch of the next one.
 
         The underlying scheduler is expected to be the prefetching scheduler.
-
-        Returns: The first batch of the next episode.
+        
+        Raises:
+            AttributeError: If the underlying scheduler does not support episodes.
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
             raise AttributeError("Underlying scheduler lacks next_episode() method.")
-        print("Called next_episode()")
-        print("About to call scheduler.next_episode()")
-        print(f"Scheduler class: {self.scheduler.__class__.__name__}")
         self.scheduler.next_episode()
-
-        return next(self)
 
     def _make_done(self) -> jnp.ndarray:
         """Return a `(batch_size,)` bool array if episodic, else None."""
