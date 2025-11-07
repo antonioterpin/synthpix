@@ -40,7 +40,7 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         if not all(file_path.endswith(".h5") for file_path in file_list):
             raise ValueError("All files must be HDF5 files with .h5 extension.")
 
-    def load_file(self, file_path: str) -> np.ndarray:
+    def load_file(self, file_path: str) -> SchedulerData:
         """Loads the dataset from the HDF5 file.
 
         Args:
@@ -55,7 +55,7 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
                 raise ValueError(f"Expected Dataset but got {type(dset)} for key '{dataset_key}' in {file_path}")
             data = dset[...]
             logger.debug(f"Loading file {file_path} with shape {data.shape}")
-        return data
+        return SchedulerData(flow_fields=data)
 
     def get_next_slice(self) -> SchedulerData:
         """Retrieves a flow field slice.
@@ -67,10 +67,10 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         """
         if self._cached_data is None:
             raise RuntimeError("No data is currently cached.")
-        data_slice = self._cached_data[:, self._slice_idx, :, :]
+        flow = self._cached_data.flow_fields[:, self._slice_idx, :, :]
 
         return SchedulerData(
-            flow_fields=data_slice,
+            flow_fields=flow,
         )
 
     def get_flow_fields_shape(self) -> tuple[int, int, int]:

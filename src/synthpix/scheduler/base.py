@@ -7,7 +7,7 @@ from typing_extensions import Self
 
 import jax
 import jax.numpy as jnp
-import numpy as np
+import itertools as it
 from goggles import get_logger
 
 from synthpix.utils import SYNTHPIX_SCOPE
@@ -129,7 +129,9 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             cpu = jax.devices("cpu")[0]
             file_list_indices = jnp.arange(len(self.file_list), device=cpu)
             file_list_indices = jax.random.permutation(shuffle_key, file_list_indices)
-            self.file_list = [self.file_list[i] for i in file_list_indices.tolist()]
+            self.file_list = [
+                self.file_list[i] for i in file_list_indices.tolist()
+            ]
         if reset_epoch:
             logger.info("Scheduler state has been reset.")
 
@@ -144,35 +146,22 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         while self.index < len(self.file_list) or self.loop:
             if self.index >= len(self.file_list):
                 self.reset(reset_epoch=False)
+                logger.info(f"Starting epoch {self.epoch}")
 
-            file_path = self.file_list[self.index]
-
+            path = self.file_list[self.index]
             try:
-                if self._cached_file != file_path:
-                    self._cached_data = self.load_file(file_path)
-                    self._cached_file = file_path
-                    self._slice_idx = 0
+                # load and cache
+                self._cached_file = path
+                self._cached_data = self.load_file(path)
 
-                assert self._cached_data is not None
-                if self._slice_idx >= self._cached_data.shape[1]:
-                    self.index += 1
-                    self._cached_file = None
-                    self._cached_data = None
-                    continue
-
-                scheduler_data = self.get_next_slice()
-                logger.debug(
-                    f"Loaded slice y={self._slice_idx} from {file_path}, "
-                    f"shape {scheduler_data.flow_fields.shape}"
-                )
-                self._slice_idx += 1
-                yield scheduler_data
+                # extract and return
+                sample = self.get_next_slice()
+                self.index += 1
+                yield sample
 
             except Exception as e:
-                logger.error(f"Error loading {file_path}: {e}")
+                logger.error(f"Skipping {path}: {e}")
                 self.index += 1
-                self._cached_data = None
-                self._cached_file = None
                 continue
 
         raise StopIteration
@@ -193,23 +182,21 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
                 desired batch size and `loop` is set to False.
         """
         batch = []
-        try:
-            for _ in range(batch_size):
-                batch.append(next(self))
-        except StopIteration:
-            if len(batch) > 0:
-                logger.warning(
-                    f"Skipping the last {len(batch)} slices. "
-                    "If undesired, use loop or a batch size dividing "
-                    "the number of slices in the dataset."
-                )
-            raise
+        for scheduler_data in it.islice(self, batch_size):
+            batch.append(scheduler_data)
+        if len(batch) < batch_size and not self.loop:
+            logger.warning(
+                f"Skipping the last {len(batch)} slices."
+                "If undesired, use loop or a batch size dividing "
+                "the number of slices in the dataset."
+            )
+            raise StopIteration
 
         logger.debug(f"Loaded batch of {len(batch)} flow field slices.")
         return batch
 
     @abstractmethod
-    def load_file(self, file_path: str) -> np.ndarray:
+    def load_file(self, file_path: str) -> SchedulerData:
         """Loads a file and returns the dataset for caching.
 
         Args:

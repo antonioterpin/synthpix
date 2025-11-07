@@ -10,7 +10,7 @@ from PIL import Image
 
 from .base import BaseFlowFieldScheduler
 from synthpix.utils import SYNTHPIX_SCOPE
-from synthpix.types import PRNGKey
+from synthpix.types import PRNGKey, SchedulerData
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -75,35 +75,43 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
                         f"Missing images for frame {t}: {prev_img}, {next_img}"
                     )
 
-    def load_file(self, file_path: str) -> np.ndarray:
+    def load_file(self, file_path: str) -> SchedulerData:
         """Load the raw flow array from .npy.
 
         Args:
             file_path: Path to the .npy file.
 
-        Returns: Loaded flow array.
+        Returns: Loaded SchedulerData.
         """
-        return np.load(file_path)
+        return SchedulerData(flow_fields=np.load(file_path))
 
-    def get_next_slice(self) -> np.ndarray | dict[str, np.ndarray]:
+    def get_next_slice(self) -> SchedulerData:
         """Return either the flow array or, if enabled, flow plus images.
 
         Returns:
             Either the flow array or a dictionary with flow and images.
         """
-        flow = self._cached_data
+        data = self._cached_data
+        if data is None or self._cached_file is None:
+            raise RuntimeError("No data is currently cached.")
+        
         if not self.include_images:
-            return flow
+            # Images are not loaded by default, but we ensure it nonetheless
+            return data.update(images1=None, images2=None)
 
         # load images on-demand
         mb = re.match(r"flow_(\d+)\.npy$", os.path.basename(self._cached_file))
+        if not mb:
+            raise ValueError(f"Bad filename: {self._cached_file}")
         t = int(mb.group(1))
         folder = os.path.dirname(self._cached_file)
         prev = np.array(
             Image.open(os.path.join(folder, f"img_{t-1}.jpg")).convert("RGB")
         )
-        nxt = np.array(Image.open(os.path.join(folder, f"img_{t}.jpg")).convert("RGB"))
-        return {"flow": flow, "img_prev": prev, "img_next": nxt}
+        nxt = np.array(
+            Image.open(os.path.join(folder, f"img_{t}.jpg")).convert("RGB")
+        )
+        return data.update(images1=prev, images2=nxt)
 
     def get_flow_fields_shape(self) -> tuple[int, ...]:
         """Return the shape of a single flow array.
@@ -111,34 +119,6 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         Returns: Shape of the flow array.
         """
         return np.load(self.file_list[0]).shape
-
-    def __next__(self) -> np.ndarray | dict[str, np.ndarray]:
-        """Iterate over .npy files, returning flow or flow+images.
-
-        Returns: Either the flow array or a dictionary with flow and images.
-        """
-        while self.index < len(self.file_list) or self.loop:
-            if self.index >= len(self.file_list):
-                self.reset(reset_epoch=False)
-                logger.info(f"Starting epoch {self.epoch}")
-
-            path = self.file_list[self.index]
-            try:
-                # load and cache
-                self._cached_file = path
-                self._cached_data = self.load_file(path)
-
-                # extract and return
-                sample = self.get_next_slice()
-                self.index += 1
-                return sample
-
-            except Exception as e:
-                logger.error(f"Skipping {path}: {e}")
-                self.index += 1
-                continue
-
-        raise StopIteration
 
     @classmethod
     def from_config(cls, config: dict) -> Self:

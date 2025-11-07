@@ -1,6 +1,5 @@
 """FlowFieldScheduler to load the flow field data from files."""
 
-import itertools as it
 from typing_extensions import Self
 import cv2
 import h5py
@@ -11,7 +10,7 @@ from PIL import Image
 
 from .base import BaseFlowFieldScheduler
 from synthpix.utils import SYNTHPIX_SCOPE
-from synthpix.types import PRNGKey
+from synthpix.types import PRNGKey, SchedulerData
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -88,7 +87,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         """
         return h5py.is_hdf5(path)
 
-    def load_file(self, file_path: str):
+    def load_file(self, file_path: str) -> SchedulerData:
         """Load any MATLAB .mat file (v4, v5/6/7, or v7.3) and return its data dict.
 
         Args:
@@ -171,106 +170,34 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             data["V"] = flow_resized
 
         logger.debug(f"Loaded {file_path} with keys {list(data.keys())}")
-        return data
+        return SchedulerData(
+            flow_fields=data["V"],
+            images1=data["I0"] if self.include_images else None,
+            images2=data["I1"] if self.include_images else None,
+        )
 
-    def get_next_slice(self) -> dict[str, np.ndarray]:
+    def get_next_slice(self) -> SchedulerData:
         """Retrieves the flow field slice and optionally the images.
 
         Returns:
-            Flow field with shape (X, Y, Z, 2) or
-            a dict containing the flow field and images.
+            SchedulerData containing the flow field and, if requested,
+            the previous and next images.
         """
         data = self._cached_data
-        flow_field = data["V"]
+        if data is None:
+            raise RuntimeError("No data is currently cached.")
 
         if not self.include_images:
-            return flow_field
+            data = data.update(images1=None, images2=None)
 
-        img_prev = data["I0"]
-        img_next = data["I1"]
-        return {"flow": flow_field, "img_prev": img_prev, "img_next": img_next}
+        return data
 
-    def get_flow_fields_shape(self) -> tuple[int, ...]:
+    def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Returns the shape of the flow field.
 
         Returns: Shape of the flow field.
         """
         return self.output_shape + (2,)
-
-    def __next__(self) -> dict[str, np.ndarray]:
-        """Iterate over .mat files, returning flow or flow+images.
-
-        Returns:
-            Flow field with shape (X, Y, Z, 2) or
-            a tuple (I0, I1, V) if `include_images` is True.
-        """
-        while self.index < len(self.file_list) or self.loop:
-            if self.index >= len(self.file_list):
-                self.reset(reset_epoch=False)
-                logger.info(f"Starting epoch {self.epoch}")
-
-            path = self.file_list[self.index]
-            try:
-                # load and cache
-                self._cached_file = path
-                self._cached_data = self.load_file(path)
-
-                # extract and return
-                sample = self.get_next_slice()
-                self.index += 1
-                return sample
-
-            except Exception as e:
-                logger.error(f"Skipping {path}: {e}")
-                self.index += 1
-                continue
-
-        raise StopIteration
-
-    def get_batch(
-        self, batch_size: int
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | np.ndarray:
-        """Retrieves a batch of flow fields using the current scheduler state.
-
-        Args:
-            batch_size: int
-                The number of flow fields to retrieve in the batch.
-
-        Returns:
-            A tuple containing:
-            - img_prevs: np.ndarray of previous images
-            - img_nexts: np.ndarray of next images
-            - flows: np.ndarray of flow fields
-            or, `include_images` is False, a batch of flow fields.
-
-        Raises:
-            StopIteration: If the iterator is fully exhausted.
-            Warning: If fewer slices than `batch_size` are available
-                and `loop` is False
-        """
-        if self.include_images:
-            batch = [
-                (s["flow"], s["img_prev"], s["img_next"])
-                for s in it.islice(self, batch_size)
-            ]
-
-            if len(batch) < batch_size and not self.loop:
-                logger.warning(
-                    f"Skipping the last {len(batch)} slices."
-                    "If undesired, use loop or a batch size dividing "
-                    "the number of slices in the dataset."
-                )
-                raise StopIteration
-
-            flows, img_prevs, img_nexts = zip(*batch)
-            return (
-                np.array(img_prevs, dtype=np.float32),
-                np.array(img_nexts, dtype=np.float32),
-                np.array(flows, dtype=np.float32),
-            )
-
-        else:
-            return super().get_batch(batch_size)
 
     @classmethod
     def from_config(cls, config: dict) -> Self:
