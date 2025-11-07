@@ -21,7 +21,7 @@ from synthpix.utils import (
     input_check_flow_field_adapter,
 )
 from synthpix.utils import SYNTHPIX_SCOPE
-from synthpix.scheduler.base import BaseFlowFieldScheduler
+from synthpix.scheduler.protocol import SchedulerProtocol
 from .base import Sampler
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
@@ -48,7 +48,7 @@ class SyntheticImageSampler(Sampler):
 
     def __init__(
         self,
-        scheduler: BaseFlowFieldScheduler,
+        scheduler: SchedulerProtocol,
         batches_per_flow_batch: int,
         flow_fields_per_batch: int,
         flow_field_size: tuple[float, float],
@@ -197,8 +197,8 @@ class SyntheticImageSampler(Sampler):
         # Use the scheduler to get the flow field shape
         flow_field_shape = scheduler.get_flow_fields_shape()
         if (
-            # not isinstance(flow_field_shape, tuple) or
-            # len(flow_field_shape) != 3 or
+            not isinstance(flow_field_shape, tuple) or
+            len(flow_field_shape) != 3 or
             (flow_field_shape[2] != 2 and flow_field_shape[2] != 3)
             or not all(isinstance(s, int) and s > 0 for s in flow_field_shape)
         ):
@@ -209,7 +209,9 @@ class SyntheticImageSampler(Sampler):
             )
         flow_field_shape = (flow_field_shape[0], flow_field_shape[1])
 
-        if resolution <= 0:
+        if (
+            not isinstance(resolution, (int, float)) or resolution <= 0
+        ):
             raise ValueError("resolution must be a positive number.")
         self.resolution = resolution
 
@@ -608,38 +610,39 @@ class SyntheticImageSampler(Sampler):
             histogram = None
 
         try:
+            gs = ImageGenerationSpecification(
+                batch_size=config["batch_size"],
+                image_shape=tuple(config["image_shape"]),
+                img_offset=tuple(config["img_offset"]),
+                seeding_density_range=tuple(config["seeding_density_range"]),
+                p_hide_img1=config["p_hide_img1"],
+                p_hide_img2=config["p_hide_img2"],
+                diameter_ranges=[tuple(t) for t in config["diameter_ranges"]],
+                diameter_var=config["diameter_var"],
+                intensity_ranges=[tuple(t) for t in config["intensity_ranges"]],
+                intensity_var=config["intensity_var"],
+                rho_ranges=[tuple(t) for t in config["rho_ranges"]],
+                rho_var=config["rho_var"],
+                dt=config["dt"],
+                noise_uniform=config["noise_uniform"],
+                noise_gaussian_mean=config["noise_gaussian_mean"],
+                noise_gaussian_std=config["noise_gaussian_std"],
+            )
             return cls(
                 scheduler=scheduler,
-                batches_per_flow_batch=int(config["batches_per_flow_batch"]),
-                flow_fields_per_batch=int(config["flow_fields_per_batch"]),
+                batches_per_flow_batch=config["batches_per_flow_batch"],
+                flow_fields_per_batch=config["flow_fields_per_batch"],
                 flow_field_size=tuple(config["flow_field_size"]),
-                resolution=float(config["resolution"]),
-                velocities_per_pixel=float(config["velocities_per_pixel"]),
-                seed=int(config["seed"]),
-                max_speed_x=float(config["max_speed_x"]),
-                max_speed_y=float(config["max_speed_y"]),
-                min_speed_x=float(config["min_speed_x"]),
-                min_speed_y=float(config["min_speed_y"]),
+                resolution=config["resolution"],
+                velocities_per_pixel=config["velocities_per_pixel"],
+                seed=config["seed"],
+                max_speed_x=config["max_speed_x"],
+                max_speed_y=config["max_speed_y"],
+                min_speed_x=config["min_speed_x"],
+                min_speed_y=config["min_speed_y"],
                 output_units=str(config["output_units"]),
                 device_ids=config.get("device_ids", None),
-                generation_specification=ImageGenerationSpecification(
-                    batch_size=int(config["batch_size"]),
-                    image_shape=tuple(config["image_shape"]),
-                    img_offset=tuple(config["img_offset"]),
-                    seeding_density_range=tuple(config["seeding_density_range"]),
-                    p_hide_img1=float(config["p_hide_img1"]),
-                    p_hide_img2=float(config["p_hide_img2"]),
-                    diameter_ranges=[tuple(t) for t in config["diameter_ranges"]],
-                    diameter_var=float(config["diameter_var"]),
-                    intensity_ranges=[tuple(t) for t in config["intensity_ranges"]],
-                    intensity_var=float(config["intensity_var"]),
-                    rho_ranges=[tuple(t) for t in config["rho_ranges"]],
-                    rho_var=float(config["rho_var"]),
-                    dt=float(config["dt"]),
-                    noise_uniform=float(config["noise_uniform"]),
-                    noise_gaussian_mean=float(config["noise_gaussian_mean"]),
-                    noise_gaussian_std=float(config["noise_gaussian_std"]),
-                ),
+                generation_specification=gs,
                 mask=mask,
                 histogram=histogram,
             )

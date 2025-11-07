@@ -8,6 +8,10 @@ from synthpix.types import SchedulerData
 class SchedulerProtocol(Protocol):
     """Protocol that needs to be followed by schedulers."""
 
+    def shutdown(self) -> None:
+        """Shuts down any background processes or threads used for prefetching."""
+        pass
+
     def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Returns the shape of the flow field.
 
@@ -86,7 +90,3 @@ class PrefetchedSchedulerProtocol(
     EpisodicSchedulerProtocol, Protocol
 ):
     """Protocol that needs to be followed by prefetched schedulers."""
-
-    def shutdown(self) -> None:
-        """Shuts down any background processes or threads used for prefetching."""
-        ...

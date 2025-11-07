@@ -236,9 +236,8 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         Returns: Number of steps remaining.
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
-            raise AttributeError(
-                "Underlying scheduler lacks steps_remaining() method."
-            )
+            # return 1 if not episodic... never ending ;)
+            return 1
         return self.scheduler.steps_remaining()
 
     def next_episode(self, join_timeout: float = 2.0) -> None:
@@ -248,9 +247,8 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         starting a new episode.
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
-            raise AttributeError(
-                "Underlying scheduler lacks next_episode() method."
-            )
+            # do nothing if not episodic
+            return
         
         if self._started and self.steps_remaining() > 0:
             to_discard = self.steps_remaining()

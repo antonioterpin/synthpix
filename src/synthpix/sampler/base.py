@@ -34,6 +34,11 @@ class Sampler(ABC):
             scheduler: Scheduler instance that provides data.
             batch_size: Number of samples to return in each batch.
         """
+        if not isinstance(scheduler, SchedulerProtocol):
+            raise TypeError(
+                "scheduler must implement the SchedulerProtocol interface."
+            )
+
         if not isinstance(batch_size, int) or batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
 
@@ -130,3 +135,15 @@ class Sampler(ABC):
         # implemented like this to make it easier in the future to implement
         # asynchronous horizons
         return jnp.full((self.batch_size,), is_last_step, dtype=bool)
+    
+    @classmethod
+    @abstractmethod
+    def from_config(cls, scheduler, config) -> Self:
+        """Create a Sampler instance from a configuration dictionary.
+
+        Args:
+            scheduler: Scheduler instance to be used by the sampler.
+            config: Configuration dictionary with sampler parameters.
+
+        Returns: A Sampler instance.
+        """
