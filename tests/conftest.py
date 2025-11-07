@@ -98,12 +98,13 @@ def temp_file_module(request, hdf5_test_dims, generate_hdf5_file):
 @pytest.fixture
 def scheduler(temp_file_module, request):
     """Create a scheduler for module scope tests."""
-    randomize = (
-        getattr(request.param, "randomize", False)
-        if hasattr(request, "param")
-        else False
-    )
-    loop = getattr(request.param, "loop", False) if hasattr(request, "param") else False
+    randomize = False
+    loop = False
+
+    if hasattr(request, "param"):
+        randomize = request.param.get("randomize", False)
+        loop = request.param.get("loop", False)
+    
     yield HDF5FlowFieldScheduler([temp_file_module], randomize=randomize, loop=loop)
 
 

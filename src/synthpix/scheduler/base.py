@@ -103,7 +103,6 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             raise ValueError("loop must be a boolean value.")
         self.loop = loop
 
-        self.epoch = 0
         self.index = 0
 
         if self.randomize:
@@ -136,14 +135,12 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         """
         return self
 
-    def reset(self, reset_epoch: bool = True) -> None:
+    def reset(self) -> None:
         """Resets the state and, optionally, epoch count.
 
         Args:
             reset_epoch: If True, resets the epoch counter to zero.
         """
-        if reset_epoch:
-            self.epoch = 0
         self.index = 0
         self._slice_idx = 0
         self._cached_data = None
@@ -154,8 +151,6 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             file_list_indices = jnp.arange(len(self.file_list), device=cpu)
             file_list_indices = jax.random.permutation(shuffle_key, file_list_indices)
             self.file_list = [self.file_list[i] for i in file_list_indices.tolist()]
-        if reset_epoch:
-            logger.info("Scheduler state has been reset.")
 
     def _get_next(self):
         """Returns the next flow field slice from the dataset.
@@ -167,8 +162,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         """
         while self.index < len(self.file_list) or self.loop:
             if self.index >= len(self.file_list):
-                self.reset(reset_epoch=False)
-                logger.info(f"Starting epoch {self.epoch}")
+                self.reset()
 
             path = self.file_list[self.index]
             try:
@@ -212,7 +206,9 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             except StopIteration:
                 break
         if len(batch) == 0:
-            raise StopIteration
+            if not self.loop:
+                raise StopIteration
+            self.reset()
         if len(batch) < batch_size and not self.loop:
             mask = np.zeros((batch_size,), dtype=bool)
             mask[: len(batch)] = True
