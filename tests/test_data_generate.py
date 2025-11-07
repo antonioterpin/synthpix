@@ -133,16 +133,15 @@ def test_invalid_num_images(num_images):
 
 
 @pytest.mark.parametrize(
-    "img_offset", [(-1, 0), (0, -1), (128.5, 0), (0, 128.5), (1, 2, 3)]
+    "img_offset", [(-1, 0), (0, -1), (1, 2, 3)]
 )
 def test_invalid_img_offset(img_offset):
     """Test that invalid img_offset raises a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     position_bounds = (256, 256)
     image_shape = (128, 128)
     with pytest.raises(
-        ValueError, match="img_offset must be a tuple of two non-negative integers."
+        ValueError, match="img_offset must be a tuple of two non-negative numbers."
     ):
         input_check_gen_img_from_flow(
             flow_field=flow_field,
@@ -157,7 +156,6 @@ def test_invalid_img_offset(img_offset):
 @pytest.mark.parametrize("p_hide_img1", [-0.1, 1.1, 1.5, 2.5])
 def test_invalid_p_hide_img1(p_hide_img1):
     """Test that invalid p_hide_img1 raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(ValueError, match="p_hide_img1 must be between 0 and 1."):
@@ -173,7 +171,6 @@ def test_invalid_p_hide_img1(p_hide_img1):
 @pytest.mark.parametrize("p_hide_img2", [-0.1, 1.1, 1.5, 2.5])
 def test_invalid_p_hide_img2(p_hide_img2):
     """Test that invalid p_hide_img2 raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(ValueError, match="p_hide_img2 must be between 0 and 1."):
@@ -202,7 +199,6 @@ def test_invalid_p_hide_img2(p_hide_img2):
 )
 def test_invalid_diameter_range(diameter_ranges, expected_message):
     """Test that invalid diameter ranges raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(ValueError, match=re.escape(expected_message)):
@@ -231,7 +227,6 @@ def test_invalid_diameter_range(diameter_ranges, expected_message):
 )
 def test_invalid_intensity_range(intensity_ranges, expected_message):
     """Test that invalid intensity ranges raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(ValueError, match=re.escape(expected_message)):
@@ -265,7 +260,6 @@ def test_invalid_intensity_range(intensity_ranges, expected_message):
 )
 def test_invalid_rho_range(rho_ranges, expected_message):
     """Test that invalid rho ranges raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(ValueError, match=re.escape(expected_message)):
@@ -301,7 +295,6 @@ def test_invalid_dt(dt):
 )
 def test_invalid_flow_field_res_x(flow_field_res_x):
     """Test that invalid flow_field_res_x raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
@@ -323,7 +316,6 @@ def test_invalid_flow_field_res_x(flow_field_res_x):
 )
 def test_invalid_flow_field_res_y(flow_field_res_y):
     """Test that invalid flow_field_res_y raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
@@ -364,7 +356,6 @@ def test_invalid_noise_uniform(noise_uniform):
 )
 def test_invalid_noise_gaussian_mean(noise_gaussian_mean):
     """Test that invalid noise_gaussian_mean raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
@@ -385,7 +376,6 @@ def test_invalid_noise_gaussian_mean(noise_gaussian_mean):
 )
 def test_invalid_noise_gaussian_std(noise_gaussian_std):
     """Test that invalid noise_gaussian_std raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
@@ -406,7 +396,6 @@ def test_invalid_noise_gaussian_std(noise_gaussian_std):
 )
 def test_invalid_diameter_var(diameter_var):
     """Test that invalid diameter_var raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
@@ -427,7 +416,6 @@ def test_invalid_diameter_var(diameter_var):
 )
 def test_invalid_intensity_var(intensity_var):
     """Test that invalid intensity_var raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
@@ -448,7 +436,6 @@ def test_invalid_intensity_var(intensity_var):
 )
 def test_invalid_rho_var(rho_var):
     """Test that invalid rho_var raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
@@ -501,7 +488,6 @@ def test_incoherent_image_shape_and_position_bounds(
     image_shape, img_offset, position_bounds, error_message
 ):
     """Test that incoherent image_shape and position_bounds raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     with pytest.raises(
         ValueError,
@@ -552,7 +538,7 @@ def test_generate_images_from_flow(monkeypatch, debug_flag):
     flow_field = jnp.expand_dims(flow_field, axis=0)
 
     # 3. apply the flow field to the particles
-    images1, images2, params = dg.generate_images_from_flow(
+    images1, images2, _ = dg.generate_images_from_flow(
         key=key,
         flow_field=flow_field,
         position_bounds=position_bounds,

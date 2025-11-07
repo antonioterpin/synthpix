@@ -230,11 +230,6 @@ def test_invalid_histogram_sampler(histogram, error, scheduler):
 def test_invalid_histogram_values(scheduler, mock_histogram_invalid_file):
     """Test that histogram with invalid values raises a ValueError."""
     # Create a dummy histogram with an invalid shape
-    img_shape = (
-        mock_histogram_invalid_file[1]["height"],
-        mock_histogram_invalid_file[1]["width"],
-    )
-
     with pytest.raises(
         ValueError,
         match=re.escape(
@@ -244,7 +239,6 @@ def test_invalid_histogram_values(scheduler, mock_histogram_invalid_file):
     ):
         config = sampler_config.copy()
         config["histogram"] = mock_histogram_invalid_file[0]
-        config["image_shape"] = img_shape
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
             config=config,

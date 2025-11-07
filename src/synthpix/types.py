@@ -119,7 +119,7 @@ class ImageGenerationSpecification:
 
     batch_size: int = 300
     image_shape: tuple[int, int] = (256, 256)
-    img_offset: tuple[int, int] = (128, 128)
+    img_offset: tuple[int|float, int|float] = (128, 128)
     seeding_density_range: tuple[int|float, int|float] = (0.01, 0.02)
     p_hide_img1: float = 0.01
     p_hide_img2: float = 0.01
@@ -160,13 +160,13 @@ class ImageGenerationSpecification:
         if not (
             isinstance(self.img_offset, tuple)
             and len(self.img_offset) == 2
-            and all(isinstance(s, int) and s >= 0 for s in self.img_offset)
+            and all(isinstance(s, (int, float)) and s >= 0 for s in self.img_offset)
         ):
-            raise ValueError("img_offset must be a tuple of two non-negative integers.")
-        
+            raise ValueError("img_offset must be a tuple of two non-negative numbers.")
+
         if (
-            # not isinstance(seeding_density_range, tuple) or 
-            # len(seeding_density_range) != 2 or 
+            not isinstance(self.seeding_density_range, tuple) or 
+            len(self.seeding_density_range) != 2 or 
             not all(
                 isinstance(s, (int, float)) and s >= 0 for s in self.seeding_density_range
             )
