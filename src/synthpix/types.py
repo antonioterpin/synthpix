@@ -1,6 +1,7 @@
 """Type aliases for SynthPix library."""
 
-from typing import Sequence, TypeAlias
+from typing import TypeAlias
+from collections.abc import Sequence
 import numpy as np
 from typing_extensions import Self
 import jax.numpy as jnp
@@ -9,6 +10,7 @@ from dataclasses import dataclass, field
 from jax import tree_util
 
 PRNGKey: TypeAlias = jnp.ndarray
+
 
 @tree_util.register_pytree_node_class
 @dataclass(frozen=True)
@@ -21,13 +23,19 @@ class ImageGenerationParameters:
     rho_ranges: jnp.ndarray
 
     def tree_flatten(self):
-        children = (self.seeding_densities, self.diameter_ranges, self.intensity_ranges, self.rho_ranges)
+        children = (
+            self.seeding_densities,
+            self.diameter_ranges,
+            self.intensity_ranges,
+            self.rho_ranges,
+        )
         aux_data = None
         return (children, aux_data)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return cls(*children)
+
 
 @tree_util.register_pytree_node_class
 @dataclass(frozen=True)
@@ -58,14 +66,21 @@ class SynthpixBatch:
         )
 
     def tree_flatten(self):
-        children = (self.images1, self.images2, self.flow_fields, self.params, self.done)
+        children = (
+            self.images1,
+            self.images2,
+            self.flow_fields,
+            self.params,
+            self.done,
+        )
         aux_data = None
         return (children, aux_data)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return cls(*children)
-    
+
+
 @dataclass(frozen=True)
 class SchedulerData:
     """Dataclass representing a batch returned by a scheduler."""
@@ -90,11 +105,12 @@ class SchedulerData:
             images2=kwargs.get("images2", self.images2),
             mask=kwargs.get("mask", self.mask),
         )
-    
+
+
 @dataclass(frozen=True)
 class ImageGenerationSpecification:
     """Dataclass representing parameters for image generation.
-    
+
     Details:
         batch_size: Number of image pairs to generate.
         image_shape: (height, width) of the output image in pixels.
@@ -121,15 +137,21 @@ class ImageGenerationSpecification:
 
     batch_size: int = 300
     image_shape: tuple[int, int] = (256, 256)
-    img_offset: tuple[int|float, int|float] = (128, 128)
-    seeding_density_range: tuple[int|float, int|float] = (0.01, 0.02)
+    img_offset: tuple[int | float, int | float] = (128, 128)
+    seeding_density_range: tuple[int | float, int | float] = (0.01, 0.02)
     p_hide_img1: float = 0.01
     p_hide_img2: float = 0.01
-    diameter_ranges: Sequence[tuple[int|float, int|float]] = field(default_factory=lambda: [(0.1, 1.0)])
+    diameter_ranges: Sequence[tuple[int | float, int | float]] = field(
+        default_factory=lambda: [(0.1, 1.0)]
+    )
     diameter_var: float = 1.0
-    intensity_ranges: Sequence[tuple[int|float, int|float]] = field(default_factory=lambda: [(50, 200)])
+    intensity_ranges: Sequence[tuple[int | float, int | float]] = field(
+        default_factory=lambda: [(50, 200)]
+    )
     intensity_var: float = 1.0
-    rho_ranges: Sequence[tuple[int|float, int|float]] = field(default_factory=lambda: [(-0.99, 0.99)])
+    rho_ranges: Sequence[tuple[int | float, int | float]] = field(
+        default_factory=lambda: [(-0.99, 0.99)]
+    )
     rho_var: float = 1.0
     dt: float = 1.0
     noise_uniform: float = 0.0
@@ -141,24 +163,22 @@ class ImageGenerationSpecification:
             raise ValueError("batch_size must be a positive integer.")
         if (
             not isinstance(self.image_shape, tuple)
-            or len(self.image_shape) != 2 or
-            not all(isinstance(s, int) and s > 0 for s in self.image_shape)
+            or len(self.image_shape) != 2
+            or not all(isinstance(s, int) and s > 0 for s in self.image_shape)
         ):
             raise ValueError("image_shape must be a tuple of two positive integers.")
         if not (0.0 <= self.p_hide_img1 <= 1.0):
             raise ValueError("p_hide_img1 must be between 0 and 1.")
         if not (0.0 <= self.p_hide_img2 <= 1.0):
             raise ValueError("p_hide_img2 must be between 0 and 1.")
-        
+
         if (
             not isinstance(self.image_shape, tuple)
-            or len(self.image_shape) != 2 or 
-            not all(isinstance(s, int) and s > 0 for s in self.image_shape)
+            or len(self.image_shape) != 2
+            or not all(isinstance(s, int) and s > 0 for s in self.image_shape)
         ):
-            raise ValueError(
-                "image_shape must be a tuple of two positive integers."
-            )
-        
+            raise ValueError("image_shape must be a tuple of two positive integers.")
+
         if not (
             isinstance(self.img_offset, tuple)
             and len(self.img_offset) == 2
@@ -167,10 +187,11 @@ class ImageGenerationSpecification:
             raise ValueError("img_offset must be a tuple of two non-negative numbers.")
 
         if (
-            not isinstance(self.seeding_density_range, tuple) or 
-            len(self.seeding_density_range) != 2 or 
-            not all(
-                isinstance(s, (int, float)) and s >= 0 for s in self.seeding_density_range
+            not isinstance(self.seeding_density_range, tuple)
+            or len(self.seeding_density_range) != 2
+            or not all(
+                isinstance(s, (int, float)) and s >= 0
+                for s in self.seeding_density_range
             )
         ):
             raise ValueError(
@@ -178,17 +199,13 @@ class ImageGenerationSpecification:
             )
 
         if self.seeding_density_range[0] > self.seeding_density_range[1]:
-            raise ValueError(
-                "seeding_density_range must be in the form (min, max)."
-            )
-        
+            raise ValueError("seeding_density_range must be in the form (min, max).")
+
         # Check diameter_ranges
         if not (
             isinstance(self.diameter_ranges, list)
             and len(self.diameter_ranges) > 0
-            and all(
-                isinstance(r, tuple) and len(r) == 2 for r in self.diameter_ranges
-            )
+            and all(isinstance(r, tuple) and len(r) == 2 for r in self.diameter_ranges)
         ):
             raise ValueError("diameter_ranges must be a list of (min, max) tuples.")
         if not all(0 < d1 <= d2 for d1, d2 in self.diameter_ranges):
@@ -197,47 +214,33 @@ class ImageGenerationSpecification:
         if not (
             isinstance(self.intensity_ranges, list)
             and len(self.intensity_ranges) > 0
-            and all(
-                isinstance(r, tuple) and len(r) == 2
-                for r in self.intensity_ranges
-            )
+            and all(isinstance(r, tuple) and len(r) == 2 for r in self.intensity_ranges)
         ):
             raise ValueError("intensity_ranges must be a list of (min, max) tuples.")
         if not all(0 < d1 <= d2 for d1, d2 in self.intensity_ranges):
-            raise ValueError(
-                "Each intensity_range must satisfy 0 < min <= max."
-            )
+            raise ValueError("Each intensity_range must satisfy 0 < min <= max.")
 
         if not (
             isinstance(self.rho_ranges, list)
             and len(self.rho_ranges) > 0
-            and all(
-                isinstance(r, tuple) and len(r) == 2 for r in self.rho_ranges
-            )
+            and all(isinstance(r, tuple) and len(r) == 2 for r in self.rho_ranges)
         ):
             raise ValueError("rho_ranges must be a list of (min, max) tuples.")
 
         if not all(-1 < r1 <= r2 < 1 for r1, r2 in self.rho_ranges):
-            raise ValueError(
-                "Each rho_range must satisfy -1 < min <= max < 1."
-            )
-        
-        if not (
-            isinstance(self.diameter_var, (int, float))
-            and 0 <= self.diameter_var
-        ):
+            raise ValueError("Each rho_range must satisfy -1 < min <= max < 1.")
+
+        if not (isinstance(self.diameter_var, (int, float)) and 0 <= self.diameter_var):
             raise ValueError("diameter_var must be a non-negative number.")
         if not (
-            isinstance(self.intensity_var, (int, float))
-            and 0 <= self.intensity_var
+            isinstance(self.intensity_var, (int, float)) and 0 <= self.intensity_var
         ):
             raise ValueError("intensity_var must be a non-negative number.")
         if not (isinstance(self.rho_var, (int, float)) and 0 <= self.rho_var):
             raise ValueError("rho_var must be a non-negative number.")
-        
-        if not(
-            isinstance(self.noise_uniform, (int, float))
-            and (0 <= self.noise_uniform)
+
+        if not (
+            isinstance(self.noise_uniform, (int, float)) and (0 <= self.noise_uniform)
         ):
             raise ValueError("noise_uniform must be a non-negative number.")
 
@@ -247,15 +250,13 @@ class ImageGenerationSpecification:
         ):
             raise ValueError("noise_gaussian_mean must be a non-negative number.")
         if (
-            not isinstance(self.noise_gaussian_std, (int, float)) 
+            not isinstance(self.noise_gaussian_std, (int, float))
             or self.noise_gaussian_std < 0
         ):
             raise ValueError("noise_gaussian_std must be a non-negative number.")
-        if (
-            not isinstance(self.dt, (int, float)) or self.dt <= 0
-        ):
+        if not isinstance(self.dt, (int, float)) or self.dt <= 0:
             raise ValueError("dt must be a positive number.")
-        
+
     def update(self, **kwargs) -> Self:
         """Return a new ImageGenerationSpecification with updated fields.
 

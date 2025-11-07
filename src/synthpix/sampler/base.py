@@ -11,7 +11,7 @@ from synthpix.types import SynthpixBatch
 from synthpix.scheduler.protocol import (
     SchedulerProtocol,
     EpisodicSchedulerProtocol,
-    PrefetchedSchedulerProtocol
+    PrefetchedSchedulerProtocol,
 )
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
@@ -35,9 +35,7 @@ class Sampler(ABC):
             batch_size: Number of samples to return in each batch.
         """
         if not isinstance(scheduler, SchedulerProtocol):
-            raise TypeError(
-                "scheduler must implement the SchedulerProtocol interface."
-            )
+            raise TypeError("scheduler must implement the SchedulerProtocol interface.")
 
         if not isinstance(batch_size, int) or batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
@@ -47,8 +45,7 @@ class Sampler(ABC):
 
         episodic = isinstance(self.scheduler, EpisodicSchedulerProtocol)
         logger.info(
-            "The underlying scheduler is "
-            f"{'' if episodic else 'not'} episodic."
+            "The underlying scheduler is " f"{'' if episodic else 'not'} episodic."
         )  # pragma: no cover
 
         self.batch_size = batch_size
@@ -113,9 +110,7 @@ class Sampler(ABC):
         Returns: The first batch of the next episode.
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
-            raise AttributeError(
-                "Underlying scheduler lacks next_episode() method."
-            )
+            raise AttributeError("Underlying scheduler lacks next_episode() method.")
 
         self.scheduler.next_episode()
 
@@ -124,9 +119,7 @@ class Sampler(ABC):
     def _make_done(self) -> jnp.ndarray:
         """Return a `(batch_size,)` bool array if episodic, else None."""
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
-            raise NotImplementedError(
-                "The underlying scheduler is not episodic."
-            )
+            raise NotImplementedError("The underlying scheduler is not episodic.")
 
         is_last_step = self.scheduler.steps_remaining() == 0
         logger.debug(f"Is last step: {is_last_step}")
@@ -135,7 +128,7 @@ class Sampler(ABC):
         # implemented like this to make it easier in the future to implement
         # asynchronous horizons
         return jnp.full((self.batch_size,), is_last_step, dtype=bool)
-    
+
     @classmethod
     @abstractmethod
     def from_config(cls, scheduler, config) -> Self:

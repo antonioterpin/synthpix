@@ -171,8 +171,7 @@ def trilinear_interpolate(
 
 def generate_array_flow_field(
     flow_f: Callable[
-        [jnp.ndarray, jnp.ndarray, jnp.ndarray], 
-        tuple[jnp.ndarray, jnp.ndarray]
+        [jnp.ndarray, jnp.ndarray, jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]
     ],
     grid_shape: tuple[int, int] = (128, 128),
 ) -> jnp.ndarray:
@@ -192,7 +191,9 @@ def generate_array_flow_field(
     cols = jnp.arange(W)
 
     # vmap over both axes, and apply the flow function at time t=1
-    arr = jax.vmap(lambda i: jax.vmap(lambda j: jnp.array(flow_f(jnp.ones((1)), i, j)))(cols))(rows)
+    arr = jax.vmap(
+        lambda i: jax.vmap(lambda j: jnp.array(flow_f(jnp.ones(1), i, j)))(cols)
+    )(rows)
 
     return arr
 

@@ -94,7 +94,7 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         data = self._cached_data
         if data is None or self._cached_file is None:
             raise RuntimeError("No data is currently cached.")
-        
+
         if not self.include_images:
             # Images are not loaded by default, but we ensure it nonetheless
             return data.update(images1=None, images2=None)
@@ -108,9 +108,7 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         prev = np.array(
             Image.open(os.path.join(folder, f"img_{t-1}.jpg")).convert("RGB")
         )
-        nxt = np.array(
-            Image.open(os.path.join(folder, f"img_{t}.jpg")).convert("RGB")
-        )
+        nxt = np.array(Image.open(os.path.join(folder, f"img_{t}.jpg")).convert("RGB"))
         return data.update(images1=prev, images2=nxt)
 
     def get_flow_fields_shape(self) -> tuple[int, ...]:

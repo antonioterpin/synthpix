@@ -28,7 +28,7 @@ class SchedulerProtocol(Protocol):
         Args:
             batch_size: Number of flow field slices to retrieve.
 
-        Returns: SchedulerData containing the batch of flow fields 
+        Returns: SchedulerData containing the batch of flow fields
             and, optionally, images.
         """
         ...
@@ -58,6 +58,7 @@ class SchedulerProtocol(Protocol):
         """
         ...
 
+
 @runtime_checkable
 class EpisodicSchedulerProtocol(SchedulerProtocol, Protocol):
     """Protocol that needs to be followed by episodic schedulers."""
@@ -85,8 +86,7 @@ class EpisodicSchedulerProtocol(SchedulerProtocol, Protocol):
         """
         ...
 
+
 @runtime_checkable
-class PrefetchedSchedulerProtocol(
-    EpisodicSchedulerProtocol, Protocol
-):
+class PrefetchedSchedulerProtocol(EpisodicSchedulerProtocol, Protocol):
     """Protocol that needs to be followed by prefetched schedulers."""

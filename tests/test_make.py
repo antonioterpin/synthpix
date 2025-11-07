@@ -1,11 +1,9 @@
 import importlib
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
-from build.lib.synthpix import sampler
 
 make_mod = importlib.import_module("synthpix.make")
 make = make_mod.make
@@ -55,7 +53,9 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setattr(make_mod, "SyntheticImageSampler", DummySampler)
     monkeypatch.setattr(make_mod, "MATFlowFieldScheduler", DummyScheduler)
     monkeypatch.setattr(make_mod, "NumpyFlowFieldScheduler", DummyScheduler)
-    monkeypatch.setattr(make_mod, "PrefetchingFlowFieldScheduler", DummyPrefetchScheduler)
+    monkeypatch.setattr(
+        make_mod, "PrefetchingFlowFieldScheduler", DummyPrefetchScheduler
+    )
     monkeypatch.setattr(make_mod, "EpisodicFlowFieldScheduler", DummyEpisodicScheduler)
     monkeypatch.setitem(make_mod.SCHEDULERS, ".mat", DummyScheduler)
     monkeypatch.setitem(make_mod.SCHEDULERS, ".npy", DummyScheduler)
@@ -76,6 +76,7 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
 # ---------------------- #
 # Validation and Errors  #
 # ---------------------- #
+
 
 @pytest.mark.parametrize("bad", [123, 3.14, ["a"], ("t",), None])
 def test_rejects_non_str_or_dict(monkeypatch, bad):
@@ -130,7 +131,12 @@ def test_rejects_nonpositive_batch(monkeypatch, bad):
 @pytest.mark.parametrize("bad", [-3, "x"])
 def test_rejects_invalid_buffer_size(monkeypatch, bad):
     _patch_common(monkeypatch)
-    cfg = {"scheduler_class": ".mat", "batch_size": 2, "flow_fields_per_batch": 1, "buffer_size": bad}
+    cfg = {
+        "scheduler_class": ".mat",
+        "batch_size": 2,
+        "flow_fields_per_batch": 1,
+        "buffer_size": bad,
+    }
     with pytest.raises((ValueError, TypeError), match="buffer_size"):
         make(cfg)
 
@@ -138,7 +144,12 @@ def test_rejects_invalid_buffer_size(monkeypatch, bad):
 @pytest.mark.parametrize("bad", [-3, "x"])
 def test_rejects_invalid_episode_length(monkeypatch, bad):
     _patch_common(monkeypatch)
-    cfg = {"scheduler_class": ".mat", "batch_size": 2, "flow_fields_per_batch": 1, "episode_length": bad}
+    cfg = {
+        "scheduler_class": ".mat",
+        "batch_size": 2,
+        "flow_fields_per_batch": 1,
+        "episode_length": bad,
+    }
     with pytest.raises((ValueError, TypeError), match="episode_length"):
         make(cfg)
 
@@ -159,14 +170,24 @@ def test_requires_batches_per_flow_batch_for_synthetic(monkeypatch):
 
 def test_include_images_must_be_bool(monkeypatch):
     _patch_common(monkeypatch)
-    cfg = {"scheduler_class": ".mat", "batch_size": 2, "flow_fields_per_batch": 1, "include_images": "yes"}
+    cfg = {
+        "scheduler_class": ".mat",
+        "batch_size": 2,
+        "flow_fields_per_batch": 1,
+        "include_images": "yes",
+    }
     with pytest.raises(TypeError, match="include_images must be a boolean"):
         make(cfg)
 
 
 def test_include_images_requires_mat(monkeypatch):
     _patch_common(monkeypatch)
-    cfg = {"scheduler_class": ".npy", "batch_size": 2, "flow_fields_per_batch": 1, "include_images": True}
+    cfg = {
+        "scheduler_class": ".npy",
+        "batch_size": 2,
+        "flow_fields_per_batch": 1,
+        "include_images": True,
+    }
     with pytest.raises(ValueError, match="not supported for file images"):
         make(cfg)
 
@@ -174,6 +195,7 @@ def test_include_images_requires_mat(monkeypatch):
 # ---------------------- #
 # Functional paths       #
 # ---------------------- #
+
 
 def test_make_from_yaml_path_success(monkeypatch, tmp_path):
     helpers = _patch_common(monkeypatch)
@@ -231,7 +253,6 @@ def test_synthetic_sampler_with_prefetch(monkeypatch):
     sampler = make(cfg)
     assert isinstance(sampler.scheduler, helpers.DummyPrefetchScheduler)
     assert isinstance(sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler)
-    
 
 
 def test_synthetic_sampler_with_episode(monkeypatch):

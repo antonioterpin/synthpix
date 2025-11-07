@@ -25,11 +25,13 @@ class RealImageSampler(Sampler):
         super().__init__(scheduler, batch_size)
 
         while (
-            not hasattr(scheduler, "include_images") 
-            or not scheduler.include_images # pyright: ignore[reportAttributeAccessIssue]
+            not hasattr(scheduler, "include_images")
+            or not scheduler.include_images  # pyright: ignore[reportAttributeAccessIssue]
         ):
             if hasattr(scheduler, "scheduler"):
-                scheduler = scheduler.scheduler # pyright: ignore[reportAttributeAccessIssue]
+                scheduler = (
+                    scheduler.scheduler
+                )  # pyright: ignore[reportAttributeAccessIssue]
             else:
                 raise ValueError(
                     "Base scheduler must have include_images set to True"
@@ -50,7 +52,7 @@ class RealImageSampler(Sampler):
         )
 
         return batch
-    
+
     @classmethod
     def from_config(cls, scheduler, config) -> Self:
         """Create a RealImageSampler from configuration.

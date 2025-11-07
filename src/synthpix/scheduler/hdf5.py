@@ -1,7 +1,6 @@
 """HDF5FlowFieldScheduler to load flow fields from .h5 files."""
 
 import h5py
-import numpy as np
 from typing_extensions import Self
 from goggles import get_logger
 
@@ -52,7 +51,9 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
             dataset_key = list(file)[0]
             dset = file[dataset_key]
             if not isinstance(dset, h5py.Dataset):
-                raise ValueError(f"Expected Dataset but got {type(dset)} for key '{dataset_key}' in {file_path}")
+                raise ValueError(
+                    f"Expected Dataset but got {type(dset)} for key '{dataset_key}' in {file_path}"
+                )
             data = dset[...]
             logger.debug(f"Loading file {file_path} with shape {data.shape}")
         return SchedulerData(flow_fields=data)
@@ -85,7 +86,9 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
             dataset_key = list(file)[0]
             dset = file[dataset_key]
             if not isinstance(dset, h5py.Dataset):
-                raise ValueError(f"Expected Dataset but got {type(dset)} for key '{dataset_key}' in {file_path}")
+                raise ValueError(
+                    f"Expected Dataset but got {type(dset)} for key '{dataset_key}' in {file_path}"
+                )
             shape = dset.shape[0], dset.shape[2], 2  # (X, Z, 2)
             logger.debug(f"Flow field shape: {shape}")
         return shape

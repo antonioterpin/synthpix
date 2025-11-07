@@ -8,7 +8,6 @@ from typing_extensions import Self
 
 import jax
 import jax.numpy as jnp
-import itertools as it
 from goggles import get_logger
 
 from synthpix.utils import SYNTHPIX_SCOPE
@@ -37,7 +36,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         Returns: List of file paths.
         """
         return self._file_list
-    
+
     @file_list.setter
     def file_list(self, value: list[str]) -> None:
         """Sets the list of files used by the scheduler.
@@ -65,7 +64,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         # Check if file_list is a list of files or directories
         self._file_list = []
         if (
-            file_list is None 
+            file_list is None
             or not isinstance(file_list, list)
             or not all(isinstance(f, str) for f in file_list)
         ):
@@ -112,9 +111,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             cpu = jax.devices("cpu")[0]
             file_list_indices = jnp.arange(len(self.file_list), device=cpu)
             file_list_indices = jax.random.permutation(shuffle_key, file_list_indices)
-            self.file_list = [
-                self.file_list[i] for i in file_list_indices.tolist()
-            ]
+            self.file_list = [self.file_list[i] for i in file_list_indices.tolist()]
 
         self._cached_data = None
         self._cached_file = None
@@ -156,9 +153,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             cpu = jax.devices("cpu")[0]
             file_list_indices = jnp.arange(len(self.file_list), device=cpu)
             file_list_indices = jax.random.permutation(shuffle_key, file_list_indices)
-            self.file_list = [
-                self.file_list[i] for i in file_list_indices.tolist()
-            ]
+            self.file_list = [self.file_list[i] for i in file_list_indices.tolist()]
         if reset_epoch:
             logger.info("Scheduler state has been reset.")
 
@@ -219,22 +214,18 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         if len(batch) < batch_size and not self.loop:
             mask = np.zeros((batch_size,), dtype=bool)
             mask[: len(batch)] = True
-                
 
         logger.debug(f"Loaded batch of {len(batch)} flow field slices.")
 
         images1, images2 = None, None
-        if all(
-            data.images1 is not None for data in batch
-        ):
+        print([data.images1 for data in batch])
+        if all(data.images1 is not None for data in batch):
             images1 = np.stack([data.images1 for data in batch])
-        if all(
-            data.images2 is not None for data in batch
-        ):
+        if all(data.images2 is not None for data in batch):
             images2 = np.stack([data.images2 for data in batch])
 
-        flow_fields=np.stack([data.flow_fields for data in batch])
-        
+        flow_fields = np.stack([data.flow_fields for data in batch])
+
         # Pad if needed
         if len(batch) < batch_size:
             pad_size = batch_size - len(batch)
@@ -257,8 +248,8 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
                     ((0, pad_size), (0, 0), (0, 0), (0, 0)),
                     mode="constant",
                     constant_values=0,
-                ) 
-        
+                )
+
         return SchedulerData(
             flow_fields=flow_fields,
             images1=images1,

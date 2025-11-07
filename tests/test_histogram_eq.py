@@ -1,12 +1,11 @@
 import re
 from synthpix.types import ImageGenerationSpecification
-from tests.test_sampler import dummy_img_gen_fn
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from jax import jit, random
+from jax import jit
 
 from synthpix.data_generate import (
     generate_images_from_flow,
@@ -122,7 +121,9 @@ def test_input_check_gen_img_from_flow_logs_histogram(monkeypatch):
 
     # Call the function to test
     generate_mod.input_check_gen_img_from_flow(
-        flow_field=flow_field, parameters=ImageGenerationSpecification(image_shape=image_shape), histogram=histogram
+        flow_field=flow_field,
+        parameters=ImageGenerationSpecification(image_shape=image_shape),
+        histogram=histogram,
     )
 
     # Check if the mask shape was logged

@@ -98,9 +98,7 @@ def test_invalid_mask_path(mask, scheduler):
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-@pytest.mark.parametrize(
-    "mock_invalid_mask_file", [0.0, 1.0, 0.0], indirect=True
-)
+@pytest.mark.parametrize("mock_invalid_mask_file", [0.0, 1.0, 0.0], indirect=True)
 def test_invalid_mask_shape(scheduler, mock_invalid_mask_file, image_shape):
     """Test that mask with invalid shape raises a ValueError."""
     # Create a dummy mask with an invalid shape
@@ -231,7 +229,7 @@ def test_invalid_mask_shape_in_generate(mask):
             mask=mask,
             parameters=ImageGenerationSpecification(
                 image_shape=image_shape,
-            )
+            ),
         )
 
 

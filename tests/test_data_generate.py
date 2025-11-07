@@ -59,7 +59,8 @@ def test_invalid_image_shape(image_shape):
         ValueError, match="image_shape must be a tuple of two positive integers."
     ):
         input_check_gen_img_from_flow(
-            flow_field=flow_field, parameters=ImageGenerationSpecification(image_shape=image_shape)
+            flow_field=flow_field,
+            parameters=ImageGenerationSpecification(image_shape=image_shape),
         )
 
 
@@ -132,9 +133,7 @@ def test_invalid_num_images(num_images):
         )
 
 
-@pytest.mark.parametrize(
-    "img_offset", [(-1, 0), (0, -1), (1, 2, 3)]
-)
+@pytest.mark.parametrize("img_offset", [(-1, 0), (0, -1), (1, 2, 3)])
 def test_invalid_img_offset(img_offset):
     """Test that invalid img_offset raises a ValueError."""
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -149,7 +148,7 @@ def test_invalid_img_offset(img_offset):
             parameters=ImageGenerationSpecification(
                 image_shape=image_shape,
                 img_offset=img_offset,
-            )
+            ),
         )
 
 
@@ -162,8 +161,7 @@ def test_invalid_p_hide_img1(p_hide_img1):
         input_check_gen_img_from_flow(
             flow_field=flow_field,
             parameters=ImageGenerationSpecification(
-                image_shape=image_shape, 
-                p_hide_img1=p_hide_img1
+                image_shape=image_shape, p_hide_img1=p_hide_img1
             ),
         )
 
@@ -175,10 +173,9 @@ def test_invalid_p_hide_img2(p_hide_img2):
     image_shape = (128, 128)
     with pytest.raises(ValueError, match="p_hide_img2 must be between 0 and 1."):
         input_check_gen_img_from_flow(
-            flow_field=flow_field, 
+            flow_field=flow_field,
             parameters=ImageGenerationSpecification(
-                image_shape=image_shape, 
-                p_hide_img2=p_hide_img2
+                image_shape=image_shape, p_hide_img2=p_hide_img2
             ),
         )
 
@@ -264,7 +261,7 @@ def test_invalid_rho_range(rho_ranges, expected_message):
     image_shape = (128, 128)
     with pytest.raises(ValueError, match=re.escape(expected_message)):
         input_check_gen_img_from_flow(
-            flow_field=flow_field, 
+            flow_field=flow_field,
             parameters=ImageGenerationSpecification(
                 image_shape=image_shape,
                 rho_ranges=rho_ranges,
@@ -559,7 +556,7 @@ def test_generate_images_from_flow(monkeypatch, debug_flag):
             noise_uniform=noise_uniform,
             noise_gaussian_mean=noise_gaussian_mean,
             noise_gaussian_std=noise_gaussian_std,
-        )
+        ),
     )
     img = images1
     img_warped = images2
@@ -597,7 +594,7 @@ def test_generate_images_from_flow(monkeypatch, debug_flag):
                     rho_var=rho_var,
                     dt=dt,
                     noise_uniform=noise_uniform,
-                )
+                ),
             )
 
 
@@ -678,9 +675,9 @@ def test_speed_generate_images_from_flow(
     jax.block_until_ready(keys_sharded)
 
     out_specs = (
-        PartitionSpec(shard_fields), 
         PartitionSpec(shard_fields),
-        PartitionSpec(shard_fields)
+        PartitionSpec(shard_fields),
+        PartitionSpec(shard_fields),
     )
 
     # 5. Create the jit function
@@ -706,7 +703,7 @@ def test_speed_generate_images_from_flow(
                     noise_gaussian_std=0.0,
                     rho_ranges=[(-0.01, 0.01)],
                     rho_var=0,
-                )
+                ),
             ),
             mesh=mesh,
             in_specs=(PartitionSpec(shard_fields), PartitionSpec(shard_fields)),
@@ -759,9 +756,7 @@ def test_speed_generate_images_from_flow(
 @pytest.mark.parametrize("intensity_ranges", [[(80, 100)]])
 @pytest.mark.parametrize("intensity_var", [0])
 @pytest.mark.parametrize("dt", [0.1])
-@pytest.mark.parametrize(
-    "rho_ranges", [[(-0.01, 0.01)]]
-)  # rho cannot be -1 or 1
+@pytest.mark.parametrize("rho_ranges", [[(-0.01, 0.01)]])  # rho cannot be -1 or 1
 @pytest.mark.parametrize("rho_var", [0])
 @pytest.mark.parametrize("noise_uniform", [0.0])
 @pytest.mark.parametrize("noise_gaussian_mean", [0.0])
@@ -789,6 +784,7 @@ def test_img_parameter_combinations(
     # 1. setup the image parameters
     key = jax.random.PRNGKey(0)
     import os
+
     os.makedirs("results/images_generated", exist_ok=True)
     file_description = (
         "results/images_generated/"
@@ -840,7 +836,7 @@ def test_img_parameter_combinations(
                 noise_uniform=noise_uniform,
                 noise_gaussian_mean=noise_gaussian_mean,
                 noise_gaussian_std=noise_gaussian_std,
-            )
+            ),
         )
     )
 
@@ -952,14 +948,14 @@ def test_speed_parameter_combinations(
                     diameter_ranges=diameter_ranges,
                     intensity_ranges=intensity_ranges,
                     rho_ranges=rho_ranges,
-                )
+                ),
             ),
             mesh=mesh,
             in_specs=(PartitionSpec(shard_fields), PartitionSpec(shard_fields)),
             out_specs=(
                 PartitionSpec(shard_fields),
                 PartitionSpec(shard_fields),
-                PartitionSpec(shard_fields)
+                PartitionSpec(shard_fields),
             ),
         )
     )

@@ -65,10 +65,7 @@ def vortex_flow(
 
 def get_flow_function(
     selected_flow: str, image_shape: tuple[int, int] = (128, 128)
-) -> Callable[
-    [jnp.ndarray, jnp.ndarray, jnp.ndarray], 
-    tuple[jnp.ndarray, jnp.ndarray]
-]:
+) -> Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]]:
     """Generate a flow field for testing purposes.
 
     It creates a flow field function based on the selected_flow.

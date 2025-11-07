@@ -1,5 +1,4 @@
 import jax
-import jax.numpy as jnp
 import pytest
 
 from synthpix.sampler import SyntheticImageSampler
@@ -26,13 +25,13 @@ class _DummyScheduler(BaseFlowFieldScheduler):
 
     def get_batch(self, *_):
         raise StopIteration
-        
+
     def load_file(self, file_path: str):
         pass
-        
+
     def get_next_slice(self):
         pass
-    
+
     @classmethod
     def from_config(cls, config: dict):
         return cls()

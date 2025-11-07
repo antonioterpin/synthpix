@@ -11,9 +11,7 @@ import goggles as gg
 
 from synthpix.utils import discover_leaf_dirs, SYNTHPIX_SCOPE
 from synthpix.types import PRNGKey, SchedulerData
-from synthpix.scheduler.protocol import (
-    EpisodicSchedulerProtocol, SchedulerProtocol
-)
+from synthpix.scheduler.protocol import EpisodicSchedulerProtocol, SchedulerProtocol
 
 logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -113,7 +111,7 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         """Returns self so the object can be used in a ``for`` loop."""
         self._t = 0
         return self
-    
+
     @property
     def file_list(self) -> list[str]:
         """Return the current file list from the underlying scheduler.
@@ -121,7 +119,7 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         Returns: The current file list.
         """
         return self.scheduler.file_list
-    
+
     @file_list.setter
     def file_list(self, value: list[str]) -> None:
         """Set the file list in the underlying scheduler.
@@ -150,7 +148,7 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
                 f"{self.batch_size}"
             )
         logger.debug(f"get_batch() called with batch_size {batch_size}")
-        
+
         # If we’ve exhausted the current horizon, start fresh episodes
         if self._t >= self.episode_length:
             self.next_episode()
@@ -162,14 +160,13 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         logger.debug(f"timestep: {self._t}")
         return batch
 
-
     def __len__(self) -> int:
         """Return the episode length.
 
         Returns: The length of the episode.
         """
         return self.episode_length
-    
+
     @property
     def episode_length(self) -> int:
         """Return the length of the episode.
@@ -188,7 +185,7 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
 
     def reset(self) -> None:
         """Start *batch_size* brand-new episodes.
-        
+
         Alias for reset_episode() to maintain API consistency with BaseFlowFieldScheduler.
         """
         self.reset_episode()

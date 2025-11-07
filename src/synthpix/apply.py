@@ -260,7 +260,7 @@ def apply_flow_to_particles(
 
             # Return the new position: (y + v * dt, x + u * dt)
             return jnp.array([y + v * dt, x + u * dt])
-        
+
         update_position = _update_position_2d
 
     else:

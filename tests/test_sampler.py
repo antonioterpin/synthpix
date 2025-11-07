@@ -29,8 +29,7 @@ sampler_config = load_configuration("config/test_data.yaml")
 def test_invalid_scheduler(scheduler):
     """Test that invalid scheduler raises a ValueError."""
     with pytest.raises(
-        TypeError,
-        match="scheduler must implement the SchedulerProtocol interface."
+        TypeError, match="scheduler must implement the SchedulerProtocol interface."
     ):
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
@@ -73,9 +72,8 @@ def test_from_config_missing_key_raises(scheduler, missing_key):
     config.pop(missing_key)
 
     with pytest.raises(KeyError):
-        SyntheticImageSampler.from_config(
-            scheduler=scheduler, config=config
-        )
+        SyntheticImageSampler.from_config(scheduler=scheduler, config=config)
+
 
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
@@ -271,12 +269,30 @@ def test_invalid_resolution(resolution, scheduler):
 
 
 @pytest.mark.parametrize(
-    "velocities_per_pixel", [-1, 0, "invalid_velocities_per_pixel"]
+    "velocities_per_pixel", ["invalid_velocities_per_pixel", None, (-1, 1)]
 )
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_invalid_velocities_per_pixel(velocities_per_pixel, scheduler):
+    """Test that invalid velocities_per_pixel raises a ValueError."""
+    with pytest.raises(
+        ValueError, match="velocities_per_pixel must be a number."
+    ):
+        config = sampler_config.copy()
+        config["velocities_per_pixel"] = velocities_per_pixel
+        SyntheticImageSampler.from_config(
+            scheduler=scheduler,
+            config=config,
+        )
+
+@pytest.mark.parametrize(
+    "velocities_per_pixel", [0, -1, -0.5]
+)
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_non_positive_velocities_per_pixel(velocities_per_pixel, scheduler):
     """Test that invalid velocities_per_pixel raises a ValueError."""
     with pytest.raises(
         ValueError, match="velocities_per_pixel must be a positive number."
@@ -395,7 +411,8 @@ def test_invalid_p_hide_img2(p_hide_img2, scheduler):
             [[0.5, 0.1]],
             "Each diameter_range must satisfy 0 < min <= max.",
         ),
-    ])
+    ],
+)
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
@@ -649,6 +666,7 @@ def test_invalid_min_max_speed_y(min_speed_y, max_speed_y, scheduler):
             scheduler=scheduler,
             config=config,
         )
+
 
 @pytest.mark.parametrize(
     "img_offset, max_speed_x, max_speed_y, dt",
@@ -1187,7 +1205,7 @@ class _BaseDummy(BaseFlowFieldScheduler):
 
     def load_file(self, file_path: str) -> SchedulerData:
         assert False, "Not implemented for dummy scheduler."
-    
+
     def get_next_slice(self) -> SchedulerData:
         assert False, "Not implemented for dummy scheduler."
 
@@ -1312,10 +1330,10 @@ def test_reset_and_shutdown(sampler_class):
 )
 def test_next_episode_attribute_error(sampler_class):
     sampler = sampler_class.from_config(
-        PlainDummy(), 
+        PlainDummy(),
         {
             "batch_size": 1,
-        }    
+        },
     )
     with pytest.raises(AttributeError, match="next_episode"):
         sampler.next_episode()
@@ -1371,7 +1389,6 @@ def test_batch_size_adjusted_when_not_divisible_by_ndevices(monkeypatch):
         output_units="pixels",
         flow_fields_per_batch=1,
         device_ids=None,  # use all devices (the two fakes)
-
     )
 
     # should have bumped batch_size from 3 to 4
@@ -1397,7 +1414,7 @@ def test_warning_when_batch_size_not_divisible_by_flow_fields(monkeypatch):
         flow_field_size=(8, 8),
         resolution=1.0,
         velocities_per_pixel=1.0,
-        generation_specification=ImageGenerationSpecification( 
+        generation_specification=ImageGenerationSpecification(
             image_shape=(5, 5),
             img_offset=(1.0, 1.0),
             seeding_density_range=(1.0, 1.0),

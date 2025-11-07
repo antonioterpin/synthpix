@@ -24,7 +24,7 @@ def generate_images_from_flow(
     flow_field_res_x: float = 1.0,
     flow_field_res_y: float = 1.0,
     mask: jnp.ndarray | None = None,
-    histogram: jnp.ndarray | None = None
+    histogram: jnp.ndarray | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray, ImageGenerationParameters]:
     """Generates a batch of grey scale image pairs from a batch of flow fields.
 
@@ -55,10 +55,7 @@ def generate_images_from_flow(
     """
     if DEBUG_JIT:
         input_check_gen_img_from_flow(
-            flow_field=flow_field,
-            parameters=parameters,
-            mask=mask,
-            histogram=histogram
+            flow_field=flow_field, parameters=parameters, mask=mask, histogram=histogram
         )
 
     # Compute maximum diameter and maximum seeding density
@@ -77,9 +74,7 @@ def generate_images_from_flow(
     # Calculate the number of particles based on the max density
     # Density is given in particles per pixel, so we use
     # the number of pixels in position bounds
-    num_particles = int(
-        position_bounds[0] * position_bounds[1] * max_seeding_density
-    )
+    num_particles = int(position_bounds[0] * position_bounds[1] * max_seeding_density)
 
     # Number of flow fields
     num_flow_fields = flow_field.shape[0]
@@ -326,11 +321,15 @@ def generate_images_from_flow(
     used_intensity_ranges = jnp.array(parameters.intensity_ranges)[intensity_indices]
     used_rho_ranges = jnp.array(parameters.rho_ranges)[rho_indices]
 
-    return images1, images2, ImageGenerationParameters(
-        seeding_densities=seeding_densities,
-        diameter_ranges=used_diameter_ranges,
-        intensity_ranges=used_intensity_ranges,
-        rho_ranges=used_rho_ranges,
+    return (
+        images1,
+        images2,
+        ImageGenerationParameters(
+            seeding_densities=seeding_densities,
+            diameter_ranges=used_diameter_ranges,
+            intensity_ranges=used_intensity_ranges,
+            rho_ranges=used_rho_ranges,
+        ),
     )
 
 
@@ -341,7 +340,7 @@ def input_check_gen_img_from_flow(
     flow_field_res_x: float = 1.0,
     flow_field_res_y: float = 1.0,
     mask: jnp.ndarray | None = None,
-    histogram: jnp.ndarray | None = None
+    histogram: jnp.ndarray | None = None,
 ):
     """Check the input arguments for generate_images_from_flow.
 
@@ -374,13 +373,9 @@ def input_check_gen_img_from_flow(
     ):
         raise ValueError("position_bounds must be a tuple of two positive integers.")
 
-    if not (
-        isinstance(flow_field_res_x, (int, float)) and flow_field_res_x > 0
-    ):
+    if not (isinstance(flow_field_res_x, (int, float)) and flow_field_res_x > 0):
         raise ValueError("flow_field_res_x must be a positive scalar (int or float)")
-    if not (
-        isinstance(flow_field_res_y, (int, float)) and 0 < flow_field_res_y
-    ):
+    if not (isinstance(flow_field_res_y, (int, float)) and 0 < flow_field_res_y):
         raise ValueError("flow_field_res_y must be a positive scalar (int or float)")
     if position_bounds[0] < parameters.image_shape[0] + parameters.img_offset[0]:
         raise ValueError(
@@ -406,7 +401,9 @@ def input_check_gen_img_from_flow(
     if histogram is not None and histogram.shape[0] != 256:
         raise ValueError("histogram must have 256 bins (shape (256,)).")
     if histogram is not None and not (
-        jnp.isclose(jnp.sum(histogram), parameters.image_shape[0] * parameters.image_shape[1])
+        jnp.isclose(
+            jnp.sum(histogram), parameters.image_shape[0] * parameters.image_shape[1]
+        )
     ):
         raise ValueError(
             "Histogram must sum to the number of pixels in the image shape."
@@ -422,8 +419,12 @@ def input_check_gen_img_from_flow(
     logger.debug(f"Number of images: {parameters.batch_size}")
     logger.debug(f"Particles density range: {parameters.seeding_density_range}")
     logger.debug(f"Number of particles: {num_particles}")
-    logger.debug(f"Probability of hiding particles in image 1: {parameters.p_hide_img1}")
-    logger.debug(f"Probability of hiding particles in image 2: {parameters.p_hide_img2}")
+    logger.debug(
+        f"Probability of hiding particles in image 1: {parameters.p_hide_img1}"
+    )
+    logger.debug(
+        f"Probability of hiding particles in image 2: {parameters.p_hide_img2}"
+    )
     logger.debug(f"Particle diameter ranges: {parameters.diameter_ranges}")
     logger.debug(f"Diameter variance: {parameters.diameter_var}")
     logger.debug(f"Intensity ranges: {parameters.intensity_ranges}")

@@ -26,6 +26,7 @@ SCHEDULERS = {
     ".npy": NumpyFlowFieldScheduler,
 }
 
+
 def get_base_scheduler(name: str) -> BaseFlowFieldScheduler:
     """Get the base scheduler class by name.
 
@@ -39,9 +40,12 @@ def get_base_scheduler(name: str) -> BaseFlowFieldScheduler:
         ValueError: If the scheduler class is not found.
     """
     if name not in SCHEDULERS:
-        raise ValueError(f"Scheduler class {name} not found. Should be one of {list(SCHEDULERS.keys())}.")
+        raise ValueError(
+            f"Scheduler class {name} not found. Should be one of {list(SCHEDULERS.keys())}."
+        )
 
     return SCHEDULERS[name]
+
 
 def make(
     config: str | dict,
@@ -54,7 +58,7 @@ def make(
     keys:
     - scheduler_class: The class of the scheduler to use.
     - batch_size: The batch size for training.
-    
+
     Args:
         config: The dataset configuration.
 
@@ -117,7 +121,7 @@ def make(
     batch_size = dataset_config["batch_size"]
     if not isinstance(batch_size, int) or batch_size <= 0:
         raise ValueError("batch_size must be a positive integer.")
-    
+
     # Optional parameters
     include_images = dataset_config.get("include_images", False)
     if not isinstance(include_images, bool):
@@ -129,9 +133,7 @@ def make(
     if not isinstance(episode_length, int) or episode_length < 0:
         raise ValueError("episode_length must be a non-negative integer.")
     if "flow_fields_per_batch" not in dataset_config:
-        raise ValueError(
-            "config must contain 'flow_fields_per_batch' key."
-        )
+        raise ValueError("config must contain 'flow_fields_per_batch' key.")
 
     # Initialize the random number generator
     cpu = jax.devices("cpu")[0]
@@ -156,9 +158,7 @@ def make(
             )
         kwargs = {
             **kwargs,
-            "output_shape": tuple(
-                dataset_config.get("image_shape", (256, 256))
-            ),
+            "output_shape": tuple(dataset_config.get("image_shape", (256, 256))),
         }
 
     # Initialize the base scheduler
@@ -206,8 +206,6 @@ def make(
             config=dataset_config,
         )
 
-    logger.info(
-        f"--- SynthPix sampler and scheduler initialized ---\n{dataset_config}"
-    )
+    logger.info(f"--- SynthPix sampler and scheduler initialized ---\n{dataset_config}")
 
     return sampler

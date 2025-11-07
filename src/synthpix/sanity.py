@@ -86,14 +86,16 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
             # Read the file
             dataset_name = list(f.keys())[0]
             dataset = f[dataset_name]
-            
+
             # Ensure we have a dataset, not a group or datatype
             if not isinstance(dataset, h5py.Dataset):
-                raise ValueError(f"Expected dataset, got {type(dataset)} in file {file}")
-            
+                raise ValueError(
+                    f"Expected dataset, got {type(dataset)} in file {file}"
+                )
+
             # Convert to numpy array if needed
             data = np.array(dataset)
-            
+
             # Check data shape and handle different formats
             if data.ndim == 4:
                 # Standard 4D format: (batch, height, width, channels)

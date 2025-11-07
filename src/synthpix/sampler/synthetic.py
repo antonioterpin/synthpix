@@ -11,7 +11,8 @@ from goggles import get_logger
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
 from synthpix.data_generate import (
-    input_check_gen_img_from_flow, generate_images_from_flow
+    input_check_gen_img_from_flow,
+    generate_images_from_flow,
 )
 from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
 from synthpix.types import ImageGenerationSpecification, SynthpixBatch
@@ -23,6 +24,7 @@ from synthpix.utils import (
 from synthpix.utils import SYNTHPIX_SCOPE
 from synthpix.scheduler.protocol import SchedulerProtocol
 from .base import Sampler
+from synthpix.types import SchedulerData
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -110,18 +112,14 @@ class SyntheticImageSampler(Sampler):
         # Check provided mask
         if mask is not None and mask.shape != image_shape:
             raise ValueError(
-                f"Mask shape {mask.shape} does not match image shape "
-                f"{image_shape}."
+                f"Mask shape {mask.shape} does not match image shape " f"{image_shape}."
             )
         self.mask = mask
         # Check provided histogram
-        if (
-            histogram is not None and (
-                histogram.shape != (256,) 
-                or not jnp.isclose(
-                    histogram.sum(), image_shape[0] * image_shape[1]
-                )
-            )):
+        if histogram is not None and (
+            histogram.shape != (256,)
+            or not jnp.isclose(histogram.sum(), image_shape[0] * image_shape[1])
+        ):
             raise ValueError(
                 "Histogram must be a (256,) array and "
                 "sum to the number of pixels in the image."
@@ -163,7 +161,8 @@ class SyntheticImageSampler(Sampler):
             raise ValueError("batches_per_flow_batch must be a positive integer.")
         self.batches_per_flow_batch = batches_per_flow_batch
         if (
-            isinstance(self.scheduler, EpisodicFlowFieldScheduler) and batches_per_flow_batch != 1
+            isinstance(self.scheduler, EpisodicFlowFieldScheduler)
+            and batches_per_flow_batch != 1
         ):
             self.batches_per_flow_batch = 1
             logger.warning("Using batches_per_flow_batch = 1 for episodic setting.")
@@ -184,22 +183,18 @@ class SyntheticImageSampler(Sampler):
 
         if (
             # not isinstance(flow_field_size, tuple) or
-            # len(flow_field_size) != 2 or 
-            not all(
-                isinstance(s, (int, float)) and s > 0 for s in flow_field_size
-            )
+            # len(flow_field_size) != 2 or
+            not all(isinstance(s, (int, float)) and s > 0 for s in flow_field_size)
         ):
-            raise ValueError(
-                "flow_field_size must be a tuple of two positive numbers."
-            )
+            raise ValueError("flow_field_size must be a tuple of two positive numbers.")
         self.flow_field_size = flow_field_size
 
         # Use the scheduler to get the flow field shape
         flow_field_shape = scheduler.get_flow_fields_shape()
         if (
-            not isinstance(flow_field_shape, tuple) or
-            len(flow_field_shape) != 3 or
-            (flow_field_shape[2] != 2 and flow_field_shape[2] != 3)
+            not isinstance(flow_field_shape, tuple)
+            or len(flow_field_shape) != 3
+            or (flow_field_shape[2] != 2 and flow_field_shape[2] != 3)
             or not all(isinstance(s, int) and s > 0 for s in flow_field_shape)
         ):
             raise ValueError(
@@ -209,12 +204,12 @@ class SyntheticImageSampler(Sampler):
             )
         flow_field_shape = (flow_field_shape[0], flow_field_shape[1])
 
-        if (
-            not isinstance(resolution, (int, float)) or resolution <= 0
-        ):
+        if not isinstance(resolution, (int, float)) or resolution <= 0:
             raise ValueError("resolution must be a positive number.")
         self.resolution = resolution
 
+        if not isinstance(velocities_per_pixel, (int, float)):
+            raise ValueError("velocities_per_pixel must be a number.")
         if velocities_per_pixel <= 0:
             raise ValueError("velocities_per_pixel must be a positive number.")
         self.velocities_per_pixel = velocities_per_pixel
@@ -223,9 +218,7 @@ class SyntheticImageSampler(Sampler):
             int(image_shape[1] * velocities_per_pixel),
         )
 
-        self.max_diameter = max(
-            r[1] for r in generation_specification.diameter_ranges
-        )
+        self.max_diameter = max(r[1] for r in generation_specification.diameter_ranges)
 
         if output_units not in ["pixels", "measure units per second"]:
             raise ValueError(
@@ -315,7 +308,8 @@ class SyntheticImageSampler(Sampler):
         if (
             generation_specification.p_hide_img1 > 0
             or generation_specification.p_hide_img2 > 0
-            or generation_specification.seeding_density_range[0] != generation_specification.seeding_density_range[1]
+            or generation_specification.seeding_density_range[0]
+            != generation_specification.seeding_density_range[1]
         ) and (particle_size > max_speed_x * dt or particle_size > max_speed_y * dt):
             # Compute the extra length of the position bounds
             extra_length_x = max(0.0, particle_size - max_speed_x * dt)
@@ -367,7 +361,7 @@ class SyntheticImageSampler(Sampler):
 
         if DEBUG_JIT:  # pragma: no cover
             _current_flows = jnp.asarray(
-                self.scheduler.get_batch(self.flow_fields_per_batch)
+                self.scheduler.get_batch(self.flow_fields_per_batch).flow_fields
             )
 
             input_check_gen_img_from_flow(
@@ -434,7 +428,7 @@ class SyntheticImageSampler(Sampler):
                     out_specs=(
                         PartitionSpec(self.shard_fields),
                         PartitionSpec(self.shard_fields),
-                        PartitionSpec(self.shard_fields)
+                        PartitionSpec(self.shard_fields),
                     ),
                 )
             )
@@ -460,10 +454,16 @@ class SyntheticImageSampler(Sampler):
         logger.debug(f"Resolution: {self.resolution}")
         logger.debug(f"Velocities per pixel: {velocities_per_pixel}")
         logger.debug(f"Image offset: {self.img_offset}")
-        logger.debug(f"Seeding density Range: {self.generation_specification.seeding_density_range}")
-        logger.debug(f"Diameter ranges: {self.generation_specification.diameter_ranges}")
+        logger.debug(
+            f"Seeding density Range: {self.generation_specification.seeding_density_range}"
+        )
+        logger.debug(
+            f"Diameter ranges: {self.generation_specification.diameter_ranges}"
+        )
         logger.debug(f"Max diameter: {self.max_diameter}")
-        logger.debug(f"Intensity ranges: {self.generation_specification.intensity_ranges}")
+        logger.debug(
+            f"Intensity ranges: {self.generation_specification.intensity_ranges}"
+        )
         logger.debug(f"Intensity var: {self.generation_specification.intensity_var}")
         logger.debug(f"Rho ranges: {self.generation_specification.rho_ranges}")
         logger.debug(f"Rho var: {self.generation_specification.rho_var}")
@@ -475,7 +475,9 @@ class SyntheticImageSampler(Sampler):
         logger.debug(f"Min speed y: {min_speed_y}")
         logger.debug(f"Output units: {self.output_units}")
         logger.debug(f"Background level: {self.generation_specification.noise_uniform}")
-        logger.debug(f"Noise Gaussian mean: {self.generation_specification.noise_gaussian_mean}")
+        logger.debug(
+            f"Noise Gaussian mean: {self.generation_specification.noise_gaussian_mean}"
+        )
         logger.debug(
             f"Noise Gaussian std: {self.generation_specification.noise_gaussian_std}"
         )
@@ -507,8 +509,9 @@ class SyntheticImageSampler(Sampler):
             # Reset the batch counter
             self._batches_generated = 0
 
-            _current_flows = self.scheduler.get_batch(self.flow_fields_per_batch)
-
+            scheduler_batch: SchedulerData = self.scheduler.get_batch(self.flow_fields_per_batch)
+            _current_flows = scheduler_batch.flow_fields
+            
             # Shard the flow fields across devices
             _current_flows = jnp.array(_current_flows, device=self.sharding)
 

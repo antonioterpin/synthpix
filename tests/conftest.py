@@ -9,7 +9,6 @@ from datetime import datetime
 from pathlib import Path
 
 import h5py
-import jax
 import numpy as np
 import pytest
 from PIL import Image
@@ -215,10 +214,11 @@ def clear_after_test():
     yield  # --- run the test ---
     # Free Python-side references
     gc.collect()
-    
+
     # Finish goggles session
     try:
         import goggles as gg
+
         gg.finish()
     except Exception:
         # Silently continue if goggles is not available or fails
