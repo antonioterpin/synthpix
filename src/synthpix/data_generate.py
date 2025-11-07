@@ -55,7 +55,6 @@ def generate_images_from_flow(
     """
     if DEBUG_JIT:
         input_check_gen_img_from_flow(
-            key=key,
             flow_field=flow_field,
             parameters=parameters,
             mask=mask,
@@ -333,7 +332,6 @@ def generate_images_from_flow(
 
 
 def input_check_gen_img_from_flow(
-    key: PRNGKey,
     flow_field: jnp.ndarray,
     parameters: ImageGenerationSpecification,
     position_bounds: tuple[int, int] = (512, 512),
@@ -345,7 +343,6 @@ def input_check_gen_img_from_flow(
     """Check the input arguments for generate_images_from_flow.
 
     Args:
-        key: Random key for reproducibility.
         flow_field: Array of shape (N, H, W, 2) containing N velocity fields
             with velocities in length measure unit per second.
         parameters: ImageGenerationParameters dataclass containing all the
@@ -360,26 +357,7 @@ def input_check_gen_img_from_flow(
         histogram: Optional histogram to match the images to.
             NOTE: Histogram equalization is very slow!
     """
-    # Check diameter_ranges
-    if not all(0 < d1 <= d2 for d1, d2 in parameters.diameter_ranges):
-        raise ValueError("Each diameter_range must satisfy 0 < min <= max.")
 
-    # Check intensity_ranges
-    if not all(0 <= d1 <= d2 for d1, d2 in parameters.intensity_ranges):
-        raise ValueError("Each intensity_range must satisfy 0 <= min <= max.")
-
-    # Check rho_ranges
-    if not all(-1 < r1 <= r2 < 1 for r1, r2 in parameters.rho_ranges):
-        raise ValueError(
-            "All values in rho_ranges must be in the open interval (-1, 1)."
-        )
-
-    if parameters.batch_size <= 0:
-        raise ValueError("num_images must be a positive integer.")
-    if not (0 <= parameters.p_hide_img1 <= 1):
-        raise ValueError("p_hide_img1 must be between 0 and 1.")
-    if not (0 <= parameters.p_hide_img2 <= 1):
-        raise ValueError("p_hide_img2 must be between 0 and 1.")
     if not (0 < flow_field_res_x):
         raise ValueError("flow_field_res_x must be a positive scalar (int or float)")
     if not (0 < flow_field_res_y):
@@ -394,23 +372,7 @@ def input_check_gen_img_from_flow(
             "The width of the position_bounds must be greater "
             "than the width of the image plus the offset."
         )
-    if parameters.seeding_density_range[0] > parameters.seeding_density_range[1]:
-        raise ValueError("seeding_density_range must be in the form (min, max).")
 
-    if not (0 <= parameters.noise_uniform):
-        raise ValueError("noise_uniform must be a non-negative number.")
-
-    if parameters.noise_gaussian_mean < 0:
-        raise ValueError("noise_gaussian_mean must be a non-negative number.")
-    if parameters.noise_gaussian_std < 0:
-        raise ValueError("noise_gaussian_std must be a non-negative number.")
-
-    if not (0 <= parameters.diameter_var):
-        raise ValueError("diameter_var must be a non-negative number.")
-    if not (0 <= parameters.intensity_var):
-        raise ValueError("intensity_var must be a non-negative number.")
-    if not (0 <= parameters.rho_var):
-        raise ValueError("rho_var must be a non-negative number.")
     if mask is not None and mask.shape != parameters.image_shape:
         raise ValueError(
             f"mask shape {mask.shape} does not match "

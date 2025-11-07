@@ -5,7 +5,7 @@ import numpy as np
 from typing_extensions import Self
 import jax.numpy as jnp
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from jax import tree_util
 
 PRNGKey: TypeAlias = jnp.ndarray
@@ -123,13 +123,126 @@ class ImageGenerationSpecification:
     seeding_density_range: tuple[float, float] = (0.01, 0.02)
     p_hide_img1: float = 0.01
     p_hide_img2: float = 0.01
-    diameter_ranges: list[tuple[float, float]] = [(0.1, 1.0)]
+    diameter_ranges: list[tuple[float, float]] = field(default_factory=lambda: [(0.1, 1.0)])
     diameter_var: float = 1.0
-    intensity_ranges: list[tuple[float, float]] = [(50, 200)]
+    intensity_ranges: list[tuple[float, float]] = field(default_factory=lambda: [(50, 200)])
     intensity_var: float = 1.0
-    rho_ranges: list[tuple[float, float]] = [(-0.99, 0.99)]
+    rho_ranges: list[tuple[float, float]] = field(default_factory=lambda: [(-0.99, 0.99)])
     rho_var: float = 1.0
     dt: float = 1.0
     noise_uniform: float = 0.0
     noise_gaussian_mean: float = 0.0
     noise_gaussian_std: float = 0.0
+
+    def __post_init__(self):
+        if self.batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer.")
+        if (
+            # not isinstance(self.image_shape, tuple)
+            # or len(self.image_shape) != 2 or
+            not all(isinstance(s, int) and s > 0 for s in self.image_shape)
+        ):
+            raise ValueError("image_shape must be a tuple of two positive integers.")
+        if not (0.0 <= self.p_hide_img1 <= 1.0):
+            raise ValueError("p_hide_img1 must be between 0 and 1.")
+        if not (0.0 <= self.p_hide_img2 <= 1.0):
+            raise ValueError("p_hide_img2 must be between 0 and 1.")
+        
+        if (
+            # not isinstance(image_shape, tuple)
+            # or len(image_shape) != 2 or 
+            not all(isinstance(s, int) and s > 0 for s in self.image_shape)
+        ):
+            raise ValueError(
+                "image_shape must be a tuple of two positive integers."
+            )
+        
+        if (
+            # not isinstance(img_offset, tuple)
+            # or len(img_offset) != 2
+            # or not all(isinstance(s, (int, float)) and s >= 0 for s in img_offset)
+            not all(
+                isinstance(s, (int, float)) and s >= 0 for s in self.img_offset
+            )
+        ):
+            raise ValueError("img_offset must be a tuple of two non-negative numbers.")
+        
+        if (
+            # not isinstance(seeding_density_range, tuple) or 
+            # len(seeding_density_range) != 2 or 
+            not all(
+                isinstance(s, (int, float)) and s >= 0 for s in self.seeding_density_range
+            )
+        ):
+            raise ValueError(
+                "seeding_density_range must be a tuple of two non-negative numbers."
+            )
+
+        if self.seeding_density_range[0] > self.seeding_density_range[1]:
+            raise ValueError(
+                "seeding_density_range must be in the form (min, max)."
+            )
+        
+        if not all(0 < d1 <= d2 for d1, d2 in self.diameter_ranges):
+            raise ValueError("Each diameter_range must satisfy 0 < min <= max.")
+
+        if not all(0 <= d1 <= d2 for d1, d2 in self.intensity_ranges):
+            raise ValueError(
+                "Each intensity_range must satisfy 0 <= min <= max."
+            )
+        
+        if not all(-1 < r1 <= r2 < 1 for r1, r2 in self.rho_ranges):
+            raise ValueError(
+                "All values in rho_ranges must be in the open interval (-1, 1)."
+            )
+        
+        if not (0 <= self.diameter_var):
+            raise ValueError("diameter_var must be a non-negative number.")
+        if not (0 <= self.intensity_var):
+            raise ValueError("intensity_var must be a non-negative number.")
+        if not (0 <= self.rho_var):
+            raise ValueError("rho_var must be a non-negative number.")
+        
+        if not (0 <= self.noise_uniform):
+            raise ValueError("noise_uniform must be a non-negative number.")
+
+        if self.noise_gaussian_mean < 0:
+            raise ValueError("noise_gaussian_mean must be a non-negative number.")
+        if self.noise_gaussian_std < 0:
+            raise ValueError("noise_gaussian_std must be a non-negative number.")
+        if self.dt <= 0:
+            raise ValueError("dt must be a positive number.")
+        
+    def update(self, **kwargs) -> Self:
+        """Return a new ImageGenerationSpecification with updated fields.
+
+        Args:
+            **kwargs: Fields to update in the specification.
+
+        Returns:
+            A new ImageGenerationSpecification instance with updated fields.
+        """
+        return self.__class__(
+            batch_size=kwargs.get("batch_size", self.batch_size),
+            image_shape=kwargs.get("image_shape", self.image_shape),
+            img_offset=kwargs.get("img_offset", self.img_offset),
+            seeding_density_range=kwargs.get(
+                "seeding_density_range", self.seeding_density_range
+            ),
+            p_hide_img1=kwargs.get("p_hide_img1", self.p_hide_img1),
+            p_hide_img2=kwargs.get("p_hide_img2", self.p_hide_img2),
+            diameter_ranges=kwargs.get("diameter_ranges", self.diameter_ranges),
+            diameter_var=kwargs.get("diameter_var", self.diameter_var),
+            intensity_ranges=kwargs.get("intensity_ranges", self.intensity_ranges),
+            intensity_var=kwargs.get("intensity_var", self.intensity_var),
+            rho_ranges=kwargs.get("rho_ranges", self.rho_ranges),
+            rho_var=kwargs.get("rho_var", self.rho_var),
+            dt=kwargs.get("dt", self.dt),
+            noise_uniform=kwargs.get("noise_uniform", self.noise_uniform),
+            noise_gaussian_mean=kwargs.get(
+                "noise_gaussian_mean", self.noise_gaussian_mean
+            ),
+            noise_gaussian_std=kwargs.get(
+                "noise_gaussian_std", self.noise_gaussian_std
+            ),
+        )
