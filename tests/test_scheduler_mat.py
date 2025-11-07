@@ -72,10 +72,9 @@ def test_mat_scheduler_iteration(mock_mat_files):
     while True:
         try:
             data = scheduler.get_batch(batch_size=1)
-            assert isinstance(data, list)
-            assert len(data) == 1
-            assert data[0].flow_fields.shape == (256, 256, 2), (
-                f"Expected flow field shape (256, 256, 2), got {data[0].flow_fields.shape}"
+            assert isinstance(data, SchedulerData)
+            assert data.flow_fields.shape == (1, 256, 256, 2), (
+                f"Expected flow field shape (1, 256, 256, 2), got {data.flow_fields.shape}"
             )
             count += 1
         except StopIteration:
@@ -147,10 +146,8 @@ def test_mat_scheduler_get_batch(mock_mat_files):
 
     batch_size = len(files)
     batch = scheduler.get_batch(batch_size)
-    assert isinstance(batch, list)
-    assert len(batch) == batch_size
-    assert all(isinstance(b, SchedulerData) for b in batch)
-    assert all(b.flow_fields.shape == (256, 256, 2) for b in batch)
+    assert isinstance(batch, SchedulerData)
+    assert batch.flow_fields.shape == (batch_size, 256, 256, 2)
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
@@ -166,14 +163,13 @@ def test_mat_scheduler_with_images(mock_mat_files):
         except StopIteration:
             break
 
-        assert len(batch) == 1
-        data = batch[0]
-        assert isinstance(data, SchedulerData)
-        assert data.flow_fields.shape == (256, 256, 2)
-        assert data.images1 is not None
-        assert data.images2 is not None
-        assert data.images1.shape == (256, 256)
-        assert data.images2.shape == (256, 256)
+
+        assert isinstance(batch, SchedulerData)
+        assert batch.flow_fields.shape == (1, 256, 256, 2)
+        assert batch.images1 is not None
+        assert batch.images2 is not None
+        assert batch.images1.shape == (1, 256, 256)
+        assert batch.images2.shape == (1, 256, 256)
 
 
 # ============================
@@ -204,9 +200,8 @@ def test_episode_iteration(mock_mat_files):
         except StopIteration:
             break
         # every batch is (batch_size, H, W, 2)
-        assert isinstance(batch, list)
-        assert len(batch) == batch_size
-        assert all(b.flow_fields.shape == (H, W, 2) for b in batch)
+        assert isinstance(batch, SchedulerData)
+        assert batch.flow_fields.shape == (batch_size, H, W, 2)
 
         steps.append(t)
         t += 1
@@ -239,19 +234,19 @@ def test_reset_episode_resamples(mock_mat_files):
     second0 = epi.get_batch(batch_size)  # new t = 0
     assert epi.steps_remaining() == episode_length - 1
     # ensure we didn’t get the exact same files twice
-    assert not np.array_equal(first0[0].flow_fields, second0[0].flow_fields)
+    assert not np.array_equal(first0.flow_fields, second0.flow_fields)
 
     # Check which files were used by opening the files
     # with a regular scheduler
     base.file_list = reordered_files[:batch_size]
     base.reset()
     rightfirst0 = base.get_batch(batch_size)
-    assert np.array_equal(first0[0].flow_fields, rightfirst0[0].flow_fields)
+    assert np.array_equal(first0.flow_fields, rightfirst0.flow_fields)
 
     base.file_list = post_reset_files[:batch_size]
     base.reset()
     rightsecond0 = base.get_batch(batch_size)
-    assert np.array_equal(second0[0].flow_fields, rightsecond0[0].flow_fields)
+    assert np.array_equal(second0.flow_fields, rightsecond0.flow_fields)
 
 
 @pytest.mark.parametrize("mock_mat_files", [64], indirect=True)  # 64 frames
@@ -419,14 +414,12 @@ def test_mat_scheduler_get_batch_with_images(mock_mat_files):
     batch_size = len(files)
     batch = scheduler.get_batch(batch_size)
 
-    img_prevs, img_nexts, flows = zip(
-        *[(data.images1, data.images2, data.flow_fields) for data in batch]
-    )
-    assert all(img is not None for img in img_prevs)
-    assert all(img is not None for img in img_nexts)
-    img_prevs = np.stack(img_prevs, axis=0)
-    img_nexts = np.stack(img_nexts, axis=0)
-    flows =  np.stack(flows, axis=0)
+    img_prevs = batch.images1
+    img_nexts = batch.images2
+    flows = batch.flow_fields
+
+    assert img_prevs is not None
+    assert img_nexts is not None
 
     assert img_prevs.shape == (batch_size, 256, 256)
     assert img_nexts.shape == (batch_size, 256, 256)
@@ -445,12 +438,12 @@ def test_next_loop_reset(tmp_path):
         output_shape=(4, 4),
     )
 
-    first = sched.get_batch(batch_size=1)[0]  # consumes file, index -> 1
-    second = sched.get_batch(batch_size=1)[0]  # triggers reset() branch
+    first = sched.get_batch(batch_size=1)  # consumes file, index -> 1
+    second = sched.get_batch(batch_size=1)  # triggers reset() branch
 
     # Both iterations must yield the same (resized) flow field
-    np.testing.assert_array_equal(first.flow_fields, flow)
-    np.testing.assert_array_equal(second.flow_fields, flow)
+    np.testing.assert_array_equal(first.flow_fields[0, ...], flow)
+    np.testing.assert_array_equal(second.flow_fields[0, ...], flow)
 
     # After two successful returns we are back at "end of list"
     assert sched.index == 1  # 0 → reset() -> +1 during 2nd return
@@ -476,7 +469,7 @@ def test_next_skip_on_error(tmp_path):
 
     # The scheduler must now point to the good file it cached
     assert sched._cached_file == good_path
-    np.testing.assert_array_equal(sample[0].flow_fields, good_flow)
+    np.testing.assert_array_equal(sample.flow_fields[0, ...], good_flow)
 
     # Both list entries have been consumed (bad skipped, good returned)
     assert sched.index == 2

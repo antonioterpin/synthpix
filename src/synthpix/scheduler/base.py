@@ -3,6 +3,7 @@
 import glob
 import os
 from abc import ABC, abstractmethod
+import numpy as np
 from typing_extensions import Self
 
 import jax
@@ -166,7 +167,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
 
         raise StopIteration
 
-    def get_batch(self, batch_size: int) -> list[SchedulerData]:
+    def get_batch(self, batch_size: int) -> SchedulerData:
         """Retrieves a batch of flow fields using the current scheduler state.
 
         This method repeatedly calls `__next__()` to store a batch
@@ -175,7 +176,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         Args:
             batch_size: Number of flow field slices to retrieve.
 
-        Returns: A np.ndarray of flow field slices with length `batch_size`.
+        Returns: SchedulerData containing the batch of flow field slices.
 
         Raises:
             StopIteration: If the dataset is exhausted before reaching the
@@ -197,7 +198,22 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             raise StopIteration
 
         logger.debug(f"Loaded batch of {len(batch)} flow field slices.")
-        return batch
+
+        images1, images2 = None, None
+        if all(
+            data.images1 is not None for data in batch
+        ):
+            images1 = np.stack([data.images1 for data in batch])
+        if all(
+            data.images2 is not None for data in batch
+        ):
+            images2 = np.stack([data.images2 for data in batch])
+
+        return SchedulerData(
+            flow_fields=np.stack([data.flow_fields for data in batch]),
+            images1=images1,
+            images2=images2,
+        )
 
     @abstractmethod
     def load_file(self, file_path: str) -> SchedulerData:

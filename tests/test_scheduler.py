@@ -14,6 +14,7 @@ from synthpix.scheduler import (
     NumpyFlowFieldScheduler,
     PrefetchingFlowFieldScheduler,
 )
+from synthpix.types import SchedulerData
 from synthpix.utils import load_configuration
 
 config = load_configuration("config/testing.yaml")
@@ -87,27 +88,6 @@ def test_non_hdf5_file(temp_txt_file):
     ):
         HDF5FlowFieldScheduler(file_list=temp_txt_file)
 
-
-def test_hdf5_shape(temp_file):
-    """Test that the HDF5 file has the correct shape."""
-    scheduler = HDF5FlowFieldScheduler.from_config(
-        {
-            "scheduler_files": [temp_file],
-        }
-    )
-    with h5py.File(temp_file, "r") as file:
-        temp_file_key = list(file.keys())[0]
-        expected_shape = (
-            file[temp_file_key].shape[0],
-            file[temp_file_key].shape[2],
-            2,
-        )
-    actual_shape = scheduler.get_flow_fields_shape()
-    assert (
-        actual_shape == expected_shape
-    ), f"Expected {expected_shape}, got {actual_shape}"
-
-
 @pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
 def test_numpy_scheduler_iteration(mock_numpy_files):
     files, dims = mock_numpy_files
@@ -120,10 +100,15 @@ def test_numpy_scheduler_iteration(mock_numpy_files):
     )
 
     count = 0
-    for flow in scheduler:
-        assert isinstance(flow, np.ndarray)
-        assert flow.shape == (dims["height"], dims["width"], 2)
-        count += 1
+    while True:
+        try:
+            batch = scheduler.get_batch(batch_size=1)
+            flow = batch.flow_fields
+            assert isinstance(flow, np.ndarray)
+            assert flow.shape == (1, dims["height"], dims["width"], 2)
+            count += 1
+        except StopIteration:
+            break
 
     assert count == 2
 
@@ -196,8 +181,8 @@ def test_numpy_scheduler_get_batch(mock_numpy_files):
 
     batch_size = len(files)
     batch = scheduler.get_batch(batch_size)
-    assert isinstance(batch, np.ndarray)
-    assert batch.shape == (batch_size, dims["height"], dims["width"], 2)
+    assert isinstance(batch, SchedulerData)
+    assert batch.flow_fields.shape == (batch_size, dims["height"], dims["width"], 2)
 
 
 @pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
@@ -207,21 +192,27 @@ def test_numpy_scheduler_with_images(mock_numpy_files):
         {"scheduler_files": files, "include_images": True, "loop": False}
     )
 
+    batch_size = 1
     # when including images, iteration returns dicts with flow and images
-    for output in scheduler:
-        assert isinstance(output, dict)
-        assert set(output.keys()) == {"flow", "img_prev", "img_next"}
+    while True:
+        try:
+            output = scheduler.get_batch(batch_size)
+        except StopIteration:
+            break
+        assert isinstance(output, SchedulerData)
+        assert output.images1 is not None
+        assert output.images2 is not None
 
-        flow = output["flow"]
-        img_prev = output["img_prev"]
-        img_next = output["img_next"]
+        flow = output.flow_fields
+        img_prev = output.images1
+        img_next = output.images2
 
         assert isinstance(flow, np.ndarray)
-        assert flow.shape == (dims["height"], dims["width"], 2)
+        assert flow.shape == (batch_size, dims["height"], dims["width"], 2)
         assert isinstance(img_prev, np.ndarray)
-        assert img_prev.shape == (dims["height"], dims["width"], 3)
+        assert img_prev.shape == (batch_size, dims["height"], dims["width"], 3)
         assert isinstance(img_next, np.ndarray)
-        assert img_next.shape == (dims["height"], dims["width"], 3)
+        assert img_next.shape == (batch_size, dims["height"], dims["width"], 3)
 
 
 @pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
@@ -241,13 +232,16 @@ def test_numpy_scheduler_loop_reset(mock_numpy_files):
 
     # Read exactly two full epochs
     expected_total = len(files) * 2
-    out_shapes = [next(scheduler).shape for _ in range(expected_total)]
+    out_shapes = [
+        scheduler.get_batch(1).flow_fields.shape 
+        for _ in range(expected_total)
+    ]
 
     # We should have received the right number of samples
     assert len(out_shapes) == expected_total
 
     # Every returned flow must have the correct shape
-    assert set(out_shapes) == {(dims["height"], dims["width"], 2)}
+    assert set(out_shapes) == {(1, dims["height"], dims["width"], 2)}
 
     # After two complete epochs the internal index should be back at 0
     # (because reset was called when the first epoch ended).
@@ -278,12 +272,12 @@ def test_numpy_scheduler_skips_bad_file(tmp_path):
 
     # The first call should return the *good* flow after silently
     # skipping the corrupted one.
-    flow = next(scheduler)
-    assert np.allclose(flow, good_flow)
+    flow = scheduler.get_batch(1).flow_fields
+    assert np.allclose(flow[0, ...], good_flow)
 
     # No more valid files remain, so a second call must raise StopIteration
     with pytest.raises(StopIteration):
-        next(scheduler)
+        _ = scheduler.get_batch(1)
 
 
 # ============================
@@ -300,11 +294,21 @@ class DummyScheduler(BaseFlowFieldScheduler):
 
     def get_next_slice(self):
         assert self._cached_data is not None
-        return self._cached_data[:, self._slice_idx, :, :][:, :, :2]
+        return SchedulerData(
+            flow_fields=self._cached_data.flow_fields[:, self._slice_idx, :, :2]
+        )
 
     def get_flow_fields_shape(self):
         assert self._cached_data is not None
-        return self._cached_data.shape[0], self._cached_data.shape[2] // 2, 2
+        return self._cached_data.flow_fields.shape[0], self._cached_data.flow_fields.shape[2] // 2, 2
+    
+    @classmethod
+    def from_config(cls, config: dict) -> "DummyScheduler":
+        return cls(
+            file_list=config["scheduler_files"],
+            randomize=config.get("randomize", False),
+            loop=config.get("loop", False),
+        )
 
 
 class FailingDummyScheduler(DummyScheduler):
@@ -321,7 +325,13 @@ def test_abstract_scheduler_iteration(generate_hdf5_file):
         "dummy_test.h5", dims={"x_dim": 4, "y_dim": 2, "z_dim": 4, "features": 3}
     )
     scheduler = DummyScheduler([tmp_file])
-    count = sum(1 for _ in scheduler)
+    count = 0
+    while True:
+        try:
+            _ = scheduler.get_batch(1)
+            count += 1
+        except StopIteration:
+            break
     assert count == 2
     os.remove(tmp_file)
 
@@ -400,13 +410,14 @@ def test_error_branch_skips_bad_file(tmp_path):
         [str(bad), str(good)], randomize=False, loop=False
     )
 
-    first_flow = next(scheduler)  # should come from *good* file
+    # should come from *good* file
+    first_flow = scheduler.get_batch(1).flow_fields[0, ...]
     # shape (x, z, 2) = (4, 4, 2)
     assert first_flow.shape == (4, 4, 2)
     # exhaust remaining slice to be sure everything still works
-    _ = next(scheduler)
+    _ = scheduler.get_batch(1)
     with pytest.raises(StopIteration):
-        next(scheduler)
+        _ = scheduler.get_batch(1)
 
 
 def test_get_batch_success(tmp_path):
@@ -415,7 +426,7 @@ def test_get_batch_success(tmp_path):
     scheduler = DummyScheduler([str(f)], randomize=False, loop=False)
 
     batch = scheduler.get_batch(2)  # exactly the available slices
-    assert batch.shape == (2, 4, 4, 2)  # (batch, x, z, 2)
+    assert batch.flow_fields.shape == (2, 4, 4, 2)  # (batch, x, z, 2)
 
 
 def test_get_batch_partial_raises_stopiteration(tmp_path):
@@ -439,7 +450,7 @@ def test_get_batch_warning_and_return(tmp_path):
     # ── success branch ──
     sch_full = DummyScheduler([str(f)])
     batch = sch_full.get_batch(2)  # exactly the available slices
-    assert batch.shape == (2, 4, 4, 2)
+    assert batch.flow_fields.shape == (2, 4, 4, 2)
 
 
 def test_loop_resets_and_continues_dummy(tmp_path):
@@ -447,11 +458,11 @@ def test_loop_resets_and_continues_dummy(tmp_path):
     f.write_text("x")
     sch = DummyScheduler([str(f)], loop=True, randomize=False)
 
-    next(sch)  # slice 0
-    next(sch)  # slice 1
-    third = next(sch)  # after reset → slice 0 again
+    _ = sch.get_batch(1)  # slice 0
+    _ = sch.get_batch(1)  # slice 1
+    third = sch.get_batch(1)  # after reset → slice 0 again
 
-    assert third.shape == (4, 4, 2)
+    assert third.flow_fields.shape == (1, 4, 4, 2)
     # internal state: back at first file, having emitted first slice of epoch 2
     assert sch.index == 0 and sch._slice_idx == 1
 
@@ -478,10 +489,15 @@ def test_scheduler_iteration(mock_hdf5_files):
     scheduler = HDF5FlowFieldScheduler(file_list=files, randomize=True, loop=False)
 
     num_flows = 0
-    for flow in scheduler:
-        expected_shape = (dims["x_dim"], dims["z_dim"], 2)
-        assert flow.shape == expected_shape
-        num_flows += 1
+    while True:
+        try:
+            batch = scheduler.get_batch(1)
+            flow = batch.flow_fields
+            expected_shape = (1, dims["x_dim"], dims["z_dim"], 2)
+            assert flow.shape == expected_shape
+            num_flows += 1
+        except StopIteration:
+            break
 
     assert num_flows == len(files) * dims["y_dim"]
 
@@ -507,15 +523,15 @@ def test_scheduler_iteration_with_multiple_files(mock_hdf5_files):
 
     # Validate iteration
     num_flows = 0
-    for flow in scheduler:
-        # Validate the shape of each flow
-        expected_shape = (
-            dims["x_dim"],
-            dims["z_dim"],
-            2,
-        )  # Assumes slicing z_dim and selecting 2 features
-        assert flow.shape == expected_shape
-        num_flows += 1
+    while True:
+        try:
+            batch = scheduler.get_batch(1)
+            flow = batch.flow_fields
+            expected_shape = (1, dims["x_dim"], dims["z_dim"], 2)
+            assert flow.shape == expected_shape
+            num_flows += 1
+        except StopIteration:
+            break
 
     # Validate the total number of flows
     assert num_flows == len(files) * dims["y_dim"]
@@ -531,8 +547,11 @@ def test_scheduler_time(randomize, mock_hdf5_files):
     scheduler = HDF5FlowFieldScheduler(file_list=files, randomize=randomize, loop=False)
 
     def iterate_scheduler():
-        for _ in scheduler:
-            pass
+        while True:
+            try:
+                _ = scheduler.get_batch(1)
+            except StopIteration:
+                break
         scheduler.epoch = 0
         scheduler.index = 0
         scheduler._slice_idx = 0

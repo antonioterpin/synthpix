@@ -116,11 +116,16 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         self._t = 0
         return self
 
-    def get_batch(self, batch_size: int) -> list[SchedulerData]:
+    def get_batch(self, batch_size: int) -> SchedulerData:
         """Return exactly one time-step for `batch_size` parallel episodes.
 
         *Does not* loop internally, we delegate to the wrapped base
         scheduler once, because `__next__` already returns a full batch.
+
+        Args:
+            batch_size: Must match the ``batch_size`` used at initialization.
+
+        Returns: SchedulerData containing the flow fields for the current time-step
         """
         if batch_size != self.batch_size:
             raise ValueError(
