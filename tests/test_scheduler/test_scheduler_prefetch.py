@@ -60,7 +60,6 @@ class MinimalEpisodic(EpisodicSchedulerProtocol):
             # you can either cycle or clamp; for tests, cycle is fine:
             self._t = 0
         self._t += 1
-        print(f"MinimalEpisodic.get_batch: t={self._t}/{self.episode_length}")
         return np.ones((batch_size,) + self.shape)
 
     def next_episode(self):
@@ -136,7 +135,7 @@ def test_stop_iteration_from_queue_empty():
 
 
 def test_worker_eos_signal_when_queue_full():
-    scheduler = MinimalScheduler(total_batches=0)
+    scheduler = MinimalScheduler(total_batches=1)
 
     pf = PrefetchingFlowFieldScheduler(scheduler=scheduler, batch_size=1, buffer_size=1)
     pf.get_batch(1)  # Starts the thread
@@ -192,18 +191,17 @@ def test_t_counter_wraps_after_episode():
     sched = MinimalEpisodic(total_batches=2)
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
 
-    print(f"Initial t: {pf.scheduler._t}")  # type: ignore[attr-defined]
     pf.get_batch(1) # _t becomes 1
-    print(f"Initial t: {pf.scheduler._t}")  # type: ignore[attr-defined]
-    assert pf.scheduler._t == 1  # type: ignore[attr-defined]
-    print(f"t after 1st get_batch: {pf.scheduler._t}")  # type: ignore[attr-defined]
+    assert pf._t == 1
     pf.get_batch(1) # _t becomes 2
-    print(f"t after 2nd get_batch: {pf.scheduler._t}")  # type: ignore[attr-defined]
-    assert pf.scheduler._t == 2  # still inside episode # type: ignore[attr-defined]
-    print(f"Getting batch to wrap t... {pf.scheduler._t}")  # type: ignore[attr-defined]
+    assert pf._t == 2  # still inside episode
 
+    with pytest.raises(StopIteration):
+        pf.get_batch(1)  # _t would wrap to 0 here
+    pf.reset()
+    assert pf._t == 0
     pf.get_batch(1) # _t wraps to 0
-    assert pf.scheduler._t == 1  # type: ignore[attr-defined]
+    assert pf._t == 1
     pf.shutdown()
 
 
@@ -368,7 +366,7 @@ def test_reset_then_next_episode_three_cycles(monkeypatch):
     # ---------------- Episode 1 ----------------
     first_batch = pf.get_batch(1)
     assert first_batch.shape == (1,) + shape
-    assert pf.scheduler._t == 1  # type: ignore[attr-defined]
+    assert pf._t == 1  # type: ignore[attr-defined]
 
     pf.reset()
     assert not pf._thread.is_alive()
@@ -376,14 +374,14 @@ def test_reset_then_next_episode_three_cycles(monkeypatch):
 
     # ---------------- Episode 2 ----------------
     pf.next_episode(join_timeout=1)
-    assert pf.scheduler._t == 0 and pf._thread.is_alive()
+    assert pf._t == 0 and pf._thread.is_alive()
 
     # Consume one batch
     assert pf.get_batch(1).shape == (1,) + shape
-    assert pf.scheduler._t == 1  # type: ignore[attr-defined]
+    assert pf._t == 1  # type: ignore[attr-defined]
     # Case when queue NOT empty
     pf.next_episode(join_timeout=1)  # flush unfinished episode
-    assert pf.scheduler._t == 0  # type: ignore[attr-defined]
+    assert pf._t == 0  # type: ignore[attr-defined]
 
     # ---------------- Episode 3 ----------------
     def always_empty():
@@ -392,12 +390,12 @@ def test_reset_then_next_episode_three_cycles(monkeypatch):
     monkeypatch.setattr(pf._queue, "get_nowait", always_empty, raising=True)
     # Consume one batch so we are mid-episode again (_t == 1)
     assert pf.get_batch(1).shape == (1,) + shape
-    assert pf.scheduler._t == 1  # type: ignore[attr-defined]
+    assert pf._t == 1  # type: ignore[attr-defined]
     assert pf._thread.is_alive()
 
     # case when queue empty
     pf.next_episode(join_timeout=1)
-    assert pf.scheduler._t == 0  # type: ignore[attr-defined]
+    assert pf._t == 0  # type: ignore[attr-defined]
     # Producer thread was restarted
     assert pf._thread.is_alive()
 
@@ -526,6 +524,6 @@ def test_worker_eos_signal_via_full_queue_branch_direct():
 
     # 5) And consuming it via __next__ raises StopIteration.
     with pytest.raises(StopIteration):
-        pf.get_batch(1)
+        pf.get_batch(2)
 
     pf.shutdown()

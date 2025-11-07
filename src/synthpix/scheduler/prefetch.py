@@ -77,11 +77,18 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
                 f"Batch size {batch_size} does not match the "
                 f"prefetching batch size {self.batch_size}."
             )
+        if not self._started:
+            self._started = True
+            self._thread.start()
+            logger.debug("Background thread started.")
+
+        if isinstance(self.scheduler, EpisodicSchedulerProtocol):
+            if self._t >= self.scheduler.episode_length:
+                raise StopIteration(
+                    "Episode ended. No more flow fields available. "
+                    "Use next_episode() to continue."
+                )
         try:
-            if not self._started:
-                self._started = True
-                self._thread.start()
-                logger.debug("Background thread started.")
             batch = self._queue.get(block=True, timeout=2)
             self._t += 1
             if batch is None:
