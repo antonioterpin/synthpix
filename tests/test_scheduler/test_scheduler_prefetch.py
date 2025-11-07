@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from synthpix.scheduler import PrefetchingFlowFieldScheduler
-from synthpix.scheduler.protocol import EpisodicSchedulerProtocol, SchedulerProtocol
+from synthpix.scheduler.protocol import EpisodeEnd, EpisodicSchedulerProtocol, SchedulerProtocol
 from synthpix.types import SchedulerData
 
 
@@ -177,9 +177,9 @@ def test_next_episode_resets_thread_and_flushes_queue():
     pf.get_batch(1) # start the thread
     time.sleep(0.2)  # allow prefetch
 
-    pf.scheduler._t = 3 # type: ignore[attr-defined]
+    pf._t = 3 # type: ignore[attr-defined]
     pf.next_episode()
-    assert pf.scheduler._t == 0 # type: ignore[attr-defined]
+    assert pf._t == 0 # type: ignore[attr-defined]
     pf.shutdown()
 
 
@@ -201,7 +201,7 @@ def test_t_counter_wraps_after_episode():
     pf.get_batch(1) # _t becomes 2
     assert pf._t == 2  # still inside episode
 
-    with pytest.raises(StopIteration):
+    with pytest.raises(EpisodeEnd):
         pf.get_batch(1)  # _t would wrap to 0 here
     pf.reset()
     assert pf._t == 0
@@ -438,7 +438,7 @@ def test_next_episode_immediate_timeout_break():
     pf.next_episode(join_timeout=0)
 
     # After calling next_episode the internal counter must be reset
-    assert pf.scheduler._t == 0  # type: ignore[attr-defined]
+    assert pf._t == 0  # type: ignore[attr-defined]
     pf.shutdown()
 
 
@@ -459,7 +459,7 @@ def test_next_episode_handles_queue_empty(monkeypatch):
 
     # This should complete without raising and reset the internal counter
     pf.next_episode(join_timeout=0.05)
-    assert pf.scheduler._t == 0  # type: ignore[attr-defined]
+    assert pf._t == 0  # type: ignore[attr-defined]
     pf.shutdown()
 
 
@@ -474,7 +474,7 @@ def test_next_episode_breaks_on_eos_sentinel():
 
     # This should notice the EOS and break out, resetting _t
     pf.next_episode(join_timeout=1)
-    assert pf.scheduler._t == 0 # type: ignore[attr-defined]
+    assert pf._t == 0 # type: ignore[attr-defined]
     pf.shutdown()
 
 
