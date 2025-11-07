@@ -243,9 +243,11 @@ def apply_flow_to_particles(
     Returns: Array of shape (N, 2) or (N, 3) containing
         the new particle coordinates.
     """
+    update_position: Callable[[jnp.ndarray], jnp.ndarray]
+
     if particle_positions.shape[1] == 2:
 
-        def update_position(
+        def _update_position_2d(
             yx: jnp.ndarray,
         ) -> jnp.ndarray:
             y, x = yx
@@ -258,10 +260,12 @@ def apply_flow_to_particles(
 
             # Return the new position: (y + v * dt, x + u * dt)
             return jnp.array([y + v * dt, x + u * dt])
+        
+        update_position = _update_position_2d
 
     else:
 
-        def update_position(
+        def _update_position_3d(
             zyx: jnp.ndarray,
         ) -> jnp.ndarray:
             z, y, x = zyx
@@ -275,6 +279,8 @@ def apply_flow_to_particles(
 
             # Return the new position: (z + w * dt, y + v * dt, x + u * dt)
             return jnp.array([z + w * dt, y + v * dt, x + u * dt])
+
+        update_position = _update_position_3d
 
     # Vectorize the function over all particles
     return jax.vmap(update_position)(particle_positions)
