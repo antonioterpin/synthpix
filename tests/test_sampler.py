@@ -814,31 +814,52 @@ def test_synthetic_sampler_batches(
     "batch_size, batches_per_flow_batch, flow_fields_per_batch",
     [(24, 4, 12), (12, 6, 12)],
 )
-@pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": True}], indirect=True
-)
+@pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
 def test_sampler_switches_flow_fields(
-    batch_size, batches_per_flow_batch, flow_fields_per_batch, scheduler
+    batch_size, batches_per_flow_batch, flow_fields_per_batch, mock_mat_files
 ):
+    
+    files, dims = mock_mat_files
+    H, W = dims["height"], dims["width"]
+
+    CI = os.getenv("CI") == "true"
+
+    if CI:
+        devices = None
+    else:
+        devices = jax.devices()
+        if len(devices) > 4:
+            devices = devices[:4]
+
+    batch_size = 3 * 4  # multiple of all number of devices
+    scheduler = MATFlowFieldScheduler(files, loop=True, output_shape=(H, W))
+
     config = sampler_config.copy()
     config["batch_size"] = batch_size
     config["batches_per_flow_batch"] = batches_per_flow_batch
     config["flow_fields_per_batch"] = flow_fields_per_batch
+    config["devices"] = devices
+
     sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
         config=config,
     )
 
     for i, batch in enumerate(sampler):
-        if i >= batches_per_flow_batch - 1:
+        if i == 0:
             batch1 = batch
+        if i >= batches_per_flow_batch - 1:
+            batch2 = batch
             break
 
-    batch2 = next(sampler)
+    batch3 = next(sampler)
 
     assert not jnp.allclose(batch1.images1, batch2.images1)
     assert not jnp.allclose(batch1.images2, batch2.images2)
-    assert not jnp.allclose(batch1.flow_fields, batch2.flow_fields)
+    assert jnp.allclose(batch1.flow_fields, batch2.flow_fields)
+    assert not jnp.allclose(batch2.images1, batch3.images1)
+    assert not jnp.allclose(batch2.images2, batch3.images2)
+    assert not jnp.allclose(batch2.flow_fields, batch3.flow_fields)
 
 
 @pytest.mark.slow
