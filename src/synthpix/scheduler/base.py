@@ -220,8 +220,8 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         Returns: Shape of the flow field.
         """
 
-    @abstractmethod
     @classmethod
+    @abstractmethod
     def from_config(cls, config: dict) -> Self:
         """Creates a BaseFlowFieldScheduler instance from a configuration.
 

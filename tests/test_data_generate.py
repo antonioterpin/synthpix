@@ -1,5 +1,6 @@
 import re
 import timeit
+from synthpix.types import ImageGenerationSpecification
 from tests.example_flows import get_flow_function
 
 import jax
@@ -21,41 +22,15 @@ REPETITIONS = config["REPETITIONS"]
 NUMBER_OF_EXECUTIONS = config["EXECUTIONS_DATA_GEN"]
 
 
-@pytest.mark.parametrize(
-    "key",
-    [
-        None,
-        42,
-        "invalid_key",
-        jnp.array([1, 2]),
-        jnp.array([1.0, 2.0]),
-        jnp.array([1, 2, 3]),
-    ],
-)
-def test_invalid_key(key):
-    """Test that invalid PRNG keys raise a TypeError."""
-    flow_field = jnp.zeros((1, 128, 128, 2))
-    image_shape = (128, 128)
-    with pytest.raises(
-        ValueError,
-        match="key must be a jax.array with shape \\(2,\\) and dtype jnp.uint32.",
-    ):
-        input_check_gen_img_from_flow(
-            key, flow_field=flow_field, image_shape=image_shape
-        )
-
-
 @pytest.mark.parametrize("flow_field", [None, "invalid_flow", 42, [1, 2]])
 def test_invalid_flow_field(flow_field):
     """Test that invalid flow_field raise a ValueError."""
-    key = jax.random.PRNGKey(0)
-    image_shape = (128, 128)
     with pytest.raises(
         ValueError,
         match=f"flow_field must be a jnp.ndarray, got {type(flow_field)}.",
     ):
         input_check_gen_img_from_flow(
-            key, flow_field=flow_field, image_shape=image_shape
+            flow_field=flow_field, parameters=ImageGenerationSpecification()
         )
 
 
@@ -64,15 +39,13 @@ def test_invalid_flow_field(flow_field):
 )
 def test_invalid_flow_field_shape(flow_field):
     """Test that invalid flow_field shapes raise a ValueError."""
-    key = jax.random.PRNGKey(0)
-    image_shape = (128, 128)
     expected_message = (
         "flow_field must be a 4D jnp.ndarray with shape (N, H, W, 2), "
         f"got shape {flow_field.shape}."
     )
     with pytest.raises(ValueError, match=re.escape(expected_message)):
         input_check_gen_img_from_flow(
-            key, flow_field=flow_field, image_shape=image_shape
+            flow_field=flow_field, parameters=ImageGenerationSpecification()
         )
 
 
@@ -81,13 +54,12 @@ def test_invalid_flow_field_shape(flow_field):
 )
 def test_invalid_image_shape(image_shape):
     """Test that invalid image shapes raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     with pytest.raises(
         ValueError, match="image_shape must be a tuple of two positive integers."
     ):
         input_check_gen_img_from_flow(
-            key, flow_field=flow_field, image_shape=image_shape
+            flow_field=flow_field, parameters=ImageGenerationSpecification(image_shape=image_shape)
         )
 
 
@@ -96,7 +68,6 @@ def test_invalid_image_shape(image_shape):
 )
 def test_invalid_position_bounds(position_bounds):
     """Test that invalid position_bounds raises a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     img_offset = (0, 0)
@@ -104,11 +75,12 @@ def test_invalid_position_bounds(position_bounds):
         ValueError, match="position_bounds must be a tuple of two positive integers."
     ):
         input_check_gen_img_from_flow(
-            key,
             flow_field=flow_field,
+            parameters=ImageGenerationSpecification(
+                image_shape=image_shape,
+                img_offset=img_offset,
+            ),
             position_bounds=position_bounds,
-            image_shape=image_shape,
-            img_offset=img_offset,
         )
 
 
@@ -133,46 +105,30 @@ def test_invalid_position_bounds(position_bounds):
 )
 def test_invalid_seeding_density_range(seeding_density_range, expected_message):
     """Test that invalid seeding_density_range raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(ValueError, match=expected_message):
         input_check_gen_img_from_flow(
-            key,
             flow_field=flow_field,
-            image_shape=image_shape,
-            seeding_density_range=seeding_density_range,
-        )
-
-
-@pytest.mark.parametrize(
-    "max_seeding_density", [-1, "a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
-)
-def test_invalid_max_seeding_density(max_seeding_density):
-    """Test that invalid max_seeding_density raise a ValueError."""
-    key = jax.random.PRNGKey(0)
-    flow_field = jnp.zeros((1, 128, 128, 2))
-    image_shape = (128, 128)
-    with pytest.raises(
-        ValueError, match="max_seeding_density must be a positive number."
-    ):
-        input_check_gen_img_from_flow(
-            key,
-            flow_field=flow_field,
-            image_shape=image_shape,
-            max_seeding_density=max_seeding_density,
+            parameters=ImageGenerationSpecification(
+                image_shape=image_shape,
+                seeding_density_range=seeding_density_range,
+            ),
         )
 
 
 @pytest.mark.parametrize("num_images", [-1, 0, 1.5, 2.5])
 def test_invalid_num_images(num_images):
     """Test that invalid num_images raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
-    with pytest.raises(ValueError, match="num_images must be a positive integer."):
+    with pytest.raises(ValueError, match="batch_size must be a positive integer."):
         input_check_gen_img_from_flow(
-            key, flow_field=flow_field, image_shape=image_shape, num_images=num_images
+            flow_field=flow_field,
+            parameters=ImageGenerationSpecification(
+                image_shape=image_shape,
+                batch_size=num_images,
+            ),
         )
 
 

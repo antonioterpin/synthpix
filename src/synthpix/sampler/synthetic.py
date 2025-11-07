@@ -61,8 +61,8 @@ class SyntheticImageSampler(Sampler):
         output_units: str,
         device_ids: Sequence[int] | None = None,
         generation_specification: ImageGenerationSpecification = ImageGenerationSpecification(),
-        mask: str | None = None,
-        histogram: str | None = None,
+        mask: jnp.ndarray | None = None,
+        histogram: jnp.ndarray | None = None,
     ):
         """Initializes the SyntheticImageSampler.
 
@@ -92,12 +92,10 @@ class SyntheticImageSampler(Sampler):
             device_ids: List of device IDs to use for sharding the
                 flow fields and images.
             generation_specification: Specification for image generation.
-            mask: Optional path to a .npy file containing a mask.
-                Mask must be a 2D array with 1 where unmasked, 0 where masked.
-            histogram: Optional path to a .npy file containing a
-                histogram of the flow field.
-                Histogram must be a 1D array with 256 bins,
-                summing to number of pixels.
+            mask: Optional binary mask to apply during image generation.
+                Should be a jnp.ndarray of shape (height, width).
+            histogram: Optional histogram to match during image generation.
+                Should be a jnp.ndarray of shape (256,).
                 NOTE: Histogram equalization is very slow!
         """
         # unpack for convenience
@@ -107,6 +105,27 @@ class SyntheticImageSampler(Sampler):
         dt = generation_specification.dt
 
         super().__init__(scheduler, self.batch_size)
+
+        # Check provided mask
+        if mask is not None and mask.shape != image_shape:
+            raise ValueError(
+                f"Mask shape {mask.shape} does not match image shape "
+                f"{image_shape}."
+            )
+        self.mask = mask
+        # Check provided histogram
+        if (
+            histogram is not None and (
+                histogram.shape != (256,) 
+                or not jnp.isclose(
+                    histogram.sum(), image_shape[0] * image_shape[1]
+                )
+            )):
+            raise ValueError(
+                "Histogram must be a (256,) array and "
+                "sum to the number of pixels in the image."
+            )
+        self.histogram = histogram
 
         # Name of the axis for the device mesh
         self.shard_fields = "fields"
@@ -212,42 +231,6 @@ class SyntheticImageSampler(Sampler):
         if not isinstance(seed, int) or seed < 0:
             raise ValueError("seed must be a positive integer.")
         self.seed = seed
-
-        if mask is not None:
-            if not isinstance(mask, str):
-                raise ValueError("mask must be a string representing the mask path.")
-            if not os.path.isfile(mask):
-                raise ValueError(f"Mask file {mask} does not exist.")
-            mask_array = np.load(mask)
-            if mask_array.shape != image_shape:
-                raise ValueError(
-                    f"Mask shape {mask_array.shape} does not match image shape "
-                    f"{image_shape}."
-                )
-            if not np.isin(mask_array, [0, 1]).all():
-                raise ValueError("Mask must only contain 0 and 1 values.")
-            self.mask = jnp.array(mask_array)
-        else:
-            self.mask = None
-
-        if histogram is not None:
-            if not isinstance(histogram, str):
-                raise ValueError(
-                    "histogram must be a string representing the histogram path."
-                )
-            if not os.path.isfile(histogram):
-                raise ValueError(f"Histogram file {histogram} does not exist.")
-            hist_array = np.load(histogram)
-            if hist_array.shape != (256,) or not np.isclose(
-                hist_array.sum(), image_shape[0] * image_shape[1]
-            ):
-                raise ValueError(
-                    "Histogram must be a (256,) array and "
-                    "sum to the number of pixels in the image."
-                )
-            self.histogram = jnp.array(hist_array)
-        else:
-            self.histogram = None
 
         if self.batch_size % flow_fields_per_batch != 0:
             extra_batch_size = self.batch_size % flow_fields_per_batch
@@ -579,10 +562,48 @@ class SyntheticImageSampler(Sampler):
             scheduler:
                 An instance of FlowFieldScheduler that provides flow fields.
             config: Configuration dictionary containing the parameters
-                for the sampler.
+                for the sampler. The parameters include all the arguments
+                required by the SyntheticImageSampler constructor, except for
+                the scheduler. The mask and histogram parameters are optional
+                and are provided as paths to .npy files instead.
+                mask: Optional path to a .npy file containing a mask.
+                    Mask must be a 2D array with 1 where unmasked, 0 where masked.
+                histogram: Optional path to a .npy file containing a
+                    histogram of the flow field.
+                    Histogram must be a 1D array with 256 bins,
+                    summing to number of pixels.
 
         Returns: An instance of SyntheticImageSampler.
         """
+        # Parse mask
+        mask_path = config.get("mask", None)
+        if mask_path is not None:
+            if not isinstance(mask_path, str):
+                raise ValueError("mask must be a string representing the mask path.")
+            if not os.path.isfile(mask_path):
+                raise ValueError(f"Mask file {mask_path} does not exist.")
+            mask_array = np.load(mask_path)
+            if not np.isin(mask_array, [0, 1]).all():
+                raise ValueError("Mask must only contain 0 and 1 values.")
+            mask = jnp.array(mask_array)
+        else:
+            mask = None
+
+        # Parse histogram
+        histogram_path = config.get("histogram", None)
+
+        if histogram_path is not None:
+            if not isinstance(histogram_path, str):
+                raise ValueError(
+                    "histogram must be a string representing the histogram path."
+                )
+            if not os.path.isfile(histogram_path):
+                raise ValueError(f"Histogram file {histogram_path} does not exist.")
+            hist_array = np.load(histogram_path)
+            histogram = jnp.array(hist_array)
+        else:
+            histogram = None
+
         try:
             return cls(
                 scheduler=scheduler,
@@ -618,8 +639,8 @@ class SyntheticImageSampler(Sampler):
                     noise_gaussian_mean=float(config["noise_gaussian_mean"]),
                     noise_gaussian_std=float(config["noise_gaussian_std"]),
                 ),
-                mask=config.get("mask", None),
-                histogram=config.get("histogram", None),
+                mask=mask,
+                histogram=histogram,
             )
         except KeyError as e:
             raise KeyError(

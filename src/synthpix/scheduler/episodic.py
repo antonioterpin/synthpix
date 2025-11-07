@@ -12,12 +12,13 @@ import goggles as gg
 
 from synthpix.utils import discover_leaf_dirs, SYNTHPIX_SCOPE
 from synthpix.types import PRNGKey
-from .base import BaseFlowFieldScheduler
+from synthpix.scheduler.base import BaseFlowFieldScheduler
+from synthpix.scheduler.protocol import SchedulerProtocol
 
 logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
-class EpisodicFlowFieldScheduler:
+class EpisodicFlowFieldScheduler(SchedulerProtocol):
     """Wrapper that serves flow-field *episodes* in parallel batches.
 
     The wrapper rearranges the ``file_list`` of an underlying
@@ -161,6 +162,13 @@ class EpisodicFlowFieldScheduler:
         """
         self._sample_new_episodes()
         self._t = 0
+
+    def reset(self) -> None:
+        """Start *batch_size* brand-new episodes.
+        
+        Alias for reset_episode() to maintain API consistency with BaseFlowFieldScheduler.
+        """
+        self.reset_episode()
 
     def steps_remaining(self) -> int:
         """Return the number of steps remaining in the current episode.

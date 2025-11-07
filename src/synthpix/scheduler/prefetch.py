@@ -8,14 +8,13 @@ import numpy as np
 
 from goggles import get_logger
 
-from synthpix.scheduler.base import BaseFlowFieldScheduler
-from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
 from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.scheduler.protocol import SchedulerProtocol
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
-class PrefetchingFlowFieldScheduler:
+class PrefetchingFlowFieldScheduler(SchedulerProtocol):
     """Prefetching Wrapper around a FlowFieldScheduler.
 
     It asynchronously prefetches batches of flow fields using a
@@ -24,7 +23,7 @@ class PrefetchingFlowFieldScheduler:
 
     def __init__(
         self,
-        scheduler: BaseFlowFieldScheduler | EpisodicFlowFieldScheduler,
+        scheduler: SchedulerProtocol,
         batch_size: int,
         buffer_size: int = 8,
     ):

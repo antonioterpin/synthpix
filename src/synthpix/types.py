@@ -135,7 +135,7 @@ class ImageGenerationSpecification:
     noise_gaussian_std: float = 0.0
 
     def __post_init__(self):
-        if self.batch_size <= 0:
+        if not isinstance(self.batch_size, int) or self.batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
         if (
             # not isinstance(self.image_shape, tuple)

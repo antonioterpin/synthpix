@@ -93,6 +93,9 @@ def generate_images_from_flow(
         maxval=parameters.seeding_density_range[1],
     )
     seeding_densities = jnp.clip(seeding_densities, 0, max_seeding_density)
+    diameter_ranges = jnp.array(parameters.diameter_ranges)
+    intensity_ranges = jnp.array(parameters.intensity_ranges)
+    rho_ranges = jnp.array(parameters.rho_ranges)
 
     def scan_body(carry, inputs):
         (key,) = carry
@@ -114,13 +117,13 @@ def generate_images_from_flow(
         ) = subkeys
 
         # Randomly select a range for this image for each property
-        diameter_idx = jax.random.randint(subkey7, (), 0, len(parameters.diameter_ranges))
-        intensity_idx = jax.random.randint(subkey8, (), 0, len(parameters.intensity_ranges))
-        rho_idx = jax.random.randint(subkey9, (), 0, len(parameters.rho_ranges))
+        diameter_idx = jax.random.randint(subkey7, (), 0, len(diameter_ranges))
+        intensity_idx = jax.random.randint(subkey8, (), 0, len(intensity_ranges))
+        rho_idx = jax.random.randint(subkey9, (), 0, len(rho_ranges))
 
-        diameter_range = parameters.diameter_ranges[diameter_idx]
-        intensity_range = parameters.intensity_ranges[intensity_idx]
-        rho_range = parameters.rho_ranges[rho_idx]
+        diameter_range = diameter_ranges[diameter_idx]
+        intensity_range = intensity_ranges[intensity_idx]
+        rho_range = rho_ranges[rho_idx]
 
         # Calculate the number of particles for this couple of images
         current_num_particles = jnp.floor(
@@ -357,6 +360,19 @@ def input_check_gen_img_from_flow(
         histogram: Optional histogram to match the images to.
             NOTE: Histogram equalization is very slow!
     """
+    if not isinstance(flow_field, jnp.ndarray):
+        raise ValueError(f"flow_field must be a jnp.ndarray, got {type(flow_field)}.")
+    if flow_field.ndim != 4 or flow_field.shape[3] != 2:
+        raise ValueError(
+            "flow_field must be a 4D jnp.ndarray with shape (N, H, W, 2), "
+            f"got shape {flow_field.shape}."
+        )
+    if (
+        len(position_bounds) != 2
+        or not all(s > 0 for s in position_bounds)
+        or not all(isinstance(s, int) for s in position_bounds)
+    ):
+        raise ValueError("position_bounds must be a tuple of two positive integers.")
 
     if not (0 < flow_field_res_x):
         raise ValueError("flow_field_res_x must be a positive scalar (int or float)")
@@ -378,6 +394,8 @@ def input_check_gen_img_from_flow(
             f"mask shape {mask.shape} does not match "
             f"image_shape {parameters.image_shape}."
         )
+    if histogram is not None and not isinstance(histogram, jnp.ndarray):
+        raise ValueError("histogram must be a jnp.ndarray or None.")
     if histogram is not None and histogram.ndim != 1:
         raise ValueError("histogram must be a 1D jnp.ndarray.")
     if histogram is not None and histogram.shape[0] != 256:
