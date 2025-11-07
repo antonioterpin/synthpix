@@ -148,10 +148,11 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
                 f"{self.batch_size}"
             )
         logger.debug(f"get_batch() called with batch_size {batch_size}")
-
-        # If we’ve exhausted the current horizon, start fresh episodes
+        
         if self._t >= self.episode_length:
-            self.next_episode()
+            # If we’ve exhausted the current horizon,
+            # wait for the next episode
+            raise StopIteration
 
         self._t += 1
 

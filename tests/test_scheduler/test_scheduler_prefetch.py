@@ -374,6 +374,7 @@ def test_reset_then_next_episode_three_cycles(monkeypatch):
 
     # ---------------- Episode 2 ----------------
     pf.next_episode(join_timeout=1)
+    time.sleep(1)  # allow thread to start
     assert pf._t == 0 and pf._thread.is_alive()
 
     # Consume one batch
