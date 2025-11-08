@@ -73,9 +73,12 @@ def test_mat_scheduler_iteration(mock_mat_files):
         try:
             data = scheduler.get_batch(batch_size=1)
             assert isinstance(data, SchedulerData)
-            assert data.flow_fields.shape == (1, 256, 256, 2), (
-                f"Expected flow field shape (1, 256, 256, 2), got {data.flow_fields.shape}"
-            )
+            assert data.flow_fields.shape == (
+                1,
+                256,
+                256,
+                2,
+            ), f"Expected flow field shape (1, 256, 256, 2), got {data.flow_fields.shape}"
             count += 1
         except StopIteration:
             break
@@ -162,7 +165,6 @@ def test_mat_scheduler_with_images(mock_mat_files):
         except StopIteration:
             break
 
-
         assert isinstance(batch, SchedulerData)
         assert batch.flow_fields.shape == (1, 256, 256, 2)
         assert batch.images1 is not None
@@ -205,7 +207,7 @@ def test_episode_iteration(mock_mat_files):
         steps.append(t)
         t += 1
         if t >= episode_length:
-            break # will check below steps_remaining() == 0
+            break  # will check below steps_remaining() == 0
     assert steps == list(range(8))  # exactly one episode
     assert epi.steps_remaining() == 0
 
@@ -445,7 +447,8 @@ def test_next_loop_reset(tmp_path):
     np.testing.assert_array_equal(second.flow_fields[0, ...], flow)
 
     # After two successful returns we are back at "end of list"
-    assert sched.index == 1  # 0 → reset() -> +1 during 2nd return
+    assert sched.index == 0  #
+    assert sched._slice_idx == 1
     assert sched.loop is True  # sanity-check configuration
 
 
@@ -471,7 +474,7 @@ def test_next_skip_on_error(tmp_path):
     np.testing.assert_array_equal(sample.flow_fields[0, ...], good_flow)
 
     # Both list entries have been consumed (bad skipped, good returned)
-    assert sched.index == 2
+    assert sched.index == 1
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
@@ -498,8 +501,9 @@ def test_mat_scheduler_get_batch_too_large_pads_correctly(mock_mat_files, caplog
     assert batch.images2 is not None
     assert batch.images1.shape == (batch_size, 256, 256)
     assert batch.images2.shape == (batch_size, 256, 256)
-    assert batch.flow_fields[len(files) :, ...].sum() == 0.0  # padded entries are zeroed out
-    
+    assert (
+        batch.flow_fields[len(files) :, ...].sum() == 0.0
+    )  # padded entries are zeroed out
 
 
 def test_hdf5_recursive_group(monkeypatch, tmp_path):

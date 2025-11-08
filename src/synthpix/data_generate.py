@@ -44,6 +44,9 @@ def generate_images_from_flow(
             in grid steps per length measure unit.
         flow_field_res_y: Resolution of the flow field in the y direction
             in grid steps per length measure unit.
+        mask: Optional mask to apply to the generated images.
+        histogram: Optional histogram to match the images to.
+            NOTE: Histogram equalization is very slow!
 
     Returns: Tuple containing:
         - images1: Array of shape (num_images, image_height, image_width),

@@ -128,9 +128,9 @@ def test_speed_generate_images_sweep_all():
 
         # 3. Prepare the jit function
         out_specs = (
-            PartitionSpec(shard_fields), 
-            PartitionSpec(shard_fields), 
-            PartitionSpec(shard_fields)
+            PartitionSpec(shard_fields),
+            PartitionSpec(shard_fields),
+            PartitionSpec(shard_fields),
         )
 
         jit_generate_images = jax.jit(
@@ -155,7 +155,7 @@ def test_speed_generate_images_sweep_all():
                         noise_gaussian_std=0.0,
                         rho_ranges=[(-0.01, 0.01)],
                         rho_var=0,
-                    )
+                    ),
                 ),
                 mesh=mesh,
                 in_specs=(PartitionSpec(shard_fields), PartitionSpec(shard_fields)),

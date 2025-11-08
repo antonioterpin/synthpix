@@ -5,7 +5,7 @@ from typing_extensions import Self
 from goggles import get_logger
 
 from synthpix.scheduler import BaseFlowFieldScheduler
-from synthpix.scheduler.base import FileEndedError
+from synthpix.scheduler.protocol import FileEndedError
 from synthpix.utils import SYNTHPIX_SCOPE
 from synthpix.types import PRNGKey, SchedulerData
 

@@ -92,3 +92,9 @@ class EpisodeEnd(Exception):
     """Exception raised when an episode ends in a prefetched scheduler."""
 
     pass
+
+
+class FileEndedError(Exception):
+    """Exception raised when the end of a file's data is reached."""
+
+    pass

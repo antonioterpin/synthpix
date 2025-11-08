@@ -112,10 +112,10 @@ def test_speed_sampler_sweep_all(
             batch.images1.block_until_ready()
             batch.images2.block_until_ready()
             batch.flow_fields.block_until_ready()
-            batch.params.seeding_densities.block_until_ready() # type: ignore
-            batch.params.diameter_ranges.block_until_ready() # type: ignore
-            batch.params.intensity_ranges.block_until_ready() # type: ignore
-            batch.params.rho_ranges.block_until_ready() # type: ignore
+            batch.params.seeding_densities.block_until_ready()  # type: ignore
+            batch.params.diameter_ranges.block_until_ready()  # type: ignore
+            batch.params.intensity_ranges.block_until_ready()  # type: ignore
+            batch.params.rho_ranges.block_until_ready()  # type: ignore
             if i + 1 >= NUMBER_OF_EXECUTIONS:
                 sampler.reset(scheduler_reset=False)
                 break

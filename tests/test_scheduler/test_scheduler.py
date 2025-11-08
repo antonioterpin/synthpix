@@ -338,6 +338,7 @@ def test_abstract_scheduler_iteration(generate_hdf5_file):
     assert count == 2
     os.remove(tmp_file)
 
+
 def test_reset_calls_random_shuffle(monkeypatch, tmp_path):
     """Test that reset() calls jax.random.permutation when randomize=True."""
     files = [tmp_path / f"f{i}.dat" for i in range(3)]
@@ -361,7 +362,7 @@ def test_reset_calls_random_shuffle(monkeypatch, tmp_path):
     # Manually trigger a few resets
     for _ in range(5):
         sch.reset()
-    assert call_flag["called"] == 6   # 1 (init) + 5 manual
+    assert call_flag["called"] == 6  # 1 (init) + 5 manual
 
     assert isinstance(sch.file_list, list)
 

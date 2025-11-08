@@ -592,6 +592,7 @@ class SyntheticImageSampler(Sampler):
 
         Returns: An instance of SyntheticImageSampler.
         """
+        print("This is the config:", config)
         # Parse mask
         mask_path = config.get("mask", None)
         if mask_path is not None:

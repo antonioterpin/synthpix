@@ -12,15 +12,9 @@ from goggles import get_logger
 
 from synthpix.utils import SYNTHPIX_SCOPE
 from synthpix.types import PRNGKey, SchedulerData
-from synthpix.scheduler.protocol import SchedulerProtocol
+from synthpix.scheduler.protocol import SchedulerProtocol, FileEndedError
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
-
-
-class FileEndedError(Exception):
-    """Exception raised when the end of a file's data is reached."""
-
-    pass
 
 
 class BaseFlowFieldScheduler(ABC, SchedulerProtocol):

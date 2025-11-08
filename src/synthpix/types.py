@@ -22,7 +22,20 @@ class ImageGenerationParameters:
     intensity_ranges: jnp.ndarray
     rho_ranges: jnp.ndarray
 
-    def tree_flatten(self):
+    def tree_flatten(self) -> tuple[
+        tuple[
+            jnp.ndarray,
+            jnp.ndarray,
+            jnp.ndarray,
+            jnp.ndarray,
+        ],
+        None,
+    ]:
+        """Flattens the ImageGenerationParameters into its constituent parts.
+
+        Returns:
+            A tuple containing the flattened children and auxiliary data.
+        """
         children = (
             self.seeding_densities,
             self.diameter_ranges,
@@ -33,7 +46,17 @@ class ImageGenerationParameters:
         return (children, aux_data)
 
     @classmethod
-    def tree_unflatten(cls, aux_data, children):
+    def tree_unflatten(cls, aux_data, children) -> Self:
+        """Reconstructs an ImageGenerationParameters from its flattened children.
+
+        Args:
+            aux_data: Auxiliary data (not used here).
+            children: Tuple containing the flattened fields of the
+                ImageGenerationParameters.
+
+        Returns:
+            An instance of ImageGenerationParameters.
+        """
         return cls(*children)
 
 
@@ -65,7 +88,14 @@ class SynthpixBatch:
             done=kwargs.get("done", self.done),
         )
 
-    def tree_flatten(self):
+    def tree_flatten(
+        self,
+    ) -> tuple[tuple[jnp.ndarray | None | ImageGenerationParameters, ...], None]:
+        """Flattens the SynthpixBatch into its constituent parts.
+
+        Returns:
+            A tuple containing the flattened children and auxiliary data.
+        """
         children = (
             self.images1,
             self.images2,
@@ -78,6 +108,13 @@ class SynthpixBatch:
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
+        """Reconstructs a SynthpixBatch from its flattened children.
+
+        Args:
+            aux_data: Auxiliary data (not used here).
+
+            children: Tuple containing the flattened fields of the SynthpixBatch.
+        """
         return cls(*children)
 
 
@@ -159,6 +196,7 @@ class ImageGenerationSpecification:
     noise_gaussian_std: float = 0.0
 
     def __post_init__(self):
+        """Validate the fields of the dataclass."""
         if not isinstance(self.batch_size, int) or self.batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
         if (

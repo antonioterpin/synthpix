@@ -4,6 +4,8 @@ import jax.numpy as jnp
 from goggles import get_logger
 from typing_extensions import Self
 
+from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
+from synthpix.scheduler.prefetch import PrefetchingFlowFieldScheduler
 from synthpix.utils import SYNTHPIX_SCOPE
 from synthpix.types import SynthpixBatch
 from synthpix.sampler.base import Sampler
@@ -24,14 +26,11 @@ class RealImageSampler(Sampler):
         """
         super().__init__(scheduler, batch_size)
 
-        while (
-            not hasattr(scheduler, "include_images")
-            or not scheduler.include_images  # pyright: ignore[reportAttributeAccessIssue]
-        ):
-            if hasattr(scheduler, "scheduler"):
-                scheduler = (
-                    scheduler.scheduler
-                )  # pyright: ignore[reportAttributeAccessIssue]
+        while not getattr(scheduler, "include_images", False):
+            if isinstance(
+                scheduler, (EpisodicFlowFieldScheduler, PrefetchingFlowFieldScheduler)
+            ):
+                scheduler = scheduler.scheduler
             else:
                 raise ValueError(
                     "Base scheduler must have include_images set to True"
@@ -41,6 +40,11 @@ class RealImageSampler(Sampler):
         logger.info("RealImageSampler initialized successfully")
 
     def _get_next(self) -> SynthpixBatch:
+        """Get the next batch of real images and flow fields.
+
+        Returns:
+            A batch of real images and flow fields.
+        """
         # Get the next batch of flow fields from the scheduler
         batch = self.scheduler.get_batch(batch_size=self.batch_size)
         batch = SynthpixBatch(
@@ -50,6 +54,7 @@ class RealImageSampler(Sampler):
             params=None,
             done=None,
         )
+        print("RealImageSampler produced a batch")
         return batch
 
     @classmethod

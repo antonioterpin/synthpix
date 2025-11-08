@@ -8,9 +8,10 @@ import scipy.io
 from goggles import get_logger
 from PIL import Image
 
-from .base import BaseFlowFieldScheduler, FileEndedError
+from .base import BaseFlowFieldScheduler
 from synthpix.utils import SYNTHPIX_SCOPE
 from synthpix.types import PRNGKey, SchedulerData
+from synthpix.scheduler.protocol import FileEndedError
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 

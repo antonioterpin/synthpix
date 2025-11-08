@@ -104,7 +104,7 @@ def scheduler(temp_file_module, request):
     if hasattr(request, "param"):
         randomize = request.param.get("randomize", False)
         loop = request.param.get("loop", False)
-    
+
     yield HDF5FlowFieldScheduler([temp_file_module], randomize=randomize, loop=loop)
 
 

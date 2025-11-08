@@ -1,6 +1,6 @@
 import os
+from pathlib import Path
 import re
-import stat
 import sys
 import timeit
 from tests.example_flows import get_flow_function
@@ -682,9 +682,12 @@ def test_speed_flow_fields_adapter(
     ), f"The average time is {average_time_jit}, time limit: {limit_time}"
 
 
-def test_discover_leaf_dirs(tmp_path):
-    """Test discover_leaf_dirs function.
+def _abspath(p):  # small helper to compare reliably
+    return os.path.abspath(str(p))
 
+
+def test_discover_leaf_dirs(tmp_path):
+    """
     tmp_path/
       ├── seq_A/
       │   ├── flow_0000.mat
@@ -702,8 +705,7 @@ def test_discover_leaf_dirs(tmp_path):
     seq_B.mkdir()
     sub_1 = seq_B / "sub_1"
     sub_1.mkdir()
-    seq_C = tmp_path / "seq_C"
-    seq_C.mkdir()
+    (tmp_path / "seq_C").mkdir()  # empty, ignored
 
     # Drop dummy files
     for t in (0, 1):
@@ -711,15 +713,17 @@ def test_discover_leaf_dirs(tmp_path):
     (seq_B / "flow_0000.mat").touch()
     (sub_1 / "flow_0002.mat").touch()
 
+    # Collect file paths as strings (API contract), then resolve results for comparison
     paths = [str(p) for p in tmp_path.rglob("*.mat")]
-    leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
-    expect = {os.path.abspath(seq_A), os.path.abspath(sub_1)}
+
+    leaves = {Path(p).resolve() for p in discover_leaf_dirs(paths)}
+    expect = {seq_A.resolve(), sub_1.resolve()}
 
     assert leaves == expect, f"Expected {expect}, got {leaves}"
 
 
-def test_discover_leaf_dirs_skips_missing_dirs(tmp_path):
-    """Trigger FileNotFoundError: directory disappears after path collection."""
+def test_discover_leaf_dirs_skips_missing_dirs(tmp_path, monkeypatch):
+    """Simulate FileNotFoundError for one directory during discovery."""
     gone = tmp_path / "gone_seq"
     gone.mkdir()
     (gone / "flow_0000.mat").touch()
@@ -728,20 +732,24 @@ def test_discover_leaf_dirs_skips_missing_dirs(tmp_path):
     keep.mkdir()
     (keep / "flow_0000.mat").touch()
 
-    # Collect paths, then remove 'gone' entirely so listing it raises FileNotFoundError
     paths = [str(p) for p in tmp_path.rglob("*.mat")]
-    for p in gone.glob("*"):
-        p.unlink()
-    gone.rmdir()
+
+    real_scandir = os.scandir
+
+    def fake_scandir(path):
+        if os.path.abspath(path) == _abspath(gone):
+            raise FileNotFoundError(path)
+        return real_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", fake_scandir)
 
     leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
-    assert os.path.abspath(keep) in leaves
-    # The deleted dir must not appear
-    assert os.path.abspath(gone) not in leaves
+    assert _abspath(keep) in leaves
+    assert _abspath(gone) not in leaves
 
 
-def test_discover_leaf_dirs_skips_not_a_directory(tmp_path):
-    """Trigger NotADirectoryError: path collected as a dir becomes a file later."""
+def test_discover_leaf_dirs_skips_not_a_directory(tmp_path, monkeypatch):
+    """Simulate NotADirectoryError for a path that used to be a directory."""
     will_be_file = tmp_path / "turns_into_file"
     will_be_file.mkdir()
     (will_be_file / "flow_0000.mat").touch()
@@ -750,30 +758,27 @@ def test_discover_leaf_dirs_skips_not_a_directory(tmp_path):
     ok.mkdir()
     (ok / "flow_0000.mat").touch()
 
-    # Collect paths first
     paths = [str(p) for p in tmp_path.rglob("*.mat")]
 
-    # Replace the directory with a file at the same path
-    for p in will_be_file.glob("*"):
-        p.unlink()
-    will_be_file.rmdir()
-    will_be_file.write_text("I am a file now")  # same path, not a dir anymore
+    real_scandir = os.scandir
+
+    def fake_scandir(path):
+        if os.path.abspath(path) == _abspath(will_be_file):
+            raise NotADirectoryError(path)
+        return real_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", fake_scandir)
 
     leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
-    assert os.path.abspath(ok) in leaves
-    # The path that became a file should be skipped silently by the except block
-    assert os.path.abspath(will_be_file) not in leaves
+    assert _abspath(ok) in leaves
+    assert _abspath(will_be_file) not in leaves
 
 
 @pytest.mark.skipif(
-    sys.platform.startswith("win"), reason="chmod(0) semantics differ on Windows"
+    sys.platform.startswith("win"), reason="permission semantics differ on Windows"
 )
-@pytest.mark.skipif(
-    os.getenv("CI") == "true",
-    reason="CI environments may have different permission handling",
-)
-def test_discover_leaf_dirs_skips_permission_denied(tmp_path):
-    """Trigger PermissionError: directory exists but is not readable."""
+def test_discover_leaf_dirs_skips_permission_denied(tmp_path, monkeypatch):
+    """Simulate PermissionError without touching actual filesystem permissions."""
     denied = tmp_path / "no_perm_seq"
     denied.mkdir()
     (denied / "flow_0000.mat").touch()
@@ -784,15 +789,15 @@ def test_discover_leaf_dirs_skips_permission_denied(tmp_path):
 
     paths = [str(p) for p in tmp_path.rglob("*.mat")]
 
-    # Remove read/execute from the directory to block listing (r-x needed to list)
-    _ = denied.stat().st_mode
-    try:
-        denied.chmod(
-            0
-        )  # no permissions → os.scandir / iterdir should raise PermissionError
-        leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
-        assert os.path.abspath(ok) in leaves
-        assert os.path.abspath(denied) not in leaves
-    finally:
-        # Restore perms so tmp cleanup can remove the directory
-        denied.chmod(stat.S_IRWXU)
+    real_scandir = os.scandir
+
+    def fake_scandir(path):
+        if os.path.abspath(path) == _abspath(denied):
+            raise PermissionError(path)
+        return real_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", fake_scandir)
+
+    leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
+    assert _abspath(ok) in leaves
+    assert _abspath(denied) not in leaves

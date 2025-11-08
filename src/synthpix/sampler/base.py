@@ -105,7 +105,7 @@ class Sampler(ABC):
         """Flush the current episode and return the first batch of the next one.
 
         The underlying scheduler is expected to be the prefetching scheduler.
-        
+
         Raises:
             AttributeError: If the underlying scheduler does not support episodes.
         """
@@ -114,11 +114,16 @@ class Sampler(ABC):
         self.scheduler.next_episode()
 
     def _make_done(self) -> jnp.ndarray:
-        """Return a `(batch_size,)` bool array if episodic, else None."""
+        """Return a `(batch_size,)` bool array if episodic.
+
+        Returns:
+            A boolean array indicating the end of episodes for each sample in the batch.
+        """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
             raise NotImplementedError("The underlying scheduler is not episodic.")
 
         is_last_step = self.scheduler.steps_remaining() == 0
+        print("Called _make_done", is_last_step)
         logger.debug(f"Is last step: {is_last_step}")
         logger.debug(f"Steps remaining: {self.scheduler.steps_remaining()}")
         # broadcast identical flag to every episode (synchronous horizons)

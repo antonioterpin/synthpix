@@ -15,7 +15,10 @@ from synthpix.scheduler import (
     PrefetchingFlowFieldScheduler,
 )
 from synthpix.scheduler.base import BaseFlowFieldScheduler
-from synthpix.scheduler.protocol import EpisodeEnd, EpisodicSchedulerProtocol
+from synthpix.scheduler.protocol import (
+    EpisodeEnd,
+    EpisodicSchedulerProtocol,
+)
 from synthpix.types import ImageGenerationSpecification, SchedulerData
 from synthpix.utils import load_configuration
 
@@ -1271,6 +1274,7 @@ class EpisodicDummy(_BaseDummy, EpisodicSchedulerProtocol):
         return max(self.episode_length - self._step, 0)
 
     def get_batch(self, batch_size):
+        print("EpisodicDummy.get_batch called, step =", self._step)
         batch = super().get_batch(batch_size=batch_size)
         self._step += 1
         done = jnp.array(self._step >= self.episode_length)
@@ -1308,6 +1312,7 @@ class SyntheticImageSamplerWrapper:
         full_config = sampler_config.copy()
         full_config["batch_size"] = config.get("batch_size", 4)
         full_config["flow_fields_per_batch"] = full_config["batch_size"]
+        full_config["batches_per_flow_batch"] = config.get("batches_per_flow_batch", 1)
         return SyntheticImageSampler.from_config(
             scheduler=scheduler,
             config=full_config,
@@ -1319,7 +1324,9 @@ class SyntheticImageSamplerWrapper:
 )
 def test_episodic_done_and_episode_end(sampler_class):
     sched = EpisodicDummy(episode_length=2)
-    sampler = sampler_class.from_config(sched, {"batch_size": 4})
+    sampler = sampler_class.from_config(
+        sched, {"batch_size": 4, "batches_per_flow_batch": 1}
+    )
 
     first = next(sampler)
     assert first.done is not None and not first.done.any()
