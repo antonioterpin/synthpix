@@ -296,12 +296,12 @@ def flow_field_adapter(
         flow_position_bounds_vec_y = jnp.linspace(
             flow_position_bounds_start[0],
             flow_position_bounds_end[0],
-            int(position_bounds[0] / resolution * res_y),
+            max(1, int(position_bounds[0] / resolution * res_y)),
         )
         flow_position_bounds_vec_x = jnp.linspace(
             flow_position_bounds_start[1],
             flow_position_bounds_end[1],
-            int(position_bounds[1] / resolution * res_x),
+            max(1, int(position_bounds[1] / resolution * res_x)),
         )
         flow_position_bounds_grid_x, flow_position_bounds_grid_y = jnp.meshgrid(
             flow_position_bounds_vec_x, flow_position_bounds_vec_y
