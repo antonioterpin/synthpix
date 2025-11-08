@@ -276,10 +276,10 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
                 if item is None:  # End-of-stream signal
                     break
                 discarded += 1
+        else:
+            self._start_worker()
 
         self._t = 0
-
-        self._start_worker()
 
     @property
     def episode_length(self) -> int:
