@@ -341,24 +341,32 @@ def test_abstract_scheduler_iteration(generate_hdf5_file):
     os.remove(tmp_file)
 
 def test_reset_calls_random_shuffle(monkeypatch, tmp_path):
+    """Test that reset() calls jax.random.permutation when randomize=True."""
     files = [tmp_path / f"f{i}.dat" for i in range(3)]
     for f in files:
         f.write_text("x")
     call_flag = {"called": False}
 
     def spy(key, indices):
-        call_flag["called"] = True
+        call_flag["called"] += 1
         return jnp.flip(indices)
 
     monkeypatch.setattr(jax.random, "permutation", spy)
 
     key = jax.random.PRNGKey(0)
     sch = DummyScheduler([str(f) for f in files], randomize=True, key=key)
-
-    assert isinstance(sch.file_list, list)
     original = sch.file_list.copy()
 
-    assert call_flag["called"]
+    # Ensure at least one call during init
+    assert call_flag["called"] == 1
+
+    # Manually trigger a few resets
+    for _ in range(5):
+        sch.reset()
+    assert call_flag["called"] == 6   # 1 (init) + 5 manual
+
+    assert isinstance(sch.file_list, list)
+
     assert sch.file_list == list(reversed(original))
 
 
