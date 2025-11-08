@@ -62,7 +62,8 @@ def make(
     Args:
         config: The dataset configuration.
 
-    Returns: The initialized sampler.
+    Returns:
+        The initialized sampler.
     """
     # Initialize console for colored output
     console = Console()

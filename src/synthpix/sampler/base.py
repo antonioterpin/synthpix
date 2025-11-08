@@ -24,7 +24,8 @@ class Sampler(ABC):
     def _get_next(self) -> SynthpixBatch:
         """Generates the next batch of data.
 
-        Returns: The next batch of data as a SynthpixBatch instance.
+        Returns:
+            The next batch of data as a SynthpixBatch instance.
         """
 
     def __init__(self, scheduler: SchedulerProtocol, batch_size: int = 1):
@@ -71,7 +72,8 @@ class Sampler(ABC):
     def __next__(self) -> SynthpixBatch:
         """Return the next batch of data.
 
-        Returns: The next batch of data as a SynthpixBatch instance.
+        Returns:
+            The next batch of data as a SynthpixBatch instance.
         """
         if (
             isinstance(self.scheduler, EpisodicSchedulerProtocol)

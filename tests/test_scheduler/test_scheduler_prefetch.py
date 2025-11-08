@@ -38,7 +38,8 @@ class MinimalScheduler(SchedulerProtocol):
     def file_list(self) -> list[str]:
         """Returns the list of files used by the underlying scheduler.
 
-        Returns: The list of files.
+        Returns:
+            The list of files.
         """
         return ["dummy_file.npy"]
 

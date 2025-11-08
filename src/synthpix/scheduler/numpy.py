@@ -82,7 +82,8 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         Args:
             file_path: Path to the .npy file.
 
-        Returns: Loaded SchedulerData.
+        Returns:
+            Loaded SchedulerData.
         """
         return SchedulerData(flow_fields=np.load(file_path))
 
@@ -117,7 +118,8 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
     def get_flow_fields_shape(self) -> tuple[int, ...]:
         """Return the shape of a single flow array.
 
-        Returns: Shape of the flow array.
+        Returns:
+            Shape of the flow array.
         """
         return np.load(self.file_list[0]).shape
 
@@ -129,7 +131,8 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
             config:
                 Configuration dictionary containing the scheduler parameters.
 
-        Returns: An instance of the scheduler.
+        Returns:
+            An instance of the scheduler.
         """
         return cls(
             file_list=config["scheduler_files"],

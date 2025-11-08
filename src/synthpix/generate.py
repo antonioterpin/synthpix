@@ -28,7 +28,8 @@ def gaussian_2d_correlated(
         rho: Correlation coefficient between x and y.
         amplitude: Peak intensity (I0).
 
-    Returns: 2D array representing the Gaussian function.
+    Returns:
+        2D array representing the Gaussian function.
     """
     x_shifted = x - x0
     y_shifted = y - y0
@@ -62,7 +63,8 @@ def add_noise_to_image(
         noise_gaussian_mean: Mean of the Gaussian noise to add.
         noise_gaussian_std: Standard deviation of the Gaussian noise to add.
 
-    Returns: The noisy image.
+    Returns:
+        The noisy image.
     """
     uniform_key, gaussian_key = jax.random.split(key)
 
@@ -107,7 +109,8 @@ def img_gen_from_data(
         rho: Array of correlation coefficients (rho).
         clip: If True, clip the image values to [0, 255].
 
-    Returns: Synthetic particle image of shape `image_shape`.
+    Returns:
+        Synthetic particle image of shape `image_shape`.
     """
     H, W = image_shape
 

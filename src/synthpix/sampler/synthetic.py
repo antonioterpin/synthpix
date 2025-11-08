@@ -498,7 +498,8 @@ class SyntheticImageSampler(Sampler):
         Raises:
             StopIteration: can only be thrown by the underlying scheduler.
 
-        Returns: The next batch of data as a SynthpixBatch instance.
+        Returns:
+            The next batch of data as a SynthpixBatch instance.
         """
         # Check if we need to initialize or switch to a new batch of flow fields
         if (
@@ -590,7 +591,8 @@ class SyntheticImageSampler(Sampler):
                     Histogram must be a 1D array with 256 bins,
                     summing to number of pixels.
 
-        Returns: An instance of SyntheticImageSampler.
+        Returns:
+            An instance of SyntheticImageSampler.
         """
         print("This is the config:", config)
         # Parse mask

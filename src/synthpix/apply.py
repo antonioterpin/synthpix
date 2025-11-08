@@ -24,7 +24,8 @@ def apply_flow_to_image_forward(
         flow_field: 3D array (H, W, 2) representing the velocity field.
         dt: Time step for the backward mapping.
 
-    Returns: A new 2D array of shape (H, W) with the particles displaced.
+    Returns: 
+        A new 2D array of shape (H, W) with the particles displaced.
     """
     H, W = image.shape
     y_grid, x_grid = jnp.indices((H, W))
@@ -89,7 +90,8 @@ def apply_flow_to_image_backward(
         flow_field: 3D array (H, W, 2) representing the velocity field.
         dt: Time step for the backward mapping.
 
-    Returns: A new 2D array of shape (H, W) with the particles displaced.
+    Returns: 
+        A new 2D array of shape (H, W) with the particles displaced.
     """
     H, W = image.shape
 
@@ -133,7 +135,8 @@ def apply_flow_to_image_callable(
         dt: Time step for the backward mapping.
         forward: If True, use forward mapping; else use backward mapping.
 
-    Returns: A new 2D array of shape (H, W) with the particles displaced.
+    Returns: 
+        A new 2D array of shape (H, W) with the particles displaced.
     """
     H, W = image.shape
 
@@ -240,8 +243,9 @@ def apply_flow_to_particles(
         flow_field_res_z: Resolution of the flow field in the z direction
             in grid steps per length measure unit
 
-    Returns: Array of shape (N, 2) or (N, 3) containing
-        the new particle coordinates.
+    Returns: 
+        Array of shape (N, 2) or (N, 3) containing
+            the new particle coordinates.
     """
     update_position: Callable[[jnp.ndarray], jnp.ndarray]
 

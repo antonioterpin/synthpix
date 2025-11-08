@@ -84,7 +84,8 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         Args:
             path: Path to the file.
 
-        Returns: True if the file is in HDF5 format, False otherwise.
+        Returns:
+            True if the file is in HDF5 format, False otherwise.
         """
         return h5py.is_hdf5(path)
 
@@ -94,7 +95,8 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         Args:
             file_path: Path to the .mat file.
 
-        Returns: Dictionary containing 'V' (flow field).  When
+        Returns:
+            Dictionary containing 'V' (flow field).  When
             `self.include_images` is True, it must also hold 'I0' and 'I1'.
         """
 
@@ -197,7 +199,8 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
     def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Returns the shape of the flow field.
 
-        Returns: Shape of the flow field.
+        Returns:
+            Shape of the flow field.
         """
         return self.output_shape + (2,)
 

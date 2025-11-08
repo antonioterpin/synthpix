@@ -15,7 +15,8 @@ class SchedulerProtocol(Protocol):
     def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Returns the shape of the flow field.
 
-        Returns: Shape of the flow field.
+        Returns:
+            Shape of the flow field.
         """
         ...
 
@@ -28,8 +29,9 @@ class SchedulerProtocol(Protocol):
         Args:
             batch_size: Number of flow field slices to retrieve.
 
-        Returns: SchedulerData containing the batch of flow fields
-            and, optionally, images.
+        Returns:
+            SchedulerData containing the batch of flow fields
+                and, optionally, images.
         """
         ...
 
@@ -41,7 +43,8 @@ class SchedulerProtocol(Protocol):
     def file_list(self) -> list[str]:
         """Returns the list of files used by the scheduler.
 
-        Returns: List of file paths.
+        Returns:
+            List of file paths.
         """
         ...
 
@@ -62,7 +65,8 @@ class EpisodicSchedulerProtocol(SchedulerProtocol, Protocol):
     def steps_remaining(self) -> int:
         """Returns the number of steps remaining in the current episode.
 
-        Returns: Number of steps remaining.
+        Returns:
+            Number of steps remaining.
         """
         ...
 
@@ -78,7 +82,8 @@ class EpisodicSchedulerProtocol(SchedulerProtocol, Protocol):
     def episode_length(self) -> int:
         """Returns the length of the episode.
 
-        Returns: The length of the episode.
+        Returns:
+            The length of the episode.
         """
         ...
 

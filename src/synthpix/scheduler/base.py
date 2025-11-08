@@ -33,7 +33,8 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
     def file_list(self) -> list[str]:
         """Returns the list of files used by the scheduler.
 
-        Returns: List of file paths.
+        Returns:
+            List of file paths.
         """
         return self._file_list
 
@@ -124,14 +125,16 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
     def __len__(self) -> int:
         """Returns the number of files in the dataset.
 
-        Returns: Number of files in file_list.
+        Returns:
+            Number of files in file_list.
         """
         return len(self.file_list)
 
     def __iter__(self) -> Self:
         """Returns the iterator instance itself.
 
-        Returns: The iterator instance.
+        Returns:
+            The iterator instance.
         """
         return self
 
@@ -151,7 +154,8 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
     def _get_next(self):
         """Returns the next flow field slice from the dataset.
 
-        Returns: A single flow field slice.
+        Returns:
+            A single flow field slice.
 
         Raises:
             StopIteration: If no more data and loop is False.
@@ -196,7 +200,8 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         Args:
             batch_size: Number of flow field slices to retrieve.
 
-        Returns: SchedulerData containing the batch of flow field slices.
+        Returns:
+            SchedulerData containing the batch of flow field slices.
 
         Raises:
             StopIteration: If the dataset is exhausted before reaching the
@@ -266,22 +271,25 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         Args:
             file_path: Path to the file to be loaded.
 
-        Returns: The loaded dataset.
+        Returns:
+            The loaded dataset.
         """
 
     @abstractmethod
     def get_next_slice(self) -> SchedulerData:
         """Extracts the next slice from the cached data.
 
-        Returns: SchedulerData containing the next flow field slice
-            (and optionally images).
+        Returns:
+            SchedulerData containing the next flow field slice
+                (and optionally images).
         """
 
     @abstractmethod
     def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Returns the shape of the flow field.
 
-        Returns: Shape of the flow field.
+        Returns:
+            Shape of the flow field.
         """
 
     @classmethod
@@ -293,5 +301,6 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             config:
                 Configuration dictionary containing the scheduler parameters.
 
-        Returns: A BaseFlowFieldScheduler instance.
+        Returns:
+            A BaseFlowFieldScheduler instance.
         """

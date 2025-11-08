@@ -120,7 +120,8 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
     def file_list(self) -> list[str]:
         """Return the current file list from the underlying scheduler.
 
-        Returns: The current file list.
+        Returns:
+            The current file list.
         """
         return self.scheduler.file_list
 
@@ -142,7 +143,8 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         Args:
             batch_size: Must match the ``batch_size`` used at initialization.
 
-        Returns: SchedulerData containing the flow fields for the current time-step
+        Returns:
+            SchedulerData containing the flow fields for the current time-step
             across all episodes.
         """
         if batch_size != self.batch_size:
@@ -168,7 +170,8 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
     def __len__(self) -> int:
         """Return the episode length.
 
-        Returns: The length of the episode.
+        Returns:
+            The length of the episode.
         """
         return self.episode_length
 
@@ -176,7 +179,8 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
     def episode_length(self) -> int:
         """Return the length of the episode.
 
-        Returns: The length of the episode.
+        Returns:
+            The length of the episode.
         """
         return self._episode_length
 
@@ -198,7 +202,8 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
     def steps_remaining(self) -> int:
         """Return the number of steps remaining in the current episode.
 
-        Returns: Number of steps remaining in the current episode.
+        Returns:
+            Number of steps remaining in the current episode.
         """
         return self.episode_length - self._t
 

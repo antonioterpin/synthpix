@@ -66,7 +66,8 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         Args:
             batch_size: Number of flow field slices to retrieve.
 
-        Returns: A preloaded batch of flow fields.
+        Returns:
+            A preloaded batch of flow fields.
 
         Raises:
             ValueError: If the requested batch_size does not match
@@ -228,7 +229,8 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
     def is_running(self) -> bool:
         """Check if the prefetching thread is currently running.
 
-        Returns: True if the prefetching thread is alive, False otherwise.
+        Returns:
+            True if the prefetching thread is alive, False otherwise.
         """
         t = self._thread
         return t is not None and t.is_alive()
@@ -236,7 +238,8 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
     def steps_remaining(self) -> int:
         """Returns the number of steps remaining in the current episode.
 
-        Returns: Number of steps remaining.
+        Returns:
+            Number of steps remaining.
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
             # return 1 if not episodic... never ending ;)
@@ -282,7 +285,8 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
     def episode_length(self) -> int:
         """Returns the length of the episode.
 
-        Returns: The length of the episode.
+        Returns:
+            The length of the episode.
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
             raise AttributeError("Underlying scheduler lacks episode_length property.")
@@ -292,7 +296,8 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
     def file_list(self) -> list[str]:
         """Returns the list of files used by the underlying scheduler.
 
-        Returns: The list of files.
+        Returns:
+            The list of files.
         """
         return self.scheduler.file_list
 

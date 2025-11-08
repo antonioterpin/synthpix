@@ -46,7 +46,8 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         Args:
             file_path: Path to the HDF5 file.
 
-        Returns: Loaded dataset with truncated x-axis.
+        Returns:
+            Loaded dataset with truncated x-axis.
         """
         with h5py.File(file_path, "r") as file:
             dataset_key = list(file)[0]
@@ -65,7 +66,8 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         The flow field slice consists of the x and z components
             for the current y index.
 
-        Returns: Flow field with shape (X, Z, 2).
+        Returns:
+            Flow field with shape (X, Z, 2).
         """
         if self._cached_data is None:
             raise RuntimeError("No data is currently cached.")
@@ -82,7 +84,8 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
 
         NOTE: It is assumed that all the flow fields have the same shape.
 
-        Returns: Shape of all the flow fields.
+        Returns:
+            Shape of all the flow fields.
         """
         file_path = self.file_list[0]
         with h5py.File(file_path, "r") as file:
@@ -104,7 +107,8 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
             config:
                 Configuration dictionary containing the scheduler parameters.
 
-        Returns: An instance of the scheduler.
+        Returns:
+            An instance of the scheduler.
         """
         return cls(
             file_list=config["scheduler_files"],
