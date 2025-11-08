@@ -21,7 +21,7 @@ def test_mat_scheduler_invalid_include_images(bad_include_images, mock_mat_files
     with pytest.raises(ValueError, match="include_images must be a boolean value."):
         MATFlowFieldScheduler.from_config(
             {
-                "scheduler_files": files,
+                "file_list": files,
                 "include_images": bad_include_images,
             }
         )
@@ -36,7 +36,7 @@ def test_mat_scheduler_invalid_output_shape(bad_output_shape, mock_mat_files):
     with pytest.raises((ValueError, TypeError)):
         MATFlowFieldScheduler.from_config(
             {
-                "scheduler_files": files,
+                "file_list": files,
                 "output_shape": bad_output_shape,
             }
         )
@@ -51,7 +51,7 @@ def test_mat_scheduler_invalid_output_shape_values(bad_output_shape, mock_mat_fi
     ):
         MATFlowFieldScheduler.from_config(
             {
-                "scheduler_files": files,
+                "file_list": files,
                 "output_shape": bad_output_shape,
             }
         )
@@ -62,7 +62,7 @@ def test_mat_scheduler_iteration(mock_mat_files):
     files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler.from_config(
         {
-            "scheduler_files": files,
+            "file_list": files,
             "randomize": False,
             "loop": False,
         }
@@ -91,7 +91,7 @@ def test_mat_scheduler_shape(mock_mat_files):
     files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler.from_config(
         {
-            "scheduler_files": files,
+            "file_list": files,
         }
     )
     shape = scheduler.get_flow_fields_shape()
@@ -103,7 +103,7 @@ def test_mat_scheduler_init_flags(mock_mat_files):
     files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler.from_config(
         {
-            "scheduler_files": files,
+            "file_list": files,
             "randomize": True,
             "loop": True,
         }

@@ -50,15 +50,15 @@ def update_config_file(config_path: str, updated_values: dict) -> None:
     for key, value in updated_values.items():
         config_data[key] = convert_to_standard_type(value)
 
-    # Handle scheduler_files separately
-    scheduler_files = config_data.pop("scheduler_files", [])
+    # Handle file_list separately
+    file_list = config_data.pop("file_list", [])
 
     with open(config_path, "w") as file:
         for key, value in config_data.items():
             file.write(f"{key}: {value}\n")
-        if scheduler_files and isinstance(scheduler_files, list):
-            file.write("scheduler_files:\n")
-            for item in scheduler_files:
+        if file_list and isinstance(file_list, list):
+            file.write("file_list:\n")
+            for item in file_list:
                 file.write(f"  - {str(item)}\n")
 
 
@@ -134,9 +134,9 @@ def missing_speeds_panel(config_path: str) -> tuple[float, float, float, float]:
     config = load_configuration(config_path)
 
     # Input validation
-    if "scheduler_files" not in config:
-        raise ValueError("The configuration must contain 'scheduler_files'.")
-    file_list = config["scheduler_files"]
+    if "file_list" not in config:
+        raise ValueError("The configuration must contain 'file_list'.")
+    file_list = config["file_list"]
     if not isinstance(file_list, list) or not file_list:
         raise ValueError("The file_list must not be empty.")
 
@@ -231,7 +231,7 @@ def main() -> None:  # pragma: no cover
     # 2. Try to instantiate the scheduler with the config
     scheduler = None
     try:
-        scheduler = HDF5FlowFieldScheduler(config["scheduler_files"], loop=False)
+        scheduler = HDF5FlowFieldScheduler(config["file_list"], loop=False)
     except Exception as e:
         logger.error(f"Error instantiating scheduler: {e}")
         logger.error(f"Please check the configuration file: {config_path}.")

@@ -66,7 +66,7 @@ def make(
     - buffer_size: Size of prefetching buffer (non-negative int, default 0).
     - episode_length: Length of episodes for episodic scheduler (non-negative int, default 0).
     - seed: Random seed (int, default 0).
-    - scheduler_files: List of data files (list, default empty).
+    - file_list: List of data files (list, default empty).
     - randomize: Whether to randomize file order (bool, default False).
     - loop: Whether to loop through files (bool, default True).
     - image_shape: Shape for image extraction when include_images=True (tuple, default (256, 256)).
@@ -162,7 +162,7 @@ def make(
     key, sched_key = jax.random.split(key)
 
     kwargs = {
-        "file_list": dataset_config.get("scheduler_files", []),
+        "file_list": dataset_config.get("file_list", []),
         "randomize": dataset_config.get("randomize", False),
         "loop": dataset_config.get("loop", True),
         "key": sched_key,

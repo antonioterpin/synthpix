@@ -108,10 +108,10 @@ def test_calculate_min_and_max_speeds(mock_hdf5_files):
     "cfg_name, cfg_content, expected_exception",
     [
         ("no_key", {}, ValueError),
-        ("not_a_list", {"scheduler_files": "not_a_list"}, ValueError),
-        ("non_string_items", {"scheduler_files": [123, 456]}, ValueError),
-        ("empty_list", {"scheduler_files": []}, ValueError),
-        ("nonexistent_file", {"scheduler_files": ["nonexistent_file.h5"]}, ValueError),
+        ("not_a_list", {"file_list": "not_a_list"}, ValueError),
+        ("non_string_items", {"file_list": [123, 456]}, ValueError),
+        ("empty_list", {"file_list": []}, ValueError),
+        ("nonexistent_file", {"file_list": ["nonexistent_file.h5"]}, ValueError),
     ],
 )
 def test_invalid_inputs_missing_speeds_panel(
@@ -127,7 +127,7 @@ def test_invalid_inputs_missing_speeds_panel(
 def test_not_h5_inputs_missing_speeds_panel(tmp_path):
     """Test with non-HDF5 file inputs for missing_speeds_panel."""
     cfg_file = tmp_path / "not_h5.yaml"
-    cfg_content = {"scheduler_files": [str(cfg_file)]}
+    cfg_content = {"file_list": [str(cfg_file)]}
     cfg_file.write_text(yaml.safe_dump(cfg_content))
     with pytest.raises(ValueError, match=f"File {cfg_file} is not a .h5 file"):
         missing_speeds_panel(str(cfg_file))
@@ -158,8 +158,8 @@ def test_missing_speeds_panel_all_branches(
 ):
     """Drive every branch in `missing_speeds_panel` by faking user input."""
     files, _dims = mock_hdf5_files
-    # Write initial config with only scheduler_files
-    cfg_dict = {"scheduler_files": files}
+    # Write initial config with only file_list
+    cfg_dict = {"file_list": files}
     cfg_file = tmp_path / "cfg.yaml"
     cfg_file.write_text(yaml.safe_dump(cfg_dict))
 
@@ -192,7 +192,7 @@ def test_missing_speeds_panel_when_values_present(
     files, _dims = mock_hdf5_files
     # Write config with all required keys
     cfg = {
-        "scheduler_files": files,
+        "file_list": files,
         "max_speed_x": 1.0,
         "max_speed_y": 2.0,
         "min_speed_x": -1.0,

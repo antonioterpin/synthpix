@@ -30,13 +30,13 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_SCHEDULER"]
 @pytest.mark.parametrize("file_list", [[None], [123, "invalid"], [123, "invalid"]])
 def test_invalid_file_list_type(file_list):
     with pytest.raises(ValueError, match="file_list must be a list of file paths."):
-        HDF5FlowFieldScheduler.from_config({"scheduler_files": file_list})
+        HDF5FlowFieldScheduler.from_config({"file_list": file_list})
 
 
 @pytest.mark.parametrize("file_list", [["nonexistent.h5"]])
 def test_invalid_file_paths(file_list):
     with pytest.raises(ValueError, match=f"File {file_list[0]} does not exist."):
-        HDF5FlowFieldScheduler.from_config({"scheduler_files": file_list})
+        HDF5FlowFieldScheduler.from_config({"file_list": file_list})
 
 
 @pytest.mark.parametrize("randomize", [None, 123, "invalid"])
@@ -44,7 +44,7 @@ def test_invalid_randomize(randomize, temp_file):
     with pytest.raises(ValueError, match="randomize must be a boolean value."):
         HDF5FlowFieldScheduler.from_config(
             {
-                "scheduler_files": [temp_file],
+                "file_list": [temp_file],
                 "randomize": randomize,
             }
         )
@@ -55,7 +55,7 @@ def test_invalid_loop(loop, temp_file):
     with pytest.raises(ValueError, match="loop must be a boolean value."):
         HDF5FlowFieldScheduler.from_config(
             {
-                "scheduler_files": [temp_file],
+                "file_list": [temp_file],
                 "loop": loop,
             }
         )
@@ -69,7 +69,7 @@ def test_empty_file_list(file_list, randomize, loop):
     with pytest.raises(ValueError, match="The file_list must not be empty."):
         HDF5FlowFieldScheduler.from_config(
             {
-                "scheduler_files": file_list,
+                "file_list": file_list,
                 "randomize": randomize,
                 "loop": loop,
             }
@@ -95,7 +95,7 @@ def test_numpy_scheduler_iteration(mock_numpy_files):
 
     scheduler = NumpyFlowFieldScheduler.from_config(
         {
-            "scheduler_files": files,
+            "file_list": files,
             "randomize": False,
             "loop": False,
         }
@@ -119,7 +119,7 @@ def test_numpy_scheduler_shape(mock_numpy_files):
     files, dims = mock_numpy_files
     scheduler = NumpyFlowFieldScheduler.from_config(
         {
-            "scheduler_files": files,
+            "file_list": files,
         }
     )
     shape = scheduler.get_flow_fields_shape()
@@ -131,7 +131,7 @@ def test_numpy_scheduler_init_flags(mock_numpy_files):
     files, _ = mock_numpy_files
     scheduler = NumpyFlowFieldScheduler.from_config(
         {
-            "scheduler_files": files,
+            "file_list": files,
             "randomize": True,
             "loop": True,
         }
@@ -176,7 +176,7 @@ def test_numpy_scheduler_get_batch(mock_numpy_files):
     files, dims = mock_numpy_files
     scheduler = NumpyFlowFieldScheduler.from_config(
         {
-            "scheduler_files": files,
+            "file_list": files,
         }
     )
 
@@ -190,7 +190,7 @@ def test_numpy_scheduler_get_batch(mock_numpy_files):
 def test_numpy_scheduler_with_images(mock_numpy_files):
     files, dims = mock_numpy_files
     scheduler = NumpyFlowFieldScheduler.from_config(
-        {"scheduler_files": files, "include_images": True, "loop": False}
+        {"file_list": files, "include_images": True, "loop": False}
     )
 
     batch_size = 1
@@ -308,7 +308,7 @@ class DummyScheduler(BaseFlowFieldScheduler):
     @classmethod
     def from_config(cls, config: dict) -> "DummyScheduler":
         return cls(
-            file_list=config["scheduler_files"],
+            file_list=config["file_list"],
             randomize=config.get("randomize", False),
             loop=config.get("loop", False),
         )
@@ -619,7 +619,7 @@ def test_mat_scheduler_invalid_include_images(bad_include_images, mock_numpy_fil
     with pytest.raises(ValueError, match="include_images must be a boolean value."):
         NumpyFlowFieldScheduler.from_config(
             {
-                "scheduler_files": files,
+                "file_list": files,
                 "include_images": bad_include_images,
             }
         )

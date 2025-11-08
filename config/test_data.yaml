@@ -38,5 +38,5 @@ max_speed_y: 0.501191258430481 # Maximum speed in the y direction
 output_units: "measure units per second"
 # Flows files: can be either a list of files or a directory
 # If a directory is provided, all the .h5 files in the directory will be used
-scheduler_files:
+file_list:
   - "/shared/fluids/fluids-estimation/test.h5"

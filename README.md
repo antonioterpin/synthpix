@@ -206,7 +206,7 @@ Describe which region of your flow field is captured, and its velocity bounds.
 | `img_offset` | 2D offset (in physical units, matching `flow_field_size`) specifying the top-left corner of the region of interest to extract from the flow field. |
 | `min_speed_x/y`, `max_speed_x/y` | Range of allowed velocities in each direction,           |
 | `output_units`                   | Units used in the returned flow field: `"pixels"` (converts physical velocities to displacements in pixels using `dt` and `resolution`), or `"measure units per second"` (same units as the input flow field, e.g., mm/s). |
-| `scheduler_files`                | List of ground-truth flow field files (e.g. `.mat`)      |
+| `file_list`                | List of ground-truth flow field files (e.g. `.mat`)      |
 | `scheduler_class`                | Loader class for your flow files (usually by extension). See [tutorials](docs/tutorials.md) for detailed explanations. |
 
 Note: `min_speed_x/y` and `max_speed_x/y` are not absolute cutoffs, but define the full expected velocity range (positive and negative) along each axis.

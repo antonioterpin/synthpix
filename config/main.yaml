@@ -43,6 +43,6 @@ max_speed_y: 0 # Maximum speed in the y direction
 # Units of the output flow field. Can be "measure units per second" or "pixels"
 output_units: "pixels"
 # Flows files
-scheduler_files:
+file_list:
   - /shared/fluids/fluids-estimation/eye_candies_main
 scheduler_class: ".mat"
