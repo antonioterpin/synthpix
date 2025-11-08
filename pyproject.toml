@@ -43,8 +43,12 @@ Repository = "https://github.com/antonioterpin/synthpix"
 Documentation = "https://github.com/antonioterpin/synthpix#readme"
 Issues = "https://github.com/antonioterpin/synthpix/issues"
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+
 [tool.setuptools.packages.find]
-include = ["src/synthpix*"]
+where = ["src"]
+include = ["synthpix*"]
 exclude = ["tests*", "docs*"]
 
 [project.optional-dependencies]
