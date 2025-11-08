@@ -36,7 +36,7 @@ def generate_images_from_flow(
         key: Random key for reproducibility.
         flow_field: Array of shape (N, H, W, 2) containing N velocity fields
             with velocities in length measure unit per second.
-        parameters: ImageGenerationParameters dataclass containing all the
+        parameters: ImageGenerationSpecification dataclass containing all the
             parameters for image generation.
         position_bounds: (height, width) bounds on the positions of
             the particles in pixels.
@@ -351,7 +351,7 @@ def input_check_gen_img_from_flow(
     Args:
         flow_field: Array of shape (N, H, W, 2) containing N velocity fields
             with velocities in length measure unit per second.
-        parameters: ImageGenerationParameters dataclass containing all the
+        parameters: ImageGenerationSpecification dataclass containing all the
             parameters for image generation.
         position_bounds: (height, width) bounds on the positions of
             the particles in pixels.

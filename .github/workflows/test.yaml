@@ -1,9 +1,7 @@
 name: Python CI
 
 on:
-    push:
-        branches:
-            - '**'
+    workflow_dispatch:
 
 jobs:
     test:
@@ -41,7 +39,8 @@ jobs:
               with:
                   name: coverage-xml
                   path: coverage.xml
+
             - name: Upload coverage reports to Codecov
               uses: codecov/codecov-action@v5
               with:
-                token: ${{ secrets.CODECOV_TOKEN }}
+                  token: ${{ secrets.CODECOV_TOKEN }}

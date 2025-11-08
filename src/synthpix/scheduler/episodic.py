@@ -75,8 +75,8 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         """Constructs an episodic scheduler wrapper.
 
         Args:
-            scheduler: Any concrete subclass of :class:`BaseFlowFieldScheduler`
-                (e.g. :class:`MATFlowFieldScheduler`).
+            scheduler: Any scheduler that implements SchedulerProtocol
+                (e.g. :class:`MATFlowFieldScheduler`, :class:`HDF5FlowFieldScheduler`).
             batch_size: episodes to run in parallel
                 (== first dim of each batch).
             episode_length: Number of consecutive flow-fields that

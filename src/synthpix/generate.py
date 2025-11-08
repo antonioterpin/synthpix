@@ -100,8 +100,8 @@ def img_gen_from_data(
         - Out-of-bounds particles are clipped to ensure valid rendering.
 
     Args:
-        image_shape: (height, width) of the output image.
         particle_positions: Array of particle positions (y, x) in pixels.
+        image_shape: (height, width) of the output image.
         max_diameter: Maximum particle diameter in pixels.
         diameters_x: Array of particle diameters in the x-direction.
         diameters_y: Array of particle diameters in the y-direction.

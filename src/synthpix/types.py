@@ -151,7 +151,7 @@ class ImageGenerationSpecification:
     Details:
         batch_size: Number of image pairs to generate.
         image_shape: (height, width) of the output image in pixels.
-        img_offset: (x, y) offset to apply to the generated images.
+        img_offset: (y, x) offset to apply to the generated images in pixels.
         seeding_density_range: (min, max) range of density of particles
             in the images.
         p_hide_img1: Probability of hiding particles in the first image.

@@ -28,16 +28,16 @@ SCHEDULERS = {
 
 
 def get_base_scheduler(name: str) -> BaseFlowFieldScheduler:
-    """Get the base scheduler class by name.
+    """Get the base scheduler class by file extension.
 
     Args:
-        name: Name of the scheduler class.
+        name: File extension identifying the scheduler type (".h5", ".mat", or ".npy").
 
     Returns:
-        The scheduler class.
+        The scheduler class corresponding to the file extension.
 
     Raises:
-        ValueError: If the scheduler class is not found.
+        ValueError: If the file extension is not supported.
     """
     if name not in SCHEDULERS:
         raise ValueError(
@@ -54,16 +54,33 @@ def make(
 
     The loading file must be a YAML file containing the dataset configuration.
     Extracting images from files is supported only for .mat files.
-    The configuration dictionary must contain at least the following
-    keys:
-    - scheduler_class: The class of the scheduler to use.
-    - batch_size: The batch size for training.
+
+    Required configuration keys:
+    - scheduler_class: The file extension of the scheduler to use (".h5", ".mat", or ".npy").
+    - batch_size: The batch size for training (positive integer).
+    - flow_fields_per_batch: Number of flow fields to use per batch.
+    - batches_per_flow_batch: Required when generating synthetic images (include_images=False).
+
+    Optional configuration keys:
+    - include_images: Whether to extract real images from files (bool, default False).
+    - buffer_size: Size of prefetching buffer (non-negative int, default 0).
+    - episode_length: Length of episodes for episodic scheduler (non-negative int, default 0).
+    - seed: Random seed (int, default 0).
+    - scheduler_files: List of data files (list, default empty).
+    - randomize: Whether to randomize file order (bool, default False).
+    - loop: Whether to loop through files (bool, default True).
+    - image_shape: Shape for image extraction when include_images=True (tuple, default (256, 256)).
 
     Args:
-        config: The dataset configuration.
+        config: Either a path to a YAML configuration file or a configuration dictionary.
 
     Returns:
-        The initialized sampler.
+        The initialized sampler (RealImageSampler or SyntheticImageSampler).
+
+    Raises:
+        TypeError: If config is not a string or dictionary, or if parameter types are invalid.
+        ValueError: If required keys are missing or parameter values are invalid.
+        FileNotFoundError: If the configuration file doesn't exist.
     """
     # Initialize console for colored output
     console = Console()

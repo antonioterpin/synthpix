@@ -13,19 +13,19 @@ def apply_flow_to_image_forward(
     flow_field: jnp.ndarray,
     dt: float,
 ) -> jnp.ndarray:
-    """Warp a 2D image of particles according to a given flow field.
+    """Warp a 2D image of particles according to a given flow field using forward mapping.
 
-    For each pixel (y, x) in the output image, we compute a velocity (u, v)
-    from `flow_field[t, y, x]`, then sample from the input image at
-    (y_s, x_s) = (y - v * dt, x - u * dt) via bilinear interpolation.
+    For each pixel (y, x) in the input image, we compute a velocity (u, v)
+    from `flow_field[y, x]`, then deposit the pixel value at the displaced
+    location (y + v * dt, x + u * dt) in the output image using bilinear splatting.
 
     Args:
         image: 2D array (H, W) representing the input particle image.
         flow_field: 3D array (H, W, 2) representing the velocity field.
-        dt: Time step for the backward mapping.
+        dt: Time step for the forward mapping.
 
     Returns:
-        A new 2D array of shape (H, W) with the particles displaced.
+        A new 2D array of shape (H, W) with the particles displaced using forward mapping.
     """
     H, W = image.shape
     y_grid, x_grid = jnp.indices((H, W))
