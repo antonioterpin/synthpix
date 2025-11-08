@@ -13,6 +13,7 @@ from synthpix.scheduler import (
     NumpyFlowFieldScheduler,
     PrefetchingFlowFieldScheduler,
 )
+from synthpix.scheduler.base import FileEndedError
 from synthpix.types import SchedulerData
 from synthpix.utils import load_configuration
 
@@ -87,9 +88,12 @@ def test_non_hdf5_file(temp_txt_file):
     ):
         HDF5FlowFieldScheduler(file_list=temp_txt_file)
 
+
 @pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
 def test_numpy_scheduler_iteration(mock_numpy_files):
     files, dims = mock_numpy_files
+
+    print("Number of test files:", len(files))
     scheduler = NumpyFlowFieldScheduler.from_config(
         {
             "scheduler_files": files,
@@ -229,8 +233,7 @@ def test_numpy_scheduler_loop_reset(mock_numpy_files):
 
     expected_total = len(files) * 2
     out_shapes = [
-        scheduler.get_batch(1).flow_fields.shape 
-        for _ in range(expected_total)
+        scheduler.get_batch(1).flow_fields.shape for _ in range(expected_total)
     ]
 
     # We should have received the right number of samples
@@ -283,19 +286,27 @@ class DummyScheduler(BaseFlowFieldScheduler):
     def __init__(self, file_list, randomize=False, loop=False, key=None):
         super().__init__(file_list, randomize, loop, key)
 
-    def load_file(self, file_path):
-        return np.random.rand(4, 2, 4, 3).astype(np.float32)
+    def load_file(self, file_path) -> SchedulerData:
+        data = np.random.rand(4, 2, 4, 3).astype(np.float32)
+        return SchedulerData(flow_fields=data)
 
-    def get_next_slice(self):
+    def get_next_slice(self) -> SchedulerData:
         assert self._cached_data is not None
+        if self._slice_idx >= self._cached_data.flow_fields.shape[1]:
+            raise FileEndedError("End of file data reached.")
+        print("Getting slice index:", self._slice_idx)
         return SchedulerData(
             flow_fields=self._cached_data.flow_fields[:, self._slice_idx, :, :2]
         )
 
-    def get_flow_fields_shape(self):
+    def get_flow_fields_shape(self) -> tuple[int, int, int]:
         assert self._cached_data is not None
-        return self._cached_data.flow_fields.shape[0], self._cached_data.flow_fields.shape[2] // 2, 2
-    
+        return (
+            self._cached_data.flow_fields.shape[0],
+            self._cached_data.flow_fields.shape[2] // 2,
+            2,
+        )
+
     @classmethod
     def from_config(cls, config: dict) -> "DummyScheduler":
         return cls(
@@ -395,8 +406,13 @@ def test_get_batch_partial_raises_stopiteration(tmp_path):
     f.write_text("data")
     scheduler = DummyScheduler([str(f)], randomize=False, loop=False)
 
-    with pytest.raises(StopIteration):
-        scheduler.get_batch(3)
+    batch = scheduler.get_batch(3)
+    assert batch is not None
+    assert batch.flow_fields.shape == (3, 4, 4, 2)
+    assert batch.mask is not None
+    assert batch.mask.sum() == 2  # only 2 valid slices
+    assert batch.flow_fields[:2].sum() != 0  # valid slices have data
+    assert batch.flow_fields[2:].sum() == 0  # padded slices are zero
 
 
 def test_get_batch_warning_and_return(tmp_path):
@@ -405,8 +421,11 @@ def test_get_batch_warning_and_return(tmp_path):
 
     # ── partial-batch branch ──
     sch_partial = DummyScheduler([str(f)])
-    with pytest.raises(StopIteration):
-        sch_partial.get_batch(3)  # asks for >2 slices -> partial batch
+    batch = sch_partial.get_batch(3)  # asks for >2 slices -> partial batch
+    assert batch.flow_fields.shape == (3, 4, 4, 2)
+    assert batch.mask is not None
+    assert batch.mask.sum() == 2  # only two valid slices
+    assert batch.flow_fields[:2].sum() != 0  # valid slices have data
 
     # ── success branch ──
     sch_full = DummyScheduler([str(f)])
@@ -415,6 +434,7 @@ def test_get_batch_warning_and_return(tmp_path):
 
 
 def test_loop_resets_and_continues_dummy(tmp_path):
+    # TODO: fix
     f = tmp_path / "one.dat"
     f.write_text("x")
     sch = DummyScheduler([str(f)], loop=True, randomize=False)
@@ -538,7 +558,8 @@ def test_prefetch_batch_shapes(mock_hdf5_files):
     try:
         batch = prefetch.get_batch(3)
         expected_shape = (3, dims["x_dim"], dims["z_dim"], 2)
-        assert batch.shape == expected_shape
+        flows = batch.flow_fields
+        assert flows.shape == expected_shape
     finally:
         prefetch.shutdown()
 

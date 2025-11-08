@@ -8,7 +8,7 @@ import scipy.io
 from goggles import get_logger
 from PIL import Image
 
-from .base import BaseFlowFieldScheduler
+from .base import BaseFlowFieldScheduler, FileEndedError
 from synthpix.utils import SYNTHPIX_SCOPE
 from synthpix.types import PRNGKey, SchedulerData
 
@@ -186,7 +186,8 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         data = self._cached_data
         if data is None:
             raise RuntimeError("No data is currently cached.")
-
+        if self._slice_idx != 0:
+            raise FileEndedError("End of file data reached.")
         if not self.include_images:
             data = data.update(images1=None, images2=None)
 

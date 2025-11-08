@@ -17,6 +17,12 @@ from synthpix.scheduler.protocol import SchedulerProtocol
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
+class FileEndedError(Exception):
+    """Exception raised when the end of a file's data is reached."""
+
+    pass
+
+
 class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
     """Abstract class for scheduling access to flow field data.
 
@@ -112,9 +118,9 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             file_list_indices = jax.random.permutation(shuffle_key, file_list_indices)
             self.file_list = [self.file_list[i] for i in file_list_indices.tolist()]
 
-        self._cached_data = None
-        self._cached_file = None
-        self._slice_idx = 0
+        self._cached_data: SchedulerData | None = None
+        self._cached_file: str | None = None
+        self._slice_idx: int = 0
 
         logger.debug(
             f"Initialized with {len(self.file_list)} files, "
@@ -157,24 +163,38 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             StopIteration: If no more data and loop is False.
         """
         while self.index < len(self.file_list) or self.loop:
+            print("Current index:", self.index)
+            print("Current slice index:", self._slice_idx)
+            print("File list length:", len(self.file_list))
+            # Handle loop around
             if self.index >= len(self.file_list):
                 self.reset()
 
+            # Get the current file path
             path = self.file_list[self.index]
+
+            # Load and cache the file if not already cached
+            if self._cached_file != path:
+                print("Loading file:", path)
+                self._cached_file = None
+                self._cached_data = None
+                try:
+                    self._cached_data = self.load_file(path)
+                    self._cached_file = path
+                    self._slice_idx = 0
+                except Exception as e:
+                    logger.error(f"Error loading file {path}: {e}")
+                    self.index += 1
+                    continue  # Skip to the next file
+
             try:
-                # load and cache
-                self._cached_file = path
-                self._cached_data = self.load_file(path)
-
-                # extract and return
                 sample = self.get_next_slice()
-                self.index += 1
+                self._slice_idx += 1
+                print("Got next slice:", sample.flow_fields.shape)
                 return sample
-
-            except Exception as e:
-                logger.error(f"Skipping {path}: {e}")
+            except FileEndedError as e:
                 self.index += 1
-                continue
+                continue  # Skip to the next file
 
         raise StopIteration
 
@@ -197,9 +217,11 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         mask = None
         for _ in range(batch_size):
             try:
+                print("Getting next at index", _)
                 scheduler_data = self._get_next()
                 batch.append(scheduler_data)
             except StopIteration:
+                print("Caught StopIteration at index ", _)
                 break
         if len(batch) == 0:
             if not self.loop:

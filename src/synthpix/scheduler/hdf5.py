@@ -5,6 +5,7 @@ from typing_extensions import Self
 from goggles import get_logger
 
 from synthpix.scheduler import BaseFlowFieldScheduler
+from synthpix.scheduler.base import FileEndedError
 from synthpix.utils import SYNTHPIX_SCOPE
 from synthpix.types import PRNGKey, SchedulerData
 
@@ -68,6 +69,8 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         """
         if self._cached_data is None:
             raise RuntimeError("No data is currently cached.")
+        if self._slice_idx >= self._cached_data.flow_fields.shape[1]:
+            raise FileEndedError("End of file data reached.")
         flow = self._cached_data.flow_fields[:, self._slice_idx, :, :]
 
         return SchedulerData(

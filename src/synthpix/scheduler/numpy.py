@@ -8,7 +8,7 @@ import numpy as np
 from goggles import get_logger
 from PIL import Image
 
-from .base import BaseFlowFieldScheduler
+from .base import BaseFlowFieldScheduler, FileEndedError
 from synthpix.utils import SYNTHPIX_SCOPE
 from synthpix.types import PRNGKey, SchedulerData
 
@@ -94,6 +94,8 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         data = self._cached_data
         if data is None or self._cached_file is None:
             raise RuntimeError("No data is currently cached.")
+        if self._slice_idx != 0:
+            raise FileEndedError("End of file data reached.")
 
         if not self.include_images:
             # Images are not loaded by default, but we ensure it nonetheless

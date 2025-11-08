@@ -1338,7 +1338,7 @@ def test_reset_and_shutdown(sampler_class):
     sched = EpisodicDummy(episode_length=2)
     if sampler_class is SyntheticImageSamplerWrapper:
         old_get_batch = sched.get_batch
-        sched.get_batch = lambda batch_size: old_get_batch(batch_size=batch_size)
+        sched.get_batch = lambda *a, **kw: old_get_batch(*a, **kw)
     sampler = sampler_class.from_config(sched, {"batch_size": 4})
 
     next(sampler)
