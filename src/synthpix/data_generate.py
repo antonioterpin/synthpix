@@ -48,7 +48,7 @@ def generate_images_from_flow(
         histogram: Optional histogram to match the images to.
             NOTE: Histogram equalization is very slow!
 
-    Returns: 
+    Returns:
         Tuple containing:
         - images1: Array of shape (num_images, image_height, image_width),
                 the first images in the pairs.
