@@ -163,9 +163,6 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             StopIteration: If no more data and loop is False.
         """
         while self.index < len(self.file_list) or self.loop:
-            print("Current index:", self.index)
-            print("Current slice index:", self._slice_idx)
-            print("File list length:", len(self.file_list))
             # Handle loop around
             if self.index >= len(self.file_list):
                 self.reset()
@@ -175,7 +172,6 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
 
             # Load and cache the file if not already cached
             if self._cached_file != path:
-                print("Loading file:", path)
                 self._cached_file = None
                 self._cached_data = None
                 try:
@@ -190,7 +186,6 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             try:
                 sample = self.get_next_slice()
                 self._slice_idx += 1
-                print("Got next slice:", sample.flow_fields.shape)
                 return sample
             except FileEndedError as e:
                 self.index += 1
@@ -217,11 +212,9 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         mask = None
         for _ in range(batch_size):
             try:
-                print("Getting next at index", _)
                 scheduler_data = self._get_next()
                 batch.append(scheduler_data)
             except StopIteration:
-                print("Caught StopIteration at index ", _)
                 break
         if len(batch) == 0:
             if not self.loop:

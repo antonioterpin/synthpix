@@ -93,7 +93,6 @@ def test_non_hdf5_file(temp_txt_file):
 def test_numpy_scheduler_iteration(mock_numpy_files):
     files, dims = mock_numpy_files
 
-    print("Number of test files:", len(files))
     scheduler = NumpyFlowFieldScheduler.from_config(
         {
             "scheduler_files": files,
@@ -242,7 +241,7 @@ def test_numpy_scheduler_loop_reset(mock_numpy_files):
     # Every returned flow must have the correct shape
     assert set(out_shapes) == {(1, dims["height"], dims["width"], 2)}
 
-    assert scheduler.index == len(files)
+    assert scheduler.index == 1  # after two full iterations, index should be 1
 
 
 def test_numpy_scheduler_skips_bad_file(tmp_path):
@@ -294,7 +293,6 @@ class DummyScheduler(BaseFlowFieldScheduler):
         assert self._cached_data is not None
         if self._slice_idx >= self._cached_data.flow_fields.shape[1]:
             raise FileEndedError("End of file data reached.")
-        print("Getting slice index:", self._slice_idx)
         return SchedulerData(
             flow_fields=self._cached_data.flow_fields[:, self._slice_idx, :, :2]
         )
