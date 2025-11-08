@@ -135,7 +135,7 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
             An instance of the scheduler.
         """
         return cls(
-            file_list=config["scheduler_files"],
+            file_list=config.get("file_list", []),
             randomize=config.get("randomize", False),
             loop=config.get("loop", True),
             include_images=config.get("include_images", False),

@@ -1274,7 +1274,6 @@ class EpisodicDummy(_BaseDummy, EpisodicSchedulerProtocol):
         return max(self.episode_length - self._step, 0)
 
     def get_batch(self, batch_size):
-        print("EpisodicDummy.get_batch called, step =", self._step)
         batch = super().get_batch(batch_size=batch_size)
         self._step += 1
         done = jnp.array(self._step >= self.episode_length)

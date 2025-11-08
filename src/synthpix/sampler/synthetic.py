@@ -518,14 +518,9 @@ class SyntheticImageSampler(Sampler):
             # logger.info("Flow fields have been successfully loaded and sharded.")
             logger.debug(f"Current flow fields sharding: {_current_flows.sharding}")
 
-            print("current_flows", _current_flows.shape, _current_flows.sharding)
             # Creating the output flow field
             self.output_flow_fields, self._current_flows = self.flow_field_adapter_jit(
                 _current_flows
-            )
-
-            print(
-                "current_flows", self._current_flows.shape, self._current_flows.sharding
             )
 
         # Generate a new random key for image generation
@@ -538,11 +533,6 @@ class SyntheticImageSampler(Sampler):
         logger.debug(f"Current random keys: {keys}")
         logger.debug(f"Keys sharding: {keys.sharding}")
 
-        print(
-            "current_flows before img gen",
-            self._current_flows.shape,
-            self._current_flows.sharding,
-        )
         # Generate a new batch of images using the current flow fields
         imgs1, imgs2, params = self.img_gen_fn_jit(keys, self._current_flows)
         batch = SynthpixBatch(

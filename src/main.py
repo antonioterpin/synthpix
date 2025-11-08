@@ -75,6 +75,10 @@ def main(config_path: str, output_dir: str, num_images_to_display: int):
     # Initialize the sampler
     sampler = synthpix.make(config_path)
 
+    # Print where images will be saved
+    abs_output_dir = os.path.abspath(output_dir)
+    print(f"Images will be saved to: {abs_output_dir}")
+
     try:
         # Run the sampler and print results
         logger.info(f"Starting the {sampler.__class__.__name__} pipeline...")
@@ -101,6 +105,7 @@ def main(config_path: str, output_dir: str, num_images_to_display: int):
                     break
     finally:
         sampler.shutdown()
+        gg.finish()
 
 
 if __name__ == "__main__":

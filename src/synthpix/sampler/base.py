@@ -125,7 +125,6 @@ class Sampler(ABC):
             raise NotImplementedError("The underlying scheduler is not episodic.")
 
         is_last_step = self.scheduler.steps_remaining() == 0
-        print("Called _make_done", is_last_step)
         logger.debug(f"Is last step: {is_last_step}")
         logger.debug(f"Steps remaining: {self.scheduler.steps_remaining()}")
         # broadcast identical flag to every episode (synchronous horizons)

@@ -54,7 +54,6 @@ class RealImageSampler(Sampler):
             params=None,
             done=None,
         )
-        print("RealImageSampler produced a batch")
         return batch
 
     @classmethod
