@@ -101,7 +101,6 @@ class Sampler(ABC):
         self._reset()
         if scheduler_reset:
             self.scheduler.reset()
-        print(f"{self.__class__.__name__} has been reset.")
 
     def next_episode(self) -> None:
         """Flush the current episode and return the first batch of the next one.
