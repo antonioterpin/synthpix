@@ -166,6 +166,7 @@ def make(
         "randomize": dataset_config.get("randomize", False),
         "loop": dataset_config.get("loop", True),
         "key": sched_key,
+        "include_images": include_images,
     }
 
     if include_images:
