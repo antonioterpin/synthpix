@@ -61,7 +61,7 @@ def generate_images_from_flow(
         input_check_gen_img_from_flow(
             flow_field=flow_field, parameters=parameters, mask=mask, histogram=histogram
         )
-    
+
     # Extract image generation parameters
     image_shape = parameters.image_shape
 

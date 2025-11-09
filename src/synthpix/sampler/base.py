@@ -50,7 +50,7 @@ class Sampler(ABC):
         )  # pragma: no cover
 
         self.batch_size = batch_size
-        logger.debug(f"Scheduler class: {self.scheduler.__class__.__name__}")
+        logger.info(f"Scheduler class: {self.scheduler.__class__.__name__}")
 
     def _shutdown(self) -> None:
         """Custom shutdown logic for the sampler."""
@@ -101,7 +101,7 @@ class Sampler(ABC):
         self._reset()
         if scheduler_reset:
             self.scheduler.reset()
-        logger.debug(f"{self.__class__.__name__} has been reset.")
+        print(f"{self.__class__.__name__} has been reset.")
 
     def next_episode(self) -> None:
         """Flush the current episode and return the first batch of the next one.
@@ -125,11 +125,6 @@ class Sampler(ABC):
             raise NotImplementedError("The underlying scheduler is not episodic.")
 
         is_last_step = self.scheduler.steps_remaining() == 0
-        logger.debug(f"Is last step: {is_last_step}")
-        logger.debug(f"Steps remaining: {self.scheduler.steps_remaining()}")
-        # broadcast identical flag to every episode (synchronous horizons)
-        # implemented like this to make it easier in the future to implement
-        # asynchronous horizons
         return jnp.full((self.batch_size,), is_last_step, dtype=bool)
 
     @classmethod

@@ -443,47 +443,6 @@ class SyntheticImageSampler(Sampler):
                 )
             )
 
-        logger.debug("Input arguments of SyntheticImageSampler are valid.")
-        logger.debug(f"Flow field scheduler: {self.scheduler}")
-        logger.debug(f"Batches per flow batch: {self.batches_per_flow_batch}")
-        logger.debug(f"Batch size: {self.batch_size}")
-        logger.debug(f"Flow fields per batch: {flow_fields_per_batch}")
-        logger.debug(f"Flow field shape: {flow_field_shape}")
-        logger.debug(f"Flow field size: {self.flow_field_size}")
-        logger.debug(f"Resolution: {self.resolution}")
-        logger.debug(f"Velocities per pixel: {velocities_per_pixel}")
-        logger.debug(f"Image offset: {self.img_offset}")
-        logger.debug(
-            f"Seeding density Range: {generation_specification.seeding_density_range}"
-        )
-        logger.debug(
-            f"Diameter ranges: {generation_specification.diameter_ranges}"
-        )
-        logger.debug(f"Max diameter: {self.max_diameter}")
-        logger.debug(
-            f"Intensity ranges: {generation_specification.intensity_ranges}"
-        )
-        logger.debug(f"Intensity var: {generation_specification.intensity_var}")
-        logger.debug(f"Rho ranges: {generation_specification.rho_ranges}")
-        logger.debug(f"Rho var: {generation_specification.rho_var}")
-        logger.debug(f"dt: {generation_specification.dt}")
-        logger.debug(f"Seed: {self.seed}")
-        logger.debug(f"Max speed x: {max_speed_x}")
-        logger.debug(f"Max speed y: {max_speed_y}")
-        logger.debug(f"Min speed x: {min_speed_x}")
-        logger.debug(f"Min speed y: {min_speed_y}")
-        logger.debug(f"Output units: {self.output_units}")
-        logger.debug(f"Background level: {generation_specification.noise_uniform}")
-        logger.debug(
-            f"Noise Gaussian mean: {generation_specification.noise_gaussian_mean}"
-        )
-        logger.debug(
-            f"Noise Gaussian std: {generation_specification.noise_gaussian_std}"
-        )
-        if mask is not None:
-            logger.debug(f"Mask path: {mask}")
-        if histogram is not None:
-            logger.debug(f"Histogram path: {histogram}")
         self._reset()
 
     def _reset(self) -> None:
@@ -514,10 +473,6 @@ class SyntheticImageSampler(Sampler):
 
             # Shard the flow fields across devices
             self._current_flows = jnp.array(self._current_flows, device=self.sharding)
-
-            # logger.info("Flow fields have been successfully loaded and sharded.")
-            logger.debug(f"Current flow fields sharding: {self._current_flows.sharding}")
-
             # Creating the output flow field
             self.output_flow_fields, self._current_flows = self.flow_field_adapter_jit(
                 self._current_flows
@@ -529,55 +484,16 @@ class SyntheticImageSampler(Sampler):
         self._rng, subkey = jax.random.split(self._rng)
         keys = jax.random.split(subkey, self.ndevices)
 
-        logger.debug(f"Number of flow fields: {self._current_flows.shape[0]}")
-        logger.debug(f"Current flow fields shape: {self._current_flows.shape[1:]}")
-        logger.debug(f"Current flow sharding: {self._current_flows.sharding}")
-        logger.debug(f"Current random keys: {keys}")
-        logger.debug(f"Keys sharding: {keys.sharding}")
-
         # Generate a new batch of images using the current flow fields
-        # arrays = jax.live_arrays()
-        # before = len(arrays)
-        # print("\n=== Live arrays before image generation ===")
-        # print(before)
-        #     print(f"shape={info.shape}, dtype={info.dtype}, device={info.device}, nbytes={info.nbytes/1e6:.2f} MB")
         imgs1, imgs2, params = self.img_gen_fn_jit(keys, self._current_flows)
-        # print("before batch", jax.devices()[0].memory_stats()["bytes_in_use"])
-        # imgs1.block_until_ready()
-        # imgs2.block_until_ready()
         batch = SynthpixBatch(
             images1=imgs1,
             images2=imgs2,
             flow_fields=self.output_flow_fields,
             params=params,
         )
-        # arrays = jax.live_arrays()
-        # after = len(arrays)
-        # print("\n=== Live arrays after image generation ===")
-        # print(after)
-        # # for info in jax.live_arrays():
-        # batch.images1.block_until_ready()
-        # batch.images2.block_until_ready()
-        # batch.flow_fields.block_until_ready()
-        # print("after batch", jax.devices()[0].memory_stats()["bytes_in_use"])
-        logger.debug(f"imgs1 location: {imgs1.sharding}")
-        logger.debug(f"imgs2 location: {imgs2.sharding}")
-        logger.debug(f"Current flow fields location: {self._current_flows.sharding}")
-        logger.debug(f"Output flow fields location: {self.output_flow_fields.sharding}")
-        logger.debug(f"Generated images shape: {imgs1.shape}, {imgs2.shape}")
-        logger.debug(f"Output flow fields shape: {self.output_flow_fields.shape}")
-
-        assert (
-            imgs1.shape[0] == self.batch_size
-        ), f"Expected {self.batch_size} images but got {imgs1.shape[0]}"
-        assert (
-            imgs2.shape[0] == self.batch_size
-        ), f"Expected {self.batch_size} images but got {imgs2.shape[0]}"
 
         self._batches_generated += 1
-        logger.debug(
-            f"Generated {self._batches_generated * self.batch_size} " "image couples"
-        )
 
         return batch
 
