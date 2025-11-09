@@ -61,6 +61,9 @@ def generate_images_from_flow(
         input_check_gen_img_from_flow(
             flow_field=flow_field, parameters=parameters, mask=mask, histogram=histogram
         )
+    
+    # Extract image generation parameters
+    image_shape = parameters.image_shape
 
     # Compute maximum diameter and maximum seeding density
     max_seeding_density = parameters.seeding_density_range[1]
@@ -269,12 +272,12 @@ def generate_images_from_flow(
 
         # Crop the images to image_shape
         first_img = first_img[
-            parameters.img_offset[0] : position_bounds[0] + parameters.img_offset[0],
-            parameters.img_offset[1] : position_bounds[1] + parameters.img_offset[1],
+            parameters.img_offset[0] : image_shape[0] + parameters.img_offset[0],
+            parameters.img_offset[1] : image_shape[1] + parameters.img_offset[1],
         ]
         second_img = second_img[
-            parameters.img_offset[0] : position_bounds[0] + parameters.img_offset[0],
-            parameters.img_offset[1] : position_bounds[1] + parameters.img_offset[1],
+            parameters.img_offset[0] : image_shape[0] + parameters.img_offset[0],
+            parameters.img_offset[1] : image_shape[1] + parameters.img_offset[1],
         ]
 
         # Add noise to the images
