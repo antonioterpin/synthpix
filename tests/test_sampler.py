@@ -985,10 +985,6 @@ def test_speed_sampler_real_fn(
             batch.params.diameter_ranges.block_until_ready()  # type: ignore
             batch.params.intensity_ranges.block_until_ready()  # type: ignore
             batch.params.rho_ranges.block_until_ready()  # type: ignore
-            print(f"Completed batch {i + 1}/{batches_per_flow_batch}")
-            stats = jax.devices()[0].memory_stats()
-            used = stats["bytes_in_use"]
-            print(f"\nGPU memory used: {used/1e9:.2f} GB")
             if i >= batches_per_flow_batch - 1:
                 sampler.reset(scheduler_reset=False)
                 break
