@@ -13,7 +13,7 @@ PRNGKey: TypeAlias = jnp.ndarray
 
 
 @tree_util.register_pytree_node_class
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class ImageGenerationParameters:
     """Dataclass representing generated images along with their parameters."""
 
@@ -61,7 +61,7 @@ class ImageGenerationParameters:
 
 
 @tree_util.register_pytree_node_class
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class SynthpixBatch:
     """Dataclass representing a batch of SynthPix data."""
 

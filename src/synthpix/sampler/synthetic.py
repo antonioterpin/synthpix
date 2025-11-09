@@ -353,7 +353,7 @@ class SyntheticImageSampler(Sampler):
         )
 
         # Update generation specification with adjusted parameters
-        self.generation_specification = generation_specification.update(
+        generation_specification = generation_specification.update(
             batch_size=self.batch_size // self.ndevices,
             img_offset=self.img_offset,
         )
@@ -365,7 +365,7 @@ class SyntheticImageSampler(Sampler):
 
             input_check_gen_img_from_flow(
                 flow_field=_current_flows,
-                parameters=self.generation_specification,
+                parameters=generation_specification,
                 position_bounds=self.position_bounds,
                 flow_field_res_x=self.flow_field_res_x,
                 flow_field_res_y=self.flow_field_res_y,
@@ -376,23 +376,23 @@ class SyntheticImageSampler(Sampler):
             input_check_flow_field_adapter(
                 flow_field=_current_flows,
                 new_flow_field_shape=self.output_flow_field_shape,
-                image_shape=self.generation_specification.image_shape,
+                image_shape=generation_specification.image_shape,
                 img_offset=self.img_offset,
                 resolution=self.resolution,
                 res_x=self.flow_field_res_x,
                 res_y=self.flow_field_res_y,
                 position_bounds=self.position_bounds,
                 position_bounds_offset=self.position_bounds_offset,
-                batch_size=self.generation_specification.batch_size,
+                batch_size=generation_specification.batch_size,
                 output_units=self.output_units,
-                dt=self.generation_specification.dt,
+                dt=generation_specification.dt,
                 zero_padding=self.zero_padding,
             )
 
         self.img_gen_fn_jit = lambda key, flow: generate_images_from_flow(
             key=key,
             flow_field=flow,
-            parameters=self.generation_specification,
+            parameters=generation_specification,
             position_bounds=self.position_bounds,
             flow_field_res_x=self.flow_field_res_x,
             flow_field_res_y=self.flow_field_res_y,
@@ -403,16 +403,16 @@ class SyntheticImageSampler(Sampler):
         self.flow_field_adapter_jit = lambda flow: flow_field_adapter(
             flow,
             new_flow_field_shape=self.output_flow_field_shape,
-            image_shape=self.generation_specification.image_shape,
+            image_shape=generation_specification.image_shape,
             img_offset=self.img_offset,
             resolution=self.resolution,
             res_x=self.flow_field_res_x,
             res_y=self.flow_field_res_y,
             position_bounds=self.position_bounds,
             position_bounds_offset=self.position_bounds_offset,
-            batch_size=self.generation_specification.batch_size,
+            batch_size=generation_specification.batch_size,
             output_units=self.output_units,
-            dt=self.generation_specification.dt,
+            dt=generation_specification.dt,
             zero_padding=self.zero_padding,
         )
         if not DEBUG_JIT:
@@ -454,31 +454,31 @@ class SyntheticImageSampler(Sampler):
         logger.debug(f"Velocities per pixel: {velocities_per_pixel}")
         logger.debug(f"Image offset: {self.img_offset}")
         logger.debug(
-            f"Seeding density Range: {self.generation_specification.seeding_density_range}"
+            f"Seeding density Range: {generation_specification.seeding_density_range}"
         )
         logger.debug(
-            f"Diameter ranges: {self.generation_specification.diameter_ranges}"
+            f"Diameter ranges: {generation_specification.diameter_ranges}"
         )
         logger.debug(f"Max diameter: {self.max_diameter}")
         logger.debug(
-            f"Intensity ranges: {self.generation_specification.intensity_ranges}"
+            f"Intensity ranges: {generation_specification.intensity_ranges}"
         )
-        logger.debug(f"Intensity var: {self.generation_specification.intensity_var}")
-        logger.debug(f"Rho ranges: {self.generation_specification.rho_ranges}")
-        logger.debug(f"Rho var: {self.generation_specification.rho_var}")
-        logger.debug(f"dt: {self.generation_specification.dt}")
+        logger.debug(f"Intensity var: {generation_specification.intensity_var}")
+        logger.debug(f"Rho ranges: {generation_specification.rho_ranges}")
+        logger.debug(f"Rho var: {generation_specification.rho_var}")
+        logger.debug(f"dt: {generation_specification.dt}")
         logger.debug(f"Seed: {self.seed}")
         logger.debug(f"Max speed x: {max_speed_x}")
         logger.debug(f"Max speed y: {max_speed_y}")
         logger.debug(f"Min speed x: {min_speed_x}")
         logger.debug(f"Min speed y: {min_speed_y}")
         logger.debug(f"Output units: {self.output_units}")
-        logger.debug(f"Background level: {self.generation_specification.noise_uniform}")
+        logger.debug(f"Background level: {generation_specification.noise_uniform}")
         logger.debug(
-            f"Noise Gaussian mean: {self.generation_specification.noise_gaussian_mean}"
+            f"Noise Gaussian mean: {generation_specification.noise_gaussian_mean}"
         )
         logger.debug(
-            f"Noise Gaussian std: {self.generation_specification.noise_gaussian_std}"
+            f"Noise Gaussian std: {generation_specification.noise_gaussian_std}"
         )
         if mask is not None:
             logger.debug(f"Mask path: {mask}")
@@ -510,18 +510,20 @@ class SyntheticImageSampler(Sampler):
             self._batches_generated = 0
 
             scheduler_batch = self.scheduler.get_batch(self.flow_fields_per_batch)
-            _current_flows = scheduler_batch.flow_fields
+            self._current_flows = scheduler_batch.flow_fields
 
             # Shard the flow fields across devices
-            _current_flows = jnp.array(_current_flows, device=self.sharding)
+            self._current_flows = jnp.array(self._current_flows, device=self.sharding)
 
             # logger.info("Flow fields have been successfully loaded and sharded.")
-            logger.debug(f"Current flow fields sharding: {_current_flows.sharding}")
+            logger.debug(f"Current flow fields sharding: {self._current_flows.sharding}")
 
             # Creating the output flow field
             self.output_flow_fields, self._current_flows = self.flow_field_adapter_jit(
-                _current_flows
+                self._current_flows
             )
+            self.output_flow_fields.block_until_ready()
+            self._current_flows.block_until_ready()
 
         # Generate a new random key for image generation
         self._rng, subkey = jax.random.split(self._rng)
@@ -534,13 +536,30 @@ class SyntheticImageSampler(Sampler):
         logger.debug(f"Keys sharding: {keys.sharding}")
 
         # Generate a new batch of images using the current flow fields
+        # arrays = jax.live_arrays()
+        # before = len(arrays)
+        # print("\n=== Live arrays before image generation ===")
+        # print(before)
+        #     print(f"shape={info.shape}, dtype={info.dtype}, device={info.device}, nbytes={info.nbytes/1e6:.2f} MB")
         imgs1, imgs2, params = self.img_gen_fn_jit(keys, self._current_flows)
+        # print("before batch", jax.devices()[0].memory_stats()["bytes_in_use"])
+        # imgs1.block_until_ready()
+        # imgs2.block_until_ready()
         batch = SynthpixBatch(
             images1=imgs1,
             images2=imgs2,
             flow_fields=self.output_flow_fields,
             params=params,
         )
+        # arrays = jax.live_arrays()
+        # after = len(arrays)
+        # print("\n=== Live arrays after image generation ===")
+        # print(after)
+        # # for info in jax.live_arrays():
+        # batch.images1.block_until_ready()
+        # batch.images2.block_until_ready()
+        # batch.flow_fields.block_until_ready()
+        # print("after batch", jax.devices()[0].memory_stats()["bytes_in_use"])
         logger.debug(f"imgs1 location: {imgs1.sharding}")
         logger.debug(f"imgs2 location: {imgs2.sharding}")
         logger.debug(f"Current flow fields location: {self._current_flows.sharding}")
