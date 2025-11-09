@@ -985,7 +985,7 @@ def test_speed_sampler_real_fn(
             batch.params.diameter_ranges.block_until_ready()  # type: ignore
             batch.params.intensity_ranges.block_until_ready()  # type: ignore
             batch.params.rho_ranges.block_until_ready()  # type: ignore
-            if i >= batches_per_flow_batch:
+            if i >= batches_per_flow_batch - 1:
                 sampler.reset(scheduler_reset=False)
                 break
 
