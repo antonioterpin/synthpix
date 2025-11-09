@@ -1,10 +1,12 @@
 """Flow field scheduler module."""
+
 from .base import BaseFlowFieldScheduler
 from .episodic import EpisodicFlowFieldScheduler
 from .hdf5 import HDF5FlowFieldScheduler
 from .mat import MATFlowFieldScheduler
 from .numpy import NumpyFlowFieldScheduler
 from .prefetch import PrefetchingFlowFieldScheduler
+from .protocol import SchedulerProtocol
 
 __all__ = [
     "BaseFlowFieldScheduler",
@@ -13,4 +15,5 @@ __all__ = [
     "MATFlowFieldScheduler",
     "EpisodicFlowFieldScheduler",
     "PrefetchingFlowFieldScheduler",
+    "SchedulerProtocol",
 ]

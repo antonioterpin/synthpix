@@ -6,21 +6,26 @@ import numpy as np
 import pytest
 
 from synthpix.scheduler import PrefetchingFlowFieldScheduler
+from synthpix.scheduler.protocol import (
+    EpisodeEnd,
+    EpisodicSchedulerProtocol,
+    SchedulerProtocol,
+)
+from synthpix.types import SchedulerData
 
 
-class MinimalScheduler:
+class MinimalScheduler(SchedulerProtocol):
     def __init__(self, total_batches=4, shape=(8, 8, 2)):
         self.total = total_batches
         self.count = 0
         self.shape = shape
         self.reset_called = False
-        self.episode_length = total_batches
 
     def get_batch(self, batch_size):
         if self.count >= self.total:
             raise StopIteration
         self.count += 1
-        return np.ones((batch_size,) + self.shape)
+        return SchedulerData(flow_fields=np.ones((batch_size,) + self.shape))
 
     def reset(self):
         self.count = 0
@@ -29,10 +34,28 @@ class MinimalScheduler:
     def get_flow_fields_shape(self):
         return self.shape
 
+    @property
+    def file_list(self) -> list[str]:
+        """Returns the list of files used by the underlying scheduler.
 
-class MinimalEpisodic:
+        Returns:
+            The list of files.
+        """
+        return ["dummy_file.npy"]
+
+    @file_list.setter
+    def file_list(self, new_file_list: list[str]) -> None:
+        """Sets a new list of files for the underlying scheduler.
+
+        Args:
+            new_file_list: The new list of files to set.
+        """
+        pass
+
+
+class MinimalEpisodic(EpisodicSchedulerProtocol):
     def __init__(self, total_batches=4, shape=(8, 8, 2)):
-        self.episode_length = total_batches
+        self._episode_length = total_batches
         self.shape = shape
         self._t = 0
 
@@ -43,10 +66,14 @@ class MinimalEpisodic:
             # you can either cycle or clamp; for tests, cycle is fine:
             self._t = 0
         self._t += 1
-        return np.ones((batch_size,) + self.shape)
+        return SchedulerData(flow_fields=np.ones((batch_size,) + self.shape))
 
     def next_episode(self):
         self._t = 0
+
+    @property
+    def episode_length(self) -> int:
+        return self._episode_length
 
     def reset(self):
         self._t = 0
@@ -54,17 +81,28 @@ class MinimalEpisodic:
     def get_flow_fields_shape(self):
         return self.shape
 
+    def steps_remaining(self) -> int:
+        return self.episode_length - self._t
+
+    @property
+    def file_list(self) -> list[str]:
+        return ["dummy_file.npy"]
+
+    @file_list.setter
+    def file_list(self, new_file_list: list[str]) -> None:
+        pass
+
 
 def test_single_producer_thread_across_episodes():
     import threading
 
     shape = (8, 8, 2)
-    sched = MinimalScheduler(total_batches=50, shape=shape)
-    sched.episode_length = 3  # short episodes to exercise next_episode() often
+    sched = MinimalEpisodic(total_batches=50, shape=shape)
+    sched._episode_length = 3  # short episodes to exercise next_episode() often
 
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=4)
 
-    it = iter(pf)  # start producer
+    pf.get_batch(1)  # start the thread
     time.sleep(0.1)  # let it prefetch a bit
 
     first_ident = pf._thread.ident
@@ -75,7 +113,7 @@ def test_single_producer_thread_across_episodes():
         # consume up to two steps in the episode
         for __ in range(2):
             try:
-                next(it)
+                pf.get_batch(1)
             except StopIteration:
                 break
 
@@ -94,30 +132,20 @@ def test_single_producer_thread_across_episodes():
     pf.shutdown()
 
 
-def test_iter_and_next():
-    scheduler = MinimalScheduler()
-    pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=2, buffer_size=2)
-
-    pf_iter = iter(pf)
-    batch = next(pf_iter)
-    assert batch.shape == (2, 8, 8, 2)
-    pf.shutdown()
-
-
 def test_stop_iteration_from_queue_empty():
     scheduler = MinimalScheduler(total_batches=0)
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=2)
 
     with pytest.raises(StopIteration):
-        next(iter(pf))
+        pf.get_batch(2)
     pf.shutdown()
 
 
 def test_worker_eos_signal_when_queue_full():
-    scheduler = MinimalScheduler(total_batches=0)
+    scheduler = MinimalScheduler(total_batches=1)
 
     pf = PrefetchingFlowFieldScheduler(scheduler=scheduler, batch_size=1, buffer_size=1)
-    iter(pf)  # Starts the thread
+    pf.get_batch(1)  # Starts the thread
 
     # Wait until EOS is in queue or timeout
     for _ in range(20):
@@ -128,7 +156,7 @@ def test_worker_eos_signal_when_queue_full():
         pytest.fail("Timeout waiting for worker to produce EOS.")
 
     with pytest.raises(StopIteration):
-        next(pf)
+        pf.get_batch(1)
     pf.shutdown()
 
 
@@ -145,15 +173,15 @@ def test_reset_stops_and_joins():
 
 
 def test_next_episode_resets_thread_and_flushes_queue():
-    scheduler = MinimalScheduler(total_batches=5)
+    scheduler = MinimalEpisodic(total_batches=5)
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1, buffer_size=5)
 
-    next(iter(pf))  # start thread
+    pf.get_batch(1)  # start the thread
     time.sleep(0.2)  # allow prefetch
 
-    pf._t = 3
+    pf._t = 3  # type: ignore[attr-defined]
     pf.next_episode()
-    assert pf._t == 0
+    assert pf._t == 0  # type: ignore[attr-defined]
     pf.shutdown()
 
 
@@ -167,19 +195,19 @@ def test_shutdown_behavior():
 
 
 def test_t_counter_wraps_after_episode():
-    sched = MinimalScheduler(total_batches=5)
-    sched.episode_length = 2
+    sched = MinimalEpisodic(total_batches=2)
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
 
-    it = iter(pf)
-
-    next(it)  # _t becomes 1
-    next(it)  # _t becomes 2
+    pf.get_batch(1)  # _t becomes 1
+    assert pf._t == 1
+    pf.get_batch(1)  # _t becomes 2
     assert pf._t == 2  # still inside episode
 
-    # Third request: internal counter must wrap to 1 again
-    sched.total += 1
-    next(it)
+    with pytest.raises(EpisodeEnd):
+        pf.get_batch(1)  # _t would wrap to 0 here
+    pf.reset()
+    assert pf._t == 0
+    pf.get_batch(1)  # _t wraps to 0
     assert pf._t == 1
     pf.shutdown()
 
@@ -212,9 +240,8 @@ def test_next_episode_flushes_remaining_and_restarts():
     scheduler = MinimalEpisodic(total_batches=TOTAL_BATCHES)
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1, buffer_size=5)
 
-    it = iter(pf)
     for _ in range(3):
-        next(it)
+        pf.get_batch(1)
 
     assert pf.steps_remaining() == TOTAL_BATCHES - 3
 
@@ -237,8 +264,7 @@ def test_reset_stops_thread_and_clears_queue():
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=3)
 
     # prime the queue with two prefetched batches
-    it = iter(pf)
-    next(it)
+    _ = pf.get_batch(1)
     for _ in range(40):
         if not pf._queue.empty():
             break
@@ -257,16 +283,14 @@ def test_worker_handles_full_queue_on_eos():
     sched = MinimalScheduler(total_batches=1)
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=1)
 
-    it = iter(pf)
     time.sleep(0.1)
 
     # Consume first (and only) real batch – queue becomes empty again,
     # but EOS is already injected via the queue.Full branch.
-    next(it)
+    pf.get_batch(1)
 
-    # next() must now raise StopIteration coming from the sentinel None.
     with pytest.raises(StopIteration):
-        next(it)
+        pf.get_batch(1)
 
     pf.shutdown()
 
@@ -287,12 +311,11 @@ def test_shutdown_when_queue_empty():
     sched = MinimalScheduler(total_batches=1)
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=1)
 
-    it = iter(pf)
     # Consume the only real batch
-    next(it)
+    pf.get_batch(1)
     # Consume the EOS sentinel (raises StopIteration) → queue is now empty
     with pytest.raises(StopIteration):
-        next(it)
+        pf.get_batch(1)
 
     assert pf._queue.empty()
 
@@ -306,7 +329,7 @@ def test_shutdown_when_queue_full():
     sched = MinimalScheduler(total_batches=5)
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=1)
 
-    iter(pf)
+    pf.get_batch(1)  # start consuming to let producer fill the queue
     for _ in range(40):
         if pf._queue.full():
             break
@@ -334,24 +357,23 @@ def test_reset_when_queue_empty_and_thread_not_started():
     assert not pf._thread.is_alive()
 
     # Ensure wrapper still works end-to-end
-    it = iter(pf)
-    batch = next(it)
-    assert batch.shape == (1,) + sched.shape
+    batch = pf.get_batch(1)
+    assert batch.flow_fields.shape == (1,) + sched.shape
     pf.shutdown()
 
 
 def test_reset_then_next_episode_three_cycles(monkeypatch):
     """Test that reset() and next_episode() work correctly in sequence."""
     shape = (8, 8, 2)
-    sched = MinimalScheduler(total_batches=10, shape=shape)
-    sched.episode_length = 2  # make episodes short
+    sched = MinimalEpisodic(total_batches=10, shape=shape)
+    sched._episode_length = 2  # make episodes short
 
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
 
     # ---------------- Episode 1 ----------------
-    first_batch = next(iter(pf))
-    assert first_batch.shape == (1,) + shape
-    assert pf._t == 1
+    first_batch = pf.get_batch(1)
+    assert first_batch.flow_fields.shape == (1,) + shape
+    assert pf._t == 1  # type: ignore[attr-defined]
 
     pf.reset()
     assert not pf._thread.is_alive()
@@ -359,14 +381,15 @@ def test_reset_then_next_episode_three_cycles(monkeypatch):
 
     # ---------------- Episode 2 ----------------
     pf.next_episode(join_timeout=1)
+    time.sleep(1)  # allow thread to start
     assert pf._t == 0 and pf._thread.is_alive()
 
     # Consume one batch
-    assert pf.get_batch(1).shape == (1,) + shape
-    assert pf._t == 1
+    assert pf.get_batch(1).flow_fields.shape == (1,) + shape
+    assert pf._t == 1  # type: ignore[attr-defined]
     # Case when queue NOT empty
     pf.next_episode(join_timeout=1)  # flush unfinished episode
-    assert pf._t == 0
+    assert pf._t == 0  # type: ignore[attr-defined]
 
     # ---------------- Episode 3 ----------------
     def always_empty():
@@ -374,12 +397,13 @@ def test_reset_then_next_episode_three_cycles(monkeypatch):
 
     monkeypatch.setattr(pf._queue, "get_nowait", always_empty, raising=True)
     # Consume one batch so we are mid-episode again (_t == 1)
-    assert pf.get_batch(1).shape == (1,) + shape
-    assert pf._t == 1 and pf._thread.is_alive()
+    assert pf.get_batch(1).flow_fields.shape == (1,) + shape
+    assert pf._t == 1  # type: ignore[attr-defined]
+    assert pf._thread.is_alive()
 
     # case when queue empty
     pf.next_episode(join_timeout=1)
-    assert pf._t == 0  # counters reset despite empty queue
+    assert pf._t == 0  # type: ignore[attr-defined]
     # Producer thread was restarted
     assert pf._thread.is_alive()
 
@@ -398,30 +422,32 @@ def test_next_raises_stop_iteration_when_queue_empty(monkeypatch):
 
     # Iteration must now fail with StopIteration via the Empty-queue branch.
     with pytest.raises(StopIteration):
-        next(iter(pf))
+        pf.get_batch(1)
 
     pf.shutdown()
 
 
 def test_next_episode_immediate_timeout_break():
     """If join_timeout is 0 the loop should hit the immediate timeout break."""
-    sched = MinimalScheduler(total_batches=10)
+    sched = MinimalEpisodic(total_batches=10)
+    sched._episode_length = 5
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
 
     # Start the iterator so _started becomes True
-    iter(pf)
+    pf.get_batch(1)
 
     # Call next_episode with zero timeout to hit the `remaining_time <= 0` branch
     pf.next_episode(join_timeout=0)
 
     # After calling next_episode the internal counter must be reset
-    assert pf._t == 0
+    assert pf._t == 0  # type: ignore[attr-defined]
     pf.shutdown()
 
 
 def test_next_episode_handles_queue_empty(monkeypatch):
     """Simulate queue.get raising queue.Empty to exercise the except branch."""
-    sched = MinimalScheduler(total_batches=10)
+    sched = MinimalEpisodic(total_batches=10)
+    sched._episode_length = 5
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
 
     # Ensure the wrapper is marked as started so the discard loop runs
@@ -435,13 +461,13 @@ def test_next_episode_handles_queue_empty(monkeypatch):
 
     # This should complete without raising and reset the internal counter
     pf.next_episode(join_timeout=0.05)
-    assert pf._t == 0
+    assert pf._t == 0  # type: ignore[attr-defined]
     pf.shutdown()
 
 
 def test_next_episode_breaks_on_eos_sentinel():
     """If an EOS (None) is found in the queue, the flush loop must break."""
-    sched = MinimalScheduler(total_batches=5)
+    sched = MinimalEpisodic(total_batches=5)
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
 
     # Mark started so the discard loop activates and push an EOS sentinel
@@ -450,11 +476,11 @@ def test_next_episode_breaks_on_eos_sentinel():
 
     # This should notice the EOS and break out, resetting _t
     pf.next_episode(join_timeout=1)
-    assert pf._t == 0
+    assert pf._t == 0  # type: ignore[attr-defined]
     pf.shutdown()
 
 
-class AlwaysEmptyScheduler:
+class AlwaysEmptyScheduler(SchedulerProtocol):
     """A scheduler that immediately raises StopIteration."""
 
     def __init__(self, shape=(8, 8, 2)):
@@ -468,6 +494,18 @@ class AlwaysEmptyScheduler:
 
     def get_flow_fields_shape(self):
         return self.shape
+
+    @property
+    def file_list(self) -> list[str]:
+        return []
+
+    @file_list.setter
+    def file_list(self, new_file_list: list[str]) -> None:
+        pass
+
+    @classmethod
+    def from_config(cls, scheduler, config) -> "AlwaysEmptyScheduler":
+        return cls()
 
 
 def test_worker_eos_signal_via_full_queue_branch_direct():
@@ -494,6 +532,6 @@ def test_worker_eos_signal_via_full_queue_branch_direct():
 
     # 5) And consuming it via __next__ raises StopIteration.
     with pytest.raises(StopIteration):
-        next(pf)
+        pf.get_batch(2)
 
     pf.shutdown()

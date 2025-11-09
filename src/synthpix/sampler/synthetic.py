@@ -1,6 +1,8 @@
-"""SyntheticImageSampler class for generating synthetic images from flow fields."""
+"""Class for generating synthetic images from flow fields."""
+
 import os
-from typing import Callable, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing_extensions import Self
 
 import jax
 import jax.numpy as jnp
@@ -8,141 +10,120 @@ import numpy as np
 from goggles import get_logger
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
-from ..data_generate import input_check_gen_img_from_flow
-from ..utils import DEBUG_JIT, flow_field_adapter, input_check_flow_field_adapter
+from synthpix.data_generate import (
+    input_check_gen_img_from_flow,
+    generate_images_from_flow,
+)
+from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
+from synthpix.types import ImageGenerationSpecification, SynthpixBatch
+from synthpix.utils import (
+    DEBUG_JIT,
+    flow_field_adapter,
+    input_check_flow_field_adapter,
+)
+from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.scheduler.protocol import SchedulerProtocol
 from .base import Sampler
 
-logger = get_logger(__name__)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class SyntheticImageSampler(Sampler):
     """Iterator class that generates synthetic images from flow fields.
 
-    This class repeatedly samples flow fields from a FlowFieldScheduler, and for each,
-    generates a specified number of synthetic images using JAX random keys.
-    The generation is performed by a JAX-compatible synthesis function passed by the user.
-    The sampler yields batches of synthetic images, and automatically switches to a new
-    flow field after generating a defined number of images from the current one.
+    This class repeatedly samples flow fields from a FlowFieldScheduler,
+    and for each, generates a specified number of synthetic images using
+    JAX random keys.
+    The generation is performed by a JAX-compatible synthesis function
+    passed by the user.
+    The sampler yields batches of synthetic images, and automatically switches
+    to a new flow field after generating a defined number of images from the
+    current one.
 
-    Typical usage involves feeding the resulting batches into a model training loop or
-    downstream processing pipeline.
+    Typical usage involves feeding the resulting batches into a model training
+    loop or downstream processing pipeline.
 
-    If the underlying scheduler is an episodic scheduler, it automatically outputs also a
-    done flag to indicate the end of an episode.
+    If the underlying scheduler is an episodic scheduler, it automatically
+    outputs also a done flag to indicate the end of an episode.
     """
 
     def __init__(
         self,
-        scheduler,
-        img_gen_fn: Callable[..., jnp.ndarray],
+        scheduler: SchedulerProtocol,
         batches_per_flow_batch: int,
-        batch_size: int,
         flow_fields_per_batch: int,
-        flow_field_size: Tuple[float, float],
-        image_shape: Tuple[int, int],
+        flow_field_size: tuple[float, float],
         resolution: float,
         velocities_per_pixel: float,
-        img_offset: Tuple[float, float],
-        seeding_density_range: Tuple[float, float],
-        p_hide_img1: float,
-        p_hide_img2: float,
-        diameter_ranges: List[List[float]],
-        diameter_var: float,
-        intensity_ranges: List[List[float]],
-        intensity_var: float,
-        rho_ranges: List[List[float]],
-        rho_var: float,
-        dt: float,
         seed: int,
         max_speed_x: float,
         max_speed_y: float,
         min_speed_x: float,
         min_speed_y: float,
         output_units: str,
-        noise_uniform: float,
-        noise_gaussian_mean: float,
-        noise_gaussian_std: float,
-        device_ids: Optional[Sequence[int]] = None,
-        mask: Optional[str] = None,
-        histogram: Optional[str] = None,
+        device_ids: Sequence[int] | None = None,
+        generation_specification: ImageGenerationSpecification = ImageGenerationSpecification(),
+        mask: jnp.ndarray | None = None,
+        histogram: jnp.ndarray | None = None,
     ):
         """Initializes the SyntheticImageSampler.
 
         Args:
-            scheduler: An instance of FlowFieldScheduler that provides flow fields.
-            img_gen_fn: Callable[..., jnp.ndarray]
-                JAX-compatible function (flow_field, key, ...) -> batch of images.
-            batches_per_flow_batch: int
-                Number of batches of (imgs1, imgs2, flows) tuples per flow field batch.
-            batch_size: int
-                Number of synthetic image couples per batch.
-            flow_fields_per_batch: int
-                Number of flow fields to use per batch.
-            flow_field_size: Tuple[float, float]
-                Area in which the flow field has been calculated
+            scheduler:
+                An instance of FlowFieldScheduler that provides flow fields.
+            batches_per_flow_batch:
+                Number of batches of (imgs1, imgs2, flows) tuples
+                per flow field batch.
+            flow_fields_per_batch: Number of flow fields to use per batch.
+            flow_field_size: Area in which the flow field has been calculated
                 in a length measure unit. (e.g in meters, cm, etc.)
-            image_shape: Tuple[int, int]
-                Shape of the synthetic images.
-            resolution: float
-                Resolution of the images in pixels per unit length.
-            velocities_per_pixel: float
+            resolution: Resolution of the images in pixels per unit length.
+            velocities_per_pixel:
                 Number of velocities per pixel in the output flow field.
-            img_offset: Tuple[float, float]
-                Distance in the two axes from the top left corner of the flow field
-                and the top left corner of the image a length measure unit.
-            seeding_density_range: Tuple[float, float]
-                Range of density of particles in the images.
-            p_hide_img1: float
-                Probability of hiding particles in the first image.
-            p_hide_img2: float
-                Probability of hiding particles in the second image.
-            diameter_ranges: List[List[float, float], ...]
-                List of ranges of diameters for particles.
-            diameter_var: float
-                Variance of the diameters for particles.
-            intensity_ranges: List[List[float, float], ...]
-                List of ranges of intensities for particles.
-            intensity_var: float
-                Variance of the intensities for particles.
-            rho_ranges: List[List[float, float], ...]
-                List of ranges of correlation coefficients for particles.
-            rho_var: float
-                Variance of the correlation coefficients for particles.
-            dt: float
-                Time step for the simulation.
-            seed: int
-                Random seed for JAX PRNG.
-            max_speed_x: float
-                Maximum speed in the x-direction for the flow field
+            seed: Random seed for JAX PRNG.
+            max_speed_x: Maximum speed in the x-direction for the flow field
                 in length measure unit per seconds.
-            max_speed_y: float
-                Maximum speed in the y-direction for the flow field
+            max_speed_y: Maximum speed in the y-direction for the flow field
                 in length measure unit per seconds.
-            min_speed_x: float
-                Minimum speed in the x-direction for the flow field
+            min_speed_x: Minimum speed in the x-direction for the flow field
                 in length measure unit per seconds.
-            min_speed_y: float
-                Minimum speed in the y-direction for the flow field
+            min_speed_y: Minimum speed in the y-direction for the flow field
                 in length measure unit per seconds.
-            output_units: str
-                Units of the output flow field. Can be 'pixels' or 'measure units'.
-            noise_uniform: float
-                Maximum amplitude of the uniform noise to add.
-            noise_gaussian_mean: float
-                Mean of the Gaussian noise to add.
-            noise_gaussian_std: float
-                Standard deviation of the Gaussian noise to add.
-            device_ids: Sequence[int]
-                List of device IDs to use for sharding the flow fields and images.
-            mask: Optional[str]
-                Optional path to a .npy file containing a mask.
-                Mask must be a 2D array with 1 where unmasked, 0 where masked.
-            histogram: Optional[str]
-                Optional path to a .npy file containing a histogram of the flow field.
-                Histogram must be a 1D array with 256 bins, summing to number of pixels.
+            output_units: Units of the output flow field.
+                Can be 'pixels' or 'measure units'.
+            device_ids: List of device IDs to use for sharding the
+                flow fields and images.
+            generation_specification: Specification for image generation.
+            mask: Optional binary mask to apply during image generation.
+                Should be a jnp.ndarray of shape (height, width).
+            histogram: Optional histogram to match during image generation.
+                Should be a jnp.ndarray of shape (256,).
                 NOTE: Histogram equalization is very slow!
         """
-        super().__init__(scheduler, batch_size)
+        # unpack for convenience
+        self.batch_size = generation_specification.batch_size
+        image_shape = generation_specification.image_shape
+        img_offset = generation_specification.img_offset
+        dt = generation_specification.dt
+
+        super().__init__(scheduler, self.batch_size)
+
+        # Check provided mask
+        if mask is not None and mask.shape != image_shape:
+            raise ValueError(
+                f"Mask shape {mask.shape} does not match image shape " f"{image_shape}."
+            )
+        self.mask = mask
+        # Check provided histogram
+        if histogram is not None and (
+            histogram.shape != (256,)
+            or not jnp.isclose(histogram.sum(), image_shape[0] * image_shape[1])
+        ):
+            raise ValueError(
+                "Histogram must be a (256,) array and "
+                "sum to the number of pixels in the image."
+            )
+        self.histogram = histogram
 
         # Name of the axis for the device mesh
         self.shard_fields = "fields"
@@ -175,37 +156,34 @@ class SyntheticImageSampler(Sampler):
             ),
         )
 
-        if not callable(img_gen_fn):
-            raise ValueError("img_gen_fn must be a callable function.")
-
         if not isinstance(batches_per_flow_batch, int) or batches_per_flow_batch <= 0:
             raise ValueError("batches_per_flow_batch must be a positive integer.")
         self.batches_per_flow_batch = batches_per_flow_batch
-        if self._episodic and batches_per_flow_batch != 1:
+        if (
+            isinstance(self.scheduler, EpisodicFlowFieldScheduler)
+            and batches_per_flow_batch != 1
+        ):
             self.batches_per_flow_batch = 1
             logger.warning("Using batches_per_flow_batch = 1 for episodic setting.")
 
         if not isinstance(flow_fields_per_batch, int) or flow_fields_per_batch <= 0:
             raise ValueError("flow_fields_per_batch must be a positive integer.")
-        if flow_fields_per_batch > batch_size:
-            raise ValueError(
-                "flow_fields_per_batch must be less than or equal to batch_size."
-            )
+        if flow_fields_per_batch > self.batch_size:
+            raise ValueError("flow_fields_per_batch must be <= batch_size.")
         self.flow_fields_per_batch = flow_fields_per_batch
 
         # Make sure the batch size is divisible by the number of devices
-        if batch_size % self.ndevices != 0:
-            batch_size = (batch_size // self.ndevices + 1) * self.ndevices
+        if self.batch_size % self.ndevices != 0:
+            self.batch_size = (self.batch_size // self.ndevices + 1) * self.ndevices
             logger.warning(
                 f"Batch size was not divisible by the number of devices. "
-                f"Setting batch_size to {batch_size}."
+                f"Setting batch_size to {self.batch_size}."
             )
-        self.batch_size = batch_size
 
         if (
-            not isinstance(flow_field_size, tuple)
-            or len(flow_field_size) != 2
-            or not all(isinstance(s, (int, float)) and s > 0 for s in flow_field_size)
+            # not isinstance(flow_field_size, tuple) or
+            # len(flow_field_size) != 2 or
+            not all(isinstance(s, (int, float)) and s > 0 for s in flow_field_size)
         ):
             raise ValueError("flow_field_size must be a tuple of two positive numbers.")
         self.flow_field_size = flow_field_size
@@ -225,22 +203,13 @@ class SyntheticImageSampler(Sampler):
             )
         flow_field_shape = (flow_field_shape[0], flow_field_shape[1])
 
-        if (
-            not isinstance(image_shape, tuple)
-            or len(image_shape) != 2
-            or not all(isinstance(s, int) and s > 0 for s in image_shape)
-        ):
-            raise ValueError("image_shape must be a tuple of two positive integers.")
-        self.image_shape = image_shape
-
         if not isinstance(resolution, (int, float)) or resolution <= 0:
             raise ValueError("resolution must be a positive number.")
         self.resolution = resolution
 
-        if (
-            not isinstance(velocities_per_pixel, (int, float))
-            or velocities_per_pixel <= 0
-        ):
+        if not isinstance(velocities_per_pixel, (int, float)):
+            raise ValueError("velocities_per_pixel must be a number.")
+        if velocities_per_pixel <= 0:
             raise ValueError("velocities_per_pixel must be a positive number.")
         self.velocities_per_pixel = velocities_per_pixel
         self.output_flow_field_shape = (
@@ -248,168 +217,20 @@ class SyntheticImageSampler(Sampler):
             int(image_shape[1] * velocities_per_pixel),
         )
 
-        if (
-            not isinstance(img_offset, tuple)
-            or len(img_offset) != 2
-            or not all(isinstance(s, (int, float)) and s >= 0 for s in img_offset)
-        ):
-            raise ValueError("img_offset must be a tuple of two non-negative numbers.")
+        self.max_diameter = max(r[1] for r in generation_specification.diameter_ranges)
 
-        if (
-            not isinstance(seeding_density_range, tuple)
-            or len(seeding_density_range) != 2
-            or not all(
-                isinstance(s, (int, float)) and s >= 0 for s in seeding_density_range
-            )
-        ):
-            raise ValueError(
-                "seeding_density_range must be a tuple of two non-negative numbers."
-            )
-        if seeding_density_range[0] > seeding_density_range[1]:
-            raise ValueError("seeding_density_range must be in the form (min, max).")
-        self.seeding_density_range = seeding_density_range
-        self.max_seeding_density = seeding_density_range[1]
-
-        if not (0 <= p_hide_img1 <= 1):
-            raise ValueError("p_hide_img1 must be between 0 and 1.")
-        self.p_hide_img1 = p_hide_img1
-
-        if not (0 <= p_hide_img2 <= 1):
-            raise ValueError("p_hide_img2 must be between 0 and 1.")
-        self.p_hide_img2 = p_hide_img2
-
-        if (
-            not isinstance(diameter_ranges, list)
-            or len(diameter_ranges) == 0
-            or not all(
-                isinstance(r, (list, tuple))
-                and len(r) == 2
-                and all(isinstance(d, (int, float)) and d > 0 for d in r)
-                and r[0] <= r[1]
-                for r in diameter_ranges
-            )
-        ):
-            raise ValueError(
-                "diameter_ranges must be a non-empty list "
-                "of [min, max] pairs, with 0 < min <= max."
-            )
-        self.diameter_ranges = jnp.array(diameter_ranges)
-
-        self.max_diameter = max(r[1] for r in diameter_ranges)
-
-        if not isinstance(diameter_var, (int, float)) or diameter_var < 0:
-            raise ValueError("diameter_var must be a non-negative number.")
-        self.diameter_var = diameter_var
-
-        if (
-            not isinstance(intensity_ranges, list)
-            or len(intensity_ranges) == 0
-            or not all(
-                isinstance(r, (list, tuple))
-                and len(r) == 2
-                and all(isinstance(i, (int, float)) and i >= 0 for i in r)
-                and r[0] <= r[1]
-                for r in intensity_ranges
-            )
-        ):
-            raise ValueError(
-                "intensity_ranges must be a non-empty list "
-                "of [min, max] pairs, with 0 <= min <= max."
-            )
-        self.intensity_ranges = jnp.array(intensity_ranges)
-
-        if not isinstance(intensity_var, (int, float)) or intensity_var < 0:
-            raise ValueError("intensity_var must be a non-negative number.")
-        self.intensity_var = intensity_var
-
-        if (
-            not isinstance(rho_ranges, list)
-            or len(rho_ranges) == 0
-            or not all(
-                isinstance(r, (list, tuple))
-                and len(r) == 2
-                and all(isinstance(x, (int, float)) and -1.0 < x < 1.0 for x in r)
-                and r[0] <= r[1]
-                for r in rho_ranges
-            )
-        ):
-            raise ValueError(
-                "rho_ranges must be a non-empty list of [min, max] "
-                "pairs, each in (-1, 1), with min <= max."
-            )
-        self.rho_ranges = jnp.array(rho_ranges)
-
-        if not isinstance(rho_var, (int, float)) or rho_var < 0:
-            raise ValueError("rho_var must be a non-negative number.")
-        self.rho_var = rho_var
-
-        if not isinstance(dt, (int, float)):
-            raise ValueError("dt must be a scalar (int or float)")
-        self.dt = dt
-
-        if not isinstance(output_units, str) or output_units not in [
-            "pixels",
-            "measure units per second",
-        ]:
+        if output_units not in ["pixels", "measure units per second"]:
             raise ValueError(
                 "output_units must be 'pixels' or 'measure units per second'."
             )
         self.output_units = output_units
 
-        if not isinstance(noise_uniform, (int, float)) or noise_uniform < 0:
-            raise ValueError("noise_uniform must be a non-negative number.")
-        self.noise_uniform = noise_uniform
-
-        if not isinstance(noise_gaussian_mean, (int, float)) or noise_gaussian_mean < 0:
-            raise ValueError("noise_gaussian_mean must be a non-negative number.")
-        self.noise_gaussian_mean = noise_gaussian_mean
-
-        if not isinstance(noise_gaussian_std, (int, float)) or noise_gaussian_std < 0:
-            raise ValueError("noise_gaussian_std must be a non-negative number.")
-        self.noise_gaussian_std = noise_gaussian_std
-
         if not isinstance(seed, int) or seed < 0:
             raise ValueError("seed must be a positive integer.")
         self.seed = seed
 
-        if mask is not None:
-            if not isinstance(mask, str):
-                raise ValueError("mask must be a string representing the mask path.")
-            if not os.path.isfile(mask):
-                raise ValueError(f"Mask file {mask} does not exist.")
-            mask_array = np.load(mask)
-            if mask_array.shape != image_shape:
-                raise ValueError(
-                    f"Mask shape {mask_array.shape} does not match image shape "
-                    f"{image_shape}."
-                )
-            if not np.isin(mask_array, [0, 1]).all():
-                raise ValueError("Mask must only contain 0 and 1 values.")
-            self.mask = jnp.array(mask_array)
-        else:
-            self.mask = None
-
-        if histogram is not None:
-            if not isinstance(histogram, str):
-                raise ValueError(
-                    "histogram must be a string representing the histogram path."
-                )
-            if not os.path.isfile(histogram):
-                raise ValueError(f"Histogram file {histogram} does not exist.")
-            hist_array = np.load(histogram)
-            if hist_array.shape != (256,) or not np.isclose(
-                hist_array.sum(), image_shape[0] * image_shape[1]
-            ):
-                raise ValueError(
-                    "Histogram must be a (256,) array and "
-                    "sum to the number of pixels in the image."
-                )
-            self.histogram = jnp.array(hist_array)
-        else:
-            self.histogram = None
-
-        if batch_size % flow_fields_per_batch != 0:
-            extra_batch_size = batch_size % flow_fields_per_batch
+        if self.batch_size % flow_fields_per_batch != 0:
+            extra_batch_size = self.batch_size % flow_fields_per_batch
             logger.warning(
                 f"batch_size was not divisible by number of flows per batch. "
                 f"There will be one more sample for the first {extra_batch_size}"
@@ -484,9 +305,10 @@ class SyntheticImageSampler(Sampler):
 
         # Check if a bigger position bounds is needed
         if (
-            p_hide_img1 > 0
-            or p_hide_img2 > 0
-            or seeding_density_range[0] != seeding_density_range[1]
+            generation_specification.p_hide_img1 > 0
+            or generation_specification.p_hide_img2 > 0
+            or generation_specification.seeding_density_range[0]
+            != generation_specification.seeding_density_range[1]
         ) and (particle_size > max_speed_x * dt or particle_size > max_speed_y * dt):
             # Compute the extra length of the position bounds
             extra_length_x = max(0.0, particle_size - max_speed_x * dt)
@@ -513,7 +335,10 @@ class SyntheticImageSampler(Sampler):
         self.zero_padding = (pad_y, pad_x)
 
         # Set the position bounds offset
-        self.position_bounds_offset = tuple(max(0, x) for x in position_bounds_offset)
+        self.position_bounds_offset = (
+            max(0, position_bounds_offset[0]),
+            max(0, position_bounds_offset[1]),
+        )
 
         # Calculate the image offset in pixels
         self.img_offset = (
@@ -522,81 +347,55 @@ class SyntheticImageSampler(Sampler):
         )
 
         # Calculate the position bounds in pixels
-        self.position_bounds = tuple(int(x * resolution) for x in position_bounds)
+        self.position_bounds = (
+            int(position_bounds[0] * resolution),
+            int(position_bounds[1] * resolution),
+        )
+
+        # Update generation specification with adjusted parameters
+        generation_specification = generation_specification.update(
+            batch_size=self.batch_size // self.ndevices,
+            img_offset=self.img_offset,
+        )
 
         if DEBUG_JIT:  # pragma: no cover
             _current_flows = jnp.asarray(
-                self.scheduler.get_batch(self.flow_fields_per_batch)
+                self.scheduler.get_batch(self.flow_fields_per_batch).flow_fields
             )
 
             input_check_gen_img_from_flow(
-                key=jax.random.PRNGKey(self.seed),
                 flow_field=_current_flows,
+                parameters=generation_specification,
                 position_bounds=self.position_bounds,
-                image_shape=self.image_shape,
-                img_offset=self.img_offset,
-                num_images=self.batch_size,
-                seeding_density_range=self.seeding_density_range,
-                max_seeding_density=self.max_seeding_density,
-                p_hide_img1=self.p_hide_img1,
-                p_hide_img2=self.p_hide_img2,
-                diameter_ranges=self.diameter_ranges,
-                diameter_var=self.diameter_var,
-                max_diameter=self.max_diameter,
-                intensity_ranges=self.intensity_ranges,
-                intensity_var=self.intensity_var,
-                rho_ranges=self.rho_ranges,
-                rho_var=self.rho_var,
-                dt=self.dt,
                 flow_field_res_x=self.flow_field_res_x,
                 flow_field_res_y=self.flow_field_res_y,
-                noise_uniform=self.noise_uniform,
-                noise_gaussian_mean=self.noise_gaussian_mean,
-                noise_gaussian_std=self.noise_gaussian_std,
                 mask=self.mask,
-                histogram=histogram,
+                histogram=self.histogram,
             )
 
             input_check_flow_field_adapter(
                 flow_field=_current_flows,
                 new_flow_field_shape=self.output_flow_field_shape,
-                image_shape=self.image_shape,
+                image_shape=generation_specification.image_shape,
                 img_offset=self.img_offset,
                 resolution=self.resolution,
                 res_x=self.flow_field_res_x,
                 res_y=self.flow_field_res_y,
                 position_bounds=self.position_bounds,
                 position_bounds_offset=self.position_bounds_offset,
-                batch_size=self.batch_size // self.ndevices,
+                batch_size=generation_specification.batch_size,
                 output_units=self.output_units,
-                dt=self.dt,
+                dt=generation_specification.dt,
                 zero_padding=self.zero_padding,
             )
 
-        self.img_gen_fn_jit = lambda key, flow: img_gen_fn(
+        self.img_gen_fn_jit = lambda key, flow: generate_images_from_flow(
             key=key,
             flow_field=flow,
+            parameters=generation_specification,
             position_bounds=self.position_bounds,
-            image_shape=self.image_shape,
-            img_offset=self.img_offset,
-            num_images=self.batch_size // self.ndevices,
-            seeding_density_range=seeding_density_range,
-            max_seeding_density=self.max_seeding_density,
-            p_hide_img1=self.p_hide_img1,
-            p_hide_img2=self.p_hide_img2,
-            diameter_ranges=self.diameter_ranges,
-            diameter_var=self.diameter_var,
-            max_diameter=self.max_diameter,
-            intensity_ranges=self.intensity_ranges,
-            intensity_var=self.intensity_var,
-            rho_ranges=self.rho_ranges,
-            rho_var=self.rho_var,
-            dt=self.dt,
             flow_field_res_x=self.flow_field_res_x,
             flow_field_res_y=self.flow_field_res_y,
-            noise_uniform=self.noise_uniform,
-            noise_gaussian_mean=self.noise_gaussian_mean,
-            noise_gaussian_std=self.noise_gaussian_std,
             mask=self.mask,
             histogram=self.histogram,
         )
@@ -604,16 +403,16 @@ class SyntheticImageSampler(Sampler):
         self.flow_field_adapter_jit = lambda flow: flow_field_adapter(
             flow,
             new_flow_field_shape=self.output_flow_field_shape,
-            image_shape=self.image_shape,
+            image_shape=generation_specification.image_shape,
             img_offset=self.img_offset,
             resolution=self.resolution,
             res_x=self.flow_field_res_x,
             res_y=self.flow_field_res_y,
             position_bounds=self.position_bounds,
             position_bounds_offset=self.position_bounds_offset,
-            batch_size=self.batch_size // self.ndevices,
+            batch_size=generation_specification.batch_size,
             output_units=self.output_units,
-            dt=self.dt,
+            dt=generation_specification.dt,
             zero_padding=self.zero_padding,
         )
         if not DEBUG_JIT:
@@ -625,16 +424,11 @@ class SyntheticImageSampler(Sampler):
                         PartitionSpec(self.shard_fields),
                         PartitionSpec(self.shard_fields),
                     ),
-                    out_specs={
-                        "images1": PartitionSpec(self.shard_fields),
-                        "images2": PartitionSpec(self.shard_fields),
-                        "params": {
-                            "seeding_densities": PartitionSpec(self.shard_fields),
-                            "diameter_ranges": PartitionSpec(self.shard_fields),
-                            "intensity_ranges": PartitionSpec(self.shard_fields),
-                            "rho_ranges": PartitionSpec(self.shard_fields),
-                        },
-                    },
+                    out_specs=(
+                        PartitionSpec(self.shard_fields),
+                        PartitionSpec(self.shard_fields),
+                        PartitionSpec(self.shard_fields),
+                    ),
                 )
             )
             self.flow_field_adapter_jit = jax.jit(
@@ -649,65 +443,22 @@ class SyntheticImageSampler(Sampler):
                 )
             )
 
-        logger.debug("Input arguments of SyntheticImageSampler are valid.")
-        logger.debug(f"Flow field scheduler: {self.scheduler}")
-        logger.debug(f"Image generation function: {img_gen_fn}")
-        logger.debug(f"Batches per flow batch: {self.batches_per_flow_batch}")
-        logger.debug(f"Batch size: {self.batch_size}")
-        logger.debug(f"Flow fields per batch: {flow_fields_per_batch}")
-        logger.debug(f"Flow field shape: {flow_field_shape}")
-        logger.debug(f"Flow field size: {self.flow_field_size}")
-        logger.debug(f"Image shape: {self.image_shape}")
-        logger.debug(f"Resolution: {self.resolution}")
-        logger.debug(f"Velocities per pixel: {velocities_per_pixel}")
-        logger.debug(f"Image offset: {self.img_offset}")
-        logger.debug(f"Seeding density Range: {self.seeding_density_range}")
-        logger.debug(f"Max seeding density: {self.max_seeding_density}")
-        logger.debug(f"p_hide_img1: {self.p_hide_img1}")
-        logger.debug(f"p_hide_img2: {self.p_hide_img2}")
-        logger.debug(f"Diameter ranges: {self.diameter_ranges}")
-        logger.debug(f"Diameter var: {self.diameter_var}")
-        logger.debug(f"Max diameter: {self.max_diameter}")
-        logger.debug(f"Intensity ranges: {self.intensity_ranges}")
-        logger.debug(f"Intensity var: {self.intensity_var}")
-        logger.debug(f"Rho ranges: {self.rho_ranges}")
-        logger.debug(f"Rho var: {self.rho_var}")
-        logger.debug(f"dt: {self.dt}")
-        logger.debug(f"Seed: {self.seed}")
-        logger.debug(f"Max speed x: {max_speed_x}")
-        logger.debug(f"Max speed y: {max_speed_y}")
-        logger.debug(f"Min speed x: {min_speed_x}")
-        logger.debug(f"Min speed y: {min_speed_y}")
-        logger.debug(f"Output units: {self.output_units}")
-        logger.debug(f"Background level: {self.noise_uniform}")
-        logger.debug(f"Noise Gaussian mean: {self.noise_gaussian_mean}")
-        logger.debug(f"Noise Gaussian std: {self.noise_gaussian_std}")
-        if mask is not None:
-            logger.debug(f"Mask path: {mask}")
-        if histogram is not None:
-            logger.debug(f"Histogram path: {histogram}")
         self._reset()
 
-    def _reset(self):
+    def _reset(self) -> None:
         """Resets the state variables to their initial values."""
         self._rng = jax.random.PRNGKey(self.seed)
         self._current_flows = None
         self._batches_generated = 0
 
-    def ___next__(self):
+    def _get_next(self) -> SynthpixBatch:
         """Generates the next batch of synthetic images.
 
         Raises:
             StopIteration: can only be thrown by the underlying scheduler.
 
         Returns:
-            batch: dict
-                A dictionary containing:
-                - "images1": First images of the batch.
-                - "images2": Second images of the batch.
-                - "flow_fields": Flow fields used to generate the images.
-                - "done": (optional) A boolean array indicating if the episode is done.
-                - "params": A dictionary with parameters used for image generation.
+            The next batch of data as a SynthpixBatch instance.
         """
         # Check if we need to initialize or switch to a new batch of flow fields
         if (
@@ -717,104 +468,122 @@ class SyntheticImageSampler(Sampler):
             # Reset the batch counter
             self._batches_generated = 0
 
-            _current_flows = self.scheduler.get_batch(self.flow_fields_per_batch)
+            scheduler_batch = self.scheduler.get_batch(self.flow_fields_per_batch)
+            self._current_flows = scheduler_batch.flow_fields
 
             # Shard the flow fields across devices
-            _current_flows = jnp.array(_current_flows, device=self.sharding)
-
-            # logger.info("Flow fields have been successfully loaded and sharded.")
-            logger.debug(f"Current flow fields sharding: {_current_flows.sharding}")
-
+            self._current_flows = jnp.array(self._current_flows, device=self.sharding)
             # Creating the output flow field
             self.output_flow_fields, self._current_flows = self.flow_field_adapter_jit(
-                _current_flows
+                self._current_flows
             )
+            self.output_flow_fields.block_until_ready()
+            self._current_flows.block_until_ready()
 
         # Generate a new random key for image generation
         self._rng, subkey = jax.random.split(self._rng)
         keys = jax.random.split(subkey, self.ndevices)
 
-        logger.debug(f"Number of flow fields: {self._current_flows.shape[0]}")
-        logger.debug(f"Current flow fields shape: {self._current_flows.shape[1:]}")
-        logger.debug(f"Current flow sharding: {self._current_flows.sharding}")
-        logger.debug(f"Current random keys: {keys}")
-        logger.debug(f"Keys sharding: {keys.sharding}")
-
         # Generate a new batch of images using the current flow fields
-        batch = self.img_gen_fn_jit(keys, self._current_flows)
-        imgs1 = batch["images1"]
-        imgs2 = batch["images2"]
-        batch["flow_fields"] = self.output_flow_fields
-        logger.debug(f"imgs1 location: {imgs1.sharding}")
-        logger.debug(f"imgs2 location: {imgs2.sharding}")
-        logger.debug(f"Current flow fields location: {self._current_flows.sharding}")
-        logger.debug(f"Output flow fields location: {self.output_flow_fields.sharding}")
-        logger.debug(f"Generated images shape: {imgs1.shape}, {imgs2.shape}")
-        logger.debug(f"Output flow fields shape: {self.output_flow_fields.shape}")
-
-        assert (
-            imgs1.shape[0] == self.batch_size
-        ), f"Expected {self.batch_size} images but got {imgs1.shape[0]}"
-        assert (
-            imgs2.shape[0] == self.batch_size
-        ), f"Expected {self.batch_size} images but got {imgs2.shape[0]}"
+        imgs1, imgs2, params = self.img_gen_fn_jit(keys, self._current_flows)
+        batch = SynthpixBatch(
+            images1=imgs1,
+            images2=imgs2,
+            flow_fields=self.output_flow_fields,
+            params=params,
+        )
 
         self._batches_generated += 1
-        logger.debug(
-            f"Generated {self._batches_generated * self.batch_size} " "image couples"
-        )
 
         return batch
 
     @classmethod
-    def from_config(cls, scheduler, img_gen_fn, config) -> "SyntheticImageSampler":
+    def from_config(cls, scheduler, config) -> Self:
         """Creates a SyntheticImageSampler instance from a configuration dictionary.
 
         Args:
-            scheduler: FlowFieldScheduler
+            scheduler:
                 An instance of FlowFieldScheduler that provides flow fields.
-            img_gen_fn: Callable[..., jnp.ndarray]
-                JAX-compatible function (flow_field, key, ...) -> batch of images.
-            config: dict
-                Configuration dictionary containing the parameters for the sampler.
+            config: Configuration dictionary containing the parameters
+                for the sampler. The parameters include all the arguments
+                required by the SyntheticImageSampler constructor, except for
+                the scheduler. The mask and histogram parameters are optional
+                and are provided as paths to .npy files instead.
+                mask: Optional path to a .npy file containing a mask.
+                    Mask must be a 2D array with 1 where unmasked, 0 where masked.
+                histogram: Optional path to a .npy file containing a
+                    histogram of the flow field.
+                    Histogram must be a 1D array with 256 bins,
+                    summing to number of pixels.
 
         Returns:
-            SyntheticImageSampler: An instance of SyntheticImageSampler.
+            An instance of SyntheticImageSampler.
         """
+        # Parse mask
+        mask_path = config.get("mask", None)
+        if mask_path is not None:
+            if not isinstance(mask_path, str):
+                raise ValueError("mask must be a string representing the mask path.")
+            if not os.path.isfile(mask_path):
+                raise ValueError(f"Mask file {mask_path} does not exist.")
+            mask_array = np.load(mask_path)
+            if not np.isin(mask_array, [0, 1]).all():
+                raise ValueError("Mask must only contain 0 and 1 values.")
+            mask = jnp.array(mask_array)
+        else:
+            mask = None
+
+        # Parse histogram
+        histogram_path = config.get("histogram", None)
+
+        if histogram_path is not None:
+            if not isinstance(histogram_path, str):
+                raise ValueError(
+                    "histogram must be a string representing the histogram path."
+                )
+            if not os.path.isfile(histogram_path):
+                raise ValueError(f"Histogram file {histogram_path} does not exist.")
+            hist_array = np.load(histogram_path)
+            histogram = jnp.array(hist_array)
+        else:
+            histogram = None
+
         try:
-            return SyntheticImageSampler(
-                scheduler=scheduler,
-                img_gen_fn=img_gen_fn,
-                batches_per_flow_batch=config["batches_per_flow_batch"],
+            gs = ImageGenerationSpecification(
                 batch_size=config["batch_size"],
-                flow_fields_per_batch=config["flow_fields_per_batch"],
-                flow_field_size=tuple(config["flow_field_size"]),
                 image_shape=tuple(config["image_shape"]),
-                resolution=config["resolution"],
-                velocities_per_pixel=config["velocities_per_pixel"],
                 img_offset=tuple(config["img_offset"]),
                 seeding_density_range=tuple(config["seeding_density_range"]),
                 p_hide_img1=config["p_hide_img1"],
                 p_hide_img2=config["p_hide_img2"],
-                diameter_ranges=config["diameter_ranges"],
+                diameter_ranges=[tuple(t) for t in config["diameter_ranges"]],
                 diameter_var=config["diameter_var"],
-                intensity_ranges=config["intensity_ranges"],
+                intensity_ranges=[tuple(t) for t in config["intensity_ranges"]],
                 intensity_var=config["intensity_var"],
-                rho_ranges=config["rho_ranges"],
+                rho_ranges=[tuple(t) for t in config["rho_ranges"]],
                 rho_var=config["rho_var"],
                 dt=config["dt"],
+                noise_uniform=config["noise_uniform"],
+                noise_gaussian_mean=config["noise_gaussian_mean"],
+                noise_gaussian_std=config["noise_gaussian_std"],
+            )
+            return cls(
+                scheduler=scheduler,
+                batches_per_flow_batch=config["batches_per_flow_batch"],
+                flow_fields_per_batch=config["flow_fields_per_batch"],
+                flow_field_size=tuple(config["flow_field_size"]),
+                resolution=config["resolution"],
+                velocities_per_pixel=config["velocities_per_pixel"],
                 seed=config["seed"],
                 max_speed_x=config["max_speed_x"],
                 max_speed_y=config["max_speed_y"],
                 min_speed_x=config["min_speed_x"],
                 min_speed_y=config["min_speed_y"],
-                output_units=config["output_units"],
-                noise_uniform=config["noise_uniform"],
-                noise_gaussian_mean=config["noise_gaussian_mean"],
-                noise_gaussian_std=config["noise_gaussian_std"],
+                output_units=str(config["output_units"]),
                 device_ids=config.get("device_ids", None),
-                mask=config.get("mask", None),
-                histogram=config.get("histogram", None),
+                generation_specification=gs,
+                mask=mask,
+                histogram=histogram,
             )
         except KeyError as e:
             raise KeyError(

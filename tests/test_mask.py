@@ -1,12 +1,10 @@
 import re
-from test.test_sampler import dummy_img_gen_fn
+from synthpix.types import ImageGenerationSpecification
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from goggles import get_logger
-from jax import random
 
 from synthpix.data_generate import (
     generate_images_from_flow,
@@ -16,8 +14,6 @@ from synthpix.sampler import SyntheticImageSampler
 
 # Import existing modules
 from synthpix.utils import load_configuration
-
-logger = get_logger(__name__)
 
 sampler_config = load_configuration("config/test_data.yaml")
 
@@ -70,7 +66,6 @@ def test_invalid_mask_type(mask, scheduler):
         config["mask"] = mask
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -95,7 +90,6 @@ def test_invalid_mask_path(mask, scheduler):
         config["mask"] = mask
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -104,6 +98,7 @@ def test_invalid_mask_path(mask, scheduler):
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
+@pytest.mark.parametrize("mock_invalid_mask_file", [0.0, 1.0, 0.0], indirect=True)
 def test_invalid_mask_shape(scheduler, mock_invalid_mask_file, image_shape):
     """Test that mask with invalid shape raises a ValueError."""
     # Create a dummy mask with an invalid shape
@@ -120,7 +115,6 @@ def test_invalid_mask_shape(scheduler, mock_invalid_mask_file, image_shape):
             config["image_shape"] = image_shape
             SyntheticImageSampler.from_config(
                 scheduler=scheduler,
-                img_gen_fn=dummy_img_gen_fn,
                 config=config,
             )
 
@@ -142,7 +136,6 @@ def test_invalid_mask_values(scheduler, mock_invalid_mask_file):
         config["image_shape"] = mask.shape  # Use the shape of the mask
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -160,7 +153,6 @@ def test_mask_is_correct(scheduler, mock_mask_file):
     config["image_shape"] = mask.shape  # Use the shape of the mask
     sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
-        img_gen_fn=dummy_img_gen_fn,
         config=config,
     )
 
@@ -173,8 +165,6 @@ def test_mask_is_correct(scheduler, mock_mask_file):
 
 def test_input_check_gen_img_from_flow_logs_mask(monkeypatch):
     """Test that the input_check_gen_img_from_flow function logs the mask shape."""
-
-    key = random.PRNGKey(0)
     flow_field = jnp.zeros((1, 8, 8, 2))
     image_shape = (4, 4)
     mask = jnp.ones(image_shape)
@@ -187,9 +177,10 @@ def test_input_check_gen_img_from_flow_logs_mask(monkeypatch):
 
     # Call the function to test
     generate_mod.input_check_gen_img_from_flow(
-        key=key,
         flow_field=flow_field,
-        image_shape=image_shape,
+        parameters=ImageGenerationSpecification(
+            image_shape=image_shape,
+        ),
         mask=mask,
     )
 
@@ -203,15 +194,15 @@ def test_input_check_gen_img_from_flow_logs_mask(monkeypatch):
 @pytest.mark.parametrize("mask", ["a", [1, 2]])
 def test_invalid_mask_type_in_generate(mask):
     """Test that invalid mask type raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(ValueError, match="mask must be a jnp.ndarray or None."):
         input_check_gen_img_from_flow(
-            key,
             flow_field=flow_field,
-            image_shape=image_shape,
             mask=mask,
+            parameters=ImageGenerationSpecification(
+                image_shape=image_shape,
+            ),
         )
 
 
@@ -225,7 +216,6 @@ def test_invalid_mask_type_in_generate(mask):
 )
 def test_invalid_mask_shape_in_generate(mask):
     """Test that invalid mask shape raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
@@ -235,10 +225,11 @@ def test_invalid_mask_shape_in_generate(mask):
         ),
     ):
         input_check_gen_img_from_flow(
-            key,
             flow_field=flow_field,
-            image_shape=image_shape,
             mask=mask,
+            parameters=ImageGenerationSpecification(
+                image_shape=image_shape,
+            ),
         )
 
 
@@ -257,17 +248,19 @@ def test_mask_applies_zeros(mask):
     image_shape = (32, 32)
     image_offset = (0, 0)
 
-    batch = generate_images_from_flow(
+    images1, images2, _ = generate_images_from_flow(
         key=key,
         flow_field=flow_field,
-        image_shape=image_shape,
+        parameters=ImageGenerationSpecification(
+            image_shape=image_shape,
+            img_offset=image_offset,
+            batch_size=1,
+        ),
         position_bounds=image_shape,
-        img_offset=image_offset,
-        num_images=1,
         mask=mask,
     )
-    images1 = batch["images1"][0]
-    images2 = batch["images2"][0]
+    images1 = images1[0]  # Remove batch dimension
+    images2 = images2[0]  # Remove batch dimension
 
     # Masked regions (where mask == 0) should be exactly zero
     masked1 = images1[mask == 0]

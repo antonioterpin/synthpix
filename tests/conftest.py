@@ -9,7 +9,6 @@ from datetime import datetime
 from pathlib import Path
 
 import h5py
-import jax
 import numpy as np
 import pytest
 from PIL import Image
@@ -99,12 +98,13 @@ def temp_file_module(request, hdf5_test_dims, generate_hdf5_file):
 @pytest.fixture
 def scheduler(temp_file_module, request):
     """Create a scheduler for module scope tests."""
-    randomize = (
-        getattr(request.param, "randomize", False)
-        if hasattr(request, "param")
-        else False
-    )
-    loop = getattr(request.param, "loop", False) if hasattr(request, "param") else False
+    randomize = False
+    loop = False
+
+    if hasattr(request, "param"):
+        randomize = request.param.get("randomize", False)
+        loop = request.param.get("loop", False)
+
     yield HDF5FlowFieldScheduler([temp_file_module], randomize=randomize, loop=loop)
 
 
@@ -213,11 +213,14 @@ def pytest_collection_modifyitems(config, items):
 def clear_after_test():
     """Clear JAX backends and free memory after each test."""
     yield  # --- run the test ---
-    try:
-        # Release device buffers
-        jax.clear_backends()
-    except Exception:
-        # Just collect garbage if JAX fails
-        pass
     # Free Python-side references
     gc.collect()
+
+    # Finish goggles session
+    try:
+        import goggles as gg
+
+        gg.finish()
+    except Exception:
+        # Silently continue if goggles is not available or fails
+        pass

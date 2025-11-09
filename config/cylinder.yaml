@@ -40,5 +40,6 @@ max_speed_y: 0 # Maximum speed in the y direction
 # Units of the output flow field. Can be "measure units per second" or "pixels"
 output_units: "pixels"
 # Flows files
-scheduler_files: /shared/fluids/fluids-estimation/piv_dataset_final/train/cylinder_full
+file_list:
+  - /shared/fluids/fluids-estimation/piv_dataset_final/train/cylinder_full
 scheduler_class: ".mat"

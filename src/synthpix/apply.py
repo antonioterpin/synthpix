@@ -1,6 +1,6 @@
 """Apply a flow field to an image of particles or directly to the particles."""
 
-from typing import Callable, Tuple
+from collections.abc import Callable
 
 import jax
 import jax.numpy as jnp
@@ -13,19 +13,19 @@ def apply_flow_to_image_forward(
     flow_field: jnp.ndarray,
     dt: float,
 ) -> jnp.ndarray:
-    """Warp a 2D image of particles according to a given flow field.
+    """Warp a 2D image of particles according to a given flow field using forward mapping.
 
-    For each pixel (y, x) in the output image, we compute a velocity (u, v)
-    from `flow_field[t, y, x]`, then sample from the input image at
-    (y_s, x_s) = (y - v * dt, x - u * dt) via bilinear interpolation.
+    For each pixel (y, x) in the input image, we compute a velocity (u, v)
+    from `flow_field[y, x]`, then deposit the pixel value at the displaced
+    location (y + v * dt, x + u * dt) in the output image using bilinear splatting.
 
     Args:
-        image (jnp.ndarray): 2D array (H, W) representing the input particle image.
-        flow_field (jnp.ndarray): 3D array (H, W, 2) representing the velocity field.
-        dt (float): Time step for the backward mapping.
+        image: 2D array (H, W) representing the input particle image.
+        flow_field: 3D array (H, W, 2) representing the velocity field.
+        dt: Time step for the forward mapping.
 
     Returns:
-        jnp.ndarray: A new 2D array of shape (H, W) with the particles displaced.
+        A new 2D array of shape (H, W) with the particles displaced using forward mapping.
     """
     H, W = image.shape
     y_grid, x_grid = jnp.indices((H, W))
@@ -86,12 +86,12 @@ def apply_flow_to_image_backward(
     (y_s, x_s) = (y - v * dt, x - u * dt) via bilinear interpolation.
 
     Args:
-        image (jnp.ndarray): 2D array (H, W) representing the input particle image.
-        flow_field (jnp.ndarray): 3D array (H, W, 2) representing the velocity field.
-        dt (float): Time step for the backward mapping.
+        image: 2D array (H, W) representing the input particle image.
+        flow_field: 3D array (H, W, 2) representing the velocity field.
+        dt: Time step for the backward mapping.
 
     Returns:
-        jnp.ndarray: A new 2D array of shape (H, W) with the particles displaced.
+        A new 2D array of shape (H, W) with the particles displaced.
     """
     H, W = image.shape
 
@@ -114,7 +114,7 @@ def apply_flow_to_image_backward(
 
 def apply_flow_to_image_callable(
     image: jnp.ndarray,
-    flow_field: Callable[[float, float, float], Tuple[float, float]],
+    flow_field: Callable[[float, float, float], tuple[float, float]],
     t: float = 0.0,
     dt: float = 1.0,
     forward: bool = False,
@@ -126,16 +126,17 @@ def apply_flow_to_image_callable(
     (y_s, x_s) = (y - v * dt, x - u * dt) via bilinear interpolation.
 
     Args:
-        image (jnp.ndarray): 2D array (H, W) representing the input particle image.
+        image: 2D array (H, W) representing the input particle image.
         flow_field (Callable[[float, float, float], Tuple[float, float]]):
             Function that takes (x, y, t) and returns (u, v) velocity.
                 - x, y: coordinates
                 - t: time parameter (or any scalar)
-        t (float): Time parameter passed to flow_field.
-        dt (float): Time step for the backward mapping.
+        t: Time parameter passed to flow_field.
+        dt: Time step for the backward mapping.
+        forward: If True, use forward mapping; else use backward mapping.
 
     Returns:
-        jnp.ndarray: A new 2D array of shape (H, W) with the particles displaced.
+        A new 2D array of shape (H, W) with the particles displaced.
     """
     H, W = image.shape
 
@@ -162,26 +163,21 @@ def input_check_apply_flow(
     flow_field_res_x: float = 1.0,
     flow_field_res_y: float = 1.0,
     flow_field_res_z: float = 1.0,
-) -> jnp.ndarray:
+):
     """Check the input arguments for apply_flow_to_particles.
 
     Args:
-        particle_positions: jnp.ndarray
-            Array of shape (N, 2) or (N, 3) containing particle coordinates in grid_steps.
-        flow_field: jnp.ndarray
-            Array of shape (H, W, 2) or (H, W, 3) containing the velocity
-            field at each grid_step.
-        dt: float
-            Time step for the simulation, used to scale the velocity
+        particle_positions: Array of shape (N, 2) or (N, 3) containing
+            particle coordinates in grid_steps.
+        flow_field: Array of shape (H, W, 2) or (H, W, 3) containing
+            the velocity field at each grid_step.
+        dt: Time step for the simulation, used to scale the velocity
             to compute the displacement. Defaults to 1.0.
-        flow_field_res_x: float
-            Resolution of the flow field in the x direction
+        flow_field_res_x: Resolution of the flow field in the x direction
             in grid steps per length measure unit.
-        flow_field_res_y: float
-            Resolution of the flow field in the y direction
+        flow_field_res_y: Resolution of the flow field in the y direction
             in grid steps per length measure unit
-        flow_field_res_z: float
-            Resolution of the flow field in the z direction
+        flow_field_res_z: Resolution of the flow field in the z direction
             in grid steps per length measure unit
     """
     if (
@@ -234,31 +230,28 @@ def apply_flow_to_particles(
     The function works for both 2D and 3D particle coordinates.
 
     Args:
-        particle_positions: jnp.ndarray
-            Array of shape (N, 2) or (N, 3) containing particle coordinates in grid_steps.
-        flow_field: jnp.ndarray
-            Array of shape (H, W, 2) or (H, W, 3) containing the velocity
-            field at each grid_step in length measure unit / s.
-        dt: float
-            Time step for the simulation, used to scale the velocity
+        particle_positions: Array of shape (N, 2) or (N, 3) containing
+            particle coordinates in grid_steps.
+        flow_field: Array of shape (H, W, 2) or (H, W, 3) containing
+            the velocity field at each grid_step in length measure unit / s.
+        dt: Time step for the simulation, used to scale the velocity
             to compute the displacement. Defaults to 1.0.
-        flow_field_res_x: float
-            Resolution of the flow field in the x direction
+        flow_field_res_x: Resolution of the flow field in the x direction
             in grid steps per length measure unit.
-        flow_field_res_y: float
-            Resolution of the flow field in the y direction
+        flow_field_res_y: Resolution of the flow field in the y direction
             in grid steps per length measure unit
-        flow_field_res_z: float
-            Resolution of the flow field in the z direction
+        flow_field_res_z: Resolution of the flow field in the z direction
             in grid steps per length measure unit
 
     Returns:
-        jnp.ndarray: Array of shape (N, 2) or (N, 3)
-        containing the new particle coordinates.
+        Array of shape (N, 2) or (N, 3) containing
+            the new particle coordinates.
     """
+    update_position: Callable[[jnp.ndarray], jnp.ndarray]
+
     if particle_positions.shape[1] == 2:
 
-        def update_position(
+        def _update_position_2d(
             yx: jnp.ndarray,
         ) -> jnp.ndarray:
             y, x = yx
@@ -272,9 +265,11 @@ def apply_flow_to_particles(
             # Return the new position: (y + v * dt, x + u * dt)
             return jnp.array([y + v * dt, x + u * dt])
 
+        update_position = _update_position_2d
+
     else:
 
-        def update_position(
+        def _update_position_3d(
             zyx: jnp.ndarray,
         ) -> jnp.ndarray:
             z, y, x = zyx
@@ -288,6 +283,8 @@ def apply_flow_to_particles(
 
             # Return the new position: (z + w * dt, y + v * dt, x + u * dt)
             return jnp.array([z + w * dt, y + v * dt, x + u * dt])
+
+        update_position = _update_position_3d
 
     # Vectorize the function over all particles
     return jax.vmap(update_position)(particle_positions)

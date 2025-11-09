@@ -1,12 +1,11 @@
 import re
-from test.test_sampler import dummy_img_gen_fn
+from synthpix.types import ImageGenerationSpecification
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from goggles import get_logger
-from jax import jit, random
+from jax import jit
 
 from synthpix.data_generate import (
     generate_images_from_flow,
@@ -14,8 +13,6 @@ from synthpix.data_generate import (
 )
 from synthpix.sampler import SyntheticImageSampler
 from synthpix.utils import load_configuration, match_histogram
-
-logger = get_logger(__name__)
 
 TARGET_SHAPE = (64, 64)
 sampler_config = load_configuration("config/test_data.yaml")
@@ -111,7 +108,6 @@ def test_jit_compatibility(random_image_uint8):
 def test_input_check_gen_img_from_flow_logs_histogram(monkeypatch):
     """Test that the input_check_gen_img_from_flow function logs the histogram."""
 
-    key = random.PRNGKey(0)
     flow_field = jnp.zeros((1, 8, 8, 2))
     image_shape = (4, 4)
     histogram = jnp.zeros((256,))
@@ -125,7 +121,9 @@ def test_input_check_gen_img_from_flow_logs_histogram(monkeypatch):
 
     # Call the function to test
     generate_mod.input_check_gen_img_from_flow(
-        key=key, flow_field=flow_field, image_shape=image_shape, histogram=histogram
+        flow_field=flow_field,
+        parameters=ImageGenerationSpecification(image_shape=image_shape),
+        histogram=histogram,
     )
 
     # Check if the mask shape was logged
@@ -154,7 +152,6 @@ def test_input_check_gen_img_from_flow_logs_histogram(monkeypatch):
 )
 def test_invalid_histogram_in_generate(histogram, error):
     """Test that invalid histogram raise a ValueError."""
-    key = jax.random.PRNGKey(0)
     flow_field = jnp.zeros((1, 64, 64, 2))
     image_shape = (64, 64)
     with pytest.raises(
@@ -162,32 +159,30 @@ def test_invalid_histogram_in_generate(histogram, error):
         match=re.escape(error),
     ):
         input_check_gen_img_from_flow(
-            key,
             flow_field=flow_field,
-            image_shape=image_shape,
+            parameters=ImageGenerationSpecification(image_shape=image_shape),
             histogram=histogram,
         )
 
 
 def test_histogram_applies():
-    key = jax.random.PRNGKey(1)
     flow_field = jnp.zeros((1, 32, 32, 2))
     image_shape = (32, 32)
     image_offset = (0, 0)
     histogram = jnp.zeros((256,))
     histogram = histogram.at[0].set(image_shape[0] * image_shape[1])
 
-    batch = generate_images_from_flow(
-        key=key,
+    images1, images2, flow = generate_images_from_flow(
+        key=jax.random.PRNGKey(0),
         flow_field=flow_field,
-        image_shape=image_shape,
+        parameters=ImageGenerationSpecification(
+            image_shape=image_shape,
+            img_offset=image_offset,
+            batch_size=1,
+        ),
         position_bounds=image_shape,
-        img_offset=image_offset,
-        num_images=1,
         histogram=histogram,
     )
-    images1 = batch["images1"][0]
-    images2 = batch["images2"][0]
 
     # Check if the histogram is applied correctly
     hist1, _ = jnp.histogram(images1, bins=jnp.arange(257, dtype=jnp.float32))
@@ -226,7 +221,6 @@ def test_invalid_histogram_sampler(histogram, error, scheduler):
         config["histogram"] = histogram
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -237,11 +231,6 @@ def test_invalid_histogram_sampler(histogram, error, scheduler):
 def test_invalid_histogram_values(scheduler, mock_histogram_invalid_file):
     """Test that histogram with invalid values raises a ValueError."""
     # Create a dummy histogram with an invalid shape
-    img_shape = (
-        mock_histogram_invalid_file[1]["height"],
-        mock_histogram_invalid_file[1]["width"],
-    )
-
     with pytest.raises(
         ValueError,
         match=re.escape(
@@ -251,10 +240,8 @@ def test_invalid_histogram_values(scheduler, mock_histogram_invalid_file):
     ):
         config = sampler_config.copy()
         config["histogram"] = mock_histogram_invalid_file[0]
-        config["image_shape"] = img_shape
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -273,7 +260,6 @@ def test_histogram_is_correct(scheduler, mock_histogram_file):
     config["image_shape"] = image_shape
     sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
-        img_gen_fn=dummy_img_gen_fn,
         config=config,
     )
 

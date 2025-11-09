@@ -4,10 +4,9 @@ import timeit
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
-from goggles import get_logger
 
-from synthpix.data_generate import generate_images_from_flow
 from synthpix.sampler import RealImageSampler, SyntheticImageSampler
 from synthpix.scheduler import (
     EpisodicFlowFieldScheduler,
@@ -15,6 +14,12 @@ from synthpix.scheduler import (
     MATFlowFieldScheduler,
     PrefetchingFlowFieldScheduler,
 )
+from synthpix.scheduler.base import BaseFlowFieldScheduler
+from synthpix.scheduler.protocol import (
+    EpisodeEnd,
+    EpisodicSchedulerProtocol,
+)
+from synthpix.types import ImageGenerationSpecification, SchedulerData
 from synthpix.utils import load_configuration
 
 config = load_configuration("config/testing.yaml")
@@ -24,68 +29,15 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_SAMPLER"]
 
 sampler_config = load_configuration("config/test_data.yaml")
 
-logger = get_logger(__name__)
-
-
-def dummy_img_gen_fn(
-    key,
-    flow_field,
-    position_bounds,
-    image_shape,
-    img_offset,
-    num_images,
-    seeding_density_range,
-    max_seeding_density,
-    p_hide_img1,
-    p_hide_img2,
-    diameter_ranges,
-    diameter_var,
-    max_diameter,
-    intensity_ranges,
-    intensity_var,
-    rho_ranges,
-    rho_var,
-    dt,
-    flow_field_res_x,
-    flow_field_res_y,
-    noise_uniform,
-    noise_gaussian_mean,
-    noise_gaussian_std,
-    mask,
-    histogram,
-):
-    """Simulates generating a batch of synthetic images based on a single key."""
-    images1 = jnp.ones((num_images, image_shape[0], image_shape[1])) * (
-        jnp.sum(flow_field) + jnp.sum(key)
-    )
-    images2 = jnp.ones((num_images, image_shape[0], image_shape[1])) * (
-        jnp.sum(flow_field) + jnp.sum(key)
-    )
-    # Fake parameters to match shapes
-    seeding_densities = jnp.ones((num_images,))
-    used_diameter_ranges = jnp.zeros((num_images, 2))
-    used_intensity_ranges = jnp.zeros((num_images, 2))
-    used_rho_ranges = jnp.zeros((num_images, 2))
-
-    return {
-        "images1": images1,
-        "images2": images2,
-        "params": {
-            "seeding_densities": seeding_densities,
-            "diameter_ranges": used_diameter_ranges,
-            "intensity_ranges": used_intensity_ranges,
-            "rho_ranges": used_rho_ranges,
-        },
-    }
-
 
 @pytest.mark.parametrize("scheduler", [None, "invalid_scheduler"])
 def test_invalid_scheduler(scheduler):
     """Test that invalid scheduler raises a ValueError."""
-    with pytest.raises(ValueError, match="scheduler must be an iterable object."):
+    with pytest.raises(
+        TypeError, match="scheduler must implement the SchedulerProtocol interface."
+    ):
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=sampler_config,
         )
 
@@ -125,22 +77,7 @@ def test_from_config_missing_key_raises(scheduler, missing_key):
     config.pop(missing_key)
 
     with pytest.raises(KeyError):
-        SyntheticImageSampler.from_config(
-            scheduler=scheduler, img_gen_fn=dummy_img_gen_fn, config=config
-        )
-
-
-@pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": False}], indirect=True
-)
-def test_invalid_img_gen_fn(scheduler):
-    """Test that invalid img_gen_fn raises a ValueError."""
-    with pytest.raises(ValueError, match="img_gen_fn must be a callable function."):
-        SyntheticImageSampler.from_config(
-            scheduler=scheduler,
-            img_gen_fn=None,
-            config=sampler_config,
-        )
+        SyntheticImageSampler.from_config(scheduler=scheduler, config=config)
 
 
 @pytest.mark.parametrize(
@@ -152,7 +89,6 @@ def test_no_device_provided(scheduler):
     with pytest.raises(ValueError, match="No valid device IDs provided."):
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -176,7 +112,6 @@ def test_batch_size_n_devices(n_devices, scheduler):
     config["batches_per_flow_batch"] = 1
     sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
-        img_gen_fn=dummy_img_gen_fn,
         config=config,
     )
     assert (
@@ -193,9 +128,9 @@ def test_invalid_batch_size(batch_size, scheduler):
     with pytest.raises(ValueError, match="batch_size must be a positive integer."):
         config = sampler_config.copy()
         config["batch_size"] = batch_size
+        config["flow_fields_per_batch"] = batch_size
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -213,7 +148,6 @@ def test_invalid_flow_shape(flow_shape, scheduler):
         config["flow_field_size"] = flow_shape
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -231,7 +165,6 @@ def test_invalid_batches_per_flow_batch(batches_per_flow_batch, scheduler):
         config["batches_per_flow_batch"] = batches_per_flow_batch
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -249,7 +182,6 @@ def test_invalid_flow_fields_per_batch(flow_fields_per_batch, scheduler):
         config["flow_fields_per_batch"] = flow_fields_per_batch
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -259,17 +191,16 @@ def test_invalid_flow_fields_per_batch(flow_fields_per_batch, scheduler):
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_more_flows_per_batch_than_batch_size(flow_fields_per_batch, scheduler):
-    """Test that flow_fields_per_batch is less than or equal to batch_size."""
+    """Test that flow_fields_per_batch is <= batch_size."""
     with pytest.raises(
         ValueError,
-        match="flow_fields_per_batch must be less than or equal to batch_size.",
+        match="flow_fields_per_batch must be <= batch_size.",
     ):
         config = sampler_config.copy()
         config["flow_fields_per_batch"] = flow_fields_per_batch
         config["batch_size"] = flow_fields_per_batch - 1
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -304,7 +235,6 @@ def test_invalid_flow_field_size_in_scheduler(flow_field_size, scheduler):
         config = sampler_config.copy()
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -324,7 +254,6 @@ def test_invalid_image_shape(image_shape, scheduler):
         config["image_shape"] = image_shape
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -340,18 +269,32 @@ def test_invalid_resolution(resolution, scheduler):
         config["resolution"] = resolution
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
 
 @pytest.mark.parametrize(
-    "velocities_per_pixel", [-1, 0, "invalid_velocities_per_pixel"]
+    "velocities_per_pixel", ["invalid_velocities_per_pixel", None, (-1, 1)]
 )
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_invalid_velocities_per_pixel(velocities_per_pixel, scheduler):
+    """Test that invalid velocities_per_pixel raises a ValueError."""
+    with pytest.raises(ValueError, match="velocities_per_pixel must be a number."):
+        config = sampler_config.copy()
+        config["velocities_per_pixel"] = velocities_per_pixel
+        SyntheticImageSampler.from_config(
+            scheduler=scheduler,
+            config=config,
+        )
+
+
+@pytest.mark.parametrize("velocities_per_pixel", [0, -1, -0.5])
+@pytest.mark.parametrize(
+    "scheduler", [{"randomize": False, "loop": False}], indirect=True
+)
+def test_non_positive_velocities_per_pixel(velocities_per_pixel, scheduler):
     """Test that invalid velocities_per_pixel raises a ValueError."""
     with pytest.raises(
         ValueError, match="velocities_per_pixel must be a positive number."
@@ -360,7 +303,6 @@ def test_invalid_velocities_per_pixel(velocities_per_pixel, scheduler):
         config["velocities_per_pixel"] = velocities_per_pixel
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -378,7 +320,6 @@ def test_invalid_img_offset(img_offset, scheduler):
         config["img_offset"] = img_offset
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -414,7 +355,6 @@ def test_invalid_seeding_density_range(
         config["seeding_density_range"] = seeding_density_range
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -430,7 +370,6 @@ def test_invalid_p_hide_img1(p_hide_img1, scheduler):
         config["p_hide_img1"] = p_hide_img1
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -447,7 +386,6 @@ def test_invalid_p_hide_img2(p_hide_img2, scheduler):
         config["p_hide_img2"] = p_hide_img2
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -457,28 +395,23 @@ def test_invalid_p_hide_img2(p_hide_img2, scheduler):
     [
         (
             [[-1.0, 1.0]],
-            "diameter_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, with 0 < min <= max.",
+            "Each diameter_range must satisfy 0 < min <= max.",
         ),
         (
             [[0.0, -1.0]],
-            "diameter_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, with 0 < min <= max.",
+            "Each diameter_range must satisfy 0 < min <= max.",
         ),
         (
             [[-0.5, -0.5]],
-            "diameter_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, with 0 < min <= max.",
+            "Each diameter_range must satisfy 0 < min <= max.",
         ),
         (
             [[1.0, 0.5]],
-            "diameter_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, with 0 < min <= max.",
+            "Each diameter_range must satisfy 0 < min <= max.",
         ),
         (
             [[0.5, 0.1]],
-            "diameter_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, with 0 < min <= max.",
+            "Each diameter_range must satisfy 0 < min <= max.",
         ),
     ],
 )
@@ -492,7 +425,6 @@ def test_invalid_diameter_ranges(diameter_ranges, expected_message, scheduler):
         config["diameter_ranges"] = diameter_ranges
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -511,7 +443,6 @@ def test_invalid_diameter_var(diameter_var, scheduler):
         config["diameter_var"] = diameter_var
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -521,28 +452,23 @@ def test_invalid_diameter_var(diameter_var, scheduler):
     [
         (
             [[-1.0, 1.0]],
-            "intensity_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, with 0 <= min <= max.",
+            "Each intensity_range must satisfy 0 < min <= max.",
         ),
         (
             [[0.0, -1.0]],
-            "intensity_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, with 0 <= min <= max.",
+            "Each intensity_range must satisfy 0 < min <= max.",
         ),
         (
             [[-0.5, -0.5]],
-            "intensity_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, with 0 <= min <= max.",
+            "Each intensity_range must satisfy 0 < min <= max.",
         ),
         (
             [[1.0, 0.5]],
-            "intensity_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, with 0 <= min <= max.",
+            "Each intensity_range must satisfy 0 < min <= max.",
         ),
         (
             [[0.5, 0.1]],
-            "intensity_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, with 0 <= min <= max.",
+            "Each intensity_range must satisfy 0 < min <= max.",
         ),
     ],
 )
@@ -556,7 +482,6 @@ def test_invalid_intensity_ranges(intensity_ranges, expected_message, scheduler)
         config["intensity_ranges"] = intensity_ranges
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -577,7 +502,6 @@ def test_invalid_intensity_var(intensity_var, scheduler):
         config["intensity_var"] = intensity_var
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -587,23 +511,19 @@ def test_invalid_intensity_var(intensity_var, scheduler):
     [
         (
             [[-1.1, 1.0]],
-            "rho_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, each in \\(-1, 1\\), with min <= max.",
+            "Each rho_range must satisfy -1 < min <= max < 1.",
         ),
         (
             [[0.0, 1.1]],
-            "rho_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, each in \\(-1, 1\\), with min <= max.",
+            "Each rho_range must satisfy -1 < min <= max < 1.",
         ),
         (
             [[0.9, 0.5]],
-            "rho_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, each in \\(-1, 1\\), with min <= max.",
+            "Each rho_range must satisfy -1 < min <= max < 1.",
         ),
         (
             [[0.5, 0.1]],
-            "rho_ranges must be a non-empty list "
-            "of \\[min, max\\] pairs, each in \\(-1, 1\\), with min <= max.",
+            "Each rho_range must satisfy -1 < min <= max < 1.",
         ),
     ],
 )
@@ -617,7 +537,6 @@ def test_invalid_rho_range(rho_ranges, expected_message, scheduler):
         config["rho_ranges"] = rho_ranges
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -635,7 +554,6 @@ def test_invalid_rho_var(rho_var, scheduler):
         config["rho_var"] = rho_var
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -646,12 +564,11 @@ def test_invalid_rho_var(rho_var, scheduler):
 )
 def test_invalid_dt(dt, scheduler):
     """Test that invalid dt raises a ValueError."""
-    with pytest.raises(ValueError, match="dt must be a scalar \\(int or float\\)"):
+    with pytest.raises(ValueError, match="dt must be a positive number."):
         config = sampler_config.copy()
         config["dt"] = dt
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -671,7 +588,6 @@ def test_invalid_noise_uniform(noise_uniform, scheduler):
         config["noise_uniform"] = noise_uniform
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -693,7 +609,6 @@ def test_invalid_noise_gaussian_params(
         config["noise_gaussian_std"] = noise_gaussian_std
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -711,7 +626,6 @@ def test_invalid_seed(seed, scheduler):
         config["seed"] = seed
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -732,7 +646,6 @@ def test_invalid_min_max_speed_x(min_speed_x, max_speed_x, scheduler):
         config["max_speed_y"] = 0.0
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -753,22 +666,7 @@ def test_invalid_min_max_speed_y(min_speed_y, max_speed_y, scheduler):
         config["max_speed_y"] = max_speed_y
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
-        )
-
-
-@pytest.mark.parametrize("img_gen_fn", [None, "invalid_img_gen_fn"])
-@pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": False}], indirect=True
-)
-def test_invalid_img_gen_fn_type(img_gen_fn, scheduler):
-    """Test that invalid img_gen_fn raises a ValueError."""
-    with pytest.raises(ValueError, match="img_gen_fn must be a callable function."):
-        SyntheticImageSampler.from_config(
-            scheduler=scheduler,
-            img_gen_fn=img_gen_fn,
-            config=sampler_config,
         )
 
 
@@ -797,7 +695,6 @@ def test_invalid_img_offset_and_speed(
         config["dt"] = dt
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -849,9 +746,6 @@ def test_invalid_flow_field_size_and_img_offset(
         f"{position_bounds[1] + position_bounds_offset[1]})."
     )
 
-    logger.debug("test: " + str(position_bounds_offset))
-    logger.debug(position_bounds)
-
     config = sampler_config.copy()
     config["flow_field_size"] = flow_field_size
     config["img_offset"] = img_offset
@@ -866,7 +760,6 @@ def test_invalid_flow_field_size_and_img_offset(
     with pytest.raises(ValueError, match=expected_message):
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -883,7 +776,6 @@ def test_invalid_output_units(output_units, scheduler):
         config["output_units"] = output_units
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
             config=config,
         )
 
@@ -904,14 +796,13 @@ def test_synthetic_sampler_batches(
     config["image_shape"] = image_shape
     sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
-        img_gen_fn=dummy_img_gen_fn,
         config=config,
     )
 
     for batch in sampler:
-        assert batch["images1"].shape[0] >= batch_size
-        assert batch["images1"][0].shape >= image_shape
-        assert isinstance(batch["images1"], jnp.ndarray)
+        assert batch.images1.shape[0] >= batch_size
+        assert batch.images1[0].shape >= image_shape
+        assert isinstance(batch.images1, jnp.ndarray)
 
 
 @pytest.mark.skipif(
@@ -922,32 +813,52 @@ def test_synthetic_sampler_batches(
     "batch_size, batches_per_flow_batch, flow_fields_per_batch",
     [(24, 4, 12), (12, 6, 12)],
 )
-@pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": True}], indirect=True
-)
+@pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
 def test_sampler_switches_flow_fields(
-    batch_size, batches_per_flow_batch, flow_fields_per_batch, scheduler
+    batch_size, batches_per_flow_batch, flow_fields_per_batch, mock_mat_files
 ):
+
+    files, dims = mock_mat_files
+    H, W = dims["height"], dims["width"]
+
+    CI = os.getenv("CI") == "true"
+
+    if CI:
+        devices = None
+    else:
+        devices = jax.devices()
+        if len(devices) > 4:
+            devices = devices[:4]
+
+    batch_size = 3 * 4  # multiple of all number of devices
+    scheduler = MATFlowFieldScheduler(files, loop=True, output_shape=(H, W))
+
     config = sampler_config.copy()
     config["batch_size"] = batch_size
     config["batches_per_flow_batch"] = batches_per_flow_batch
     config["flow_fields_per_batch"] = flow_fields_per_batch
+    config["devices"] = devices
+
     sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
-        img_gen_fn=dummy_img_gen_fn,
         config=config,
     )
 
     for i, batch in enumerate(sampler):
-        if i >= batches_per_flow_batch - 1:
+        if i == 0:
             batch1 = batch
+        if i >= batches_per_flow_batch - 1:
+            batch2 = batch
             break
 
-    batch2 = next(sampler)
+    batch3 = next(sampler)
 
-    assert not jnp.allclose(batch1["images1"], batch2["images1"])
-    assert not jnp.allclose(batch1["images2"], batch2["images2"])
-    assert not jnp.allclose(batch1["flow_fields"], batch2["flow_fields"])
+    assert not jnp.allclose(batch1.images1, batch2.images1)
+    assert not jnp.allclose(batch1.images2, batch2.images2)
+    assert jnp.allclose(batch1.flow_fields, batch2.flow_fields)
+    assert not jnp.allclose(batch2.images1, batch3.images1)
+    assert not jnp.allclose(batch2.images2, batch3.images2)
+    assert not jnp.allclose(batch2.flow_fields, batch3.flow_fields)
 
 
 @pytest.mark.slow
@@ -975,132 +886,29 @@ def test_sampler_with_real_img_gen_fn(
     config["seeding_density_range"] = seeding_density_range
     sampler = SyntheticImageSampler.from_config(
         scheduler=scheduler,
-        img_gen_fn=generate_images_from_flow,
         config=config,
     )
 
     batch = next(sampler)
 
-    image_shape = sampler.image_shape
     res = sampler.resolution
     velocities_per_pixel = sampler.velocities_per_pixel
     output_size = jnp.array(
         [
-            batch["flow_fields"].shape[1] / velocities_per_pixel / res,
-            batch["flow_fields"].shape[2] / velocities_per_pixel / res,
-            batch["flow_fields"].shape[3],
+            batch.flow_fields.shape[1] / velocities_per_pixel / res,
+            batch.flow_fields.shape[2] / velocities_per_pixel / res,
+            batch.flow_fields.shape[3],
         ]
     )
 
     expected_size = jnp.array([image_shape[0] / res, image_shape[1] / res, 2])
 
-    assert isinstance(batch["images1"], jnp.ndarray)
-    assert isinstance(batch["images2"], jnp.ndarray)
-    assert isinstance(batch["flow_fields"], jnp.ndarray)
-    assert batch["images1"].shape == (sampler.batch_size, *image_shape)
-    assert batch["images2"].shape == (sampler.batch_size, *image_shape)
+    assert isinstance(batch.images1, jnp.ndarray)
+    assert isinstance(batch.images2, jnp.ndarray)
+    assert isinstance(batch.flow_fields, jnp.ndarray)
+    assert batch.images1.shape == (sampler.batch_size, *image_shape)
+    assert batch.images2.shape == (sampler.batch_size, *image_shape)
     assert jnp.allclose(output_size, expected_size, atol=0.01)
-
-
-@pytest.mark.slow
-@pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
-)
-@pytest.mark.parametrize("batch_size", [128])
-@pytest.mark.parametrize("batches_per_flow_batch", [100])
-@pytest.mark.parametrize("seed", [0])
-@pytest.mark.parametrize("seeding_density_range", [(0.0, 0.03)])
-@pytest.mark.parametrize(
-    "scheduler", [{"randomize": False, "loop": True}], indirect=True
-)
-def test_speed_sampler_dummy_fn(
-    scheduler, batch_size, batches_per_flow_batch, seed, seeding_density_range
-):
-    """Test the speed of the sampler with a dummy image generation function."""
-    devices = jax.devices()
-    if len(devices) == 3:
-        devices = devices[:2]
-    elif len(devices) > 4:
-        devices = devices[:4]
-    num_devices = len(devices)
-
-    # Define the parameters for the test
-    config = sampler_config.copy()
-    config["batch_size"] = batch_size
-    config["flow_fields_per_batch"] = 64
-    config["image_shape"] = (1216, 1936)
-    config["seeding_density_range"] = seeding_density_range
-    config["img_offset"] = (2.5e-2, 5e-2)
-    config["flow_field_size"] = (3 * jnp.pi, 4 * jnp.pi)
-    config["resolution"] = 155
-    config["max_speed_x"] = 1.37
-    config["max_speed_y"] = 0.56
-    config["min_speed_x"] = -0.16
-    config["min_speed_y"] = -0.72
-    config["dt"] = 2.6e-2
-    config["noise_uniform"] = 0.0
-    config["noise_gaussian_mean"] = 0.0
-    config["noise_gaussian_std"] = 0.0
-    config["batch_size"] = batch_size
-    config["seed"] = seed
-    config["device_ids"] = [d.id for d in devices]
-
-    if config["flow_fields_per_batch"] % num_devices != 0:
-        pytest.skip("flow_fields_per_batch must be divisible by the number of devices.")
-
-    # Limit time in seconds (depends on the number of GPUs)
-    # The test should not depend much on the number of GPUs.
-    if num_devices == 1:
-        limit_time = 3.5
-    elif num_devices == 2:
-        limit_time = 2.8
-    elif num_devices == 4:
-        limit_time = 2.8
-
-    # Create the sampler
-    prefetching_scheduler = PrefetchingFlowFieldScheduler(
-        scheduler=scheduler,
-        batch_size=config["flow_fields_per_batch"],
-        buffer_size=4,
-    )
-    sampler = SyntheticImageSampler.from_config(
-        scheduler=prefetching_scheduler,
-        img_gen_fn=dummy_img_gen_fn,
-        config=config,
-    )
-
-    def run_sampler():
-        # Generates images_per_field // batch_size batches
-        # of size batch_size
-        for i, batch in enumerate(sampler):
-            batch["images1"].block_until_ready()
-            batch["images2"].block_until_ready()
-            batch["flow_fields"].block_until_ready()
-            batch["params"]["seeding_densities"].block_until_ready()
-            batch["params"]["diameter_ranges"].block_until_ready()
-            batch["params"]["intensity_ranges"].block_until_ready()
-            batch["params"]["rho_ranges"].block_until_ready()
-            logger.info(i)
-            if i >= batches_per_flow_batch:
-                sampler.reset(scheduler_reset=False)
-                break
-
-    try:
-        # Warm up the function
-        run_sampler()
-
-        # Measure the time taken to run the sampler
-        total_time = timeit.repeat(
-            stmt=run_sampler, number=NUMBER_OF_EXECUTIONS, repeat=REPETITIONS
-        )
-        avg_time = min(total_time) / NUMBER_OF_EXECUTIONS
-    finally:
-        prefetching_scheduler.shutdown()
-
-    assert (
-        avg_time < limit_time
-    ), f"The average time is {avg_time}, time limit: {limit_time}"
 
 
 @pytest.mark.slow
@@ -1163,7 +971,6 @@ def test_speed_sampler_real_fn(
     )
     sampler = SyntheticImageSampler.from_config(
         scheduler=prefetching_scheduler,
-        img_gen_fn=generate_images_from_flow,
         config=config,
     )
 
@@ -1171,14 +978,14 @@ def test_speed_sampler_real_fn(
         # Generates batches_per_flow_batch batches
         # of size batch_size
         for i, batch in enumerate(sampler):
-            batch["images1"].block_until_ready()
-            batch["images2"].block_until_ready()
-            batch["flow_fields"].block_until_ready()
-            batch["params"]["seeding_densities"].block_until_ready()
-            batch["params"]["diameter_ranges"].block_until_ready()
-            batch["params"]["intensity_ranges"].block_until_ready()
-            batch["params"]["rho_ranges"].block_until_ready()
-            if i >= batches_per_flow_batch:
+            batch.images1.block_until_ready()
+            batch.images2.block_until_ready()
+            batch.flow_fields.block_until_ready()
+            batch.params.seeding_densities.block_until_ready()  # type: ignore
+            batch.params.diameter_ranges.block_until_ready()  # type: ignore
+            batch.params.intensity_ranges.block_until_ready()  # type: ignore
+            batch.params.rho_ranges.block_until_ready()  # type: ignore
+            if i >= batches_per_flow_batch - 1:
                 sampler.reset(scheduler_reset=False)
                 break
 
@@ -1225,34 +1032,35 @@ def test_stop_after_max_episodes(mock_mat_files):
 
     sampler = SyntheticImageSampler(
         scheduler=pre,
-        img_gen_fn=dummy_img_gen_fn,
         batches_per_flow_batch=1,
-        batch_size=batch_size,
         flow_fields_per_batch=batch_size,
         flow_field_size=(H, W),
-        image_shape=(H, W),
         resolution=1.0,
         velocities_per_pixel=1.0,
-        img_offset=(0.0, 0.0),
-        seeding_density_range=(0.01, 0.01),
-        p_hide_img1=0.0,
-        p_hide_img2=0.0,
-        diameter_ranges=[[1.0, 1.0]],
-        diameter_var=0.0,
-        intensity_ranges=[[1.0, 1.0]],
-        intensity_var=0.0,
-        rho_ranges=[[0.0, 0.0]],
-        rho_var=0.0,
-        dt=1.0,
         seed=0,
         max_speed_x=0.0,
         max_speed_y=0.0,
         min_speed_x=0.0,
         min_speed_y=0.0,
         output_units="pixels",
-        noise_uniform=0.0,
-        noise_gaussian_mean=0.0,
-        noise_gaussian_std=0.0,
+        generation_specification=ImageGenerationSpecification(
+            batch_size=batch_size,
+            image_shape=(H, W),
+            img_offset=(0.0, 0.0),
+            seeding_density_range=(0.01, 0.01),
+            p_hide_img1=0.0,
+            p_hide_img2=0.0,
+            diameter_ranges=[(1.0, 1.0)],
+            diameter_var=0.0,
+            intensity_ranges=[(1.0, 1.0)],
+            intensity_var=0.0,
+            rho_ranges=[(0.0, 0.0)],
+            rho_var=0.0,
+            dt=1.0,
+            noise_uniform=0.0,
+            noise_gaussian_mean=0.0,
+            noise_gaussian_std=0.0,
+        ),
         device_ids=[d.id for d in devices] if devices is not None else None,
     )
 
@@ -1260,26 +1068,29 @@ def test_stop_after_max_episodes(mock_mat_files):
     n_batches = 0
 
     for i in range(num_episodes):
-        batch = sampler.next_episode()
-        imgs1 = batch["images1"]
-        done = batch["done"]
+        if i != 0:
+            sampler.next_episode()
+        batch = next(sampler)
+        imgs1 = batch.images1
+        done = batch.done
+        assert done is not None
         n_batches += 1
         while not any(done):
-            logger.debug(f"episode {i} batch {n_batches}")
             batch = next(sampler)
-            imgs1 = batch["images1"]
-            done = batch["done"]
+            imgs1 = batch.images1
+            done = batch.done
             assert imgs1.shape[0] == batch_size
             assert imgs1[0].shape == (H, W)
             assert isinstance(imgs1, jnp.ndarray)
             n_batches += 1
+            assert done is not None
 
     assert (
         n_batches == epi.episode_length * num_episodes
     ), f"Expected {epi.episode_length * num_episodes} batches, but got {n_batches}"
 
     # Clean up background thread
-    sampler.scheduler.shutdown()
+    sampler.shutdown()
 
 
 @pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
@@ -1310,49 +1121,54 @@ def test_index_error_if_no_next_episode(mock_mat_files):
 
     sampler = SyntheticImageSampler(
         scheduler=pre,
-        img_gen_fn=dummy_img_gen_fn,
         batches_per_flow_batch=1,
-        batch_size=batch_size,
         flow_fields_per_batch=batch_size,
         flow_field_size=(H, W),
-        image_shape=(H, W),
         resolution=1.0,
         velocities_per_pixel=1.0,
-        img_offset=(0.0, 0.0),
-        seeding_density_range=(0.01, 0.01),
-        p_hide_img1=0.0,
-        p_hide_img2=0.0,
-        diameter_ranges=[[1.0, 1.0]],
-        diameter_var=0.0,
-        intensity_ranges=[[1.0, 1.0]],
-        intensity_var=0.0,
-        rho_ranges=[[0.0, 0.0]],
-        rho_var=0.0,
-        dt=1.0,
+        generation_specification=ImageGenerationSpecification(
+            batch_size=batch_size,
+            image_shape=(H, W),
+            img_offset=(0.0, 0.0),
+            seeding_density_range=(0.01, 0.01),
+            p_hide_img1=0.0,
+            p_hide_img2=0.0,
+            diameter_ranges=[(1.0, 1.0)],
+            diameter_var=0.0,
+            intensity_ranges=[(1.0, 1.0)],
+            intensity_var=0.0,
+            rho_ranges=[(0.0, 0.0)],
+            rho_var=0.0,
+            dt=1.0,
+            noise_uniform=0.0,
+            noise_gaussian_mean=0.0,
+            noise_gaussian_std=0.0,
+        ),
         seed=0,
         max_speed_x=0.0,
         max_speed_y=0.0,
         min_speed_x=0.0,
         min_speed_y=0.0,
         output_units="pixels",
-        noise_uniform=0.0,
-        noise_gaussian_mean=0.0,
-        noise_gaussian_std=0.0,
         device_ids=[d.id for d in devices] if devices is not None else None,
     )
 
-    batch = sampler.next_episode()
-    imgs1 = batch["images1"]
-    done = batch["done"]
+    sampler.next_episode()
+    batch = next(sampler)
+    assert batch is not None
+    imgs1 = batch.images1
+    done = batch.done
+    assert done is not None
     while not any(done):
         batch = next(sampler)
-        imgs1 = batch["images1"]
-        done = batch["done"]
+        imgs1 = batch.images1
+        done = batch.done
         assert imgs1.shape[0] == batch_size
         assert imgs1[0].shape == (H, W)
         assert isinstance(imgs1, jnp.ndarray)
+        assert done is not None
     with pytest.raises(
-        IndexError,
+        EpisodeEnd,
         match=re.escape(
             "Episode ended. No more flow fields available. "
             "Use next_episode() to continue."
@@ -1377,12 +1193,11 @@ def test_real_sampler(mock_mat_files):
     sampler = RealImageSampler(scheduler=prefetcher, batch_size=2)
 
     for batch in sampler:
-        assert len(batch) == 4
-        assert isinstance(batch["images1"], jnp.ndarray)
-        assert isinstance(batch["images2"], jnp.ndarray)
-        assert isinstance(batch["flow_fields"], jnp.ndarray)
-        assert batch["images1"].shape[0] == 2  # batch size
-        assert batch["params"] is None
+        assert isinstance(batch.images1, jnp.ndarray)
+        assert isinstance(batch.images2, jnp.ndarray)
+        assert isinstance(batch.flow_fields, jnp.ndarray)
+        assert batch.images1.shape[0] == 2  # batch size
+        assert batch.params is None
 
 
 @pytest.mark.parametrize("mock_mat_files", [10], indirect=True)
@@ -1404,53 +1219,65 @@ def test_reject_wrong_scheduler_for_real_images(mock_mat_files):
         RealImageSampler(scheduler=prefetcher, batch_size=2)
 
 
-class _BaseDummy:
+class _BaseDummy(BaseFlowFieldScheduler):
     """Common helpers for all dummy schedulers."""
 
     include_images = True
     _batch_ctr = 0
 
-    def _make_arrays(self, batch_size):
+    def __init__(self):
+        pass
+
+    def load_file(self, file_path: str) -> SchedulerData:
+        assert False, "Not implemented for dummy scheduler."
+
+    def get_next_slice(self) -> SchedulerData:
+        assert False, "Not implemented for dummy scheduler."
+
+    def _make_arrays(self, batch_size) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Return three arrays that differ per call so we can detect resets."""
         val = float(self._batch_ctr)
         self._batch_ctr += 1
-        imgs1 = jnp.full((batch_size, 2, 2), val, dtype=jnp.float32)
+        imgs1 = np.full((batch_size, 2, 2), val, dtype=np.float32)
         imgs2 = imgs1 + 1.0
-        flows = jnp.full((batch_size, 2, 2, 2), -val, dtype=jnp.float32)
+        flows = np.full((batch_size, 2, 2, 2), -val, dtype=np.float32)
         return imgs1, imgs2, flows
 
-    def get_batch(self, batch_size):
-        return self._make_arrays(batch_size)
+    def get_batch(self, batch_size) -> SchedulerData:
+        imgs1, imgs2, flows = self._make_arrays(batch_size)
+        return SchedulerData(flow_fields=flows, images1=imgs1, images2=imgs2)
 
     def get_flow_fields_shape(self):
         """Return the shape of the flow fields."""
         return (2, 2, 2)
 
-    def __iter__(self):
-        while True:
-            yield self.get_batch(batch_size=self.batch_size)
-
-    def __next__(self):
-        return self.get_batch(batch_size=self.batch_size)
+    @classmethod
+    def from_config(cls, config):
+        return cls()
 
 
-class EpisodicDummy(_BaseDummy):
+class EpisodicDummy(_BaseDummy, EpisodicSchedulerProtocol):
     """Implements the full episodic API."""
 
     def __init__(self, episode_length=3):
-        self.episode_length = episode_length
+        self._episode_length = episode_length
         self._step = 0
         self.reset_called = False
         self.shutdown_called = False
+
+    @property
+    def episode_length(self):
+        return self._episode_length
 
     # ---------- RealImageSampler hooks ---------------------------------
     def steps_remaining(self):
         return max(self.episode_length - self._step, 0)
 
     def get_batch(self, batch_size):
-        arrays = super().get_batch(batch_size=batch_size)
+        batch = super().get_batch(batch_size=batch_size)
         self._step += 1
-        return arrays
+        done = jnp.array(self._step >= self.episode_length)
+        return batch.update(done=jnp.full((batch_size,), done))
 
     def next_episode(self):
         self._step = 0
@@ -1480,14 +1307,14 @@ class SyntheticImageSamplerWrapper:
     """A wrapper for SyntheticImageSampler to use with pytest."""
 
     @classmethod
-    def from_config(cls, scheduler, batch_size):
-        config = sampler_config.copy()
-        config["batch_size"] = batch_size
-        config["flow_fields_per_batch"] = batch_size
+    def from_config(cls, scheduler, config):
+        full_config = sampler_config.copy()
+        full_config["batch_size"] = config.get("batch_size", 4)
+        full_config["flow_fields_per_batch"] = full_config["batch_size"]
+        full_config["batches_per_flow_batch"] = config.get("batches_per_flow_batch", 1)
         return SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=dummy_img_gen_fn,
-            config=config,
+            config=full_config,
         )
 
 
@@ -1496,18 +1323,17 @@ class SyntheticImageSamplerWrapper:
 )
 def test_episodic_done_and_episode_end(sampler_class):
     sched = EpisodicDummy(episode_length=2)
-    if sampler_class is SyntheticImageSamplerWrapper:
-        old_get_batch = sched.get_batch
-        sched.get_batch = lambda batch_size: old_get_batch(batch_size=batch_size)[-1]
-    sampler = sampler_class.from_config(sched, batch_size=4)
+    sampler = sampler_class.from_config(
+        sched, {"batch_size": 4, "batches_per_flow_batch": 1}
+    )
 
     first = next(sampler)
-    assert "done" in first and not first["done"].any()
+    assert first.done is not None and not first.done.any()
 
     last = next(sampler)
-    assert last["done"].all()  # last step → all True
+    assert last.done is not None and last.done.all()  # last step → all True
 
-    with pytest.raises(IndexError, match="Episode ended"):
+    with pytest.raises(EpisodeEnd):
         next(sampler)  # overrun episode
 
 
@@ -1518,8 +1344,8 @@ def test_reset_and_shutdown(sampler_class):
     sched = EpisodicDummy(episode_length=2)
     if sampler_class is SyntheticImageSamplerWrapper:
         old_get_batch = sched.get_batch
-        sched.get_batch = lambda batch_size: old_get_batch(batch_size=batch_size)[-1]
-    sampler = sampler_class.from_config(sched, batch_size=4)
+        sched.get_batch = lambda *a, **kw: old_get_batch(*a, **kw)
+    sampler = sampler_class.from_config(sched, {"batch_size": 4})
 
     next(sampler)
     # reset the sampler
@@ -1534,7 +1360,12 @@ def test_reset_and_shutdown(sampler_class):
     "sampler_class", [RealImageSampler, SyntheticImageSamplerWrapper]
 )
 def test_next_episode_attribute_error(sampler_class):
-    sampler = sampler_class.from_config(PlainDummy(), batch_size=1)
+    sampler = sampler_class.from_config(
+        PlainDummy(),
+        {
+            "batch_size": 1,
+        },
+    )
     with pytest.raises(AttributeError, match="next_episode"):
         sampler.next_episode()
 
@@ -1543,7 +1374,7 @@ def test_next_episode_attribute_error(sampler_class):
     "sampler_class", [RealImageSampler, SyntheticImageSamplerWrapper]
 )
 def test_make_done_not_implemented(sampler_class):
-    sampler = sampler_class.from_config(PlainDummy(), batch_size=3)
+    sampler = sampler_class.from_config(PlainDummy(), {"batch_size": 1})
     with pytest.raises(NotImplementedError):
         sampler._make_done()
 
@@ -1559,33 +1390,34 @@ def test_batch_size_adjusted_when_not_divisible_by_ndevices(monkeypatch):
     # batch_size=3 is not divisible by ndevices=2 -> adjusted to 4
     sampler = SyntheticImageSampler(
         scheduler=_BaseDummy(),
-        img_gen_fn=dummy_img_gen_fn,
         batches_per_flow_batch=1,
-        image_shape=(5, 5),
         flow_field_size=(8, 8),
         resolution=1.0,
         velocities_per_pixel=1.0,
-        img_offset=(1.0, 1.0),
-        seeding_density_range=(1.0, 1.0),
-        p_hide_img1=0.0,
-        p_hide_img2=0.0,
-        diameter_ranges=[[1.0, 1.0]],
-        diameter_var=0.1,
-        intensity_ranges=[[1.0, 1.0]],
-        intensity_var=0.1,
-        rho_ranges=[[0.0, 0.0]],
-        rho_var=0.1,
-        dt=1.0,
+        generation_specification=ImageGenerationSpecification(
+            image_shape=(5, 5),
+            img_offset=(1.0, 1.0),
+            seeding_density_range=(1.0, 1.0),
+            p_hide_img1=0.0,
+            p_hide_img2=0.0,
+            diameter_ranges=[(1.0, 1.0)],
+            diameter_var=0.1,
+            intensity_ranges=[(1.0, 1.0)],
+            intensity_var=0.1,
+            rho_ranges=[(0.0, 0.0)],
+            rho_var=0.1,
+            dt=1.0,
+            noise_uniform=0.0,
+            noise_gaussian_mean=0.0,
+            noise_gaussian_std=0.0,
+            batch_size=3,
+        ),
         seed=0,
         max_speed_x=1.0,
         max_speed_y=1.0,
         min_speed_x=0.0,
         min_speed_y=0.0,
         output_units="pixels",
-        noise_uniform=0.0,
-        noise_gaussian_mean=0.0,
-        noise_gaussian_std=0.0,
-        batch_size=3,
         flow_fields_per_batch=1,
         device_ids=None,  # use all devices (the two fakes)
     )
@@ -1609,33 +1441,34 @@ def test_warning_when_batch_size_not_divisible_by_flow_fields(monkeypatch):
     # Use a batch_size that isn't divisible by flow_fields_per_batch
     sampler = SyntheticImageSampler(
         scheduler=_BaseDummy(),
-        img_gen_fn=dummy_img_gen_fn,
         batches_per_flow_batch=1,
-        image_shape=(5, 5),
         flow_field_size=(8, 8),
         resolution=1.0,
         velocities_per_pixel=1.0,
-        img_offset=(1.0, 1.0),
-        seeding_density_range=(1.0, 1.0),
-        p_hide_img1=0.0,
-        p_hide_img2=0.0,
-        diameter_ranges=[[1.0, 1.0]],
-        diameter_var=0.1,
-        intensity_ranges=[[1.0, 1.0]],
-        intensity_var=0.1,
-        rho_ranges=[[0.0, 0.0]],
-        rho_var=0.1,
-        dt=1.0,
+        generation_specification=ImageGenerationSpecification(
+            image_shape=(5, 5),
+            img_offset=(1.0, 1.0),
+            seeding_density_range=(1.0, 1.0),
+            p_hide_img1=0.0,
+            p_hide_img2=0.0,
+            diameter_ranges=[(1.0, 1.0)],
+            diameter_var=0.1,
+            intensity_ranges=[(1.0, 1.0)],
+            intensity_var=0.1,
+            rho_ranges=[(0.0, 0.0)],
+            rho_var=0.1,
+            dt=1.0,
+            noise_uniform=0.0,
+            noise_gaussian_mean=0.0,
+            noise_gaussian_std=0.0,
+            batch_size=4,
+        ),
         seed=0,
         max_speed_x=1.0,
         max_speed_y=1.0,
         min_speed_x=0.0,
         min_speed_y=0.0,
         output_units="pixels",
-        noise_uniform=0.0,
-        noise_gaussian_mean=0.0,
-        noise_gaussian_std=0.0,
-        batch_size=4,
         flow_fields_per_batch=3,
         device_ids=None,
     )

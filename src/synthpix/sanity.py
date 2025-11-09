@@ -1,4 +1,5 @@
 """Script to check the sanity of the configuration file."""
+
 import argparse
 import collections
 import os
@@ -10,16 +11,21 @@ import numpy as np
 from goggles import get_logger
 from tqdm import tqdm
 
-from .data_generate import generate_images_from_flow
 from .sampler import SyntheticImageSampler
 from .scheduler import HDF5FlowFieldScheduler
-from .utils import load_configuration
+from .utils import load_configuration, SYNTHPIX_SCOPE
 
-logger = get_logger(__name__)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
-def update_config_file(config_path: str, updated_values: dict):
-    """Update the YAML configuration file with new values."""
+def update_config_file(config_path: str, updated_values: dict) -> None:
+    """Update the YAML configuration file with new values.
+
+    Args:
+        config_path: The path to the configuration file.
+        updated_values: A dictionary of values to update
+            in the configuration file.
+    """
     config_data = load_configuration(config_path)
 
     # Convert to OrderedDict to preserve order
@@ -44,32 +50,31 @@ def update_config_file(config_path: str, updated_values: dict):
     for key, value in updated_values.items():
         config_data[key] = convert_to_standard_type(value)
 
-    # Handle scheduler_files separately
-    scheduler_files = config_data.pop("scheduler_files", [])
+    # Handle file_list separately
+    file_list = config_data.pop("file_list", [])
 
     with open(config_path, "w") as file:
         for key, value in config_data.items():
             file.write(f"{key}: {value}\n")
-        if scheduler_files:
-            file.write("scheduler_files:\n")
-            for item in scheduler_files:
-                file.write(f"  - {item}\n")
+        if file_list and isinstance(file_list, list):
+            file.write("file_list:\n")
+            for item in file_list:
+                file.write(f"  - {str(item)}\n")
 
 
 def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
     """Calculate the missing speeds for a list of files.
 
     Args:
-        file_list: list[str]
-            The list of files.
+        file_list: The list of files.
 
     Returns:
-        dict[str, float]: A dictionary containing the minimum and maximum speeds
-            in the x and y directions with keys:
-            - "min_speed_x"
-            - "max_speed_x"
-            - "min_speed_y"
-            - "max_speed_y"
+        A dictionary containing the minimum and maximum speeds in the x and y
+            directions with keys:
+                - "min_speed_x"
+                - "max_speed_x"
+                - "min_speed_y"
+                - "max_speed_y"
     """
     running_max_speed_x = float("-inf")
     running_max_speed_y = float("-inf")
@@ -80,13 +85,34 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
         with h5py.File(file, "r") as f:
             # Read the file
             dataset_name = list(f.keys())[0]
-            data = f[dataset_name][:]
+            dataset = f[dataset_name]
+
+            # Ensure we have a dataset, not a group or datatype
+            if not isinstance(dataset, h5py.Dataset):
+                raise ValueError(
+                    f"Expected dataset, got {type(dataset)} in file {file}"
+                )
+
+            # Convert to numpy array if needed
+            data = np.array(dataset)
+
+            # Check data shape and handle different formats
+            if data.ndim == 4:
+                # Standard 4D format: (batch, height, width, channels)
+                x_data = data[..., 0]  # All x components
+                y_data = data[..., 1]  # All y components
+            elif data.ndim == 3 and data.shape[-1] == 2:
+                # 3D format: (height, width, channels)
+                x_data = data[..., 0]
+                y_data = data[..., 1]
+            else:
+                raise ValueError(f"Unexpected data shape: {data.shape} in file {file}")
 
             # Find the min and max speeds along each axis
-            running_max_speed_x = max(running_max_speed_x, np.max(data[:, :, :, 0]))
-            running_max_speed_y = max(running_max_speed_y, np.max(data[:, :, :, 1]))
-            running_min_speed_x = min(running_min_speed_x, np.min(data[:, :, :, 0]))
-            running_min_speed_y = min(running_min_speed_y, np.min(data[:, :, :, 1]))
+            running_max_speed_x = max(running_max_speed_x, float(np.max(x_data)))
+            running_max_speed_y = max(running_max_speed_y, float(np.max(y_data)))
+            running_min_speed_x = min(running_min_speed_x, float(np.min(x_data)))
+            running_min_speed_y = min(running_min_speed_y, float(np.min(y_data)))
 
     return {
         "min_speed_x": running_min_speed_x,
@@ -96,23 +122,21 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
     }
 
 
-def missing_speeds_panel(config_path) -> tuple[float, float, float, float]:
+def missing_speeds_panel(config_path: str) -> tuple[float, float, float, float]:
     """Check for missing speeds in the configuration file.
 
     Args:
-        config_path: str
-            The path to the configuration file.
+        config_path: The path to the configuration file.
 
     Returns:
-        speeds: tuple[float, float, float, float]
-            The maximum and minimum speeds in the x and y directions.
+        speeds: The maximum and minimum speeds in the x and y directions.
     """
     config = load_configuration(config_path)
 
     # Input validation
-    if "scheduler_files" not in config:
-        raise ValueError("The configuration must contain 'scheduler_files'.")
-    file_list = config["scheduler_files"]
+    if "file_list" not in config:
+        raise ValueError("The configuration must contain 'file_list'.")
+    file_list = config["file_list"]
     if not isinstance(file_list, list) or not file_list:
         raise ValueError("The file_list must not be empty.")
 
@@ -180,7 +204,7 @@ def missing_speeds_panel(config_path) -> tuple[float, float, float, float]:
         )
 
 
-def main():  # pragma: no cover
+def main() -> None:  # pragma: no cover
     """Main function to check the sanity of the configuration file."""
     parser = argparse.ArgumentParser(
         description="Check the sanity of the configuration file."
@@ -207,7 +231,7 @@ def main():  # pragma: no cover
     # 2. Try to instantiate the scheduler with the config
     scheduler = None
     try:
-        scheduler = HDF5FlowFieldScheduler(config["scheduler_files"], loop=False)
+        scheduler = HDF5FlowFieldScheduler(config["file_list"], loop=False)
     except Exception as e:
         logger.error(f"Error instantiating scheduler: {e}")
         logger.error(f"Please check the configuration file: {config_path}.")
@@ -218,7 +242,6 @@ def main():  # pragma: no cover
     try:
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=generate_images_from_flow,
             config=config,
         )
     except Exception as e:

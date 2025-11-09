@@ -1,18 +1,25 @@
 """PrefetchingFlowFieldScheduler to asynchronously prefetch flow fields."""
+
 import queue
 import threading
 import time
 
 from goggles import get_logger
 
-from synthpix.scheduler.base import BaseFlowFieldScheduler
-from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
+from synthpix.types import SchedulerData
+from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.scheduler.protocol import (
+    EpisodeEnd,
+    EpisodicSchedulerProtocol,
+    SchedulerProtocol,
+    PrefetchedSchedulerProtocol,
+)
 
-logger = get_logger(__name__)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
-class PrefetchingFlowFieldScheduler:
-    """Prefetching Wrapper around a FlowFieldScheduler.
+class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
+    """Prefetching Wrapper around a FlowFieldScheduler or an EpisodicScheduler.
 
     It asynchronously prefetches batches of flow fields using a
     background thread to keep the GPU fed.
@@ -20,7 +27,7 @@ class PrefetchingFlowFieldScheduler:
 
     def __init__(
         self,
-        scheduler: BaseFlowFieldScheduler | EpisodicFlowFieldScheduler,
+        scheduler: SchedulerProtocol,
         batch_size: int,
         buffer_size: int = 8,
     ):
@@ -30,11 +37,10 @@ class PrefetchingFlowFieldScheduler:
         moving to the next episode seamlessly.
 
         Args:
-            scheduler (BaseFlowFieldScheduler | EpisodicFlowFieldScheduler):
-                The underlying flow field scheduler.
-            batch_size (int):
-                Flow field slices per batch, must match the underlying scheduler.
-            buffer_size (int): Number of batches to prefetch.
+            scheduler: The underlying flow field scheduler.
+            batch_size: Flow field slices per batch.
+                Must match the underlying scheduler.
+            buffer_size: Number of batches to prefetch.
         """
         self.scheduler = scheduler
 
@@ -45,44 +51,44 @@ class PrefetchingFlowFieldScheduler:
         self.batch_size = batch_size
         self.buffer_size = buffer_size
 
-        # Episodic behavior
-        if hasattr(self.scheduler, "episode_length"):
-            self.episode_length = getattr(self.scheduler, "episode_length")
-            self._t = 0
-
         self._queue = queue.Queue(maxsize=buffer_size)
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._worker, daemon=True)
 
         self._started = False
+        self._t = 0
 
-    def __iter__(self):
-        """Returns the iterator instance itself and starts the background thread.
+    def get_batch(self, batch_size: int) -> SchedulerData:
+        """Return the next batch from the prefetch queue.
 
-        If the background thread is not started yet, it will be started.
-        This behavior also takes care of the case where there has been an Exception
-        in the previous run, and the thread needs to be restarted.
-        """
-        if not self._started:
-            self._started = True
-            self._thread.start()
-            logger.debug("Background thread started.")
-        return self
+        The batch matches the underlying scheduler's interface.
 
-    def __next__(self):
-        """Returns the next batch of flow fields from the prefetch queue.
+        Args:
+            batch_size: Number of flow field slices to retrieve.
+
+        Returns:
+            A preloaded batch of flow fields.
 
         Raises:
-            StopIteration: If the queue is empty or no more data is available.
+            ValueError: If the requested batch_size does not match
+                the prefetching batch size.
         """
+        if batch_size != self.batch_size:
+            raise ValueError(
+                f"Batch size {batch_size} does not match the "
+                f"prefetching batch size {self.batch_size}."
+            )
+        self._start_worker()
+
+        if isinstance(self.scheduler, EpisodicSchedulerProtocol):
+            if self._t >= self.scheduler.episode_length:
+                raise EpisodeEnd(
+                    "Episode ended. No more flow fields available. "
+                    "Use next_episode() to continue."
+                )
         try:
             batch = self._queue.get(block=True, timeout=2)
-            if hasattr(self.scheduler, "episode_length"):
-                if self._t >= self.episode_length:
-                    self._t = 0
-                self._t += 1
-            if hasattr(self.scheduler, "episode_length"):
-                logger.debug(f"t = {self._t}")
+            self._t += 1
             if batch is None:
                 logger.info("End of stream reached, stopping iteration.")
                 raise StopIteration
@@ -91,34 +97,35 @@ class PrefetchingFlowFieldScheduler:
             logger.info("Unable to get data.")
             raise StopIteration
 
-    def get_batch(self, batch_size):
-        """Return the next batch from the prefetch queue, matching scheduler interface.
-
-        Returns:
-            np.ndarray: A preloaded batch of flow fields.
-        """
-        if batch_size != self.batch_size:
-            raise ValueError(
-                f"Batch size {batch_size} does not match the "
-                f"prefetching batch size {self.batch_size}."
-            )
-        if not self._started:
-            self.__iter__()
-        return next(self)
-
-    def get_flow_fields_shape(self):
+    def get_flow_fields_shape(self) -> tuple[int, ...]:
         """Return the shape of the flow fields from the underlying scheduler.
 
         Returns:
-            tuple: Shape of the flow fields as returned by the underlying scheduler.
+            Shape of the flow fields as returned by the underlying scheduler.
         """
         return self.scheduler.get_flow_fields_shape()
 
-    def _worker(self, eos_timeout=2):
-        """Background thread that continuously fetches batches from the scheduler."""
+    def _start_worker(self) -> None:
+        """Starts the background prefetching thread if not already started."""
+        if not self._started:
+            self._started = True
+            self._thread.start()
+            logger.debug("Background thread started.")
+
+    def _worker(self, eos_timeout: float = 2.0) -> None:
+        """Background thread that fetches batches from the scheduler.
+
+        Args:
+            eos_timeout: Timeout in seconds for putting the end-of-stream
+                signal in the queue.
+        """
         while not self._stop_event.is_set():
             try:
                 batch = self.scheduler.get_batch(self.batch_size)
+            except EpisodeEnd as e:
+                assert isinstance(self.scheduler, EpisodicSchedulerProtocol)
+                self.scheduler.next_episode()
+                continue
             except StopIteration:
                 # Intended behavior here:
                 # I called get_batch() and ran into a StopIteration,
@@ -131,7 +138,7 @@ class PrefetchingFlowFieldScheduler:
                 try:
                     self._queue.put(None, block=True, timeout=eos_timeout)
                 except queue.Full:
-                    # If the queue is full for <timeout>, I remove one item
+                    # If the queue is full for <eos_timeout>, I remove one item
                     # before I can put the end‑of‑stream signal.
 
                     # Acquire the mutex to ensure atomicity
@@ -155,7 +162,7 @@ class PrefetchingFlowFieldScheduler:
             # Exception cannot be raised here, would be dead code.
             self._queue.put(batch, block=True)
 
-    def reset(self):
+    def reset(self) -> None:
         """Resets the prefetching scheduler and underlying scheduler."""
         # Set the stop event to stop the current thread
         self._stop_event.set()
@@ -179,6 +186,7 @@ class PrefetchingFlowFieldScheduler:
 
         # Reinitialize the scheduler and start the thread
         self.scheduler.reset()
+        self._t = 0
         self._started = False
         self._stop_event.clear()
         self._queue = queue.Queue(maxsize=self.buffer_size)
@@ -186,48 +194,12 @@ class PrefetchingFlowFieldScheduler:
 
         logger.debug("Prefetching thread reinitialized, scheduler reset.")
 
-    def next_episode(self, join_timeout: float = 2.0):
-        """Flush the remaining items of the current episode and proceed to the next one.
+    def shutdown(self, join_timeout: float = 2.0) -> None:
+        """Gracefully shuts down the background prefetching thread.
 
         Args:
-            join_timeout (float):
-                Timeout in seconds for joining the thread. Defaults to 2.
+            join_timeout: Timeout in seconds for joining the thread.
         """
-        if self._started and self.steps_remaining() > 0:
-            to_discard = self.steps_remaining()
-            discarded = 0
-            deadline = time.time() + join_timeout
-            while discarded < to_discard:
-                remaining_time = deadline - time.time()
-                if remaining_time <= 0:
-                    break
-                try:
-                    item = self._queue.get(block=True, timeout=remaining_time)
-                except queue.Empty:
-                    continue
-                if item is None:  # End-of-stream signal
-                    break
-                discarded += 1
-
-        # Proceed to the next episode in the underlying scheduler
-        self._t = 0
-
-        # Start the prefetching thread if not already started
-        if not self._started:
-            self.__iter__()
-
-        logger.debug("Next episode started.")
-
-    def steps_remaining(self) -> int:
-        """Return the number of steps remaining in the current episode.
-
-        Returns:
-            int: Number of steps remaining in the current episode.
-        """
-        return self.episode_length - self._t
-
-    def shutdown(self, join_timeout=2):
-        """Gracefully shuts down the background prefetching thread."""
         try:
             self._stop_event.set()
         except AttributeError:
@@ -250,7 +222,7 @@ class PrefetchingFlowFieldScheduler:
         if self._thread.is_alive():
             self._thread.join(timeout=join_timeout)
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Gracefully shuts down the scheduler upon deletion."""
         self.shutdown()
 
@@ -258,7 +230,82 @@ class PrefetchingFlowFieldScheduler:
         """Check if the prefetching thread is currently running.
 
         Returns:
-            bool: True if the prefetching thread is alive, False otherwise.
+            True if the prefetching thread is alive, False otherwise.
         """
         t = self._thread
         return t is not None and t.is_alive()
+
+    def steps_remaining(self) -> int:
+        """Returns the number of steps remaining in the current episode.
+
+        Returns:
+            Number of steps remaining.
+        """
+        if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
+            # return 1 if not episodic... never ending ;)
+            return 1
+        return self.scheduler.episode_length - self._t
+
+    def next_episode(self, join_timeout: float = 2.0) -> None:
+        """Flush the current episode and prepare for the next one.
+
+        The scheduler should reset any internal state necessary for
+        starting a new episode.
+
+        Also it starts the worker if not already started.
+
+        Args:
+            join_timeout: Timeout in seconds for joining the thread.
+        """
+        if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
+            # do nothing if not episodic
+            return
+
+        if self._started and self.steps_remaining() > 0:
+            to_discard = self.steps_remaining()
+            discarded = 0
+            deadline = time.time() + join_timeout
+            while discarded < to_discard:
+                remaining_time = deadline - time.time()
+                if remaining_time <= 0:
+                    break
+                try:
+                    item = self._queue.get(block=True, timeout=remaining_time)
+                except queue.Empty:
+                    continue
+                if item is None:  # End-of-stream signal
+                    break
+                discarded += 1
+        else:
+            self._start_worker()
+
+        self._t = 0
+
+    @property
+    def episode_length(self) -> int:
+        """Returns the length of the episode.
+
+        Returns:
+            The length of the episode.
+        """
+        if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
+            raise AttributeError("Underlying scheduler lacks episode_length property.")
+        return self.scheduler.episode_length
+
+    @property
+    def file_list(self) -> list[str]:
+        """Returns the list of files used by the underlying scheduler.
+
+        Returns:
+            The list of files.
+        """
+        return self.scheduler.file_list
+
+    @file_list.setter
+    def file_list(self, new_file_list: list[str]) -> None:
+        """Sets a new list of files for the underlying scheduler.
+
+        Args:
+            new_file_list: The new list of files to set.
+        """
+        self.scheduler.file_list = new_file_list

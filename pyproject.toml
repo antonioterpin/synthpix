@@ -1,0 +1,177 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "synthpix"
+version = "0.1.0"
+authors = [
+    { name = "Antonio Terpin", email = "aterpin@ethz.ch" },
+    { name = "Alan Bonomi", email = "abonomi@ethz.ch" },
+    { name = "Francesco Banelli", email = "fbanelli@ethz.ch" },
+]
+description = "Observability framework for robotics research"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+keywords = ["PIV", "synthetic data", "jax"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Logging",
+]
+dependencies = [
+    "jax>=0.6.0",
+    "tqdm>=4.67.1",
+    "h5py>=3.13.0",
+    "ruamel.yaml>=0.18.10",
+    "opencv-python-headless>=4.5.5",
+    "robo-goggles>=0.1.7",
+]
+
+[project.urls]
+Homepage = "https://github.com/antonioterpin/synthpix"
+Repository = "https://github.com/antonioterpin/synthpix"
+Documentation = "https://github.com/antonioterpin/synthpix#readme"
+Issues = "https://github.com/antonioterpin/synthpix/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["synthpix*"]
+exclude = ["tests*", "docs*"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "hypothesis>=6.0.0",
+    "snowballstemmer==2.2.0",
+    "pre_commit==4.0.1",
+    "tomli",
+    "pyupgrade>=3.19.0",
+    "matplotlib>=3.10.1",
+]
+# cuda
+cuda12 = [
+    "jax[cuda12]>=0.6.0",
+]
+
+# autopep8 configuration for 4-space indentation
+[tool.autopep8]
+max_line_length = 80
+indent_size = 4
+aggressive = 2
+in_place = true
+exclude = ".eggs,.git,.hg,.mypy_cache,.tox,.venv,_build,buck-out,build,dist"
+
+# isort configuration (updated for autopep8 compatibility)
+[tool.isort]
+line_length = 80
+indent = 4
+multi_line_output = 0
+force_single_line = false
+include_trailing_comma = false
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+
+# MyPy configuration
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+show_error_codes = true
+explicit_package_bases = true
+
+# Allow untyped decorators in test files for Hypothesis
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_decorators = false
+
+# Pydocstyle configuration
+[tool.pydocstyle]
+convention = "google"
+match-dir = "^(?!tests).*"
+
+# Bandit security configuration
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "build", "dist"]
+
+# Pytest configuration
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = [
+        "-ra",
+        "--strict-markers",
+        "--strict-config",
+        "--cov=goggles",
+        "--cov-branch",
+        "--cov-report=term-missing",
+        "--cov-report=html",
+        "--cov-report=xml",
+]
+testpaths = ["tests"]
+filterwarnings = [
+        "error",
+        "ignore::UserWarning",
+        "ignore::DeprecationWarning",
+]
+
+# Ruff configuration for linting and modern typing enforcement
+[tool.ruff]
+line-length = 80
+target-version = "py310"
+
+[tool.ruff.lint]
+# Enable comprehensive rule sets
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes (including unused imports F401)
+    "UP",     # pyupgrade (modern typing patterns)
+    "I",      # isort
+    "N",      # pep8-naming
+    "D",      # pydocstyle
+    "PL",     # pylint
+    "RUF",    # ruff-specific rules
+]
+
+ignore = [
+    "D100",   # Missing docstring in public module
+    "D104",   # Missing docstring in public package
+    "D105",   # Missing docstring in magic method
+    "PLR0913", # Too many arguments to function call
+    "PLR2004", # Magic value used in comparison
+]
+
+# Specific rules for modern typing enforcement
+[tool.ruff.lint.pyupgrade]
+# Keep this empty to use all pyupgrade rules
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D", "PLR2004"]  # Ignore docstring rules in tests
+"examples/*" = ["D"]          # Ignore docstring rules in examples
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

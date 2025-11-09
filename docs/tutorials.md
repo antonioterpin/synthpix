@@ -6,10 +6,10 @@
 
 - ``'V'``: shape (H, W, 2) or (2, H, W), both are automatically recognized and supported
 
-The locations of the files should be provided in the configuration file under ``scheduler_files``. You can either provide ``SynthPix`` with the directory containing the files, in which case all subdirectories will be opened to check for files, or with a list of file directories as such:
+The locations of the files should be provided in the configuration file under ``file_list``. You can either provide ``SynthPix`` with the directory containing the files, in which case all subdirectories will be opened to check for files, or with a list of file directories as such:
 
 ```yaml
-scheduler_files:
+file_list:
 - /path/to/file1.mat
 - /path/to/file2.mat
 ```
@@ -64,7 +64,7 @@ output_units: "pixels"        # Units of the output flow field. Can be
                               # "measure units per second" or "pixels".
 
 # ----- Flows files ----------------------------------------------
-scheduler_files: /shared/fluids/fluids-estimation/eye_candies_main
+file_list: /shared/fluids/fluids-estimation/eye_candies_main
 scheduler_class: ".mat"
 ```
 
@@ -92,9 +92,9 @@ To check what we're generating you can run:
 sampler = synthpix.make(config_path)
 
 for i, batch in enumerate(sampler):
-    imgs1 = batch["images1"]
-    imgs2 = batch["images2"]
-    flows = batch["flow_fields"]
+    imgs1 = batch.images1
+    imgs2 = batch.images2
+    flows = batch.flow_fields
     print(f"{imgs1.shape=}") # shape (64, H, W)
     print(f"{imgs2.shape=}") # shape (64, H, W)
     print(f"{flows.shape=}") # shape (64, H, W, 2)
@@ -138,7 +138,7 @@ randomize: false        # Whether to randomize the order of the batches
 image_shape: [256, 256] # Shape of the images
 
 # Flows files
-scheduler_files: docs/examples/mat/
+file_list: docs/examples/mat/
 scheduler_class: ".mat"
 ```
 
@@ -148,14 +148,14 @@ Now by just doing:
 sampler = synthpix.make("docs/examples/mat/config.yaml")
 
 for batch in sampler:
-    flows = batch["flow_fields"]
-    images1 = batch["imgs1"]
-    images2 = batch["imgs2"]
+    flows = batch.flow_fields
+    images1 = batch.images1
+    images2 = batch.images2
 ```
 
 you can load the images without any additional code.
 
-We also provide support for direct `.npy` files and include them as an example. Using the previous config, just change `scheduler_class` to `.npy` and `scheduler_files` to `"docs/examples/npy"`. Nothing else needs to change. So you can worry about your research, everything else is taken care of.
+We also provide support for direct `.npy` files and include them as an example. Using the previous config, just change `scheduler_class` to `.npy` and `file_list` to `"docs/examples/npy"`. Nothing else needs to change. So you can worry about your research, everything else is taken care of.
 
 ## Other File Formats
 

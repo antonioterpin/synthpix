@@ -37,7 +37,7 @@ max_speed_y: 0.501191258430481 # Maximum speed in the y direction
 # Units of the output flow field. Can be "measure units per second" or "pixels"
 output_units: "measure units per second"
 # Flows files
-scheduler_files:
+file_list:
   - /shared/fluids/fluids-estimation/files_to_modify/split_files/channel_full_ts_0984_part1.h5 # noqa: E051
   - /shared/fluids/fluids-estimation/files_to_modify/split_files/channel_full_ts_0984_part2.h5 # noqa: E051
   - /shared/fluids/fluids-estimation/files_to_modify/split_files/channel_full_ts_0988_part1.h5 # noqa: E051

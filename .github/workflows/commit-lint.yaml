@@ -1,9 +1,7 @@
 name: Commit style validation
 
 on:
-  push:
-    branches:
-      - '**'
+    workflow_dispatch:
 
 jobs:
   commit-lint:

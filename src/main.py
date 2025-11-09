@@ -1,4 +1,5 @@
 """Main file to run the SyntheticImageSampler pipeline."""
+
 import argparse
 import logging
 import os
@@ -9,21 +10,29 @@ import numpy as np
 
 import synthpix
 
-logger = gg.get_logger(__name__)
+# To see logs in the console, we need to attach a handler to
+# the Synthpix scope: synthpix.SYNTHPIX_SCOPE
+logger = gg.get_logger(__name__, scope=synthpix.SYNTHPIX_SCOPE)
 gg.attach(
     gg.ConsoleHandler(level=logging.INFO),
 )
 
 
-def visualize_and_save(name, image1, image2, flow_field, output_dir="output_images"):
+def visualize_and_save(
+    name: str,
+    image1: np.ndarray,
+    image2: np.ndarray,
+    flow_field: np.ndarray,
+    output_dir: str = "output_images",
+) -> None:
     """Visualizes and saves a specified number of images from a batch.
 
     Args:
-        name (str): The name of the batch.
-        image1 (jnp.ndarray): The first image to visualize.
-        image2 (jnp.ndarray): The second image to visualize.
-        flow_field (jnp.ndarray): The flow field to visualize.
-        output_dir (str): Directory to save the images.
+        name: The name of the batch.
+        image1: The first image to visualize.
+        image2: The second image to visualize.
+        flow_field: The flow field to visualize.
+        output_dir: Directory to save the images.
     """
     os.makedirs(output_dir, exist_ok=True)
 
@@ -59,32 +68,32 @@ def main(config_path: str, output_dir: str, num_images_to_display: int):
     """Main function to run the SyntheticImageSampler pipeline.
 
     Args:
-        config_path (string): Configuration file path.
-        output_dir (str): Directory to save visualized images.
-        num_images_to_display (int): Number of images to display and save per batch.
+        config_path: Configuration file path.
+        output_dir: Directory to save visualized images.
+        num_images_to_display: Number of images to display and save per batch.
     """
     # Initialize the sampler
-    sampler = synthpix.make(config_path, buffer_size=10, images_from_file=False)
+    sampler = synthpix.make(config_path)
+
+    # Print where images will be saved
+    abs_output_dir = os.path.abspath(output_dir)
+    print(f"Images will be saved to: {abs_output_dir}")
 
     try:
         # Run the sampler and print results
         logger.info(f"Starting the {sampler.__class__.__name__} pipeline...")
         for i, batch in enumerate(sampler):
-            # logger.info(f"Batch {i + 1} generated.")
-            # logger.info(f"Image 1 batch shape: {batch['images1'].shape}")
-            # logger.info(f"Image 2 batch shape: {batch['images2'].shape}")
-            # logger.info(f"Flow field batch shape: {batch['flow_fields'].shape}")
-
-            for j in range(min(num_images_to_display, batch["images1"].shape[0])):
+            # Batch is of type SynthpixBatch and we can access its fields
+            for j in range(min(num_images_to_display, batch.images1.shape[0])):
                 # Visualize and save the images
                 # We visualize the images in ij coordinates, so
-                # batch["flow_fields"][j, 0, 0] is the flow on the top left pixel
-                # of the j-th element of the batch
+                # batch.flow_fields[j, 0, 0] is the flow on the
+                # top left pixel of the j-th element of the batch
                 visualize_and_save(
                     f"batch_{i}_sample_{j}",
-                    batch["images1"][j],
-                    batch["images2"][j],
-                    batch["flow_fields"][j],
+                    np.asarray(batch.images1[j]),
+                    np.asarray(batch.images2[j]),
+                    np.asarray(batch.flow_fields[j]),
                     output_dir,
                 )
 
@@ -96,6 +105,7 @@ def main(config_path: str, output_dir: str, num_images_to_display: int):
                     break
     finally:
         sampler.shutdown()
+        gg.finish()
 
 
 if __name__ == "__main__":
@@ -138,3 +148,5 @@ if __name__ == "__main__":
         output_dir=args.output_dir,
         num_images_to_display=args.visualize,
     )
+
+    gg.finish()

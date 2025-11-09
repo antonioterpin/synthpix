@@ -9,5 +9,5 @@ randomize: false        # Whether to randomize the order of the batches
 image_shape: [256, 256] # Shape of the images
 
 # Flows files
-scheduler_files: docs/examples/npy
+file_list: docs/examples/npy
 scheduler_class: ".npy"

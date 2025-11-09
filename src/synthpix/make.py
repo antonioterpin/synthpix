@@ -1,23 +1,24 @@
 """Make module to instantiate SynthPix."""
+
 import os
 
 import jax
-from goggles import get_logger
+import goggles as gg
 from rich.console import Console
 from rich.text import Text
 
-from .data_generate import generate_images_from_flow
-from .sampler import RealImageSampler, Sampler, SyntheticImageSampler
-from .scheduler import (
+from synthpix.sampler import RealImageSampler, Sampler, SyntheticImageSampler
+from synthpix.scheduler import (
+    BaseFlowFieldScheduler,
     EpisodicFlowFieldScheduler,
     HDF5FlowFieldScheduler,
     MATFlowFieldScheduler,
     NumpyFlowFieldScheduler,
     PrefetchingFlowFieldScheduler,
 )
-from .utils import load_configuration
+from .utils import load_configuration, SYNTHPIX_SCOPE
 
-logger = get_logger(__name__)
+logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 SCHEDULERS = {
     ".h5": HDF5FlowFieldScheduler,
@@ -26,26 +27,60 @@ SCHEDULERS = {
 }
 
 
+def get_base_scheduler(name: str) -> BaseFlowFieldScheduler:
+    """Get the base scheduler class by file extension.
+
+    Args:
+        name: File extension identifying the scheduler type (".h5", ".mat", or ".npy").
+
+    Returns:
+        The scheduler class corresponding to the file extension.
+
+    Raises:
+        ValueError: If the file extension is not supported.
+    """
+    if name not in SCHEDULERS:
+        raise ValueError(
+            f"Scheduler class {name} not found. Should be one of {list(SCHEDULERS.keys())}."
+        )
+
+    return SCHEDULERS[name]
+
+
 def make(
     config: str | dict,
-    images_from_file: bool = False,
-    buffer_size: int = 0,
-    episode_length: int = 0,
 ) -> Sampler:
     """Load the dataset configuration and initialize the sampler.
 
     The loading file must be a YAML file containing the dataset configuration.
     Extracting images from files is supported only for .mat files.
 
+    Required configuration keys:
+    - scheduler_class: The file extension of the scheduler to use (".h5", ".mat", or ".npy").
+    - batch_size: The batch size for training (positive integer).
+    - flow_fields_per_batch: Number of flow fields to use per batch.
+    - batches_per_flow_batch: Required when generating synthetic images (include_images=False).
+
+    Optional configuration keys:
+    - include_images: Whether to extract real images from files (bool, default False).
+    - buffer_size: Size of prefetching buffer (non-negative int, default 0).
+    - episode_length: Length of episodes for episodic scheduler (non-negative int, default 0).
+    - seed: Random seed (int, default 0).
+    - file_list: List of data files (list, default empty).
+    - randomize: Whether to randomize file order (bool, default False).
+    - loop: Whether to loop through files (bool, default True).
+    - image_shape: Shape for image extraction when include_images=True (tuple, default (256, 256)).
+
     Args:
-        config (str | dict): The dataset configuration.
-        images_from_file (bool): If true, images are loaded from files.
-        buffer_size (int): Size of the buffer (in batches) for prefetching.
-            If 0, no prefetching is used.
-        episode_length (int): Length of the episode for episodic sampling.
+        config: Either a path to a YAML configuration file or a configuration dictionary.
 
     Returns:
-        sampler (Sampler): The initialized sampler.
+        The initialized sampler (RealImageSampler or SyntheticImageSampler).
+
+    Raises:
+        TypeError: If config is not a string or dictionary, or if parameter types are invalid.
+        ValueError: If required keys are missing or parameter values are invalid.
+        FileNotFoundError: If the configuration file doesn't exist.
     """
     # Initialize console for colored output
     console = Console()
@@ -76,7 +111,7 @@ def make(
 
     # Input validation
     if not isinstance(config, (str, dict)):
-        raise TypeError("config_path must be a string or a dictionary.")
+        raise TypeError("config must be a string or a dictionary.")
     if isinstance(config, str):
         if not config.endswith(".yaml"):
             raise ValueError("config must point to a .yaml file.")
@@ -94,15 +129,29 @@ def make(
 
     # Configuration validation
     if not isinstance(dataset_config, dict):
-        raise TypeError("dataset_config must be a dictionary.")
+        raise TypeError("config must be a dictionary.")
     if "scheduler_class" not in dataset_config:
-        raise ValueError("dataset_config must contain 'scheduler_class' key.")
-    if not isinstance(images_from_file, bool):
-        raise TypeError("images_from_file must be a boolean.")
+        raise ValueError("config must contain 'scheduler_class' key.")
+    scheduler_class_name = dataset_config["scheduler_class"]
+    scheduler_class = get_base_scheduler(scheduler_class_name)
+    if "batch_size" not in dataset_config:
+        raise ValueError("config must contain 'batch_size' key.")
+    batch_size = dataset_config["batch_size"]
+    if not isinstance(batch_size, int) or batch_size <= 0:
+        raise ValueError("batch_size must be a positive integer.")
+
+    # Optional parameters
+    include_images = dataset_config.get("include_images", False)
+    if not isinstance(include_images, bool):
+        raise TypeError("include_images must be a boolean.")
+    buffer_size = dataset_config.get("buffer_size", 0)
     if not isinstance(buffer_size, int) or buffer_size < 0:
         raise ValueError("buffer_size must be a non-negative integer.")
+    episode_length = dataset_config.get("episode_length", 0)
     if not isinstance(episode_length, int) or episode_length < 0:
         raise ValueError("episode_length must be a non-negative integer.")
+    if "flow_fields_per_batch" not in dataset_config:
+        raise ValueError("config must contain 'flow_fields_per_batch' key.")
 
     # Initialize the random number generator
     cpu = jax.devices("cpu")[0]
@@ -110,107 +159,69 @@ def make(
     key = jax.random.PRNGKey(seed)
     key = jax.device_put(key, cpu)
 
-    if images_from_file:
-        if dataset_config["scheduler_class"] != ".mat":
+    key, sched_key = jax.random.split(key)
+
+    kwargs = {
+        "file_list": dataset_config.get("file_list", []),
+        "randomize": dataset_config.get("randomize", False),
+        "loop": dataset_config.get("loop", True),
+        "key": sched_key,
+        "include_images": include_images,
+    }
+
+    if include_images:
+        if scheduler_class_name != ".mat":
             raise ValueError(
-                f"Scheduler class {dataset_config['scheduler_class']} "
+                f"Scheduler class {scheduler_class_name} "
                 "is not supported for file images."
             )
-        if (
-            "include_images" not in dataset_config
-            or not dataset_config["include_images"]
-        ):
-            logger.warning(
-                "The dataset configuration does not have 'include_images' set to True. "
-                "It will be set to True by default."
-            )
-        dataset_config["include_images"] = True
+        kwargs = {
+            **kwargs,
+            "output_shape": tuple(dataset_config.get("image_shape", (256, 256))),
+        }
 
-        key, sched_key = jax.random.split(key)
+    # Initialize the base scheduler
+    scheduler = scheduler_class.from_config(kwargs)
 
-        # Initialize the base scheduler
-        base = MATFlowFieldScheduler(
-            file_list=dataset_config.get("scheduler_files", []),
-            randomize=dataset_config.get("randomize", False),
-            loop=dataset_config.get("loop", False),
-            include_images=True,
-            output_shape=tuple(dataset_config.get("image_shape", (256, 256))),
-            key=sched_key,
+    # If episode_length is specified, use EpisodicFlowFieldScheduler
+    if episode_length > 0:
+        key, epi_key = jax.random.split(key)
+        scheduler = EpisodicFlowFieldScheduler(
+            scheduler=scheduler,
+            batch_size=batch_size,
+            episode_length=episode_length,
+            key=epi_key,
         )
 
-        # If episode_length is specified, use EpisodicFlowFieldScheduler
-        if episode_length > 0:
-            key, epi_key = jax.random.split(key)
-            sched = EpisodicFlowFieldScheduler(
-                base,
-                batch_size=dataset_config["batch_size"],
-                episode_length=episode_length,
-                key=epi_key,
-            )
-        else:
-            sched = base
+    # If buffer_size is specified, use PrefetchingFlowFieldScheduler
+    if buffer_size > 0:
+        scheduler = PrefetchingFlowFieldScheduler(
+            scheduler=scheduler,
+            batch_size=batch_size,
+            buffer_size=buffer_size,
+        )
 
-        # If buffer_size is specified, use PrefetchingFlowFieldScheduler
-        if buffer_size > 0:
-            scheduler = PrefetchingFlowFieldScheduler(
-                sched,
-                batch_size=dataset_config["batch_size"],
-                buffer_size=buffer_size,
-            )
-        else:
-            scheduler = sched
-
-        # Initialize the sampler
-        sampler = RealImageSampler(scheduler, batch_size=dataset_config["batch_size"])
+    if include_images:
+        sampler = RealImageSampler(scheduler, batch_size=batch_size)
     else:
-        if dataset_config["scheduler_class"] not in SCHEDULERS:
+        batches_per_flow_batch = dataset_config.get("batches_per_flow_batch", None)
+        if batches_per_flow_batch is None:
             raise ValueError(
-                f"Scheduler class {dataset_config['scheduler_class']} not found."
+                "config must contain the 'batches_per_flow_batch' key when"
+                " generating synthetic images."
             )
-        scheduler_class = SCHEDULERS.get(dataset_config["scheduler_class"])
-
-        key, sched_key = jax.random.split(key)
-
-        # Initialize the base scheduler
-        base = scheduler_class(
-            file_list=dataset_config.get("scheduler_files", []),
-            randomize=dataset_config.get("randomize", False),
-            loop=dataset_config.get("loop", True),
-            key=sched_key,
-        )
-
         # If episode_length is specified, use EpisodicFlowFieldScheduler
-        if episode_length > 0:
-            if dataset_config.get("batches_per_flow_batch") > 1:
-                logger.warning(
-                    "Using EpisodicFlowFieldScheduler with batches_per_flow_batch > 1 "
-                    "may lead to unexpected behavior. "
-                    "Consider using a single batch per flow field."
-                )
-            key, epi_key = jax.random.split(key)
-            sched = EpisodicFlowFieldScheduler(
-                base,
-                batch_size=dataset_config["flow_fields_per_batch"],
-                episode_length=episode_length,
-                key=epi_key,
+        if episode_length > 0 and batches_per_flow_batch > 1:
+            # NOTE: batches_per_flow_batch is used below by the synthetic sampler
+            logger.warning(
+                "Using EpisodicFlowFieldScheduler with batches_per_flow_batch > 1 "
+                "may lead to unexpected behavior. "
+                "Consider using a single batch per flow field."
             )
-        else:
-            sched = base
-
-        # If buffer_size is specified, use PrefetchingFlowFieldScheduler
-        if buffer_size > 0:
-            scheduler = PrefetchingFlowFieldScheduler(
-                scheduler=sched,
-                batch_size=dataset_config["flow_fields_per_batch"],
-                buffer_size=buffer_size,
-            )
-        else:
-            scheduler = sched
 
         # Initialize the sampler
         sampler = SyntheticImageSampler.from_config(
             scheduler=scheduler,
-            img_gen_fn=generate_images_from_flow,
             config=dataset_config,
         )
 

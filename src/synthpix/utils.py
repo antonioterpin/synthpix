@@ -1,44 +1,29 @@
 """Utility functions for the vision module."""
 
 import os
-from typing import List, Sequence, Tuple, Union
+from collections.abc import Sequence
+from collections.abc import Callable
 
 import goggles as gg
 import jax
 import jax.numpy as jnp
 
 DEBUG_JIT = False
+SYNTHPIX_SCOPE = "synthpix"
 
 load_configuration = gg.load_configuration
-
-
-def is_int(val: Union[int, float]) -> bool:
-    """Check if a value is an integer.
-
-    Args:
-        val (Union[int, float]): The value to check.
-
-    Returns:
-        bool: True if the value is an integer, False otherwise.
-    """
-    if isinstance(val, int):
-        return True
-    if isinstance(val, float):
-        if abs(val - int(val)) < 1e-6:
-            return True
-    return False
 
 
 def match_histogram(source: jnp.ndarray, template_hist: jnp.ndarray) -> jnp.ndarray:
     """Match the histogram of `source` to a desired histogram.
 
     Args:
-        source (jnp.ndarray): The source image (uint8 or float) with values in [0,255].
-        template_hist (jnp.ndarray): 1D target histogram of length 256,
+        source: The source image (uint8 or float) with values in [0,255].
+        template_hist: 1D target histogram of length 256,
             summing to number of pixels in source.
 
     Returns:
-        jnp.ndarray: The source image with its histogram matched to the target histogram.
+        The source image with its histogram matched to the target histogram.
     """
     # Flatten source and cast to float32 for computation
     flat = source.ravel().astype(jnp.float32)
@@ -81,15 +66,15 @@ def match_histogram(source: jnp.ndarray, template_hist: jnp.ndarray) -> jnp.ndar
 def bilinear_interpolate(
     image: jnp.ndarray, x_f: jnp.ndarray, y_f: jnp.ndarray
 ) -> jnp.ndarray:
-    """Perform bilinear interpolation of `image` at floating-point pixel coordinates.
+    """Perform bilinear interpolation at floating-point pixel coordinates.
 
     Args:
-        image (jnp.ndarray): 2D image to sample from, of shape (H, W).
-        x (jnp.ndarray): 2D array of floating-point x-coordinates
-        y (jnp.ndarray): 2D array of floating-point y-coordinates
+        image: 2D image to sample from, of shape (H, W).
+        x_f: 2D array of floating-point x-coordinates
+        y_f: 2D array of floating-point y-coordinates
 
     Returns:
-        jnp.ndarray: Interpolated intensities at each (y, x) location, of shape (H, W).
+        Interpolated intensities at each (y, x) location, of shape (H, W).
     """
     H, W = image.shape
 
@@ -125,20 +110,16 @@ def bilinear_interpolate(
 def trilinear_interpolate(
     volume: jnp.ndarray, x: jnp.ndarray, y: jnp.ndarray, z: jnp.ndarray
 ) -> jnp.ndarray:
-    """Perform trilinear interpolation of `volume` at floating-point pixel coordinates.
+    """Perform trilinear interpolation at floating-point pixel coordinates.
 
     Args:
-        volume: jnp.ndarray
-            3D volume to sample from, of shape (D, H, W).
-        x: jnp.ndarray
-            Array of floating-point x-coordinates.
-        y: jnp.ndarray
-            Array of floating-point y-coordinates.
-        z: jnp.ndarray
-            Array of floating-point z-coordinates.
+        volume: 3D volume to sample from, of shape (D, H, W).
+        x: Array of floating-point x-coordinates.
+        y: Array of floating-point y-coordinates.
+        z: Array of floating-point z-coordinates.
 
     Returns:
-        jnp.ndarray: Interpolated intensities at each (z, y, x) location.
+        Interpolated intensities at each (z, y, x) location.
     """
     D, H, W = volume.shape
 
@@ -189,19 +170,19 @@ def trilinear_interpolate(
 
 
 def generate_array_flow_field(
-    flow_f, grid_shape: tuple[int, int] = (128, 128)
+    flow_f: Callable[
+        [jnp.ndarray, jnp.ndarray, jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]
+    ],
+    grid_shape: tuple[int, int] = (128, 128),
 ) -> jnp.ndarray:
     """Generate a array flow field from a flow field function.
 
     Args:
-        flow_f:
-            The flow field function.
-        grid_shape: tuple[int, int]
-            The shape of the grid.
+        flow_f: The flow field function.
+        grid_shape: The shape of the grid.
 
     Returns:
-        arr: jnp.ndarray
-            The array flow field.
+        The array flow field.
     """
     # Get the image shape
     H, W = grid_shape
@@ -210,61 +191,54 @@ def generate_array_flow_field(
     cols = jnp.arange(W)
 
     # vmap over both axes, and apply the flow function at time t=1
-    arr = jax.vmap(lambda i: jax.vmap(lambda j: jnp.array(flow_f(1, i, j)))(cols))(rows)
+    arr = jax.vmap(
+        lambda i: jax.vmap(lambda j: jnp.array(flow_f(jnp.ones(1), i, j)))(cols)
+    )(rows)
 
     return arr
 
 
 def flow_field_adapter(
     flow_fields: jnp.ndarray,
-    new_flow_field_shape: Tuple[int, int] = (256, 256),
-    image_shape: Tuple[int, int] = (256, 256),
-    img_offset: Tuple[int, int] = (0, 0),
+    new_flow_field_shape: tuple[int, int] = (256, 256),
+    image_shape: tuple[int, int] = (256, 256),
+    img_offset: tuple[int, int] = (0, 0),
     resolution: float = 1.0,
     res_x: float = 1.0,
     res_y: float = 1.0,
-    position_bounds: Tuple[int, int] = (256, 256),
-    position_bounds_offset: Tuple[int, int] = (0, 0),
+    position_bounds: tuple[int, int] = (256, 256),
+    position_bounds_offset: tuple[int | float, int | float] = (0, 0),
     batch_size: int = 1,
     output_units: str = "pixels",
     dt: float = 1.0,
-    zero_padding: Tuple[int, int] = (0, 0),
-):
+    zero_padding: tuple[int, int] = (0, 0),
+) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Adapts a batch of flow fields to a new shape and resolution.
 
     Args:
-        flow_field: jnp.ndarray
-            The original flow field batch to be adapted.
-        new_flow_field_shape: Tuple[int, int]
-            The desired shape of the new flow fields.
-        image_shape: Tuple[int, int]
-            The shape of the images.
-        img_offset: Tuple[int, int]
-            The offset of the images from the position bounds in pixels.
-        resolution: float
-            Resolution of the images in pixels per unit length.
-        res_x: float
-            Flow field resolution in the x direction [grid steps/length measure units].
-        res_y: float
-            Flow field resolution in the y direction [grid steps/length measure units].
-        position_bounds: Tuple[int, int]
-            The bounds of the flow field in the x and y directions.
-        position_bounds_offset: Tuple[int, int]
-            The offset of the position bounds in length measure units.
-        batch_size: int
-            The desired batch size of the output flow fields.
-        output_units: str
-            The units of the output flow fields.
+        flow_fields: The original flow field batch to be adapted.
+        new_flow_field_shape: The desired shape of the new flow fields.
+        image_shape: The shape of the images.
+        img_offset: The offset of the images from the position bounds in pixels.
+        resolution: Resolution of the images in pixels per unit length.
+        res_x: Flow field resolution in the x direction
+            [grid steps/length measure units].
+        res_y: Flow field resolution in the y direction
+            [grid steps/length measure units].
+        position_bounds: The bounds of the flow field in the x and y directions.
+        position_bounds_offset: The offset of the position bounds in
+            length measure units.
+        batch_size: The desired batch size of the output flow fields.
+        output_units: The units of the output flow fields.
             Can be "pixels" or "measure units per second".
-        dt: float
-            The time step for the flow field adaptation.
-        zero_padding: Tuple[int, int]
+        dt: The time step for the flow field adaptation.
+        zero_padding:
             The amount of zero-padding to apply to the
             top and left edges of the flow field.
 
     Returns:
-        jnp.ndarray: The adapted flow fields of shape (batch_size, new_h, new_w, 2).
-        jnp.ndarray: The cropped flow field region of position bounds.
+        - The adapted flow fields of shape (batch_size, new_h, new_w, 2).
+        - The cropped flow field region of position bounds.
     """
     new_h, new_w = new_flow_field_shape
 
@@ -322,12 +296,12 @@ def flow_field_adapter(
         flow_position_bounds_vec_y = jnp.linspace(
             flow_position_bounds_start[0],
             flow_position_bounds_end[0],
-            int(position_bounds[0] / resolution * res_y),
+            max(1, int(position_bounds[0] / resolution * res_y)),
         )
         flow_position_bounds_vec_x = jnp.linspace(
             flow_position_bounds_start[1],
             flow_position_bounds_end[1],
-            int(position_bounds[1] / resolution * res_x),
+            max(1, int(position_bounds[1] / resolution * res_x)),
         )
         flow_position_bounds_grid_x, flow_position_bounds_grid_y = jnp.meshgrid(
             flow_position_bounds_vec_x, flow_position_bounds_vec_y
@@ -359,50 +333,40 @@ def flow_field_adapter(
 
 def input_check_flow_field_adapter(
     flow_field: jnp.ndarray,
-    new_flow_field_shape: Tuple[int, int],
-    image_shape: Tuple[int, int],
-    img_offset: Tuple[int, int],
+    new_flow_field_shape: tuple[int, int],
+    image_shape: tuple[int, int],
+    img_offset: tuple[int, int],
     resolution: float,
     res_x: float,
     res_y: float,
-    position_bounds: Tuple[int, int],
-    position_bounds_offset: Tuple[int, int],
+    position_bounds: tuple[float, float],
+    position_bounds_offset: tuple[float, float],
     batch_size: int,
     output_units: str,
     dt: float,
-    zero_padding: Tuple[int, int],
+    zero_padding: tuple[int, ...],
 ):
     """Checks the input arguments of the flow field adapter function.
 
     Args:
-        flow_field: jnp.ndarray
-            The original flow field batch to be adapted.
-        new_flow_field_shape: Tuple[int, int]
-            The desired shape of the new flow fields.
-        image_shape: Tuple[int, int]
-            The shape of the images.
-        img_offset: Tuple[int, int]
-            The offset of the images.
-        resolution: float
-            Resolution of the images in pixels per unit length.
-        res_x: float
-            Flow field resolution in the x direction [grid steps/length measure units].
-        res_y: float
-            Flow field resolution in the y direction [grid steps/length measure units].
-        position_bounds: Tuple[int, int]
-            The bounds of the flow field in the x and y directions.
-        position_bounds_offset: Tuple[int, int]
+        flow_field: The original flow field batch to be adapted.
+        new_flow_field_shape: The desired shape of the new flow fields.
+        image_shape: The shape of the images.
+        img_offset: The offset of the images.
+        resolution: Resolution of the images in pixels per unit length.
+        res_x: Flow field resolution in the x direction
+            [grid steps/length measure units].
+        res_y: Flow field resolution in the y direction
+            [grid steps/length measure units].
+        position_bounds: The bounds of the flow field in the x and y directions.
+        position_bounds_offset:
             The offset of the flow field in the x and y directions.
-        batch_size: int
-            The desired batch size of the output flow fields.
-        output_units: str
-            The units of the output flow fields.
+        batch_size: The desired batch size of the output flow fields.
+        output_units: The units of the output flow fields.
             Can be "pixels" or "measure units per second".
-        dt: float
-            The time step for the flow field adaptation.
-        zero_padding: Tuple[int, int]
-            The amount of zero-padding to apply to the
-            top and left edges of the flow field.
+        dt: The time step for the flow field adaptation.
+        zero_padding: The amount of zero-padding to apply to the top and left
+            edges of the flow field.
     """
     if not isinstance(flow_field, jnp.ndarray):
         raise ValueError("flow_field must be a jnp.ndarray.")
@@ -486,19 +450,18 @@ def input_check_flow_field_adapter(
 
 def discover_leaf_dirs(
     paths: Sequence[str], *, follow_symlinks: bool = False
-) -> List[str]:
+) -> list[str]:
     """Return every directory that appears in `paths` and has no sub-directories on disk.
 
     Args:
-        paths (Sequence[str]): A sequence of file or directory paths.
-        follow_symlinks (bool): Whether to follow symlinks when checking for subdirs.
-            default is False.
+        paths: A sequence of file or directory paths.
+        follow_symlinks: Whether to follow symlinks when checking for subdirs.
 
     Returns:
-        List[str]: A list of directory paths that are leaves (have no subdirectories).
+        A list of directory paths that are leaves (have no subdirectories).
     """
     dir_paths = {os.path.normpath(os.path.dirname(p)) for p in paths}  # dedupe upfront
-    leaves: List[str] = []
+    leaves: list[str] = []
 
     for d in dir_paths:
         try:

@@ -1,12 +1,10 @@
 # SynthPix: A lightspeed PIV images generator 🌊
 
-[![GitHub stars](https://img.shields.io/github/stars/IDSCETHZurich/synthpix?style=social)](https://github.com/IDSCETHZurich/synthpix/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/antonioterpin/synthpix?style=social)](https://github.com/antonioterpin/synthpix/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://creativecommons.org/licenses/by-sa/4.0/)
-[![codecov](https://codecov.io/gh/IDSCETHZurich/synthpix/graph/badge.svg?token=UQ48NNZSI4)](https://codecov.io/gh/IDSCETHZurich/synthpix)
-[![Tests](https://github.com/IDSCETHZurich/synthpix/actions/workflows/test.yaml/badge.svg)](https://github.com/IDSCETHZurich/synthpix/actions/workflows/test.yaml)
+[![codecov](https://codecov.io/gh/antonioterpin/synthpix/graph/badge.svg?token=UQ48NNZSI4)](https://codecov.io/gh/antonioterpin/synthpix)
+[![Tests](https://github.com/antonioterpin/synthpix/actions/workflows/test.yaml/badge.svg)](https://github.com/antonioterpin/synthpix/actions/workflows/test.yaml)
 [![PyPI version](https://img.shields.io/pypi/v/synthpix.svg)](https://pypi.org/project/synthpix)
-
-[![Follow @antonio_terpin](https://img.shields.io/twitter/follow/antonio_terpin.svg?style=social)](https://twitter.com/antonio_terpin)
 
 `SynthPix` is a synthetic image generator for Particle Image Velocimetry (PIV) with a focus on performance and parallelism on accelerators, implemented in [JAX](https://docs.jax.dev/en/latest/quickstart.html). `SynthPix` supports the same configuration parameters as existing tools but achieves a throughput several orders of magnitude higher in image-pair generation per second, enabling comprehensive validation and comparison of PIV algorithms, rapid experimental design iterations, and the development of data-hungry methods.
 ![The SynthPix image generation pipeline](docs/synthpix.jpg)
@@ -28,16 +26,19 @@ See `src/main.py` for a fully working example, and check out the [paper]() for m
 ## Getting started 🚀
 Alright, now that hopefully we convinced you to try SynthPix, let's get to it. Don't worry, installing it is even easier than using it:
 ```bash
-pip install synthpix
+uv add synthpix
 ```
 If you have CUDA GPUs,
 ```bash
-pip install "synthpix[cuda12]"
+uv add "synthpix[cuda12]"
 ```
 If you have issues with CUDA drivers, please follow the official instructions for [cuda12](https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local) and [cudnn](https://developer.nvidia.com/cudnn-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local)
-(*Note: wheels only available on linux*).
+(*Note: wheels only available on linux*). Make sure that `LD_LIBRARY_PATH` is not set; see the [JAX docs](https://docs.jax.dev/en/latest/installation.html):
+```bash
+unset LD_LIBRARY_PATH
+```
 
-Check out our [instructions](docs/installing.md) for installing `SynthPix` with Docker and from source.
+Check out our [instructions](./CONTRIBUTING.md) for installing `SynthPix` from source. You can of course also use pip.
 
 To generate the images, you need flow data. We provide two scripts to download the commonly used PIV datasets:
 ```bash
@@ -205,7 +206,7 @@ Describe which region of your flow field is captured, and its velocity bounds.
 | `img_offset` | 2D offset (in physical units, matching `flow_field_size`) specifying the top-left corner of the region of interest to extract from the flow field. |
 | `min_speed_x/y`, `max_speed_x/y` | Range of allowed velocities in each direction,           |
 | `output_units`                   | Units used in the returned flow field: `"pixels"` (converts physical velocities to displacements in pixels using `dt` and `resolution`), or `"measure units per second"` (same units as the input flow field, e.g., mm/s). |
-| `scheduler_files`                | List of ground-truth flow field files (e.g. `.mat`)      |
+| `file_list`                | List of ground-truth flow field files (e.g. `.mat`)      |
 | `scheduler_class`                | Loader class for your flow files (usually by extension). See [tutorials](docs/tutorials.md) for detailed explanations. |
 
 Note: `min_speed_x/y` and `max_speed_x/y` are not absolute cutoffs, but define the full expected velocity range (positive and negative) along each axis.
@@ -213,7 +214,7 @@ Note: `min_speed_x/y` and `max_speed_x/y` are not absolute cutoffs, but define t
 These bounds are used to estimate the maximum particle displacement over time (`dt`). A larger intermediate image is generated accordingly, and the final image pair is cropped from this larger region. This ensures that particles entering the visible frame (image 2) have realistic origins — possibly outside the region of interest in image 1 — making particle "appearance" at the boundaries realistic.
 
 ## Contributing 🤗
-Contributions are more than welcome! 🙏 Please check out our [how to contribute page](docs/contributing.md), and feel free to open an issue for problems and feature requests⚠️.
+Contributions are more than welcome! 🙏 Please check out our [how to contribute page](./CONTRIBUTING.md), and feel free to open an issue for problems and feature requests⚠️.
 
 ## Citation 📈
 If you use this code in your research, please cite our paper:
