@@ -10,7 +10,7 @@ authors = [
     { name = "Alan Bonomi", email = "abonomi@ethz.ch" },
     { name = "Francesco Banelli", email = "fbanelli@ethz.ch" },
 ]
-description = "Observability framework for robotics research"
+description = "Lightspeed PIV images generator using JAX"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
