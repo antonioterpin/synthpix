@@ -470,6 +470,7 @@ class SyntheticImageSampler(Sampler):
 
             scheduler_batch = self.scheduler.get_batch(self.flow_fields_per_batch)
             self._current_flows = scheduler_batch.flow_fields
+            self._mask = scheduler_batch.mask
 
             # Shard the flow fields across devices
             self._current_flows = jnp.array(self._current_flows, device=self.sharding)
@@ -491,6 +492,8 @@ class SyntheticImageSampler(Sampler):
             images2=imgs2,
             flow_fields=self.output_flow_fields,
             params=params,
+            done=None,
+            mask=jnp.ndarray(self._mask) if self._mask is not None else None
         )
 
         self._batches_generated += 1
