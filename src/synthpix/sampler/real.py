@@ -53,6 +53,7 @@ class RealImageSampler(Sampler):
             flow_fields=jnp.array(batch.flow_fields, dtype=jnp.float32),
             params=None,
             done=None,
+            mask=jnp.array(batch.mask, dtype=jnp.float32) if batch.mask is not None else None
         )
         return batch
 

@@ -70,6 +70,7 @@ class SynthpixBatch:
     flow_fields: jnp.ndarray
     params: ImageGenerationParameters | None = None
     done: jnp.ndarray | None = None
+    mask: jnp.ndarray | None = None
 
     def update(self, **kwargs) -> Self:
         """Return a new SynthpixBatch with updated fields.
@@ -86,6 +87,7 @@ class SynthpixBatch:
             flow_fields=kwargs.get("flow_fields", self.flow_fields),
             params=kwargs.get("params", self.params),
             done=kwargs.get("done", self.done),
+            mask=kwargs.get("mask", self.mask),
         )
 
     def tree_flatten(
@@ -102,6 +104,7 @@ class SynthpixBatch:
             self.flow_fields,
             self.params,
             self.done,
+            self.mask,
         )
         aux_data = None
         return (children, aux_data)
