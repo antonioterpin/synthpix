@@ -1,6 +1,8 @@
 import os
 import queue
 import time
+import threading
+import multiprocessing
 
 import numpy as np
 import pytest
@@ -94,7 +96,6 @@ class MinimalEpisodic(EpisodicSchedulerProtocol):
 
 
 def test_single_producer_thread_across_episodes():
-    import threading
 
     shape = (8, 8, 2)
     sched = MinimalEpisodic(total_batches=50, shape=shape)
@@ -550,8 +551,6 @@ def test_get_batch_starts_worker_thread():
 
 
 def test_multiple_get_batch_in_parallel_threads():
-    import threading
-
     sched = MinimalScheduler(total_batches=100)
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=10)
 
@@ -575,9 +574,6 @@ def test_multiple_get_batch_in_parallel_threads():
     assert len(exceptions) == 0
 
     pf.shutdown()
-
-
-import multiprocessing
 
 
 def worker(queue, total_batches, batch_size, buffer_size):

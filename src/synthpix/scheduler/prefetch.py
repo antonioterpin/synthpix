@@ -257,7 +257,6 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             True if the prefetching thread is alive, False otherwise.
         """
         t = self._thread
-        print(t)
         return t is not None and t.is_alive()
 
     def steps_remaining(self) -> int:
