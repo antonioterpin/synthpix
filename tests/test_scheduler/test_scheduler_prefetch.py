@@ -1,6 +1,8 @@
 import os
 import queue
 import time
+import threading
+import multiprocessing
 
 import numpy as np
 import pytest
@@ -94,7 +96,6 @@ class MinimalEpisodic(EpisodicSchedulerProtocol):
 
 
 def test_single_producer_thread_across_episodes():
-    import threading
 
     shape = (8, 8, 2)
     sched = MinimalEpisodic(total_batches=50, shape=shape)
@@ -533,5 +534,202 @@ def test_worker_eos_signal_via_full_queue_branch_direct():
     # 5) And consuming it via __next__ raises StopIteration.
     with pytest.raises(StopIteration):
         pf.get_batch(2)
+
+    pf.shutdown()
+
+
+def test_get_batch_starts_worker_thread():
+    sched = MinimalScheduler(total_batches=100)
+    pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
+
+    assert not pf.is_running()
+    pf.get_batch(1)
+    time.sleep(0.001)  # allow thread to start
+    assert pf.is_running()
+
+    pf.shutdown()
+
+
+def test_multiple_get_batch_in_parallel_threads():
+    sched = MinimalScheduler(total_batches=100)
+    pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=10)
+
+    results = []
+    exceptions = []
+
+    def worker():
+        try:
+            batch = pf.get_batch(1)
+            results.append(batch)
+        except Exception as e:
+            exceptions.append(e)
+
+    threads = [threading.Thread(target=worker) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(results) == 5
+    assert len(exceptions) == 0
+
+    pf.shutdown()
+
+
+def worker(queue, total_batches, batch_size, buffer_size):
+    try:
+        # Create scheduler *inside* the subprocess
+        sched = MinimalScheduler(total_batches=total_batches)
+        pf = PrefetchingFlowFieldScheduler(
+            sched, batch_size=batch_size, buffer_size=buffer_size
+        )
+
+        batch = pf.get_batch(1)
+        pf.shutdown()
+        queue.put(("ok", batch))
+
+    except Exception as e:
+        queue.put(("err", repr(e)))
+
+
+def test_multiple_get_batch_in_parallel_processes():
+    total_batches = 100
+    batch_size = 1
+    buffer_size = 10
+
+    result_queue = multiprocessing.Queue()
+
+    processes = [
+        multiprocessing.Process(
+            target=worker, args=(result_queue, total_batches, batch_size, buffer_size)
+        )
+        for _ in range(5)
+    ]
+
+    for p in processes:
+        p.start()
+    for p in processes:
+        p.join()
+
+    oks = 0
+    errs = []
+
+    while not result_queue.empty():
+        tag, payload = result_queue.get()
+        if tag == "ok":
+            oks += 1
+        else:
+            errs.append(payload)
+
+    assert oks == 5, f"Expected 5 successes, got {oks}"
+    assert len(errs) == 0, f"Errors: {errs}"
+
+
+class SlowMinimalScheduler(MinimalScheduler):
+    """Scheduler that is too slow for the prefetcher timeout on first batch."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._first_call = True
+
+    def get_batch(self, batch_size: int):
+        # First call: sleep longer than the *configured* startup_timeout in the test.
+        if self._first_call:
+            self._first_call = False
+            time.sleep(0.2)
+        return super().get_batch(batch_size)
+
+
+def test_prefetcher_raises_stopiteration_when_producer_is_too_slow():
+    sched = SlowMinimalScheduler(total_batches=10)
+    pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=4)
+
+    # Make startup_timeout smaller than the 0.2s sleep to force a timeout
+    pf.startup_timeout = 0.05
+    pf.steady_state_timeout = 0.05
+
+    # Now the first get_batch *must* hit queue.Empty → StopIteration
+    with pytest.raises(StopIteration):
+        pf.get_batch(batch_size=1)
+
+    pf.shutdown()
+
+
+def test_startup_and_steady_timeouts_are_used(monkeypatch):
+    """First batch should use startup_timeout, subsequent batches steady_state_timeout."""
+    sched = MinimalScheduler(total_batches=10)
+    pf = PrefetchingFlowFieldScheduler(
+        sched,
+        batch_size=1,
+        buffer_size=2,
+        startup_timeout=42.0,
+        steady_state_timeout=7.0,
+    )
+
+    recorded_timeouts: list[float | None] = []
+
+    # We don't want to block on the real queue, just capture the timeout arg.
+    def fake_get(*_args, **kwargs):
+        recorded_timeouts.append(kwargs.get("timeout"))
+        # Return a dummy batch to keep the rest of the pipeline happy.
+        return SchedulerData(flow_fields=np.ones((1,) + sched.shape))
+
+    monkeypatch.setattr(pf._queue, "get", fake_get, raising=True)
+
+    # First get_batch -> must use startup_timeout
+    pf.get_batch(1)
+    # Second get_batch -> must use steady_state_timeout
+    pf.get_batch(1)
+
+    assert recorded_timeouts[0] == pf.startup_timeout
+    assert recorded_timeouts[1] == pf.steady_state_timeout
+
+    pf.shutdown()
+
+
+def test_startup_flag_clears_after_first_batch():
+    sched = MinimalScheduler(total_batches=3)
+    pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
+
+    # By construction, we expect startup mode at initialization.
+    assert getattr(pf, "startup", None) is True
+
+    batch = pf.get_batch(1)
+    assert batch.flow_fields.shape == (1,) + sched.shape
+
+    # After the first successful get_batch, startup must be False.
+    assert pf.startup is False
+
+    pf.shutdown()
+
+
+def test_reset_restores_startup_flag_and_behavior(monkeypatch):
+    sched = MinimalScheduler(total_batches=5)
+    pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
+
+    # 1) Consume first batch -> startup should become False.
+    _ = pf.get_batch(1)
+    assert pf.startup is False
+
+    # 2) Reset → startup should be restored to True.
+    pf.reset()
+    assert pf.startup is True
+
+    # To avoid depending on actual thread timing, patch queue.get again to
+    # verify that after reset the next get_batch uses startup_timeout.
+    pf.startup_timeout = 11.0
+    pf.steady_state_timeout = 3.0
+
+    timeouts: list[float | None] = []
+
+    def fake_get(*_args, **kwargs):
+        timeouts.append(kwargs.get("timeout"))
+        return SchedulerData(flow_fields=np.ones((1,) + sched.shape))
+
+    monkeypatch.setattr(pf._queue, "get", fake_get, raising=True)
+
+    _ = pf.get_batch(1)
+    assert timeouts[0] == pf.startup_timeout
+    assert pf.startup is False  # and it flips again after that first batch
 
     pf.shutdown()
