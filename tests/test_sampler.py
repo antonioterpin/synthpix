@@ -1277,7 +1277,8 @@ class EpisodicDummy(_BaseDummy, EpisodicSchedulerProtocol):
         batch = super().get_batch(batch_size=batch_size)
         self._step += 1
         done = jnp.array(self._step >= self.episode_length)
-        return batch.update(done=jnp.full((batch_size,), done))
+        mask = jnp.full((batch_size,), done)
+        return batch.update(done=done, mask=mask)
 
     def next_episode(self):
         self._step = 0

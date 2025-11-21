@@ -208,7 +208,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
                 desired batch size and `loop` is set to False.
         """
         batch = []
-        mask = None
+        mask = np.ones((batch_size,), dtype=bool)
         for _ in range(batch_size):
             try:
                 scheduler_data = self._get_next()
