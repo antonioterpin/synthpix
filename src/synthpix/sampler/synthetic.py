@@ -63,7 +63,7 @@ class SyntheticImageSampler(Sampler):
         output_units: str,
         device_ids: Sequence[int] | None = None,
         generation_specification: ImageGenerationSpecification = ImageGenerationSpecification(),
-        mask: jnp.ndarray | None = None,
+        mask_images: jnp.ndarray | None = None,
         histogram: jnp.ndarray | None = None,
     ):
         """Initializes the SyntheticImageSampler.
@@ -94,7 +94,7 @@ class SyntheticImageSampler(Sampler):
             device_ids: List of device IDs to use for sharding the
                 flow fields and images.
             generation_specification: Specification for image generation.
-            mask: Optional binary mask to apply during image generation.
+            mask_images: Optional binary mask to apply during image generation.
                 Should be a jnp.ndarray of shape (height, width).
             histogram: Optional histogram to match during image generation.
                 Should be a jnp.ndarray of shape (256,).
@@ -109,11 +109,11 @@ class SyntheticImageSampler(Sampler):
         super().__init__(scheduler, self.batch_size)
 
         # Check provided mask
-        if mask is not None and mask.shape != image_shape:
+        if mask_images is not None and mask_images.shape != image_shape:
             raise ValueError(
-                f"Mask shape {mask.shape} does not match image shape " f"{image_shape}."
+                f"Mask shape {mask_images.shape} does not match image shape " f"{image_shape}."
             )
-        self.mask = mask
+        self.mask_images = mask_images
         # Check provided histogram
         if histogram is not None and (
             histogram.shape != (256,)
@@ -369,7 +369,7 @@ class SyntheticImageSampler(Sampler):
                 position_bounds=self.position_bounds,
                 flow_field_res_x=self.flow_field_res_x,
                 flow_field_res_y=self.flow_field_res_y,
-                mask=self.mask,
+                mask=self.mask_images,
                 histogram=self.histogram,
             )
 
@@ -396,7 +396,7 @@ class SyntheticImageSampler(Sampler):
             position_bounds=self.position_bounds,
             flow_field_res_x=self.flow_field_res_x,
             flow_field_res_y=self.flow_field_res_y,
-            mask=self.mask,
+            mask=self.mask_images,
             histogram=self.histogram,
         )
 
@@ -470,11 +470,11 @@ class SyntheticImageSampler(Sampler):
 
             scheduler_batch = self.scheduler.get_batch(self.flow_fields_per_batch)
             self._current_flows = scheduler_batch.flow_fields
-            self._mask = (
+            self._mask_scheduler = (
                 scheduler_batch.mask
             )  # Notice that self._mask refers to the current mask provided by the scheduler
             # denoting the valid flows of the current batch, shape (batch_size,)
-            # While instead self.mask refers to the static mask provided at initialization
+            # While instead self.mask_images refers to the static mask provided at initialization
 
             # Shard the flow fields across devices
             self._current_flows = jnp.array(self._current_flows, device=self.sharding)
@@ -497,7 +497,7 @@ class SyntheticImageSampler(Sampler):
             flow_fields=self.output_flow_fields,
             params=params,
             done=None,
-            mask=jnp.array(self._mask) if self._mask is not None else None,
+            mask=jnp.array(self._mask_scheduler) if self._mask_scheduler is not None else None,
         )
 
         self._batches_generated += 1
@@ -536,9 +536,9 @@ class SyntheticImageSampler(Sampler):
             mask_array = np.load(mask_path)
             if not np.isin(mask_array, [0, 1]).all():
                 raise ValueError("Mask must only contain 0 and 1 values.")
-            mask = jnp.array(mask_array)
+            mask_images = jnp.array(mask_array)
         else:
-            mask = None
+            mask_images = None
 
         # Parse histogram
         histogram_path = config.get("histogram", None)
@@ -589,7 +589,7 @@ class SyntheticImageSampler(Sampler):
                 output_units=str(config["output_units"]),
                 device_ids=config.get("device_ids", None),
                 generation_specification=gs,
-                mask=mask,
+                mask_images=mask_images,
                 histogram=histogram,
             )
         except KeyError as e:
