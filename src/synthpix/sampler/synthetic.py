@@ -472,7 +472,9 @@ class SyntheticImageSampler(Sampler):
             self._current_flows = scheduler_batch.flow_fields
             self._mask = (
                 scheduler_batch.mask
-            )  # Notice that _mask and mask are different variables
+            )  # Notice that self._mask refers to the current mask provided by the scheduler
+            # denoting the valid flows of the current batch, shape (batch_size,)
+            # While instead self.mask refers to the static mask provided at initialization
 
             # Shard the flow fields across devices
             self._current_flows = jnp.array(self._current_flows, device=self.sharding)
