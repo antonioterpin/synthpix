@@ -114,7 +114,6 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         )
         nxt = np.array(Image.open(os.path.join(folder, f"img_{t}.jpg")).convert("RGB"))
 
-        file_path = self._cached_file
         return data.update(images1=prev, images2=nxt)
 
     def get_flow_fields_shape(self) -> tuple[int, ...]:

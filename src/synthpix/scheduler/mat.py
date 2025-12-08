@@ -188,7 +188,6 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             the previous and next images.
         """
         data = self._cached_data
-        file_path = self._cached_file
         if data is None:
             raise RuntimeError("No data is currently cached.")
         if self._slice_idx != 0:

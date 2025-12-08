@@ -76,10 +76,9 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         if self._slice_idx >= self._cached_data.flow_fields.shape[1]:
             raise FileEndedError("End of file data reached.")
         flow = self._cached_data.flow_fields[:, self._slice_idx, :, :]
-        file_path = self._cached_file
         return SchedulerData(
             flow_fields=flow,
-            files=(file_path,),
+            files=(self._cached_file,),
         )
 
     def get_flow_fields_shape(self) -> tuple[int, int, int]:
