@@ -54,6 +54,7 @@ class RealImageSampler(Sampler):
             params=None,
             done=None,
             mask=jnp.array(batch.mask) if batch.mask is not None else None,
+            files=batch.files,
         )
         return batch
 

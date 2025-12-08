@@ -58,7 +58,7 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
                 )
             data = dset[...]
             logger.debug(f"Loading file {file_path} with shape {data.shape}")
-        return SchedulerData(flow_fields=data)
+        return SchedulerData(flow_fields=data, files=(file_path,))
 
     def get_next_slice(self) -> SchedulerData:
         """Retrieves a flow field slice.
@@ -71,12 +71,15 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
         """
         if self._cached_data is None:
             raise RuntimeError("No data is currently cached.")
+        if self._cached_file is None:
+            raise RuntimeError("No file is currently cached.")
         if self._slice_idx >= self._cached_data.flow_fields.shape[1]:
             raise FileEndedError("End of file data reached.")
         flow = self._cached_data.flow_fields[:, self._slice_idx, :, :]
-
+        file_path = self._cached_file
         return SchedulerData(
             flow_fields=flow,
+            files=(file_path,),
         )
 
     def get_flow_fields_shape(self) -> tuple[int, int, int]:

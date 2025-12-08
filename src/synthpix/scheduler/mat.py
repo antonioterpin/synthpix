@@ -177,6 +177,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             flow_fields=data["V"],
             images1=data["I0"] if self.include_images else None,
             images2=data["I1"] if self.include_images else None,
+            files=(file_path,),
         )
 
     def get_next_slice(self) -> SchedulerData:
@@ -187,6 +188,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             the previous and next images.
         """
         data = self._cached_data
+        file_path = self._cached_file
         if data is None:
             raise RuntimeError("No data is currently cached.")
         if self._slice_idx != 0:
