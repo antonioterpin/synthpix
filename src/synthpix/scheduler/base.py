@@ -151,8 +151,10 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             file_list_indices = jax.random.permutation(shuffle_key, file_list_indices)
             self.file_list = [self.file_list[i] for i in file_list_indices.tolist()]
 
-    def _get_next(self):
+    def _get_next(self) -> SchedulerData:
         """Returns the next flow field slice from the dataset.
+
+        NOTE: This outputs a single flow field slice, not a batch.
 
         Returns:
             A single flow field slice.
@@ -207,7 +209,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             StopIteration: If the dataset is exhausted before reaching the
                 desired batch size and `loop` is set to False.
         """
-        batch = []
+        batch: list[SchedulerData] = []
         mask = np.ones((batch_size,), dtype=bool)
         for _ in range(batch_size):
             try:
@@ -227,11 +229,32 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
 
         images1, images2 = None, None
         if all(data.images1 is not None for data in batch):
-            images1 = np.stack([data.images1 for data in batch])
+            images1 = np.stack([data.images1 for data in batch])  # type: ignore
         if all(data.images2 is not None for data in batch):
-            images2 = np.stack([data.images2 for data in batch])
+            images2 = np.stack([data.images2 for data in batch])  # type: ignore
 
         flow_fields = np.stack([data.flow_fields for data in batch])
+
+        if batch and any(data.files is not None for data in batch):
+            if not all(
+                data.files is not None and len(data.files) <= 1 for data in batch
+            ):
+                raise ValueError("Inconsistent files information in batch.")
+
+            per_item_files: list[str] = []
+            for data in batch:
+                if not data.files:
+                    per_item_files.append("")
+                else:
+                    per_item_files.append(data.files[0])
+
+            if len(batch) < batch_size:
+                pad_size = batch_size - len(batch)
+                per_item_files += [""] * pad_size
+
+            files = tuple(per_item_files)
+        else:
+            files = None
 
         # Pad if needed
         if len(batch) < batch_size:
@@ -262,6 +285,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             images1=images1,
             images2=images2,
             mask=mask,
+            files=files,
         )
 
     @abstractmethod

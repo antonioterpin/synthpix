@@ -111,7 +111,8 @@ class SyntheticImageSampler(Sampler):
         # Check provided mask
         if mask_images is not None and mask_images.shape != image_shape:
             raise ValueError(
-                f"Mask shape {mask_images.shape} does not match image shape " f"{image_shape}."
+                f"Mask shape {mask_images.shape} does not match image shape "
+                f"{image_shape}."
             )
         self.mask_images = mask_images
         # Check provided histogram
@@ -475,6 +476,7 @@ class SyntheticImageSampler(Sampler):
             )  # Notice that self._mask refers to the current mask provided by the scheduler
             # denoting the valid flows of the current batch, shape (batch_size,)
             # While instead self.mask_images refers to the static mask provided at initialization
+            self._files_scheduler = scheduler_batch.files
 
             # Shard the flow fields across devices
             self._current_flows = jnp.array(self._current_flows, device=self.sharding)
@@ -497,7 +499,12 @@ class SyntheticImageSampler(Sampler):
             flow_fields=self.output_flow_fields,
             params=params,
             done=None,
-            mask=jnp.array(self._mask_scheduler) if self._mask_scheduler is not None else None,
+            mask=(
+                jnp.array(self._mask_scheduler)
+                if self._mask_scheduler is not None
+                else None
+            ),
+            files=self._files_scheduler,
         )
 
         self._batches_generated += 1

@@ -85,7 +85,7 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         Returns:
             Loaded SchedulerData.
         """
-        return SchedulerData(flow_fields=np.load(file_path))
+        return SchedulerData(flow_fields=np.load(file_path), files=(file_path,))
 
     def get_next_slice(self) -> SchedulerData:
         """Return either the flow array or, if enabled, flow plus images.
@@ -113,6 +113,7 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
             Image.open(os.path.join(folder, f"img_{t-1}.jpg")).convert("RGB")
         )
         nxt = np.array(Image.open(os.path.join(folder, f"img_{t}.jpg")).convert("RGB"))
+
         return data.update(images1=prev, images2=nxt)
 
     def get_flow_fields_shape(self) -> tuple[int, ...]:

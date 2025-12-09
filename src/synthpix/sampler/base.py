@@ -1,6 +1,7 @@
 """Base class for Samplers in the SynthPix framework."""
 
 from abc import ABC, abstractmethod
+from typing import Any
 from typing_extensions import Self
 
 import jax.numpy as jnp
@@ -128,7 +129,7 @@ class Sampler(ABC):
 
     @classmethod
     @abstractmethod
-    def from_config(cls, scheduler, config) -> Self:
+    def from_config(cls, scheduler: SchedulerProtocol, config: dict[str, Any]) -> Self:
         """Create a Sampler instance from a configuration dictionary.
 
         Args:

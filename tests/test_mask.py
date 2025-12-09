@@ -156,10 +156,10 @@ def test_mask_is_correct(scheduler, mock_mask_file):
         config=config,
     )
 
-    assert isinstance(sampler.mask, jnp.ndarray)
-    assert sampler.mask.shape == mask.shape
+    assert isinstance(sampler.mask_images, jnp.ndarray)
+    assert sampler.mask_images.shape == mask.shape
     assert jnp.array_equal(
-        sampler.mask, mask
+        sampler.mask_images, mask
     ), "Mask loaded from file does not match the expected mask."
 
 

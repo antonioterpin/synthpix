@@ -344,7 +344,7 @@ def test_reset_calls_random_shuffle(monkeypatch, tmp_path):
     files = [tmp_path / f"f{i}.dat" for i in range(3)]
     for f in files:
         f.write_text("x")
-    call_flag = {"called": False}
+    call_flag = {"called": 0}
 
     def spy(key, indices):
         call_flag["called"] += 1
@@ -623,3 +623,55 @@ def test_mat_scheduler_invalid_include_images(bad_include_images, mock_numpy_fil
                 "include_images": bad_include_images,
             }
         )
+
+
+def test_numpy_scheduler_outputs_files(mock_numpy_files):
+    """Test that the scheduler returns correct file paths in the batch."""
+    files, dims = mock_numpy_files
+    scheduler = NumpyFlowFieldScheduler.from_config(
+        {
+            "file_list": files,
+            "include_images": True,
+            "loop": False,
+        }
+    )
+
+    batch_size = 1
+    # when including images, iteration returns dicts with flow and images
+    while True:
+        try:
+            output = scheduler.get_batch(batch_size)
+        except StopIteration:
+            break
+        assert isinstance(output, SchedulerData)
+        assert output.files is not None
+        assert len(output.files) == batch_size
+
+        for file_path in output.files:
+            assert os.path.basename(file_path) in [os.path.basename(f) for f in files]
+
+
+def test_hdf5_scheduler_outputs_files(mock_hdf5_files):
+    """Test that the scheduler returns correct file paths in the batch."""
+    files, dims = mock_hdf5_files
+    scheduler = HDF5FlowFieldScheduler.from_config(
+        {
+            "file_list": files,
+            "include_images": True,
+            "loop": False,
+        }
+    )
+
+    batch_size = 1
+    # when including images, iteration returns dicts with flow and images
+    while True:
+        try:
+            output = scheduler.get_batch(batch_size)
+        except StopIteration:
+            break
+        assert isinstance(output, SchedulerData)
+        assert output.files is not None
+        assert len(output.files) == batch_size
+
+        for file_path in output.files:
+            assert os.path.basename(file_path) in [os.path.basename(f) for f in files]

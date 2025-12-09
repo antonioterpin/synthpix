@@ -1,3 +1,4 @@
+import os
 import h5py
 import jax
 import numpy as np
@@ -529,3 +530,29 @@ def test_hdf5_recursive_group(monkeypatch, tmp_path):
 
     # 4) Assertions: top-level and nested keys must be present and correct
     np.testing.assert_array_equal(data.flow_fields, flow)
+
+
+def test_mat_scheduler_outputs_files(mock_mat_files):
+    """Test that the scheduler returns correct file paths in the batch."""
+    files, dims = mock_mat_files
+    scheduler = MATFlowFieldScheduler.from_config(
+        {
+            "file_list": files,
+            "include_images": True,
+            "loop": False,
+        }
+    )
+
+    batch_size = 1
+    # when including images, iteration returns dicts with flow and images
+    while True:
+        try:
+            output = scheduler.get_batch(batch_size)
+        except StopIteration:
+            break
+        assert isinstance(output, SchedulerData)
+        assert output.files is not None
+        assert len(output.files) == batch_size
+
+        for file_path in output.files:
+            assert os.path.basename(file_path) in [os.path.basename(f) for f in files]
