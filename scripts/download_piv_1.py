@@ -1,3 +1,5 @@
+"""Download, extract, convert, and split the PIV dataset (class 1)."""
+
 import zipfile
 import argparse
 from pathlib import Path
@@ -16,15 +18,19 @@ GDRIVE_FOLDERS = [
 ]
 
 
-def download_from_gdrive(raw_dir_path: Path):
-    """
-    Download all files from the two public Google Drive folders into raw_dir_path,
-    then recursively unzip every .zip we find.
+def download_from_gdrive(raw_dir_path: Path) -> None:
+    """Download all files from the two public Google Drive folders.
+
+    Downloads the contents into raw_dir_path, then recursively unzip
+    every .zip we find.
+
+    Args:
+        raw_dir_path: Directory to store downloaded raw data.
     """
     raw_dir_path.mkdir(parents=True, exist_ok=True)
 
     print("Press Ctrl+C to interrupt download safely and proceed to processing.")
-    
+
     try:
         for idx, url in enumerate(GDRIVE_FOLDERS, start=1):
             dest = raw_dir_path / f"gdrive_folder_{idx}"
@@ -43,7 +49,7 @@ def download_from_gdrive(raw_dir_path: Path):
                 break
             except Exception as e:
                 print(f"Error downloading folder {idx}: {e}")
-                # Optional: continue to next folder or break? 
+                # Optional: continue to next folder or break?
                 # Let's break to be safe if it's a major error
                 break
     except KeyboardInterrupt:
@@ -68,10 +74,17 @@ def download_from_gdrive(raw_dir_path: Path):
     print("\nDownload + extraction from Google Drive complete.")
 
 
-def load_split_file(path: Path):
-    """Return list of .mat file names from the split file."""
+def load_split_file(path: Path) -> set[str]:
+    """Return list of .mat file names from the split file.
+
+    Args:
+        path: Path to the split file.
+
+    Returns:
+        Set of .mat filenames listed in the split file.
+    """
     out = []
-    with open(path, "r") as f:
+    with open(path) as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -79,11 +92,11 @@ def load_split_file(path: Path):
             # The split file might contain multiple columns (img1 img2 flow)
             # We want to canonicalize to the expected .mat filename
             parts = line.split()
-            base_token = parts[0] 
-            
+            base_token = parts[0]
+
             p = Path(base_token)
             stem = p.name
-            
+
             if "_img1" in stem:
                 core = stem.split("_img1")[0]
             elif "_img2" in stem:
@@ -93,14 +106,21 @@ def load_split_file(path: Path):
             else:
                 # Fallback: just remove extension
                 core = p.stem
-                
+
             out.append(f"{core}.mat")
     return set(out)
 
 
-def perform_split(packed_root: Path, split_root: Path, split_files_dir: Path):
-    """Copy packed dataset into split folders according to split text files."""
+def perform_split(packed_root: Path, split_root: Path, split_files_dir: Path) -> None:
+    """Copy packed dataset into split folders according to split text files.
 
+    Args:
+        packed_root: Directory containing all packed .mat files.
+        split_root: Directory where to create
+            train/, val/, test/, tune/ subdirs.
+        split_files_dir: Directory containing
+            train.txt, val.txt, test.txt, tune.txt.
+    """
     split_root.mkdir(parents=True, exist_ok=True)
 
     splits = ["train", "val", "test", "tune"]
@@ -134,7 +154,7 @@ def perform_split(packed_root: Path, split_root: Path, split_files_dir: Path):
         # Copy to ALL assigned splits
         for s in assigned:
             rel = mat_path.relative_to(packed_root)
-            
+
             # Check for Reynolds number in filename (e.g., backstep_Re1000_...)
             re_match = re.search(r"_(Re\d+)_", fname)
             if re_match:
@@ -142,7 +162,7 @@ def perform_split(packed_root: Path, split_root: Path, split_files_dir: Path):
                 target_dir = split_root / s / rel.parent / re_folder
             else:
                 target_dir = split_root / s / rel.parent
-                
+
             target_dir.mkdir(parents=True, exist_ok=True)
 
             shutil.copy(mat_path, target_dir / fname)
@@ -152,7 +172,13 @@ def perform_split(packed_root: Path, split_root: Path, split_files_dir: Path):
     print(f"Split datasets saved under: {split_root}")
 
 
-def main(out_dir: str, split_dir: str):
+def main(out_dir: str, split_dir: str) -> None:
+    """Main function to orchestrate the dataset preparation workflow.
+
+    Args:
+        out_dir: Where to store raw, packed, and split datasets.
+        split_dir: Directory containing train.txt, val.txt, test.txt, tune.txt.
+    """
     out_dir_path = Path(out_dir)
     split_files_dir = Path(split_dir)
 
