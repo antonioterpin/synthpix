@@ -35,6 +35,8 @@ dependencies = [
     "ruamel.yaml>=0.18.10",
     "Pillow>=10.0.0",
     "robo-goggles>=0.1.7",
+    "numpy>=2.2.6",
+    "gdown>=5.2.0",
 ]
 
 [project.urls]
