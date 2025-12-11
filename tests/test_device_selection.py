@@ -78,7 +78,7 @@ def _make_sampler(device_ids):
 # -------------------------------------------------------------------
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="User not connected to the server.",
 )
 def test_sampler_uses_all_devices_when_none_passed():
     """If `device_ids=None`, the sampler should use every available device."""
@@ -94,7 +94,7 @@ def test_sampler_uses_all_devices_when_none_passed():
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="User not connected to the server.",
 )
 @pytest.mark.parametrize("ids", [[0], [0, 1]])
 def test_sampler_uses_requested_subset(ids):
@@ -110,7 +110,7 @@ def test_sampler_uses_requested_subset(ids):
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="User not connected to the server.",
 )
 def test_sampler_rejects_invalid_device_ids():
     """Passing only out-of-range IDs must raise a ValueError."""
