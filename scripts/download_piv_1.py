@@ -40,14 +40,16 @@ The output structure is:
             val.txt
             test.txt
             tune.txt
-        data/
-            train/
-            val/
-            test/
-            tune/
+        train/
+        val/
+        test/
+        tune/
 
 This script is intended to reproduce the dataset organization
 used in many modern deep-learning-based PIV benchmarking pipelines.
+
+After running this script, you may delete the raw_class1/ and
+packed_class1/ folders to save disk space if desired.
 """
 
 import os
@@ -141,7 +143,7 @@ def read_flow(path: str) -> np.ndarray:
         path: Path to the flow file.
 
     Returns:
-        Numpy array of the optical flow.
+        Numpy array of the optical flow with shape (H, W, 2).
     """
     if path.endswith(".flo"):
         with open(path, "rb") as f:
@@ -193,7 +195,7 @@ def resize_flow(flow: np.ndarray, shape: tuple) -> np.ndarray:
         shape: Target shape (height, width).
 
     Returns:
-        Resized flow array of shape (target_height, target_width, 2).
+        Resized flow array of shape (shape[0], shape[1], 2).
     """
     h0, w0 = flow.shape[:2]
     if (h0, w0) == shape:
@@ -420,6 +422,9 @@ def perform_split(packed_root: Path, split_root: Path) -> None:
 
     print("\nSplitting complete!")
     print(f"Split datasets saved under: {split_root}")
+    print(
+        "Now if you want you can remove the 'raw_class1' and 'packed_class1' folders to save space."
+    )
 
 
 def main(out_dir: str, target_shape: str) -> None:
@@ -428,6 +433,9 @@ def main(out_dir: str, target_shape: str) -> None:
     Args:
         out_dir: Directory to save raw, packed, and split datasets.
         target_shape: Target shape (HxW) for resizing images and flow, e.g., '256x256'.
+
+    Note:
+        The download is skipped if raw_class1/ is not empty.
     """
     out_dir_path = Path(out_dir)
     try:

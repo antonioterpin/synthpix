@@ -1,4 +1,71 @@
-"""Download and process the PIV class 2 dataset from Zenodo."""
+"""PIV Dataset Class 2 Builder.
+
+This script provides a full end-to-end pipeline for preparing the
+PIV Dataset (Class 2) from the public TFRecord archives published
+by the dataset authors.
+
+==============================================================
+ PIV Dataset Class 2 Builder
+==============================================================
+
+The pipeline performs the following steps:
+
+
+  1) Download
+     - Fetches the official Class 2 dataset zip from Zenodo.
+     - Saves it under: out_dir/raw_class2/
+
+  2) Extract
+     - Unpacks the TFRecord files from the downloaded zip.
+     - The extracted directory contains:
+           *.tfrecord (Training)
+           *.tfrecord (Validation)
+
+  3) Convert
+     - Reads each TFRecord and parses:
+           • target: flattened (256x256x2) image stack
+                   channel 0 → I0 (first image)
+                   channel 1 → I1 (second image)
+           • flow:   flattened (256x256x2) optical flow field
+     - Produces .mat files in the format:
+           V  : (H, W, 2) optical flow
+           I0 : (H, W)    first image
+           I1 : (H, W)    second image
+     - Saves the converted data to:
+           out_dir/packed_class2/train/
+           out_dir/packed_class2/val/
+           out_dir/packed_class2/other/
+
+  4) Organization
+     - Training TFRecords go to packed_class2/train/
+     - Validation TFRecords go to packed_class2/val/
+     - Any other TFRecord files go to packed_class2/other/
+
+The output structure is:
+
+    out_dir/
+        raw_class2/
+            Data_ProblemClass2_RAFT-PIV.zip
+            *.tfrecord
+            *.tfrecord-00000-of-XXXXX
+            ...
+
+        packed_class2/
+            train/
+                sample_00000.mat
+                sample_00001.mat
+                ...
+            val/
+                sample_00000.mat
+                sample_00001.mat
+                ...
+            other/
+                *.mat   # if any TFRecords did not match train/val
+
+After running this script, you may safely delete raw_class2/ to
+reclaim disk space (~12 GB). The packed_class2/ directory contains
+the final standardized dataset for experiments and benchmarking.
+"""
 
 import argparse
 import zipfile
@@ -32,19 +99,17 @@ def parse_proto(example_proto: tf.Tensor) -> dict:
     return tf.io.parse_single_example(example_proto, feature_description)
 
 
-def process_tfrecord(tfrecord_path: str, out_dir: str) -> None:
+def process_tfrecord(tfrecord_path: Path, out_path: Path) -> None:
     """Process a TFRecord file and convert its contents to .mat files.
 
-    TODO: check arguments types
     Args:
-        tfrecord_path (str): Path to the TFRecord file.
-        out_dir (str): Directory to save the converted .mat files.
+        tfrecord_path (Path): Path to the TFRecord file.
+        out_path (Path): Output directory for the .mat files.
     """
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path.mkdir(parents=True, exist_ok=True)
 
     dataset = tf.data.TFRecordDataset(tfrecord_path)
-    print(f"Processing {tfrecord_path} -> {out_dir}")
+    print(f"Processing {tfrecord_path} -> {out_path}")
 
     count = 0
     for raw_record in dataset:
@@ -88,7 +153,7 @@ def process_tfrecord(tfrecord_path: str, out_dir: str) -> None:
             # Ensure shapes for .mat (H,W for images and H,W,2 for flow)
             # convert.py used I0 shape (256, 256)
             fname = f"sample_{count:05d}.mat"
-            out_path = out_dir / fname
+            out_path = out_path / fname
 
             with h5py.File(out_path, "w") as f:
                 f.create_dataset("V", data=flow)
@@ -106,11 +171,12 @@ def process_tfrecord(tfrecord_path: str, out_dir: str) -> None:
     print(f"\nFinished {tfrecord_path}: {count} records.")
 
 
-def main(out_dir: str):
+def main(out_dir: str, target_shape: str | None = None) -> None:
     """Main function to download, extract, and process the PIV class 2 dataset.
 
     Args:
         out_dir (str): Output directory for the processed dataset.
+        target_shape (str | None): Target shape for resizing images and flow, e.g., '256x256'.
     """
     out_path = Path(out_dir)
     raw_dir = out_path / "raw_class2"
@@ -163,6 +229,44 @@ def main(out_dir: str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out-dir", required=True)
+    parser.add_argument(
+        "--out-dir",
+        type=str,
+        required=True,
+        help="Where to store raw, packed, and split datasets",
+    )
+    parser.add_argument(
+        "--split-ratio",
+        type=str,
+        required=False,
+        default="80/10/10",
+        help="Split ratio for train/val/tune as percentages, e.g., '80/10/10'",
+    )
+    parser.add_argument(
+        "--split-seed",
+        type=int,
+        required=False,
+        default=42,  # TODO: which one was the seed we used?
+        help="Random seed for shuffling when generating splits",
+    )
+    parser.add_argument(
+        "--target-shape",
+        type=str,
+        required=False,
+        default=None,
+        help="Target shape (HxW) for resizing images and flow, e.g., '256x256'",
+    )
     args = parser.parse_args()
-    main(args.out_dir)
+
+    try:
+        split_ratios = list(map(int, args.split_ratio.split("/")))
+        if len(split_ratios) != 3 or sum(split_ratios) != 100:
+            raise ValueError
+        out_path_split = Path(args.out_dir) / "splits"
+        # fetch_splits(out_path_split, args.split_seed, split_ratios)
+        main(args.out_dir, args.target_shape)
+    except Exception as e:
+        print(
+            f"Split ratio is in the wrong format: {args.split_ratio}. Use '80/10/10' format summing to 100. Error: {e}"
+        )
+        exit(1)
