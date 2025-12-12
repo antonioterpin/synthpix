@@ -30,6 +30,8 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         scheduler: SchedulerProtocol,
         batch_size: int,
         buffer_size: int = 8,
+        startup_timeout: float = 30.0,
+        steady_state_timeout: float = 2.0,
     ):
         """Initializes the prefetching scheduler.
 
@@ -41,6 +43,8 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             batch_size: Flow field slices per batch.
                 Must match the underlying scheduler.
             buffer_size: Number of batches to prefetch.
+            startup_timeout: Timeout in seconds for the initial batch fetch.
+            steady_state_timeout: Timeout in seconds for subsequent batch fetches.
         """
         self.scheduler = scheduler
 
@@ -57,6 +61,18 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
 
         self._started = False
         self._t = 0
+
+        if not isinstance(startup_timeout, (int, float)) or startup_timeout <= 0:
+            raise ValueError("startup_timeout must be a positive number.")
+        if (
+            not isinstance(steady_state_timeout, (int, float))
+            or steady_state_timeout <= 0
+        ):
+            raise ValueError("steady_state_timeout must be a positive number.")
+        self.startup_timeout = startup_timeout
+        self.steady_state_timeout = steady_state_timeout
+
+        self.startup = True
 
     def get_batch(self, batch_size: int) -> SchedulerData:
         """Return the next batch from the prefetch queue.
@@ -87,7 +103,14 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
                     "Use next_episode() to continue."
                 )
         try:
-            batch = self._queue.get(block=True, timeout=2)
+            if self.startup:
+                batch = self._queue.get(block=True, timeout=self.startup_timeout)
+            else:
+                batch = self._queue.get(block=True, timeout=self.steady_state_timeout)
+
+            if self.startup:
+                self.startup = False
+
             self._t += 1
             if batch is None:
                 logger.info("End of stream reached, stopping iteration.")
@@ -191,6 +214,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         self._stop_event.clear()
         self._queue = queue.Queue(maxsize=self.buffer_size)
         self._thread = threading.Thread(target=self._worker, daemon=True)
+        self.startup = True
 
         logger.debug("Prefetching thread reinitialized, scheduler reset.")
 

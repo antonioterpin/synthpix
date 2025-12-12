@@ -1,6 +1,6 @@
 """Type aliases for SynthPix library."""
 
-from typing import TypeAlias
+from typing import Any, TypeAlias
 from collections.abc import Sequence
 import numpy as np
 from typing_extensions import Self
@@ -15,7 +15,7 @@ PRNGKey: TypeAlias = jnp.ndarray
 @tree_util.register_pytree_node_class
 @dataclass(frozen=False)
 class ImageGenerationParameters:
-    """Dataclass representing generated images along with their parameters."""
+    """Dataclass representing image generation parameters."""
 
     seeding_densities: jnp.ndarray
     diameter_ranges: jnp.ndarray
@@ -71,8 +71,9 @@ class SynthpixBatch:
     params: ImageGenerationParameters | None = None
     done: jnp.ndarray | None = None
     mask: jnp.ndarray | None = None
+    files: tuple[str, ...] | None = None
 
-    def update(self, **kwargs) -> Self:
+    def update(self, **kwargs: Any) -> Self:
         """Return a new SynthpixBatch with updated fields.
 
         Args:
@@ -88,11 +89,15 @@ class SynthpixBatch:
             params=kwargs.get("params", self.params),
             done=kwargs.get("done", self.done),
             mask=kwargs.get("mask", self.mask),
+            files=kwargs.get("files", self.files),
         )
 
     def tree_flatten(
         self,
-    ) -> tuple[tuple[jnp.ndarray | None | ImageGenerationParameters, ...], None]:
+    ) -> tuple[
+        tuple[jnp.ndarray | ImageGenerationParameters | tuple[str, ...] | None, ...],
+        None,
+    ]:
         """Flattens the SynthpixBatch into its constituent parts.
 
         Returns:
@@ -105,6 +110,7 @@ class SynthpixBatch:
             self.params,
             self.done,
             self.mask,
+            self.files,
         )
         aux_data = None
         return (children, aux_data)
@@ -129,21 +135,23 @@ class SchedulerData:
     images1: np.ndarray | None = None
     images2: np.ndarray | None = None
     mask: np.ndarray | None = None
+    files: tuple[str, ...] | None = None
 
     def update(self, **kwargs) -> Self:
-        """Return a new SchedulerBatch with updated fields.
+        """Return a new SchedulerData with updated fields.
 
         Args:
             **kwargs: Fields to update in the batch.
 
         Returns:
-            A new SchedulerBatch instance with updated fields.
+            A new SchedulerData instance with updated fields.
         """
         return self.__class__(
             flow_fields=kwargs.get("flow_fields", self.flow_fields),
             images1=kwargs.get("images1", self.images1),
             images2=kwargs.get("images2", self.images2),
             mask=kwargs.get("mask", self.mask),
+            files=kwargs.get("files", self.files),
         )
 
 

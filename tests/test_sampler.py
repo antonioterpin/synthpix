@@ -1277,7 +1277,8 @@ class EpisodicDummy(_BaseDummy, EpisodicSchedulerProtocol):
         batch = super().get_batch(batch_size=batch_size)
         self._step += 1
         done = jnp.array(self._step >= self.episode_length)
-        return batch.update(done=jnp.full((batch_size,), done))
+        mask = jnp.full((batch_size,), done)
+        return batch.update(done=done, mask=mask)
 
     def next_episode(self):
         self._step = 0
@@ -1484,3 +1485,37 @@ def test_warning_when_batch_size_not_divisible_by_flow_fields(monkeypatch):
     assert any(expected in m for m in logged), (
         f"Expected warning: {expected}, " f"but got: {logged}"
     )
+
+
+@pytest.mark.parametrize("sampler_class", [SyntheticImageSampler, RealImageSampler])
+def test_sampler_outputs_files(sampler_class, mock_mat_files):
+    """Test that the sampler outputs the correct file paths."""
+    files, dims = mock_mat_files
+    H, W = dims["height"], dims["width"]
+
+    scheduler = MATFlowFieldScheduler(
+        files,
+        loop=True,
+        output_shape=(H, W),
+        include_images=True if sampler_class is RealImageSampler else False,
+    )
+
+    config = sampler_config.copy()
+    config["batch_size"] = 4
+    config["flow_fields_per_batch"] = 4
+    config["batches_per_flow_batch"] = 1
+
+    sampler = sampler_class.from_config(
+        scheduler=scheduler,
+        config=config,
+    )
+
+    batch = next(sampler)
+    assert hasattr(batch, "files"), "Batch should have 'files' attribute."
+    assert isinstance(batch.files, tuple), "'files' attribute should be a tuple."
+    assert len(batch.files) == sampler.batch_size, (
+        f"'files' attribute should have length {sampler.batch_size}, "
+        f"but got {len(batch.files)}."
+    )
+    for file in batch.files:
+        assert file in files, f"File {file} not found in original file list."
