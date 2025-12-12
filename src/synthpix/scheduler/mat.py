@@ -1,7 +1,6 @@
 """FlowFieldScheduler to load the flow field data from files."""
 
 from typing_extensions import Self
-import cv2
 import h5py
 import numpy as np
 import scipy.io
@@ -165,11 +164,16 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             # The original flow is assumed to be in pixels
             ratio_y = self.output_shape[0] / flow.shape[0]
             ratio_x = self.output_shape[1] / flow.shape[1]
-            flow_resized = cv2.resize(
-                flow, self.output_shape, interpolation=cv2.INTER_LINEAR
+            # Resize each channel separately using PIL (bilinear interpolation)
+            # PIL resize expects (width, height)
+            size = (self.output_shape[1], self.output_shape[0])
+            flow_u = np.asarray(
+                Image.fromarray(flow[..., 0]).resize(size, Image.Resampling.BILINEAR)
             )
-            flow_resized[..., 0] *= ratio_x
-            flow_resized[..., 1] *= ratio_y
+            flow_v = np.asarray(
+                Image.fromarray(flow[..., 1]).resize(size, Image.Resampling.BILINEAR)
+            )
+            flow_resized = np.stack([flow_u * ratio_x, flow_v * ratio_y], axis=-1)
             data["V"] = flow_resized
 
         logger.debug(f"Loaded {file_path} with keys {list(data.keys())}")

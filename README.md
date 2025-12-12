@@ -7,10 +7,10 @@
 [![PyPI version](https://img.shields.io/pypi/v/synthpix.svg)](https://pypi.org/project/synthpix)
 
 `SynthPix` is a synthetic image generator for Particle Image Velocimetry (PIV) with a focus on performance and parallelism on accelerators, implemented in [JAX](https://docs.jax.dev/en/latest/quickstart.html). `SynthPix` supports the same configuration parameters as existing tools but achieves a throughput several orders of magnitude higher in image-pair generation per second, enabling comprehensive validation and comparison of PIV algorithms, rapid experimental design iterations, and the development of data-hungry methods.
-![The SynthPix image generation pipeline](docs/synthpix.jpg)
+![The SynthPix image generation pipeline](https://raw.githubusercontent.com/antonioterpin/synthpix/main/docs/synthpix.jpg)
 
 In a nutshell, if you need many synthetic PIV images and you do not want to wait ages, you are better off with `SynthPix` 😄. Below are the performances (image pairs per second) with and without GPU for different batch sizes B.
-![Performances](docs/times.jpg)
+![Performances](https://raw.githubusercontent.com/antonioterpin/synthpix/main/docs/times.jpg)
 
 `SynthPix` is also fairly easy to use:
 ```python
@@ -102,9 +102,9 @@ Effect of `diameter_var` on particle size
   <span style="display:inline-block; width: 90px; text-align:center;"><b>High</b></span>
 </p>
 <p align="center" style="margin-top:0;">
-  <img src="docs/images/diam2.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
-  <img src="docs/images/base.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
-  <img src="docs/images/diam3.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="https://raw.githubusercontent.com/antonioterpin/synthpix/main/docs/images/diam2.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="https://raw.githubusercontent.com/antonioterpin/synthpix/main/docs/images/base.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="https://raw.githubusercontent.com/antonioterpin/synthpix/main/docs/images/diam3.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
 </p>
 <p align="center" style="margin-top:0;">
   <span style="display:inline-block; width: 90px; text-align:center;">diameter = 2.0</span>
@@ -127,9 +127,9 @@ Effect of `intensity_var` on particle brightness
   <span style="display:inline-block; width: 90px; text-align:center;"><b>High</b></span>
 </p>
 <p align="center" style="margin-top:0;">
-  <img src="docs/images/50_Int.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
-  <img src="docs/images/150_Int.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
-  <img src="docs/images/base.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="https://raw.githubusercontent.com/antonioterpin/synthpix/main/docs/images/50_Int.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="https://raw.githubusercontent.com/antonioterpin/synthpix/main/docs/images/150_Int.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="https://raw.githubusercontent.com/antonioterpin/synthpix/main/docs/images/base.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
 </p>
 <p align="center" style="margin-top:0;">
   <span style="display:inline-block; width: 90px; text-align:center;">intensity = 50</span>
@@ -155,11 +155,11 @@ Effect of `rho_var` on particle shape:
   <span style="display:inline-block; width: 90px; text-align:center;"><b>Too High</b></span>
 </p>
 <p align="center" style="margin-top:0;">
-  <img src="docs/images/rho_low.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
-  <img src="docs/images/base.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
-  <img src="docs/images/no_rho.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
-  <img src="docs/images/rho_positive.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
-  <img src="docs/images/rho_high.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="https://raw.githubusercontent.com/antonioterpin/synthpix/main/docs/images/rho_low.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="https://raw.githubusercontent.com/antonioterpin/synthpix/main/docs/images/base.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="https://raw.githubusercontent.com/antonioterpin/synthpix/main/docs/images/no_rho.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="https://raw.githubusercontent.com/antonioterpin/synthpix/main/docs/images/rho_positive.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
+  <img src="https://raw.githubusercontent.com/antonioterpin/synthpix/main/docs/images/rho_high.png" width="90" style="image-rendering: pixelated; margin: 0 10px; vertical-align: middle;"/>
 </p>
 <p align="center" style="margin-top:0;">
   <span style="display:inline-block; width: 90px; text-align:center;">ρ = -0.9</span>
@@ -219,9 +219,13 @@ Contributions are more than welcome! 🙏 Please check out our [how to contribut
 ## Citation 📈
 If you use this code in your research, please cite our paper:
 ```bash
-   @article{terpin2025synthpix,
-      title={SynthPix: A lightspeed PIV images generator},
-      author={Terpin, Antonio and Bonomi, Alan and Banelli, Francesco and D'Andrea, Raffaello},
-      year={2025}
-   }
+   @misc{terpin2025synthpixlightspeedpivimages,
+        title={SynthPix: A lightspeed PIV images generator}, 
+        author={Antonio Terpin and Alan Bonomi and Francesco Banelli and Raffaello D'Andrea},
+        year={2025},
+        eprint={2512.09664},
+        archivePrefix={arXiv},
+        primaryClass={cs.DC},
+        url={https://arxiv.org/abs/2512.09664}, 
+    }
 ```
