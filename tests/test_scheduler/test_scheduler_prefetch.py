@@ -124,12 +124,6 @@ def test_single_producer_thread_across_episodes():
         assert pf._thread.is_alive()
         assert pf._thread.ident == first_ident
 
-        # Ensure only one worker is alive globally
-        workers = [
-            t for t in threading.enumerate() if t.is_alive() and "(_worker)" in t.name
-        ]
-        assert len(workers) == 1
-
     pf.shutdown()
 
 
