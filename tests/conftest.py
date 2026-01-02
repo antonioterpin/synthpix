@@ -105,7 +105,9 @@ def scheduler(temp_file_module, request):
         randomize = request.param.get("randomize", False)
         loop = request.param.get("loop", False)
 
-    yield HDF5FlowFieldScheduler([temp_file_module], randomize=randomize, loop=loop)
+    yield HDF5FlowFieldScheduler(
+        [temp_file_module], randomize=randomize, loop=loop
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -138,7 +140,7 @@ def mock_numpy_files(tmp_path, numpy_test_dims, request):
     for t in range(1, num_files + 1):
         img0 = np.random.randint(0, 255, size=(h, w, 3), dtype=np.uint8)
         img1 = np.random.randint(0, 255, size=(h, w, 3), dtype=np.uint8)
-        Image.fromarray(img0).save(tmp_path / f"img_{t-1}.jpg")
+        Image.fromarray(img0).save(tmp_path / f"img_{t - 1}.jpg")
         Image.fromarray(img1).save(tmp_path / f"img_{t}.jpg")
 
         flow = np.random.rand(h, w, 2).astype(np.float32)
@@ -169,12 +171,16 @@ def mock_mat_files(tmp_path, mat_test_dims, request):
         mat_path = tmp_path / f"flow_{t:04d}.mat"
         with h5py.File(mat_path, "w", libver="latest", userblock_size=512) as f:
             f.create_dataset(
-                "I0", data=np.random.randint(0, 255, size=(h, w), dtype=np.uint8)
+                "I0",
+                data=np.random.randint(0, 255, size=(h, w), dtype=np.uint8),
             )
             f.create_dataset(
-                "I1", data=np.random.randint(0, 255, size=(h, w), dtype=np.uint8)
+                "I1",
+                data=np.random.randint(0, 255, size=(h, w), dtype=np.uint8),
             )
-            f.create_dataset("V", data=np.random.rand(h, w, 2).astype(np.float32))
+            f.create_dataset(
+                "V", data=np.random.rand(h, w, 2).astype(np.float32)
+            )
 
         # write fake MATLAB header
         header = (

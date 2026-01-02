@@ -1,5 +1,6 @@
 import importlib
 from types import SimpleNamespace
+
 import pytest
 
 # Import the module to be tested
@@ -34,7 +35,12 @@ class DummyGrainAdapter:
 
 class DummyLoader:
     def __init__(
-        self, data_source, sampler, operations, worker_count=0, read_options=None
+        self,
+        data_source,
+        sampler,
+        operations,
+        worker_count=0,
+        read_options=None,
     ):
         self.data_source = data_source
         self.sampler = sampler
@@ -95,7 +101,9 @@ def patch_grain(monkeypatch):
         "logger",
         SimpleNamespace(info=lambda *_: None, warning=lambda *_: None),
     )
-    monkeypatch.setattr(make_mod, "load_configuration", lambda p: {}, raising=False)
+    monkeypatch.setattr(
+        make_mod, "load_configuration", lambda p: {}, raising=False
+    )
 
 
 def test_make_grain_basic(patch_grain, monkeypatch):

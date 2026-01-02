@@ -1,13 +1,13 @@
 """HDF5FlowFieldScheduler to load flow fields from .h5 files."""
 
 import h5py
-from typing_extensions import Self
 from goggles import get_logger
+from typing_extensions import Self
 
 from synthpix.scheduler import BaseFlowFieldScheduler
 from synthpix.scheduler.protocol import FileEndedError
-from synthpix.utils import SYNTHPIX_SCOPE
 from synthpix.types import PRNGKey, SchedulerData
+from synthpix.utils import SYNTHPIX_SCOPE
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -35,6 +35,9 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
             randomize: If True, shuffle file order each reset.
             loop: If True, cycle indefinitely.
             key: Random key for reproducibility.
+
+        Raises:
+            ValueError: If not all files have .h5 extension.
         """
         super().__init__(file_list, randomize, loop, key)
         if not all(file_path.endswith(".h5") for file_path in file_list):
@@ -48,14 +51,19 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
 
         Returns:
             Loaded dataset with truncated x-axis.
+
+        Raises:
+            ValueError: If the file does not contain a valid HDF5 dataset.
         """
         with h5py.File(file_path, "r") as file:
-            dataset_key = list(file)[0]
+            dataset_key = next(iter(file))
             dset = file[dataset_key]
             if not isinstance(dset, h5py.Dataset):
-                raise ValueError(
-                    f"Expected Dataset but got {type(dset)} for key '{dataset_key}' in {file_path}"
+                msg = (
+                    f"Expected Dataset but got {type(dset)} for key "
+                    f"'{dataset_key}' in {file_path}"
                 )
+                raise ValueError(msg)
             data = dset[...]
             logger.debug(f"Loading file {file_path} with shape {data.shape}")
         return SchedulerData(flow_fields=data, files=(file_path,))
@@ -68,6 +76,10 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
 
         Returns:
             Flow field with shape (X, Z, 2).
+
+        Raises:
+            FileEndedError: If the end of file data is reached.
+            RuntimeError: If no data or file is currently cached.
         """
         if self._cached_data is None:
             raise RuntimeError("No data is currently cached.")
@@ -88,15 +100,20 @@ class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):
 
         Returns:
             Shape of all the flow fields.
+
+        Raises:
+            ValueError: If the file does not contain a valid dataset.
         """
         file_path = self.file_list[0]
         with h5py.File(file_path, "r") as file:
-            dataset_key = list(file)[0]
+            dataset_key = next(iter(file))
             dset = file[dataset_key]
             if not isinstance(dset, h5py.Dataset):
-                raise ValueError(
-                    f"Expected Dataset but got {type(dset)} for key '{dataset_key}' in {file_path}"
+                msg = (
+                    f"Expected Dataset but got {type(dset)} for key "
+                    f"'{dataset_key}' in {file_path}"
                 )
+                raise ValueError(msg)
             shape = dset.shape[0], dset.shape[2], 2  # (X, Z, 2)
             logger.debug(f"Flow field shape: {shape}")
         return shape

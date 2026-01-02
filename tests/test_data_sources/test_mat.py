@@ -1,10 +1,11 @@
 """Tests for MATDataSource."""
 
 import os
-import numpy as np
-import scipy.io
-import pytest
+
 import h5py
+import numpy as np
+import pytest
+import scipy.io
 
 from synthpix.data_sources import MATDataSource
 
@@ -128,7 +129,9 @@ def test_mat_image_resizing(tmp_path):
 
     # Request 32x32
     target_shape = (32, 32)
-    ds = MATDataSource([str(tmp_path)], output_shape=target_shape, include_images=True)
+    ds = MATDataSource(
+        [str(tmp_path)], output_shape=target_shape, include_images=True
+    )
     item = ds[0]
 
     assert item["images1"].shape == target_shape

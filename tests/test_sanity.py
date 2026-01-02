@@ -71,15 +71,23 @@ def test_convert_to_standard_type(tmp_path):
     # 4. reload and assert conversions
     cfg = load_configuration(str(cfg_path))
 
-    assert isinstance(cfg["np_float"], float) and pytest.approx(cfg["np_float"]) == 1.23
     assert (
-        isinstance(cfg["jnp_float"], float) and pytest.approx(cfg["jnp_float"]) == 4.56
+        isinstance(cfg["np_float"], float)
+        and pytest.approx(cfg["np_float"]) == 1.23
+    )
+    assert (
+        isinstance(cfg["jnp_float"], float)
+        and pytest.approx(cfg["jnp_float"]) == 4.56
     )
     assert isinstance(cfg["np_int"], int) and cfg["np_int"] == 7
     assert isinstance(cfg["jnp_int"], int) and cfg["jnp_int"] == 8
 
-    assert cfg["np_array"] == [1, 2, 3], "np.ndarray should be converted to list"
-    assert cfg["jnp_array"] == [4, 5, 6], "jnp.ndarray should be converted to list"
+    assert cfg["np_array"] == [1, 2, 3], (
+        "np.ndarray should be converted to list"
+    )
+    assert cfg["jnp_array"] == [4, 5, 6], (
+        "jnp.ndarray should be converted to list"
+    )
 
     # fallback branch: untouched
     assert cfg["string_val"] == "hello", "string should remain unchanged"
@@ -111,7 +119,11 @@ def test_calculate_min_and_max_speeds(mock_hdf5_files):
         ("not_a_list", {"file_list": "not_a_list"}, ValueError),
         ("non_string_items", {"file_list": [123, 456]}, ValueError),
         ("empty_list", {"file_list": []}, ValueError),
-        ("nonexistent_file", {"file_list": ["nonexistent_file.h5"]}, ValueError),
+        (
+            "nonexistent_file",
+            {"file_list": ["nonexistent_file.h5"]},
+            ValueError,
+        ),
     ],
 )
 def test_invalid_inputs_missing_speeds_panel(
@@ -154,7 +166,12 @@ def _fake_calculate(_files):
 )
 @pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
 def test_missing_speeds_panel_all_branches(
-    monkeypatch, mock_hdf5_files, tmp_path, cli_answers, expect_exception, expect_speeds
+    monkeypatch,
+    mock_hdf5_files,
+    tmp_path,
+    cli_answers,
+    expect_exception,
+    expect_speeds,
 ):
     """Drive every branch in `missing_speeds_panel` by faking user input."""
     files, _dims = mock_hdf5_files
@@ -164,8 +181,12 @@ def test_missing_speeds_panel_all_branches(
     cfg_file.write_text(yaml.safe_dump(cfg_dict))
 
     # 1. stub heavy/irrelevant helpers
-    monkeypatch.setattr("synthpix.sanity.calculate_min_and_max_speeds", _fake_calculate)
-    monkeypatch.setattr("synthpix.sanity.update_config_file", lambda *_, **__: None)
+    monkeypatch.setattr(
+        "synthpix.sanity.calculate_min_and_max_speeds", _fake_calculate
+    )
+    monkeypatch.setattr(
+        "synthpix.sanity.update_config_file", lambda *_, **__: None
+    )
     # ensure update_config_file would target our config file path
     import synthpix.sanity as sp_sanity
 
@@ -203,7 +224,9 @@ def test_missing_speeds_panel_when_values_present(
 
     # Patch input to fail if called
     monkeypatch.setattr(
-        builtins, "input", lambda *_: pytest.fail("input() should not be called")
+        builtins,
+        "input",
+        lambda *_: pytest.fail("input() should not be called"),
     )
 
     result = missing_speeds_panel(str(cfg_file))

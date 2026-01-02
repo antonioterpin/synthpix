@@ -27,15 +27,21 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_SCHEDULER"]
 # ============================
 
 
-@pytest.mark.parametrize("file_list", [[None], [123, "invalid"], [123, "invalid"]])
+@pytest.mark.parametrize(
+    "file_list", [[None], [123, "invalid"], [123, "invalid"]]
+)
 def test_invalid_file_list_type(file_list):
-    with pytest.raises(ValueError, match="file_list must be a list of file paths."):
+    with pytest.raises(
+        ValueError, match="file_list must be a list of file paths."
+    ):
         HDF5FlowFieldScheduler.from_config({"file_list": file_list})
 
 
 @pytest.mark.parametrize("file_list", [["nonexistent.h5"]])
 def test_invalid_file_paths(file_list):
-    with pytest.raises(ValueError, match=f"File {file_list[0]} does not exist."):
+    with pytest.raises(
+        ValueError, match=f"File {file_list[0]} does not exist."
+    ):
         HDF5FlowFieldScheduler.from_config({"file_list": file_list})
 
 
@@ -63,7 +69,12 @@ def test_invalid_loop(loop, temp_file):
 
 @pytest.mark.parametrize(
     "file_list, randomize, loop",
-    [([], True, True), ([], False, True), ([], True, False), ([], False, False)],
+    [
+        ([], True, True),
+        ([], False, True),
+        ([], True, False),
+        ([], False, False),
+    ],
 )
 def test_empty_file_list(file_list, randomize, loop):
     with pytest.raises(ValueError, match="The file_list must not be empty."):
@@ -147,7 +158,7 @@ def test_numpy_scheduler_invalid_ext(tmp_path):
     bad_file.write_text("invalid content")
 
     with pytest.raises(
-        ValueError, match="All files must be numpy files " "with '.npy' extension"
+        ValueError, match="All files must be numpy files with '.npy' extension"
     ):
         NumpyFlowFieldScheduler([str(bad_file)])
 
@@ -164,9 +175,7 @@ def test_numpy_scheduler_missing_images(tmp_path):
     file = tmp_path / "flow_1.npy"
     np.zeros((1, 64, 64, 2)).astype(np.float32).tofile(file)
 
-    pattern = (
-        f"Missing images for frame {1}: {tmp_path}/img_0.jpg, {tmp_path}/img_1.jpg"
-    )
+    pattern = f"Missing images for frame {1}: {tmp_path}/img_0.jpg, {tmp_path}/img_1.jpg"
     with pytest.raises(FileNotFoundError, match=pattern):
         NumpyFlowFieldScheduler([str(file)], include_images=True)
 
@@ -183,7 +192,12 @@ def test_numpy_scheduler_get_batch(mock_numpy_files):
     batch_size = len(files)
     batch = scheduler.get_batch(batch_size)
     assert isinstance(batch, SchedulerData)
-    assert batch.flow_fields.shape == (batch_size, dims["height"], dims["width"], 2)
+    assert batch.flow_fields.shape == (
+        batch_size,
+        dims["height"],
+        dims["width"],
+        2,
+    )
 
 
 @pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
@@ -325,7 +339,8 @@ class FailingDummyScheduler(DummyScheduler):
 
 def test_abstract_scheduler_iteration(generate_hdf5_file):
     tmp_file = generate_hdf5_file(
-        "dummy_test.h5", dims={"x_dim": 4, "y_dim": 2, "z_dim": 4, "features": 3}
+        "dummy_test.h5",
+        dims={"x_dim": 4, "y_dim": 2, "z_dim": 4, "features": 3},
     )
     scheduler = DummyScheduler([tmp_file])
     count = 0
@@ -455,7 +470,8 @@ def test_loop_resets_and_continues_dummy(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "randomize, loop", [(True, True), (False, True), (True, False), (False, False)]
+    "randomize, loop",
+    [(True, True), (False, True), (True, False), (False, False)],
 )
 def test_flow_field_scheduler_init(randomize, loop, temp_file):
     scheduler = HDF5FlowFieldScheduler([temp_file], randomize, loop)
@@ -472,7 +488,9 @@ def test_flow_field_scheduler_init(randomize, loop, temp_file):
 def test_scheduler_iteration(mock_hdf5_files):
     files, dims = mock_hdf5_files
 
-    scheduler = HDF5FlowFieldScheduler(file_list=files, randomize=True, loop=False)
+    scheduler = HDF5FlowFieldScheduler(
+        file_list=files, randomize=True, loop=False
+    )
 
     num_flows = 0
     while True:
@@ -530,7 +548,9 @@ def test_scheduler_time(randomize, mock_hdf5_files):
     CI = os.environ.get("CI") == "true"
     time_limit = 0.01 if CI else 10
 
-    scheduler = HDF5FlowFieldScheduler(file_list=files, randomize=randomize, loop=False)
+    scheduler = HDF5FlowFieldScheduler(
+        file_list=files, randomize=randomize, loop=False
+    )
 
     def iterate_scheduler():
         while True:
@@ -547,7 +567,9 @@ def test_scheduler_time(randomize, mock_hdf5_files):
         repeat=REPETITIONS,
     )
     average_time = min(total_time) / NUMBER_OF_EXECUTIONS
-    assert average_time < time_limit, f"Scheduler took too long: {average_time:.2f}s"
+    assert average_time < time_limit, (
+        f"Scheduler took too long: {average_time:.2f}s"
+    )
 
 
 # ============================
@@ -613,10 +635,14 @@ def test_prefetch_scheduler_shutdown(mock_hdf5_files):
 
 @pytest.mark.parametrize("bad_include_images", ["bad_value", None, 123])
 @pytest.mark.parametrize("mock_numpy_files", [1], indirect=True)
-def test_mat_scheduler_invalid_include_images(bad_include_images, mock_numpy_files):
+def test_mat_scheduler_invalid_include_images(
+    bad_include_images, mock_numpy_files
+):
     """Test that invalid `include_images` values raise a ValueError."""
     files, _ = mock_numpy_files
-    with pytest.raises(ValueError, match="include_images must be a boolean value."):
+    with pytest.raises(
+        ValueError, match="include_images must be a boolean value."
+    ):
         NumpyFlowFieldScheduler.from_config(
             {
                 "file_list": files,
@@ -648,7 +674,9 @@ def test_numpy_scheduler_outputs_files(mock_numpy_files):
         assert len(output.files) == batch_size
 
         for file_path in output.files:
-            assert os.path.basename(file_path) in [os.path.basename(f) for f in files]
+            assert os.path.basename(file_path) in [
+                os.path.basename(f) for f in files
+            ]
 
 
 def test_hdf5_scheduler_outputs_files(mock_hdf5_files):
@@ -674,4 +702,6 @@ def test_hdf5_scheduler_outputs_files(mock_hdf5_files):
         assert len(output.files) == batch_size
 
         for file_path in output.files:
-            assert os.path.basename(file_path) in [os.path.basename(f) for f in files]
+            assert os.path.basename(file_path) in [
+                os.path.basename(f) for f in files
+            ]

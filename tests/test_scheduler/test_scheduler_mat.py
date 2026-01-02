@@ -1,4 +1,5 @@
 import os
+
 import h5py
 import jax
 import numpy as np
@@ -16,10 +17,14 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_SCHEDULER"]
 
 
 @pytest.mark.parametrize("bad_include_images", ["bad_value", None, 123])
-def test_mat_scheduler_invalid_include_images(bad_include_images, mock_mat_files):
+def test_mat_scheduler_invalid_include_images(
+    bad_include_images, mock_mat_files
+):
     """Test that invalid `include_images` values raise a ValueError."""
     files, _ = mock_mat_files
-    with pytest.raises(ValueError, match="include_images must be a boolean value."):
+    with pytest.raises(
+        ValueError, match="include_images must be a boolean value."
+    ):
         MATFlowFieldScheduler.from_config(
             {
                 "file_list": files,
@@ -43,8 +48,12 @@ def test_mat_scheduler_invalid_output_shape(bad_output_shape, mock_mat_files):
         )
 
 
-@pytest.mark.parametrize("bad_output_shape", [(256, -1), (0, 256), (256, 0), (-1, -1)])
-def test_mat_scheduler_invalid_output_shape_values(bad_output_shape, mock_mat_files):
+@pytest.mark.parametrize(
+    "bad_output_shape", [(256, -1), (0, 256), (256, 0), (-1, -1)]
+)
+def test_mat_scheduler_invalid_output_shape_values(
+    bad_output_shape, mock_mat_files
+):
     """Test that invalid `output_shape` values raise a ValueError."""
     files, _ = mock_mat_files
     with pytest.raises(
@@ -79,7 +88,9 @@ def test_mat_scheduler_iteration(mock_mat_files):
                 256,
                 256,
                 2,
-            ), f"Expected flow field shape (1, 256, 256, 2), got {data.flow_fields.shape}"
+            ), (
+                f"Expected flow field shape (1, 256, 256, 2), got {data.flow_fields.shape}"
+            )
             count += 1
         except StopIteration:
             break
@@ -275,9 +286,15 @@ def test_steps_remaining(mock_mat_files):
 
 def test_path_is_hdf5_nonexistent():
     """_path_is_hdf5 should gracefully handle a missing file."""
-    assert MATFlowFieldScheduler._path_is_hdf5("does_not_exist_123.mat") is False
-    assert MATFlowFieldScheduler._path_is_hdf5("does_not_exist_123.hdf5") is False
-    assert MATFlowFieldScheduler._path_is_hdf5("does_not_exist_123.npy") is False
+    assert (
+        MATFlowFieldScheduler._path_is_hdf5("does_not_exist_123.mat") is False
+    )
+    assert (
+        MATFlowFieldScheduler._path_is_hdf5("does_not_exist_123.hdf5") is False
+    )
+    assert (
+        MATFlowFieldScheduler._path_is_hdf5("does_not_exist_123.npy") is False
+    )
 
 
 def _rand_flow(shape):
@@ -312,7 +329,9 @@ def test_mat_v5_basic(tmp_path):
     """SciPy branch, include_images=False, sized exactly."""
     V = _rand_flow((4, 4, 2))
     fpath = make_mat(tmp_path, "basic", V=V)
-    loader = MATFlowFieldScheduler([fpath], include_images=False, output_shape=(4, 4))
+    loader = MATFlowFieldScheduler(
+        [fpath], include_images=False, output_shape=(4, 4)
+    )
 
     data = loader.load_file(fpath)
     assert isinstance(data, SchedulerData)
@@ -326,7 +345,9 @@ def test_mat_with_images_resize(tmp_path):
     V = np.ones((2, 2, 2), dtype=np.float32)  # all-ones flow
     fpath = make_mat(tmp_path, "img_resize", V=V, I0=I0, I1=I1)
 
-    loader = MATFlowFieldScheduler([fpath], include_images=True, output_shape=(4, 4))
+    loader = MATFlowFieldScheduler(
+        [fpath], include_images=True, output_shape=(4, 4)
+    )
     data = loader.load_file(fpath)
 
     # images resized to 4×4
@@ -357,7 +378,9 @@ def test_hdf5_fallback(monkeypatch, tmp_path):
     """SciPy raises NotImplementedError -> h5py branch loads data."""
     # Patch scipy.io.loadmat to always raise NotImplementedError
     monkeypatch.setattr(
-        scipy.io, "loadmat", lambda *a, **kw: (_ for _ in ()).throw(NotImplementedError)
+        scipy.io,
+        "loadmat",
+        lambda *a, **kw: (_ for _ in ()).throw(NotImplementedError),
     )
     V = _rand_flow((4, 4, 2))
     fpath = make_hdf5(tmp_path, "v73", V=V)
@@ -371,7 +394,9 @@ def test_hdf5_fallback(monkeypatch, tmp_path):
 
 def test_missing_V_raises(tmp_path):
     """No 'V' present should raise."""
-    fpath = make_mat(tmp_path, "noV", I0=_rand_image((4, 4)), I1=_rand_image((4, 4)))
+    fpath = make_mat(
+        tmp_path, "noV", I0=_rand_image((4, 4)), I1=_rand_image((4, 4))
+    )
     loader = MATFlowFieldScheduler([fpath], include_images=False)
     with pytest.raises(ValueError, match="missing 'V'"):
         loader.load_file(fpath)
@@ -390,7 +415,9 @@ def test_load_fails_non_hdf5(monkeypatch, tmp_path):
     """SciPy ValueError & path is NOT HDF5."""
     # Force scipy.io.loadmat to raise ValueError
     monkeypatch.setattr(
-        scipy.io, "loadmat", lambda *a, **kw: (_ for _ in ()).throw(ValueError("boom"))
+        scipy.io,
+        "loadmat",
+        lambda *a, **kw: (_ for _ in ()).throw(ValueError("boom")),
     )
     # create an *empty* .mat file so _path_is_hdf5 is False
     empty_path = tmp_path / "bad.mat"
@@ -448,7 +475,7 @@ def test_next_loop_reset(tmp_path):
     np.testing.assert_array_equal(second.flow_fields[0, ...], flow)
 
     # After two successful returns we are back at "end of list"
-    assert sched.index == 0  #
+    assert sched.index == 0
     assert sched._slice_idx == 1
     assert sched.loop is True  # sanity-check configuration
 
@@ -479,7 +506,9 @@ def test_next_skip_on_error(tmp_path):
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
-def test_mat_scheduler_get_batch_too_large_pads_correctly(mock_mat_files, caplog):
+def test_mat_scheduler_get_batch_too_large_pads_correctly(
+    mock_mat_files, caplog
+):
     """Ask for a batch that is larger than the number of remaining slices.
 
     Because loop=False, the scheduler should raise StopIteration.
@@ -555,4 +584,6 @@ def test_mat_scheduler_outputs_files(mock_mat_files):
         assert len(output.files) == batch_size
 
         for file_path in output.files:
-            assert os.path.basename(file_path) in [os.path.basename(f) for f in files]
+            assert os.path.basename(file_path) in [
+                os.path.basename(f) for f in files
+            ]

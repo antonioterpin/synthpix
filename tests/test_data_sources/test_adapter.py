@@ -1,11 +1,15 @@
 """Tests for Grain Adapters."""
 
-import pytest
-import numpy as np
 import grain.python as grain
-from synthpix.data_sources.adapter import GrainSchedulerAdapter, GrainEpisodicAdapter
-from synthpix.scheduler.protocol import EpisodeEnd
+import numpy as np
+import pytest
+
 from synthpix.data_sources import EpisodicDataSource, FileDataSource
+from synthpix.data_sources.adapter import (
+    GrainEpisodicAdapter,
+    GrainSchedulerAdapter,
+)
+from synthpix.scheduler.protocol import EpisodeEnd
 
 
 class MockDataSource(grain.RandomAccessDataSource):
@@ -152,7 +156,9 @@ def test_adapter_shutdown():
     """Test shutdown method."""
     ds = MockDataSource(length=1)
     loader = grain.DataLoader(
-        data_source=ds, sampler=grain.IndexSampler(1, grain.NoSharding()), operations=[]
+        data_source=ds,
+        sampler=grain.IndexSampler(1, grain.NoSharding()),
+        operations=[],
     )
     adapter = GrainSchedulerAdapter(loader)
     adapter.shutdown()  # Should do nothing but exist
@@ -165,7 +171,9 @@ def test_adapter_properties():
     # We need to ensure loader._data_source is accessible.
     # Grain wraps it.
     loader = grain.DataLoader(
-        data_source=ds, sampler=grain.IndexSampler(1, grain.NoSharding()), operations=[]
+        data_source=ds,
+        sampler=grain.IndexSampler(1, grain.NoSharding()),
+        operations=[],
     )
 
     # Grain might not expose _data_source easily in all versions, but our adapter relies on it.
@@ -231,7 +239,9 @@ def test_episodic_next_episode_logic():
 
     # Define source properties on the mock loader
     # Using a MagicMock for the data source
-    mock_source = MagicMock(spec=EpisodicDataSource)  # Use spec ensures checking
+    mock_source = MagicMock(
+        spec=EpisodicDataSource
+    )  # Use spec ensures checking
     mock_source.episode_length = 3
     mock_source.include_images = False
 
@@ -239,10 +249,22 @@ def test_episodic_next_episode_logic():
     loader._data_source = mock_source
 
     # Iterator sequence
-    batch0 = {"_timestep": np.array([0]), "flow_fields": np.zeros((1, 32, 32, 2))}
-    batch1 = {"_timestep": np.array([1]), "flow_fields": np.zeros((1, 32, 32, 2))}
-    batch2 = {"_timestep": np.array([2]), "flow_fields": np.zeros((1, 32, 32, 2))}
-    batch_next = {"_timestep": np.array([0]), "flow_fields": np.zeros((1, 32, 32, 2))}
+    batch0 = {
+        "_timestep": np.array([0]),
+        "flow_fields": np.zeros((1, 32, 32, 2)),
+    }
+    batch1 = {
+        "_timestep": np.array([1]),
+        "flow_fields": np.zeros((1, 32, 32, 2)),
+    }
+    batch2 = {
+        "_timestep": np.array([2]),
+        "flow_fields": np.zeros((1, 32, 32, 2)),
+    }
+    batch_next = {
+        "_timestep": np.array([0]),
+        "flow_fields": np.zeros((1, 32, 32, 2)),
+    }
 
     # Iterator returns: t0, t1, t2, t0...
     loader.__iter__.return_value = iter([batch0, batch1, batch2, batch_next])
@@ -395,7 +417,9 @@ def test_adapter_missing_images_error():
     adapter = GrainSchedulerAdapter(loader)
 
     # Debug: Check property directly
-    assert adapter.include_images is True, "Adapter.include_images should be True"
+    assert adapter.include_images is True, (
+        "Adapter.include_images should be True"
+    )
 
     with pytest.raises(KeyError, match="Images expected but not found"):
         adapter.get_batch(1)
@@ -487,7 +511,9 @@ def test_episodic_adapter_init_error():
     # To make check fail, ensure not instance.
     # MagicMock is not instance of EpisodicDataSource unless spec is set.
 
-    with pytest.raises(ValueError, match="Data source is not an EpisodicDataSource"):
+    with pytest.raises(
+        ValueError, match="Data source is not an EpisodicDataSource"
+    ):
         GrainEpisodicAdapter(loader)
 
 
@@ -503,7 +529,9 @@ def test_episodic_truncated_episode():
     loader._data_source = eds
 
     adapter = GrainEpisodicAdapter(loader)
-    adapter._current_timestep = 0  # Simulate we are in middle (steps_remaining = 4)
+    adapter._current_timestep = (
+        0  # Simulate we are in middle (steps_remaining = 4)
+    )
 
     # next_episode will call next(self._iterator) which raises StopIteration
     # This should hit line 256 (break) in adapter.py
@@ -559,7 +587,9 @@ def test_adapter_file_list_error():
     """Test that setting file_list raises NotImplementedError."""
     ds = MockDataSource(length=1)
     loader = grain.DataLoader(
-        data_source=ds, sampler=grain.IndexSampler(1, grain.NoSharding()), operations=[]
+        data_source=ds,
+        sampler=grain.IndexSampler(1, grain.NoSharding()),
+        operations=[],
     )
     adapter = GrainSchedulerAdapter(loader)
 

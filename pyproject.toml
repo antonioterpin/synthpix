@@ -65,6 +65,8 @@ dev = [
     "tomli",
     "pyupgrade>=3.19.0",
     "matplotlib>=3.10.1",
+    "ruff>=0.9.0",
+    "mypy>=1.14.0",
 ]
 # cuda
 cuda12 = [
@@ -114,9 +116,12 @@ strict_equality = true
 show_error_codes = true
 explicit_package_bases = true
 
-# Allow untyped decorators in test files for Hypothesis
+# Relax strictness in tests and examples
 [[tool.mypy.overrides]]
-module = "tests.*"
+module = ["tests.*", "examples.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = false
 disallow_untyped_decorators = false
 
 # Pydocstyle configuration
@@ -158,13 +163,19 @@ target-version = "py310"
 select = [
     "E",      # pycodestyle errors
     "W",      # pycodestyle warnings
-    "F",      # pyflakes (including unused imports F401)
+    "F",      # pyflakes (including unused imports F401, unused variables F841)
     "UP",     # pyupgrade (modern typing patterns)
     "I",      # isort
     "N",      # pep8-naming
     "D",      # pydocstyle
     "PL",     # pylint
     "RUF",    # ruff-specific rules
+    "TCH",    # flake8-type-checking
+    "TID",    # flake8-tidy-imports
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "SIM",    # flake8-simplify
+    "ARG",    # flake8-unused-arguments
 ]
 
 ignore = [
@@ -174,6 +185,14 @@ ignore = [
     "PLR0913", # Too many arguments to function call
     "PLR2004", # Magic value used in comparison
 ]
+
+# Explicitly enforce complete docstring structure for Google-style docstrings
+# Note: Ruff's pydocstyle implementation with Google convention should enforce:
+# - D417: Missing argument descriptions in docstring
+# - Args section when function has parameters
+# - Returns section when function returns a value
+# - Raises section when function raises exceptions
+# These are enforced by the Google convention setting below
 
 # Specific rules for modern typing enforcement
 [tool.ruff.lint.pyupgrade]
@@ -185,3 +204,11 @@ ignore = [
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.ruff.lint.pep8-naming]
+ignore-names = ["H", "W", "D"]
+
+[dependency-groups]
+dev = [
+    "pydoclint>=0.8.3",
+]

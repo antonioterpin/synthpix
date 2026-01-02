@@ -1,9 +1,14 @@
-import pytest
-import numpy as np
-import grain.python as grain
-from synthpix.data_sources.adapter import GrainSchedulerAdapter, GrainEpisodicAdapter
-from synthpix.data_sources.episodic import EpisodicDataSource
 from unittest.mock import MagicMock
+
+import grain.python as grain
+import numpy as np
+import pytest
+
+from synthpix.data_sources.adapter import (
+    GrainEpisodicAdapter,
+    GrainSchedulerAdapter,
+)
+from synthpix.data_sources.episodic import EpisodicDataSource
 
 
 def test_grain_adapter_empty_loader_error():
@@ -59,5 +64,7 @@ def test_grain_episodic_missing_metadata_error():
     # We set _current_timestep to something > -1 to trigger the skip loop
     adapter._current_timestep = 0
 
-    with pytest.raises(KeyError, match="Batch missing required '_timestep' metadata"):
+    with pytest.raises(
+        KeyError, match="Batch missing required '_timestep' metadata"
+    ):
         adapter.next_episode()

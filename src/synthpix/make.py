@@ -2,13 +2,23 @@
 
 import os
 
-import jax
 import goggles as gg
+import grain.python as grain
+import jax
 from rich.console import Console
 from rich.text import Text
 
-import grain.python as grain
-
+from synthpix.data_sources import (
+    EpisodicDataSource,
+    FileDataSource,
+    HDF5DataSource,
+    MATDataSource,
+    NumpyDataSource,
+)
+from synthpix.data_sources.adapter import (
+    GrainEpisodicAdapter,
+    GrainSchedulerAdapter,
+)
 from synthpix.sampler import RealImageSampler, Sampler, SyntheticImageSampler
 from synthpix.scheduler import (
     BaseFlowFieldScheduler,
@@ -18,39 +28,30 @@ from synthpix.scheduler import (
     NumpyFlowFieldScheduler,
     PrefetchingFlowFieldScheduler,
 )
-from synthpix.data_sources import (
-    EpisodicDataSource,
-    HDF5DataSource,
-    MATDataSource,
-    NumpyDataSource,
-    FileDataSource,
-)
-from synthpix.data_sources.adapter import (
-    GrainEpisodicAdapter,
-    GrainSchedulerAdapter,
-)
-from .utils import load_configuration, SYNTHPIX_SCOPE
+
+from .utils import SYNTHPIX_SCOPE, load_configuration
 
 logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
-SCHEDULERS = {
+SCHEDULERS: dict[str, type[BaseFlowFieldScheduler]] = {
     ".h5": HDF5FlowFieldScheduler,
     ".mat": MATFlowFieldScheduler,
     ".npy": NumpyFlowFieldScheduler,
 }
 
-DATA_SOURCES = {
+DATA_SOURCES: dict[str, type[FileDataSource]] = {
     ".h5": HDF5DataSource,
     ".mat": MATDataSource,
     ".npy": NumpyDataSource,
 }
 
 
-def get_base_scheduler(name: str) -> BaseFlowFieldScheduler:
+def get_base_scheduler(name: str) -> type[BaseFlowFieldScheduler]:
     """Get the base scheduler class by file extension.
 
     Args:
-        name: File extension identifying the scheduler type (".h5", ".mat", or ".npy").
+        name: File extension identifying the scheduler type (".h5", ".mat",
+            or ".npy").
 
     Returns:
         The scheduler class corresponding to the file extension.
@@ -60,7 +61,8 @@ def get_base_scheduler(name: str) -> BaseFlowFieldScheduler:
     """
     if name not in SCHEDULERS:
         raise ValueError(
-            f"Scheduler class {name} not found. Should be one of {list(SCHEDULERS.keys())}."
+            f"Scheduler class {name} not found. Should be one of "
+            f"{list(SCHEDULERS.keys())}."
         )
 
     return SCHEDULERS[name]
@@ -70,7 +72,8 @@ def get_data_source_class(name: str) -> type[FileDataSource]:
     """Get the data source class by file extension.
 
     Args:
-        name: File extension identifying the scheduler type (".h5", ".mat", or ".npy").
+        name: File extension identifying the scheduler type (".h5", ".mat",
+            or ".npy").
 
     Returns:
         The data source class corresponding to the file extension.
@@ -80,13 +83,14 @@ def get_data_source_class(name: str) -> type[FileDataSource]:
     """
     if name not in DATA_SOURCES:
         raise ValueError(
-            f"DataSource class {name} not found. Should be one of {list(DATA_SOURCES.keys())}."
+            f"DataSource class {name} not found. Should be one of "
+            f"{list(DATA_SOURCES.keys())}."
         )
 
     return DATA_SOURCES[name]
 
 
-def make(
+def make(  # noqa: PLR0912, PLR0915
     config: str | dict,
     use_grain_scheduler: bool = False,
 ) -> Sampler:
@@ -96,31 +100,40 @@ def make(
     Extracting images from files is supported only for .mat files.
 
     Required configuration keys:
-    - scheduler_class: The file extension of the scheduler to use (".h5", ".mat", or ".npy").
+    - scheduler_class: The file extension of the scheduler to use
+      (".h5", ".mat", or ".npy").
     - batch_size: The batch size for training (positive integer).
     - flow_fields_per_batch: Number of flow fields to use per batch.
-    - batches_per_flow_batch: Required when generating synthetic images (include_images=False).
+    - batches_per_flow_batch: Required when generating synthetic images
+      (include_images=False).
 
     Optional configuration keys:
-    - include_images: Whether to extract real images from files (bool, default False).
+    - include_images: Whether to extract real images from files (bool,
+      default False).
     - buffer_size: Size of prefetching buffer (non-negative int, default 0).
-    - episode_length: Length of episodes for episodic scheduler (non-negative int, default 0).
+    - episode_length: Length of episodes for episodic scheduler (non-negative
+      int, default 0).
     - seed: Random seed (int, default 0).
     - file_list: List of data files (list, default empty).
     - randomize: Whether to randomize file order (bool, default False).
     - loop: Whether to loop through files (bool, default True).
-    - image_shape: Shape for image extraction when include_images=True (tuple, default (256, 256)).
+    - image_shape: Shape for image extraction when include_images=True
+      (tuple, default (256, 256)).
 
     Args:
-        config: Either a path to a YAML configuration file or a configuration dictionary.
-        use_grain_scheduler: Whether to use the new Grain-based scheduler (default False).
+        config: Either a path to a YAML configuration file or a
+            configuration dictionary.
+        use_grain_scheduler: Whether to use the new Grain-based scheduler
+            (default False).
 
     Returns:
         The initialized sampler (RealImageSampler or SyntheticImageSampler).
 
     Raises:
-        TypeError: If config is not a string or dictionary, or if parameter types are invalid.
-        ValueError: If required keys are missing or parameter values are invalid.
+        TypeError: If config is not a string or dictionary, or if parameter
+            types are invalid.
+        ValueError: If required keys are missing or parameter values are
+            invalid.
         FileNotFoundError: If the configuration file doesn't exist.
     """
     # Initialize console for colored output
@@ -151,7 +164,7 @@ def make(
         console.print(text)
 
     # Input validation
-    if not isinstance(config, (str, dict)):
+    if not isinstance(config, str | dict):
         raise TypeError("config must be a string or a dictionary.")
     if isinstance(config, str):
         if not config.endswith(".yaml"):
@@ -182,7 +195,8 @@ def make(
         # Just validate existence here, retrieved later
         if scheduler_class_name not in DATA_SOURCES:
             raise ValueError(
-                f"DataSource class {scheduler_class_name} not found. Should be one of {list(DATA_SOURCES.keys())}."
+                f"DataSource class {scheduler_class_name} not found. Should be "
+                f"one of {list(DATA_SOURCES.keys())}."
             )
     else:
         scheduler_class = get_base_scheduler(scheduler_class_name)
@@ -224,7 +238,9 @@ def make(
             )
         kwargs = {
             **kwargs,
-            "output_shape": tuple(dataset_config.get("image_shape", (256, 256))),
+            "output_shape": tuple(
+                dataset_config.get("image_shape", (256, 256))
+            ),
         }
 
     # Initialize the scheduler (Legacy or Grain)
@@ -270,26 +286,33 @@ def make(
         # Grain Options from Config
         worker_count = dataset_config.get("worker_count", 0)
         num_threads = dataset_config.get("num_threads", 16)
-        buffer_size = dataset_config.get("buffer_size", 500)  # Default grain prefetch
+        buffer_size = dataset_config.get(
+            "buffer_size", 500
+        )  # Default grain prefetch
 
         # Enforce worker_count constraints for Grain
         if is_episodic and worker_count > 0:
             raise ValueError(
-                f"worker_count must be 0 when using episodic data (episode_length={episode_length}). "
-                "Using multiple workers (multiprocessing) with EpisodicDataSource breaks data order "
-                "because workers consume the interleaved episode chunks independently."
+                f"worker_count must be 0 when using episodic data "
+                f"(episode_length={episode_length}). Using multiple workers "
+                "(multiprocessing) with EpisodicDataSource breaks data order "
+                "because workers consume the interleaved episode chunks "
+                "independently."
             )
         elif not is_episodic and worker_count > 0:
             logger.warning(
                 f"Using worker_count={worker_count} with non-episodic data. "
-                "This enables multiprocessing in Grain. Notice that the order of the data is not preserved,"
-                "but still deterministic if you keep the same number of workers."
+                "This enables multiprocessing in Grain. Notice that the order "
+                "of the data is not preserved,but still deterministic if you "
+                "keep the same number of workers."
             )
 
         grain_loader = grain.DataLoader(
             data_source=data_source,
             sampler=sampler_grain,
-            operations=[grain.Batch(batch_size=batch_size, drop_remainder=False)],
+            operations=[
+                grain.Batch(batch_size=batch_size, drop_remainder=False)
+            ],
             worker_count=worker_count,
             read_options=grain.ReadOptions(
                 num_threads=num_threads, prefetch_buffer_size=buffer_size
@@ -328,7 +351,9 @@ def make(
     if include_images:
         sampler = RealImageSampler(scheduler, batch_size=batch_size)
     else:
-        batches_per_flow_batch = dataset_config.get("batches_per_flow_batch", None)
+        batches_per_flow_batch = dataset_config.get(
+            "batches_per_flow_batch", None
+        )
         if batches_per_flow_batch is None:
             raise ValueError(
                 "config must contain the 'batches_per_flow_batch' key when"
@@ -336,10 +361,11 @@ def make(
             )
         # If episode_length is specified, use EpisodicFlowFieldScheduler
         if episode_length > 0 and batches_per_flow_batch > 1:
-            # NOTE: batches_per_flow_batch is used below by the synthetic sampler
+            # NOTE: batches_per_flow_batch is used below by the synthetic
+            # sampler
             logger.warning(
-                "Using EpisodicFlowFieldScheduler with batches_per_flow_batch > 1 "
-                "may lead to unexpected behavior. "
+                "Using EpisodicFlowFieldScheduler with batches_per_flow_batch "
+                "> 1 may lead to unexpected behavior. "
                 "Consider using a single batch per flow field."
             )
 
@@ -349,6 +375,8 @@ def make(
             config=dataset_config,
         )
 
-    logger.info(f"--- SynthPix sampler and scheduler initialized ---\n{dataset_config}")
+    logger.info(
+        f"--- SynthPix sampler and scheduler initialized ---\n{dataset_config}"
+    )
 
     return sampler

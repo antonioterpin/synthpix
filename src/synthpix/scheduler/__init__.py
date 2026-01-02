@@ -10,10 +10,10 @@ from .protocol import SchedulerProtocol
 
 __all__ = [
     "BaseFlowFieldScheduler",
-    "HDF5FlowFieldScheduler",
-    "NumpyFlowFieldScheduler",
-    "MATFlowFieldScheduler",
     "EpisodicFlowFieldScheduler",
+    "HDF5FlowFieldScheduler",
+    "MATFlowFieldScheduler",
+    "NumpyFlowFieldScheduler",
     "PrefetchingFlowFieldScheduler",
     "SchedulerProtocol",
 ]

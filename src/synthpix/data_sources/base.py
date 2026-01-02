@@ -1,9 +1,9 @@
 """Base FileDataSource abstract class."""
 
 import glob
+import logging
 import os
 from abc import ABC, abstractmethod
-import logging
 from typing import Any
 
 import grain.python as grain
@@ -24,6 +24,9 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
 
         Args:
             dataset_path: A single path or list of paths (files or directories).
+
+        Raises:
+            ValueError: If dataset_path is invalid or no files are found.
         """
         self._file_list = []
 
@@ -37,7 +40,8 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
             or not all(isinstance(f, str) for f in dataset_path)
         ):
             raise ValueError(
-                "dataset_path must be a list of file paths (or a single string)."
+                "dataset_path must be a list of file paths (or a single "
+                "string)."
             )
 
         for file_path in dataset_path:
@@ -53,7 +57,8 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
 
         if not self._file_list:
             raise ValueError(
-                f"No files found in {dataset_path} matching pattern {self._file_pattern}"
+                f"No files found in {dataset_path} matching pattern "
+                f"{self._file_pattern}"
             )
 
         super().__init__()

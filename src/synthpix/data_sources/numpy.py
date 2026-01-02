@@ -1,11 +1,12 @@
 """NumpyDataSource implementation."""
 
+import logging
 import os
 import re
+from typing import Any
+
 import numpy as np
 from PIL import Image
-import logging
-from typing import Any
 
 from .base import FileDataSource
 
@@ -26,13 +27,20 @@ class NumpyDataSource(FileDataSource):
         Args:
             dataset_path: Path to the dataset.
             include_images: Whether to include images.
+
+        Raises:
+            FileNotFoundError: If expected image files are not found.
+            ValueError: If files don't have .npy extension or filenames
+                don't match expected pattern.
         """
         self._include_images = include_images
         super().__init__(dataset_path)
 
         # Pre-validation
         if not all(fp.endswith(".npy") for fp in self._file_list):
-            raise ValueError("All files must be numpy files with '.npy' extension")
+            raise ValueError(
+                "All files must be numpy files with '.npy' extension"
+            )
 
         if self.include_images:
             for flow_path in self._file_list:
@@ -41,7 +49,7 @@ class NumpyDataSource(FileDataSource):
                     raise ValueError(f"Bad filename: {flow_path}")
                 t = int(mb.group(1))
                 folder = os.path.dirname(flow_path)
-                prev_img = os.path.join(folder, f"img_{t-1}.jpg")
+                prev_img = os.path.join(folder, f"img_{t - 1}.jpg")
                 next_img = os.path.join(folder, f"img_{t}.jpg")
                 if not (os.path.isfile(prev_img) and os.path.isfile(next_img)):
                     raise FileNotFoundError(
@@ -56,6 +64,9 @@ class NumpyDataSource(FileDataSource):
 
         Returns:
             Dictionary containing data (e.g. 'flow_fields', 'images1', etc).
+
+        Raises:
+            ValueError: If filename doesn't match expected pattern.
         """
         # Load Flow
         flow = np.load(file_path)
@@ -71,7 +82,7 @@ class NumpyDataSource(FileDataSource):
             t = int(mb.group(1))
             folder = os.path.dirname(file_path)
 
-            prev_path = os.path.join(folder, f"img_{t-1}.jpg")
+            prev_path = os.path.join(folder, f"img_{t - 1}.jpg")
             curr_path = os.path.join(folder, f"img_{t}.jpg")
 
             # Load and convert to array

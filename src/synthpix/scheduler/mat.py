@@ -1,16 +1,17 @@
 """FlowFieldScheduler to load the flow field data from files."""
 
-from typing_extensions import Self
 import h5py
 import numpy as np
 import scipy.io
 from goggles import get_logger
 from PIL import Image
+from typing_extensions import Self
+
+from synthpix.scheduler.protocol import FileEndedError
+from synthpix.types import PRNGKey, SchedulerData
+from synthpix.utils import SYNTHPIX_SCOPE
 
 from .base import BaseFlowFieldScheduler
-from synthpix.utils import SYNTHPIX_SCOPE
-from synthpix.types import PRNGKey, SchedulerData
-from synthpix.scheduler.protocol import FileEndedError
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -21,13 +22,14 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
     Assumes each file contains a dataset with three keys:
     I0: previous image, I1: current image, V: associated flow field.
 
-    The scheduler can extract the flow field data and return it as a numpy array,
-    but can also return the images if requested.
+    The scheduler can extract the flow field data and return it as a numpy
+    array, but can also return the images if requested.
 
     Notice that the flow field data is expected to be already in pixels,
     and the images are in the same resolution as the flow fields.
-    The size of the flow fields in the dataset varies is either 256x256, 512x512,
-    or 1024x1024, and the images are in the same resolution as the flow fields.
+    The size of the flow fields in the dataset varies is either 256x256,
+    512x512, or 1024x1024, and the images are in the same resolution as the
+    flow fields.
     The scheduler will downscale all the data to 256x256.
     """
 
@@ -52,6 +54,10 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             output_shape: The desired output shape for the flow fields.
                 Must be a tuple of two integers (height, width).
             key: Random key for reproducibility.
+
+        Raises:
+            ValueError: If include_images is not a boolean or output_shape
+                is invalid.
         """
         if not isinstance(include_images, bool):
             raise ValueError("include_images must be a boolean value.")
@@ -66,10 +72,13 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         super().__init__(file_list, randomize, loop, key)
         # ensure all supplied files are .mat
         if not all(file_path.endswith(".mat") for file_path in self.file_list):
-            raise ValueError("All files must be MATLAB .mat files with HDF5 format")
+            raise ValueError(
+                "All files must be MATLAB .mat files with HDF5 format"
+            )
 
         logger.debug(
-            f"Initializing MATFlowFieldScheduler with output_shape={self.output_shape}, "
+            f"Initializing MATFlowFieldScheduler with "
+            f"output_shape={self.output_shape}, "
             f"include_images={self.include_images}, "
             f"randomize={self.randomize}, loop={self.loop}"
         )
@@ -86,10 +95,10 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         Returns:
             True if the file is in HDF5 format, False otherwise.
         """
-        return h5py.is_hdf5(path)
+        return bool(h5py.is_hdf5(path))
 
     def load_file(self, file_path: str) -> SchedulerData:
-        """Load any MATLAB .mat file (v4, v5/6/7, or v7.3) and return its data dict.
+        """Load .mat file (v4-v7.3) and return data dict.
 
         Args:
             file_path: Path to the .mat file.
@@ -97,9 +106,14 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         Returns:
             Dictionary containing 'V' (flow field).  When
             `self.include_images` is True, it must also hold 'I0' and 'I1'.
+
+        Raises:
+            ValueError: If required keys are missing or data has invalid shape.
         """
 
-        def recursively_load_hdf5_group(group, prefix=""):
+        def recursively_load_hdf5_group(
+            group: h5py.Group | h5py.File, prefix: str = ""
+        ) -> dict[str, np.ndarray]:
             """Flatten all datasets in an HDF5 tree into a dict."""
             out = {}
             for name, item in group.items():
@@ -130,11 +144,15 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                     data = recursively_load_hdf5_group(f)
 
         if data is None:
-            raise ValueError(f"Failed to load {file_path} as HDF5 or legacy MATLAB.")
+            raise ValueError(
+                f"Failed to load {file_path} as HDF5 or legacy MATLAB."
+            )
 
         # Validate the loaded data
         if "V" not in data:
-            raise ValueError(f"Flow field not found in {file_path} (missing 'V').")
+            raise ValueError(
+                f"Flow field not found in {file_path} (missing 'V')."
+            )
         if self.include_images and not all(k in data for k in ("I0", "I1")):
             raise ValueError(
                 f"Image visualization not supported for {file_path}: "
@@ -168,12 +186,18 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             # PIL resize expects (width, height)
             size = (self.output_shape[1], self.output_shape[0])
             flow_u = np.asarray(
-                Image.fromarray(flow[..., 0]).resize(size, Image.Resampling.BILINEAR)
+                Image.fromarray(flow[..., 0]).resize(
+                    size, Image.Resampling.BILINEAR
+                )
             )
             flow_v = np.asarray(
-                Image.fromarray(flow[..., 1]).resize(size, Image.Resampling.BILINEAR)
+                Image.fromarray(flow[..., 1]).resize(
+                    size, Image.Resampling.BILINEAR
+                )
             )
-            flow_resized = np.stack([flow_u * ratio_x, flow_v * ratio_y], axis=-1)
+            flow_resized = np.stack(
+                [flow_u * ratio_x, flow_v * ratio_y], axis=-1
+            )
             data["V"] = flow_resized
 
         logger.debug(f"Loaded {file_path} with keys {list(data.keys())}")
@@ -190,6 +214,10 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         Returns:
             SchedulerData containing the flow field and, if requested,
             the previous and next images.
+
+        Raises:
+            FileEndedError: If the end of file data is reached.
+            RuntimeError: If no data is currently cached.
         """
         data = self._cached_data
         if data is None:
@@ -207,11 +235,11 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         Returns:
             Shape of the flow field.
         """
-        return self.output_shape + (2,)
+        return (*self.output_shape, 2)
 
     @classmethod
     def from_config(cls, config: dict) -> Self:
-        """Creates a MATFlowFieldScheduler instance from a configuration dictionary.
+        """Creates a MATFlowFieldScheduler from a dictionary.
 
         Args:
             config:

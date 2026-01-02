@@ -3,19 +3,18 @@
 import glob
 import os
 
-from typing_extensions import Self
-
+import goggles as gg
 import jax
 import jax.numpy as jnp
-import goggles as gg
+from typing_extensions import Self
 
-from synthpix.utils import discover_leaf_dirs, SYNTHPIX_SCOPE
-from synthpix.types import PRNGKey, SchedulerData
 from synthpix.scheduler.protocol import (
-    EpisodeEnd,
+    EpisodeEndError,
     EpisodicSchedulerProtocol,
     SchedulerProtocol,
 )
+from synthpix.types import PRNGKey, SchedulerData
+from synthpix.utils import SYNTHPIX_SCOPE, discover_leaf_dirs
 
 logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -57,9 +56,9 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
 
     Notes:
     -----
-    * The underlying scheduler (and its prefetching thread) are **not** initialized
-      on every episode reset—only the order of ``file_list`` is mutated.  This
-      keeps disk I/O sequential and maximises throughput.
+    * The underlying scheduler (and its prefetching thread) are **not**
+      initialized on every episode reset—only the order of ``file_list`` is
+      mutated. This keeps disk I/O sequential and maximises throughput.
     * The wrapper follows the “vector-environment” pattern popular in Gym,
       Gymnax and Brax, so your JAX RL loop can `vmap` or `pmap` over the first
       dimension without shape changes.
@@ -76,18 +75,19 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
 
         Args:
             scheduler: Any scheduler that implements SchedulerProtocol
-                (e.g. :class:`MATFlowFieldScheduler`, :class:`HDF5FlowFieldScheduler`).
-            batch_size: episodes to run in parallel
+                (e.g., :class:`MATFlowFieldScheduler`,
+                :class:`HDF5FlowFieldScheduler`).
+            batch_size: Episodes to run in parallel
                 (== first dim of each batch).
             episode_length: Number of consecutive flow-fields that
-                make up *one* episode.
+                make up one episode.
             key: Random key for reproducibility.
 
         Raises:
-            ValueError: If ``batch_size`` or ``episode_length`` are
-            not positive, or if the dataset does not contain enough
-            distinct starting positions to form at least one complete
-            batch of episodes.
+            TypeError: If scheduler does not implement SchedulerProtocol.
+            ValueError: If batch_size or episode_length are not positive,
+                or if the dataset does not contain enough distinct starting
+                positions to form at least one complete batch of episodes.
         """
         if not isinstance(scheduler, SchedulerProtocol):
             raise TypeError(
@@ -123,7 +123,7 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         Returns:
             The current file list.
         """
-        return self.scheduler.file_list
+        return list(self.scheduler.file_list)
 
     @file_list.setter
     def file_list(self, value: list[str]) -> None:
@@ -146,6 +146,10 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         Returns:
             SchedulerData containing the flow fields for the current time-step
             across all episodes.
+
+        Raises:
+            EpisodeEndError: If the current episode has been exhausted.
+            ValueError: If batch_size does not match initialization value.
         """
         if batch_size != self.batch_size:
             raise ValueError(
@@ -156,9 +160,9 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         logger.debug(f"get_batch() called with batch_size {batch_size}")
 
         if self._t >= self.episode_length:
-            # If we’ve exhausted the current horizon,
+            # If we've exhausted the current horizon,
             # wait for the next episode
-            raise EpisodeEnd
+            raise EpisodeEndError
 
         self._t += 1
 
@@ -195,7 +199,8 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
     def reset(self) -> None:
         """Start *batch_size* brand-new episodes.
 
-        Alias for reset_episode() to maintain API consistency with BaseFlowFieldScheduler.
+        Alias for reset_episode() to maintain API consistency with
+        BaseFlowFieldScheduler.
         """
         self.reset_episode()
 
@@ -216,25 +221,33 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         self._sample_new_episodes()
         self._t = 0
 
-    def get_flow_fields_shape(self) -> tuple[int, ...]:
+    def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Return the shape of the flow fields from the underlying scheduler.
 
         Returns:
             Shape of the flow fields as returned by the underlying scheduler.
         """
-        return self.scheduler.get_flow_fields_shape()
+        shape = self.scheduler.get_flow_fields_shape()
+        return (int(shape[0]), int(shape[1]), int(shape[2]))
 
-    def _calculate_starts(self) -> tuple[dict[str, list[str]], list[tuple[str, int]]]:
+    def _calculate_starts(
+        self,
+    ) -> tuple[dict[str, list[str]], list[tuple[str, int]]]:
         """Calculate the possible starting positions for the episodes.
 
         Returns:
             - A dictionary mapping directories to their sorted file lists
             - A list of tuples containing the directory and the starting index
                 for each possible episode start position.
+
+        Raises:
+            ValueError: If any directory has fewer files than episode_length.
         """
         # Extract the leaf directories from the file list
         leaf_dirs = discover_leaf_dirs(self.file_list)
-        dir2files = {d: sorted(glob.glob(os.path.join(d, "*.mat"))) for d in leaf_dirs}
+        dir2files = {
+            d: sorted(glob.glob(os.path.join(d, "*.mat"))) for d in leaf_dirs
+        }
 
         # Sanity-check: all directories must contain enough frames
         for d, files in dir2files.items():
@@ -244,7 +257,7 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
                     f"but episode_length is {self.episode_length}."
                 )
         # Enumerate every admissible (dir, start_index) combination
-        starts = []
+        starts: list[tuple[str, int]] = []
         for d, files in dir2files.items():
             last_start = len(files) - self.episode_length
             starts.extend((d, s) for s in range(last_start + 1))
@@ -255,25 +268,27 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         """Create a new interleaved file order for the ``scheduler``."""
         # Randomly choose batch_size starts indices without replacement
         cpu = jax.devices("cpu")[0]
-        indices = jnp.arange(len(self._starts), device=cpu)
+        indices = jnp.arange(len(self._starts), dtype=jnp.int32)
 
         self._key, starts_key = jax.random.split(self._key)
-        starts = jax.random.choice(
-            starts_key, indices, shape=(self.batch_size,), replace=True
-        )
+        # We perform sampling on CPU device to avoid GPU transfers if possible
+        with jax.default_device(cpu):
+            sampled_indices = jax.random.choice(
+                starts_key, indices, shape=(self.batch_size,), replace=True
+            )
 
         # Map the indices to directories
-        starts = [self._starts[s] for s in starts]
+        sampled_starts = [self._starts[int(s)] for s in sampled_indices]
 
         # Build individual episode sequences
         episodes = []
-        for d, s in starts:
+        for d, s in sampled_starts:
             # Extract the time-series pattern for this episode
             episodes.append(self.dir2files[d][s : s + self.episode_length])
 
         # Interleave “time major” → t0_ep0, t0_ep1, …, t1_ep0, …
         interleaved = [
-            episodes[ep][t]  # type: ignore[index]
+            episodes[ep][t]
             for t in range(self.episode_length)
             for ep in range(self.batch_size)
         ]

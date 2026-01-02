@@ -2,16 +2,17 @@
 
 import os
 import re
-from typing_extensions import Self
 
 import numpy as np
 from goggles import get_logger
 from PIL import Image
+from typing_extensions import Self
+
+from synthpix.scheduler.protocol import FileEndedError
+from synthpix.types import PRNGKey, SchedulerData
+from synthpix.utils import SYNTHPIX_SCOPE
 
 from .base import BaseFlowFieldScheduler
-from synthpix.scheduler.protocol import FileEndedError
-from synthpix.utils import SYNTHPIX_SCOPE
-from synthpix.types import PRNGKey, SchedulerData
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -50,6 +51,11 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
             loop: If True, cycle indefinitely.
             include_images: If True, validate and return paired JPEG images.
             key: Random key for reproducibility.
+
+        Raises:
+            FileNotFoundError: If expected image files are not found.
+            ValueError: If include_images is not boolean, files don't have
+                .npy extension, or filenames don't match expected pattern.
         """
         if not isinstance(include_images, bool):
             raise ValueError("include_images must be a boolean value.")
@@ -59,7 +65,9 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
 
         # ensure all supplied files are .npy
         if not all(fp.endswith(".npy") for fp in self.file_list):
-            raise ValueError("All files must be numpy files with '.npy' extension")
+            raise ValueError(
+                "All files must be numpy files with '.npy' extension"
+            )
 
         # validate image pairs only if requested
         if self.include_images:
@@ -69,7 +77,7 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
                     raise ValueError(f"Bad filename: {flow_path}")
                 t = int(mb.group(1))
                 folder = os.path.dirname(flow_path)
-                prev_img = os.path.join(folder, f"img_{t-1}.jpg")
+                prev_img = os.path.join(folder, f"img_{t - 1}.jpg")
                 next_img = os.path.join(folder, f"img_{t}.jpg")
                 if not (os.path.isfile(prev_img) and os.path.isfile(next_img)):
                     raise FileNotFoundError(
@@ -92,6 +100,11 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
 
         Returns:
             Either the flow array or a dictionary with flow and images.
+
+        Raises:
+            FileEndedError: If the end of file data is reached.
+            RuntimeError: If no data is currently cached.
+            ValueError: If filename doesn't match expected pattern.
         """
         data = self._cached_data
         if data is None or self._cached_file is None:
@@ -110,19 +123,22 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         t = int(mb.group(1))
         folder = os.path.dirname(self._cached_file)
         prev = np.array(
-            Image.open(os.path.join(folder, f"img_{t-1}.jpg")).convert("RGB")
+            Image.open(os.path.join(folder, f"img_{t - 1}.jpg")).convert("RGB")
         )
-        nxt = np.array(Image.open(os.path.join(folder, f"img_{t}.jpg")).convert("RGB"))
+        nxt = np.array(
+            Image.open(os.path.join(folder, f"img_{t}.jpg")).convert("RGB")
+        )
 
         return data.update(images1=prev, images2=nxt)
 
-    def get_flow_fields_shape(self) -> tuple[int, ...]:
+    def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Return the shape of a single flow array.
 
         Returns:
             Shape of the flow array.
         """
-        return np.load(self.file_list[0]).shape
+        shape = np.load(self.file_list[0]).shape
+        return (int(shape[0]), int(shape[1]), int(shape[2]))
 
     @classmethod
     def from_config(cls, config: dict) -> Self:

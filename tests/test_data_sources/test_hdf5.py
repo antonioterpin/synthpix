@@ -1,6 +1,7 @@
 """Tests for HDF5DataSource."""
 
 import os
+
 import h5py
 import numpy as np
 import pytest

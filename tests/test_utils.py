@@ -1,9 +1,8 @@
 import os
-from pathlib import Path
 import re
 import sys
 import timeit
-from tests.example_flows import get_flow_function
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -19,6 +18,7 @@ from synthpix.utils import (
     load_configuration,
     trilinear_interpolate,
 )
+from tests.example_flows import get_flow_function
 
 config = load_configuration("config/testing.yaml")
 
@@ -54,8 +54,20 @@ def test_bilinear_interpolate(
     "image, x, y, z, expected",
     [
         (jnp.array([[[0, 1], [2, 3]], [[4, 5], [6, 7]]]), 0.5, 0.5, 0.5, 3.5),
-        (jnp.array([[[0, 1], [2, 3]], [[4, 5], [6, 7]]]), 0.25, 0.75, 0.75, 4.75),
-        (jnp.array([[[0, 1], [2, 3]], [[4, 5], [6, 7]]]), -0.5, -0.5, -0.5, 0.0),
+        (
+            jnp.array([[[0, 1], [2, 3]], [[4, 5], [6, 7]]]),
+            0.25,
+            0.75,
+            0.75,
+            4.75,
+        ),
+        (
+            jnp.array([[[0, 1], [2, 3]], [[4, 5], [6, 7]]]),
+            -0.5,
+            -0.5,
+            -0.5,
+            0.0,
+        ),
     ],
 )
 def test_trilinear_interpolate(
@@ -235,7 +247,8 @@ def test_invalid_new_flow_field_shape(new_flow_field_shape):
 @pytest.mark.parametrize("image_shape", [(256,), "invalid"])
 def test_invalid_image_shape_format(image_shape):
     with pytest.raises(
-        ValueError, match="image_shape must be a tuple of two positive integers."
+        ValueError,
+        match="image_shape must be a tuple of two positive integers.",
     ):
         input_check_flow_field_adapter(
             flow_field=valid_flow_field,
@@ -279,7 +292,8 @@ def test_invalid_image_shape_values(image_shape):
 @pytest.mark.parametrize("img_offset", [(256,), "invalid"])
 def test_invalid_img_offset_format(img_offset):
     with pytest.raises(
-        ValueError, match="img_offset must be a tuple of two non-negative numbers."
+        ValueError,
+        match="img_offset must be a tuple of two non-negative numbers.",
     ):
         input_check_flow_field_adapter(
             flow_field=valid_flow_field,
@@ -349,14 +363,17 @@ def test_invalid_resolutions(value, param_name):
         "zero_padding": valid_zero_padding,
     }
     args[param_name] = value
-    with pytest.raises(ValueError, match=f"{param_name} must be a positive number."):
+    with pytest.raises(
+        ValueError, match=f"{param_name} must be a positive number."
+    ):
         input_check_flow_field_adapter(**args)
 
 
 @pytest.mark.parametrize("position_bounds", [(256,), "invalid"])
 def test_invalid_position_bounds_format(position_bounds):
     with pytest.raises(
-        ValueError, match="position_bounds must be a tuple of two positive numbers."
+        ValueError,
+        match="position_bounds must be a tuple of two positive numbers.",
     ):
         input_check_flow_field_adapter(
             flow_field=valid_flow_field,
@@ -445,7 +462,9 @@ def test_invalid_position_bounds_offset_values(position_bounds_offset):
 
 @pytest.mark.parametrize("batch_size", [-1, 0, "1", 1.5])
 def test_invalid_batch_size(batch_size):
-    with pytest.raises(ValueError, match="batch_size must be a positive integer."):
+    with pytest.raises(
+        ValueError, match="batch_size must be a positive integer."
+    ):
         input_check_flow_field_adapter(
             flow_field=valid_flow_field,
             new_flow_field_shape=valid_shape,
@@ -509,7 +528,8 @@ def test_invalid_dt(dt):
 @pytest.mark.parametrize("zero_padding", [(1,), "invalid", (-1, 0), (0, -1)])
 def test_invalid_zero_padding(zero_padding):
     with pytest.raises(
-        ValueError, match="zero_padding must be a tuple of two non-negative integers."
+        ValueError,
+        match="zero_padding must be a tuple of two non-negative integers.",
     ):
         input_check_flow_field_adapter(
             flow_field=valid_flow_field,
@@ -532,9 +552,27 @@ def test_invalid_zero_padding(zero_padding):
     "flow_field, flow_field_shape, new_flow_field_shape, "
     "expected_shape, expected_first_vector",
     [
-        ("horizontal", (1280, 1280), (128, 128), (128, 128, 2), jnp.array([10.0, 0.0])),
-        ("vertical", (12, 12), (256, 256), (256, 256, 2), jnp.array([0.0, 10.0])),
-        ("diagonal", (1, 1), (2560, 2560), (2560, 2560, 2), jnp.array([10.0, 10.0])),
+        (
+            "horizontal",
+            (1280, 1280),
+            (128, 128),
+            (128, 128, 2),
+            jnp.array([10.0, 0.0]),
+        ),
+        (
+            "vertical",
+            (12, 12),
+            (256, 256),
+            (256, 256, 2),
+            jnp.array([0.0, 10.0]),
+        ),
+        (
+            "diagonal",
+            (1, 1),
+            (2560, 2560),
+            (2560, 2560, 2),
+            jnp.array([10.0, 10.0]),
+        ),
     ],
 )
 def test_flow_field_adapter_shape(
@@ -659,7 +697,10 @@ def test_speed_flow_fields_adapter(
             ),
             mesh=mesh,
             in_specs=(PartitionSpec(shard_fields)),
-            out_specs=(PartitionSpec(shard_fields), PartitionSpec(shard_fields)),
+            out_specs=(
+                PartitionSpec(shard_fields),
+                PartitionSpec(shard_fields),
+            ),
         )
     )
 
@@ -673,13 +714,15 @@ def test_speed_flow_fields_adapter(
 
     # Time the JIT-ed function
     total_time_jit = timeit.repeat(
-        stmt=run_flow_field_adapter_jit, number=NUMBER_OF_EXECUTIONS, repeat=REPETITIONS
+        stmt=run_flow_field_adapter_jit,
+        number=NUMBER_OF_EXECUTIONS,
+        repeat=REPETITIONS,
     )
     average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
 
-    assert (
-        average_time_jit < limit_time
-    ), f"The average time is {average_time_jit}, time limit: {limit_time}"
+    assert average_time_jit < limit_time, (
+        f"The average time is {average_time_jit}, time limit: {limit_time}"
+    )
 
 
 def _abspath(p):  # small helper to compare reliably
@@ -775,7 +818,8 @@ def test_discover_leaf_dirs_skips_not_a_directory(tmp_path, monkeypatch):
 
 
 @pytest.mark.skipif(
-    sys.platform.startswith("win"), reason="permission semantics differ on Windows"
+    sys.platform.startswith("win"),
+    reason="permission semantics differ on Windows",
 )
 def test_discover_leaf_dirs_skips_permission_denied(tmp_path, monkeypatch):
     """Simulate PermissionError without touching actual filesystem permissions."""

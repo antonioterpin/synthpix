@@ -168,7 +168,9 @@ def test_speed_img_gen(
     intensities = jax.device_put(
         intensities, NamedSharding(mesh, PartitionSpec(shard_particles))
     )
-    rho = jax.device_put(rho, NamedSharding(mesh, PartitionSpec(shard_particles)))
+    rho = jax.device_put(
+        rho, NamedSharding(mesh, PartitionSpec(shard_particles))
+    )
 
     # wait for the variables to be sent to the devices
     jax.block_until_ready(particles)
@@ -178,7 +180,11 @@ def test_speed_img_gen(
     jax.block_until_ready(rho)
 
     _img_gen_fun = (
-        lambda particles, diameters_x, diameters_y, intensities, rho: img_gen_from_data(
+        lambda particles,
+        diameters_x,
+        diameters_y,
+        intensities,
+        rho: img_gen_from_data(
             image_shape=image_shape,
             particle_positions=particles,
             diameters_x=diameters_x,
@@ -231,6 +237,6 @@ def test_speed_img_gen(
     average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
 
     # 4. Check if the time is less than the limit
-    assert (
-        average_time_jit < limit_time
-    ), f"The average time is {average_time_jit}, time limit: {limit_time}"
+    assert average_time_jit < limit_time, (
+        f"The average time is {average_time_jit}, time limit: {limit_time}"
+    )

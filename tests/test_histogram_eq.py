@@ -1,5 +1,4 @@
 import re
-from synthpix.types import ImageGenerationSpecification
 
 import jax
 import jax.numpy as jnp
@@ -12,6 +11,7 @@ from synthpix.data_generate import (
     input_check_gen_img_from_flow,
 )
 from synthpix.sampler import SyntheticImageSampler
+from synthpix.types import ImageGenerationSpecification
 from synthpix.utils import load_configuration, match_histogram
 
 TARGET_SHAPE = (64, 64)
@@ -25,7 +25,9 @@ def mock_histogram_file(tmp_path, numpy_test_dims):
 
     path = tmp_path / "histogram.npy"
     arr = np.zeros((256,))
-    arr[0] = shape[0] * shape[1]  # Set the first bin to the total number of pixels
+    arr[0] = (
+        shape[0] * shape[1]
+    )  # Set the first bin to the total number of pixels
     np.save(path, arr)
 
     yield str(path), numpy_test_dims
@@ -48,7 +50,9 @@ def mock_histogram_invalid_file(tmp_path, numpy_test_dims):
 def random_image_uint8():
     """Generates a random TARGET_SHAPE uint8 grayscale image for testing."""
     key = jax.random.PRNGKey(42)
-    img = jax.random.randint(key, TARGET_SHAPE, minval=0, maxval=256, dtype=jnp.uint8)
+    img = jax.random.randint(
+        key, TARGET_SHAPE, minval=0, maxval=256, dtype=jnp.uint8
+    )
     return img
 
 
@@ -56,7 +60,9 @@ def test_identity_mapping(random_image_uint8):
     """Matching a histogram to its own should return the original image."""
     src = random_image_uint8.astype(jnp.float32)
     # Compute source histogram in 256 bins (0..255)
-    template_hist, _ = jnp.histogram(src, bins=jnp.arange(257, dtype=jnp.float32))
+    template_hist, _ = jnp.histogram(
+        src, bins=jnp.arange(257, dtype=jnp.float32)
+    )
     assert template_hist.shape[0] == 256
     assert jnp.isclose(jnp.sum(template_hist), src.size)
 
@@ -95,7 +101,9 @@ def test_constant_source():
 def test_jit_compatibility(random_image_uint8):
     """Ensure the function can be JIT-compiled and yields identical results."""
     src = random_image_uint8.astype(jnp.float32)
-    template_hist, _ = jnp.histogram(src, bins=jnp.arange(257, dtype=jnp.float32))
+    template_hist, _ = jnp.histogram(
+        src, bins=jnp.arange(257, dtype=jnp.float32)
+    )
     assert template_hist.shape[0] == 256
     assert jnp.isclose(jnp.sum(template_hist), src.size)
 
@@ -117,7 +125,9 @@ def test_input_check_gen_img_from_flow_logs_histogram(monkeypatch):
 
     # Collect debug messages
     logged = []
-    monkeypatch.setattr(generate_mod.logger, "debug", lambda msg: logged.append(msg))
+    monkeypatch.setattr(
+        generate_mod.logger, "debug", lambda msg: logged.append(msg)
+    )
 
     # Call the function to test
     generate_mod.input_check_gen_img_from_flow(
@@ -128,9 +138,9 @@ def test_input_check_gen_img_from_flow_logs_histogram(monkeypatch):
 
     # Check if the mask shape was logged
     expected_msg = "Histogram equalization will be applied to the images."
-    assert any(
-        expected_msg in m for m in logged
-    ), f"Expected :{expected_msg}, got: {logged}"
+    assert any(expected_msg in m for m in logged), (
+        f"Expected :{expected_msg}, got: {logged}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -253,7 +263,10 @@ def test_histogram_is_correct(scheduler, mock_histogram_file):
     """Test that correct histogram gets loaded."""
     # Create a dummy histogram with a valid shape
     histogram = jnp.array(np.load(mock_histogram_file[0]))
-    image_shape = mock_histogram_file[1]["height"], mock_histogram_file[1]["width"]
+    image_shape = (
+        mock_histogram_file[1]["height"],
+        mock_histogram_file[1]["width"],
+    )
 
     config = sampler_config.copy()
     config["histogram"] = mock_histogram_file[0]
@@ -265,6 +278,6 @@ def test_histogram_is_correct(scheduler, mock_histogram_file):
 
     assert isinstance(sampler.histogram, jnp.ndarray)
     assert sampler.histogram.shape == histogram.shape
-    assert jnp.array_equal(
-        sampler.histogram, histogram
-    ), "Histogram loaded from file does not match the expected histogram."
+    assert jnp.array_equal(sampler.histogram, histogram), (
+        "Histogram loaded from file does not match the expected histogram."
+    )

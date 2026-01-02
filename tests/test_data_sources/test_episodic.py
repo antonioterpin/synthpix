@@ -1,9 +1,11 @@
 """Tests for EpisodicDataSource."""
 
 import os
+
+import grain.python as grain
 import numpy as np
 import pytest
-import grain.python as grain
+
 from synthpix.data_sources import EpisodicDataSource, FileDataSource
 
 
@@ -100,7 +102,10 @@ def test_episodic_grain_integration():
     loader = grain.DataLoader(
         data_source=ds,
         sampler=grain.IndexSampler(
-            len(ds), shuffle=False, shard_options=grain.NoSharding(), num_epochs=1
+            len(ds),
+            shuffle=False,
+            shard_options=grain.NoSharding(),
+            num_epochs=1,
         ),
         operations=[grain.Batch(batch_size=4)],
         worker_count=0,
@@ -121,8 +126,12 @@ def test_episodic_grain_integration():
 
 def test_episodic_type_validation():
     """Test that TypeError is raised if source is not FileDataSource."""
-    with pytest.raises(TypeError, match="must be an instance of FileDataSource"):
-        EpisodicDataSource(source="not_a_source", batch_size=2, episode_length=5)  # type: ignore
+    with pytest.raises(
+        TypeError, match="must be an instance of FileDataSource"
+    ):
+        EpisodicDataSource(
+            source="not_a_source", batch_size=2, episode_length=5
+        )  # type: ignore
 
 
 def test_episodic_remainder_handling():

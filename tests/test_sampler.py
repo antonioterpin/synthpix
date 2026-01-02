@@ -34,7 +34,8 @@ sampler_config = load_configuration("config/test_data.yaml")
 def test_invalid_scheduler(scheduler):
     """Test that invalid scheduler raises a ValueError."""
     with pytest.raises(
-        TypeError, match="scheduler must implement the SchedulerProtocol interface."
+        TypeError,
+        match="scheduler must implement the SchedulerProtocol interface.",
     ):
         SyntheticImageSampler.from_config(
             scheduler=scheduler,
@@ -114,9 +115,9 @@ def test_batch_size_n_devices(n_devices, scheduler):
         scheduler=scheduler,
         config=config,
     )
-    assert (
-        sampler.batch_size == n_devices
-    ), "Batch size should match number of devices when set to 1."
+    assert sampler.batch_size == n_devices, (
+        "Batch size should match number of devices when set to 1."
+    )
 
 
 @pytest.mark.parametrize("batch_size", [-1, 0, 1.5])
@@ -125,7 +126,9 @@ def test_batch_size_n_devices(n_devices, scheduler):
 )
 def test_invalid_batch_size(batch_size, scheduler):
     """Test that invalid batch_size raises a ValueError."""
-    with pytest.raises(ValueError, match="batch_size must be a positive integer."):
+    with pytest.raises(
+        ValueError, match="batch_size must be a positive integer."
+    ):
         config = sampler_config.copy()
         config["batch_size"] = batch_size
         config["flow_fields_per_batch"] = batch_size
@@ -135,14 +138,17 @@ def test_invalid_batch_size(batch_size, scheduler):
         )
 
 
-@pytest.mark.parametrize("flow_shape", [(-1, 128), (128, -1), (0, 128), (128, 0)])
+@pytest.mark.parametrize(
+    "flow_shape", [(-1, 128), (128, -1), (0, 128), (128, 0)]
+)
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_invalid_flow_shape(flow_shape, scheduler):
     """Test that invalid flow_shape raises a ValueError."""
     with pytest.raises(
-        ValueError, match="flow_field_size must be a tuple of two positive numbers."
+        ValueError,
+        match="flow_field_size must be a tuple of two positive numbers.",
     ):
         config = sampler_config.copy()
         config["flow_field_size"] = flow_shape
@@ -248,7 +254,8 @@ def test_invalid_flow_field_size_in_scheduler(flow_field_size, scheduler):
 def test_invalid_image_shape(image_shape, scheduler):
     """Test that invalid image_shape raises a ValueError."""
     with pytest.raises(
-        ValueError, match="image_shape must be a tuple of two positive integers."
+        ValueError,
+        match="image_shape must be a tuple of two positive integers.",
     ):
         config = sampler_config.copy()
         config["image_shape"] = image_shape
@@ -264,7 +271,9 @@ def test_invalid_image_shape(image_shape, scheduler):
 )
 def test_invalid_resolution(resolution, scheduler):
     """Test that invalid resolution raises a ValueError."""
-    with pytest.raises(ValueError, match="resolution must be a positive number."):
+    with pytest.raises(
+        ValueError, match="resolution must be a positive number."
+    ):
         config = sampler_config.copy()
         config["resolution"] = resolution
         SyntheticImageSampler.from_config(
@@ -281,7 +290,9 @@ def test_invalid_resolution(resolution, scheduler):
 )
 def test_invalid_velocities_per_pixel(velocities_per_pixel, scheduler):
     """Test that invalid velocities_per_pixel raises a ValueError."""
-    with pytest.raises(ValueError, match="velocities_per_pixel must be a number."):
+    with pytest.raises(
+        ValueError, match="velocities_per_pixel must be a number."
+    ):
         config = sampler_config.copy()
         config["velocities_per_pixel"] = velocities_per_pixel
         SyntheticImageSampler.from_config(
@@ -314,7 +325,8 @@ def test_non_positive_velocities_per_pixel(velocities_per_pixel, scheduler):
 def test_invalid_img_offset(img_offset, scheduler):
     """Test that invalid img_offset raises a ValueError."""
     with pytest.raises(
-        ValueError, match="img_offset must be a tuple of two non-negative numbers."
+        ValueError,
+        match="img_offset must be a tuple of two non-negative numbers.",
     ):
         config = sampler_config.copy()
         config["img_offset"] = img_offset
@@ -339,8 +351,14 @@ def test_invalid_img_offset(img_offset, scheduler):
             (-0.5, -0.5),
             "seeding_density_range must be a tuple of two non-negative numbers.",
         ),
-        ((1.0, 0.5), "seeding_density_range must be in the form \\(min, max\\)."),
-        ((0.5, 0.1), "seeding_density_range must be in the form \\(min, max\\)."),
+        (
+            (1.0, 0.5),
+            "seeding_density_range must be in the form \\(min, max\\).",
+        ),
+        (
+            (0.5, 0.1),
+            "seeding_density_range must be in the form \\(min, max\\).",
+        ),
     ],
 )
 @pytest.mark.parametrize(
@@ -365,7 +383,9 @@ def test_invalid_seeding_density_range(
 )
 def test_invalid_p_hide_img1(p_hide_img1, scheduler):
     """Test that invalid p_hide_img1 raises a ValueError."""
-    with pytest.raises(ValueError, match="p_hide_img1 must be between 0 and 1."):
+    with pytest.raises(
+        ValueError, match="p_hide_img1 must be between 0 and 1."
+    ):
         config = sampler_config.copy()
         config["p_hide_img1"] = p_hide_img1
         SyntheticImageSampler.from_config(
@@ -381,7 +401,9 @@ def test_invalid_p_hide_img1(p_hide_img1, scheduler):
 def test_invalid_p_hide_img2(p_hide_img2, scheduler):
     """Test that invalid p_hide_img2 raises a ValueError."""
 
-    with pytest.raises(ValueError, match="p_hide_img2 must be between 0 and 1."):
+    with pytest.raises(
+        ValueError, match="p_hide_img2 must be between 0 and 1."
+    ):
         config = sampler_config.copy()
         config["p_hide_img2"] = p_hide_img2
         SyntheticImageSampler.from_config(
@@ -431,14 +453,22 @@ def test_invalid_diameter_ranges(diameter_ranges, expected_message, scheduler):
 
 @pytest.mark.parametrize(
     "diameter_var",
-    [-1, "invalid_diameter_var", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])],
+    [
+        -1,
+        "invalid_diameter_var",
+        [1, 2],
+        jnp.array([1, 2]),
+        jnp.array([[1, 2]]),
+    ],
 )
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_invalid_diameter_var(diameter_var, scheduler):
     """Test that invalid diameter_var raises a ValueError."""
-    with pytest.raises(ValueError, match="diameter_var must be a non-negative number."):
+    with pytest.raises(
+        ValueError, match="diameter_var must be a non-negative number."
+    ):
         config = sampler_config.copy()
         config["diameter_var"] = diameter_var
         SyntheticImageSampler.from_config(
@@ -475,7 +505,9 @@ def test_invalid_diameter_var(diameter_var, scheduler):
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_intensity_ranges(intensity_ranges, expected_message, scheduler):
+def test_invalid_intensity_ranges(
+    intensity_ranges, expected_message, scheduler
+):
     """Test that invalid intensity_ranges raises a ValueError."""
     with pytest.raises(ValueError, match=expected_message):
         config = sampler_config.copy()
@@ -488,7 +520,13 @@ def test_invalid_intensity_ranges(intensity_ranges, expected_message, scheduler)
 
 @pytest.mark.parametrize(
     "intensity_var",
-    [-1, "invalid_intensity_var", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])],
+    [
+        -1,
+        "invalid_intensity_var",
+        [1, 2],
+        jnp.array([1, 2]),
+        jnp.array([[1, 2]]),
+    ],
 )
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
@@ -542,14 +580,17 @@ def test_invalid_rho_range(rho_ranges, expected_message, scheduler):
 
 
 @pytest.mark.parametrize(
-    "rho_var", [-1, "invalid_rho_var", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+    "rho_var",
+    [-1, "invalid_rho_var", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])],
 )
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_invalid_rho_var(rho_var, scheduler):
     """Test that invalid rho_var raises a ValueError."""
-    with pytest.raises(ValueError, match="rho_var must be a non-negative number."):
+    with pytest.raises(
+        ValueError, match="rho_var must be a non-negative number."
+    ):
         config = sampler_config.copy()
         config["rho_var"] = rho_var
         SyntheticImageSampler.from_config(
@@ -558,7 +599,9 @@ def test_invalid_rho_var(rho_var, scheduler):
         )
 
 
-@pytest.mark.parametrize("dt", ["invalid_dt", jnp.array([1]), jnp.array([1.0, 2.0])])
+@pytest.mark.parametrize(
+    "dt", ["invalid_dt", jnp.array([1]), jnp.array([1.0, 2.0])]
+)
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
@@ -631,7 +674,8 @@ def test_invalid_seed(seed, scheduler):
 
 
 @pytest.mark.parametrize(
-    "min_speed_x, max_speed_x", [(1, -1), (2, 1), ("invalid", 1), (1, "invalid")]
+    "min_speed_x, max_speed_x",
+    [(1, -1), (2, 1), ("invalid", 1), (1, "invalid")],
 )
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
@@ -651,7 +695,8 @@ def test_invalid_min_max_speed_x(min_speed_x, max_speed_x, scheduler):
 
 
 @pytest.mark.parametrize(
-    "min_speed_y, max_speed_y", [(1, -1), (2, 1), ("invalid", 1), (1, "invalid")]
+    "min_speed_y, max_speed_y",
+    [(1, -1), (2, 1), ("invalid", 1), (1, "invalid")],
 )
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
@@ -770,7 +815,9 @@ def test_invalid_flow_field_size_and_img_offset(
 )
 def test_invalid_output_units(output_units, scheduler):
     """Test that invalid output units raises a ValueError."""
-    expected_message = "output_units must be 'pixels' or 'measure units per second'."
+    expected_message = (
+        "output_units must be 'pixels' or 'measure units per second'."
+    )
     with pytest.raises(ValueError, match=expected_message):
         config = sampler_config.copy()
         config["output_units"] = output_units
@@ -817,7 +864,6 @@ def test_synthetic_sampler_batches(
 def test_sampler_switches_flow_fields(
     batch_size, batches_per_flow_batch, flow_fields_per_batch, mock_mat_files
 ):
-
     files, dims = mock_mat_files
     H, W = dims["height"], dims["width"]
 
@@ -953,14 +999,14 @@ def test_speed_sampler_real_fn(
     config["device_ids"] = [d.id for d in devices]
 
     if config["flow_fields_per_batch"] % num_devices != 0:
-        pytest.skip("flow_fields_per_batch must be divisible by the number of devices.")
+        pytest.skip(
+            "flow_fields_per_batch must be divisible by the number of devices."
+        )
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
         limit_time = 1.5
-    elif num_devices == 2:
-        limit_time = 1.3
-    elif num_devices == 4:
+    elif num_devices == 2 or num_devices == 4:
         limit_time = 1.3
 
     # Create the sampler
@@ -1001,9 +1047,9 @@ def test_speed_sampler_real_fn(
     finally:
         prefetching_scheduler.shutdown()
 
-    assert (
-        avg_time < limit_time
-    ), f"The average time is {avg_time}, time limit: {limit_time}"
+    assert avg_time < limit_time, (
+        f"The average time is {avg_time}, time limit: {limit_time}"
+    )
 
 
 @pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
@@ -1028,7 +1074,9 @@ def test_stop_after_max_episodes(mock_mat_files):
         episode_length=2,
         key=jax.random.PRNGKey(0),
     )
-    pre = PrefetchingFlowFieldScheduler(epi, batch_size=batch_size, buffer_size=90)
+    pre = PrefetchingFlowFieldScheduler(
+        epi, batch_size=batch_size, buffer_size=90
+    )
 
     sampler = SyntheticImageSampler(
         scheduler=pre,
@@ -1085,9 +1133,9 @@ def test_stop_after_max_episodes(mock_mat_files):
             n_batches += 1
             assert done is not None
 
-    assert (
-        n_batches == epi.episode_length * num_episodes
-    ), f"Expected {epi.episode_length * num_episodes} batches, but got {n_batches}"
+    assert n_batches == epi.episode_length * num_episodes, (
+        f"Expected {epi.episode_length * num_episodes} batches, but got {n_batches}"
+    )
 
     # Clean up background thread
     sampler.shutdown()
@@ -1117,7 +1165,9 @@ def test_index_error_if_no_next_episode(mock_mat_files):
         episode_length=2,
         key=jax.random.PRNGKey(0),
     )
-    pre = PrefetchingFlowFieldScheduler(epi, batch_size=batch_size, buffer_size=90)
+    pre = PrefetchingFlowFieldScheduler(
+        epi, batch_size=batch_size, buffer_size=90
+    )
 
     sampler = SyntheticImageSampler(
         scheduler=pre,
@@ -1234,7 +1284,9 @@ class _BaseDummy(BaseFlowFieldScheduler):
     def get_next_slice(self) -> SchedulerData:
         assert False, "Not implemented for dummy scheduler."
 
-    def _make_arrays(self, batch_size) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _make_arrays(
+        self, batch_size
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Return three arrays that differ per call so we can detect resets."""
         val = float(self._batch_ctr)
         self._batch_ctr += 1
@@ -1312,7 +1364,9 @@ class SyntheticImageSamplerWrapper:
         full_config = sampler_config.copy()
         full_config["batch_size"] = config.get("batch_size", 4)
         full_config["flow_fields_per_batch"] = full_config["batch_size"]
-        full_config["batches_per_flow_batch"] = config.get("batches_per_flow_batch", 1)
+        full_config["batches_per_flow_batch"] = config.get(
+            "batches_per_flow_batch", 1
+        )
         return SyntheticImageSampler.from_config(
             scheduler=scheduler,
             config=full_config,
@@ -1483,11 +1537,13 @@ def test_warning_when_batch_size_not_divisible_by_flow_fields(monkeypatch):
         "There will be one more sample for the first 1 flow fields of each batch."
     )
     assert any(expected in m for m in logged), (
-        f"Expected warning: {expected}, " f"but got: {logged}"
+        f"Expected warning: {expected}, but got: {logged}"
     )
 
 
-@pytest.mark.parametrize("sampler_class", [SyntheticImageSampler, RealImageSampler])
+@pytest.mark.parametrize(
+    "sampler_class", [SyntheticImageSampler, RealImageSampler]
+)
 def test_sampler_outputs_files(sampler_class, mock_mat_files):
     """Test that the sampler outputs the correct file paths."""
     files, dims = mock_mat_files
@@ -1512,7 +1568,9 @@ def test_sampler_outputs_files(sampler_class, mock_mat_files):
 
     batch = next(sampler)
     assert hasattr(batch, "files"), "Batch should have 'files' attribute."
-    assert isinstance(batch.files, tuple), "'files' attribute should be a tuple."
+    assert isinstance(batch.files, tuple), (
+        "'files' attribute should be a tuple."
+    )
     assert len(batch.files) == sampler.batch_size, (
         f"'files' attribute should have length {sampler.batch_size}, "
         f"but got {len(batch.files)}."

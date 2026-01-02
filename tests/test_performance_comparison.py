@@ -9,19 +9,20 @@ Some design decisions are based on the following observations:
 2. Multi-threaded prefetching is supported and guarantees strict ordering.
 """
 
-import pytest
+import os
+import threading
 import time
 import timeit
-import numpy as np
-import grain.python as grain
-import threading
-import os
 
-from synthpix.data_sources.mat import MATDataSource
-from synthpix.data_sources.episodic import EpisodicDataSource
+import grain.python as grain
+import numpy as np
+import pytest
+
 from synthpix.data_sources.adapter import GrainEpisodicAdapter
-from synthpix.scheduler.mat import MATFlowFieldScheduler
+from synthpix.data_sources.episodic import EpisodicDataSource
+from synthpix.data_sources.mat import MATDataSource
 from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
+from synthpix.scheduler.mat import MATFlowFieldScheduler
 
 
 @pytest.mark.parametrize("mock_mat_files", [10], indirect=True)
@@ -44,12 +45,16 @@ def test_compare_legacy_vs_grain_performance(tmp_path, mock_mat_files):
         randomize=False,
     )
     legacy_episodic = EpisodicFlowFieldScheduler(
-        scheduler=legacy_base, batch_size=batch_size, episode_length=episode_length
+        scheduler=legacy_base,
+        batch_size=batch_size,
+        episode_length=episode_length,
     )
 
     # Grain Stack
     grain_source = MATDataSource(
-        dataset_path=str(dataset_dir), include_images=True, output_shape=(256, 256)
+        dataset_path=str(dataset_dir),
+        include_images=True,
+        output_shape=(256, 256),
     )
     grain_episodic_ds = EpisodicDataSource(
         source=grain_source,
@@ -78,7 +83,10 @@ def test_compare_legacy_vs_grain_performance(tmp_path, mock_mat_files):
     legacy_batch = legacy_episodic.get_batch(batch_size)
     grain_batch = grain_adapter.get_batch(batch_size)
 
-    assert legacy_batch.flow_fields is not None and grain_batch.flow_fields is not None
+    assert (
+        legacy_batch.flow_fields is not None
+        and grain_batch.flow_fields is not None
+    )
     assert legacy_batch.images1 is not None and grain_batch.images1 is not None
     assert legacy_batch.images2 is not None and grain_batch.images2 is not None
 
@@ -94,7 +102,10 @@ def test_compare_legacy_vs_grain_performance(tmp_path, mock_mat_files):
     )
 
     np.testing.assert_allclose(
-        legacy_batch.images1, grain_batch.images1, err_msg="Images1 mismatch", atol=1
+        legacy_batch.images1,
+        grain_batch.images1,
+        err_msg="Images1 mismatch",
+        atol=1,
     )
 
     print("[Correctness] PASSED: Outputs are identical.")
@@ -113,14 +124,18 @@ def test_compare_legacy_vs_grain_performance(tmp_path, mock_mat_files):
 
     t_legacy = timeit.timeit(
         lambda: loop_system(
-            lambda: legacy_episodic.get_batch(batch_size), legacy_episodic.reset, steps
+            lambda: legacy_episodic.get_batch(batch_size),
+            legacy_episodic.reset,
+            steps,
         ),
         number=1,
     )
 
     t_grain = timeit.timeit(
         lambda: loop_system(
-            lambda: grain_adapter.get_batch(batch_size), grain_adapter.reset, steps
+            lambda: grain_adapter.get_batch(batch_size),
+            grain_adapter.reset,
+            steps,
         ),
         number=1,
     )
@@ -128,7 +143,7 @@ def test_compare_legacy_vs_grain_performance(tmp_path, mock_mat_files):
     print("\n" + "=" * 40)
     print(f"Legacy Time: {t_legacy:.4f} s")
     print(f"Grain Time:  {t_grain:.4f} s")
-    print(f"Ratio (Legacy/Grain): {t_legacy/t_grain:.2f}x")
+    print(f"Ratio (Legacy/Grain): {t_legacy / t_grain:.2f}x")
     if t_grain < t_legacy:
         print("RESULT: Grain is FASTER 🚀")
     else:
@@ -147,7 +162,10 @@ def test_compare_worker_modes(tmp_path, mock_mat_files):
     def make_grain_system(workers):
         source = MATDataSource(str(dataset_dir), include_images=False)
         episodic_ds = EpisodicDataSource(
-            source, batch_size=batch_size, episode_length=episode_length, seed=42
+            source,
+            batch_size=batch_size,
+            episode_length=episode_length,
+            seed=42,
         )
         loader = grain.DataLoader(
             data_source=episodic_ds,
@@ -157,7 +175,9 @@ def test_compare_worker_modes(tmp_path, mock_mat_files):
                 shard_options=grain.NoSharding(),
                 num_epochs=1,
             ),
-            operations=[grain.Batch(batch_size=batch_size, drop_remainder=False)],
+            operations=[
+                grain.Batch(batch_size=batch_size, drop_remainder=False)
+            ],
             worker_count=workers,
         )
         return GrainEpisodicAdapter(loader)
@@ -193,7 +213,11 @@ def test_compare_worker_modes(tmp_path, mock_mat_files):
 
         end_t = time.perf_counter()
         duration = end_t - start_t
-        results[workers] = {"time": duration, "trace": trace, "count": len(trace)}
+        results[workers] = {
+            "time": duration,
+            "trace": trace,
+            "count": len(trace),
+        }
         print(f"-> Duration: {duration:.4f}s | Batches: {len(trace)}")
         print(f"Trace: {trace}")
 
@@ -219,7 +243,9 @@ def test_compare_worker_modes(tmp_path, mock_mat_files):
             print("-> Order Verification: PASSED ✅")
             results[workers]["ordered"] = True
         else:
-            print(f"-> Order Verification: FAILED ❌ ({broken_count} violations)")
+            print(
+                f"-> Order Verification: FAILED ❌ ({broken_count} violations)"
+            )
             results[workers]["ordered"] = False
 
     print("\n" + "-" * 60)
@@ -227,8 +253,12 @@ def test_compare_worker_modes(tmp_path, mock_mat_files):
     print("-" * 60)
     t0 = results[0]["time"]
     t2 = results[2]["time"]
-    print(f"Single-Process (0) Time: {t0:.4f}s | Ordered: {results[0]['ordered']}")
-    print(f"Multi-Process  (2) Time: {t2:.4f}s | Ordered: {results[2]['ordered']}")
+    print(
+        f"Single-Process (0) Time: {t0:.4f}s | Ordered: {results[0]['ordered']}"
+    )
+    print(
+        f"Multi-Process  (2) Time: {t2:.4f}s | Ordered: {results[2]['ordered']}"
+    )
 
     if t0 > 0:
         speedup = t0 / t2
@@ -242,7 +272,9 @@ def test_compare_worker_modes(tmp_path, mock_mat_files):
     # If MP IS ordered (maybe locally it passed?), good.
     # But based on prev test, it failed.
     if not results[2]["ordered"]:
-        print("\nCONFIRMED: Multi-process loading broke episodic order in this setup.")
+        print(
+            "\nCONFIRMED: Multi-process loading broke episodic order in this setup."
+        )
         # We do NOT fail the test if 2 fails, to avoid blocking CI,
         # but we highlighted the issue.
     else:
@@ -335,5 +367,7 @@ def test_grain_threading_behavior():
     # Assertions
     assert duration_seq >= 2.0, "Sequential should take at least 2.0s"
     assert duration_par < 1.0, "Parallel should be significantly faster"
-    assert duration_non_threaded >= 2.0, "Non-threaded should take at least 2.0s"
+    assert duration_non_threaded >= 2.0, (
+        "Non-threaded should take at least 2.0s"
+    )
     assert len(threads) > 1, "Parallel should use multiple threads"

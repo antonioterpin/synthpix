@@ -1,11 +1,12 @@
 """MATDataSource implementation."""
 
-import scipy.io
-import h5py
-import numpy as np
-from PIL import Image
 import logging
 from typing import Any
+
+import h5py
+import numpy as np
+import scipy.io
+from PIL import Image
 
 from .base import FileDataSource
 
@@ -71,6 +72,10 @@ class MATDataSource(FileDataSource):
 
         Returns:
             Dictionary containing data (e.g. 'flow_fields', 'images1', etc).
+
+        Raises:
+            ValueError: If the file cannot be loaded, is missing required keys,
+                or has invalid data format.
         """
         data = None
 
@@ -89,10 +94,14 @@ class MATDataSource(FileDataSource):
                     data = recursively_load_hdf5_group(f)
 
         if data is None:
-            raise ValueError(f"Failed to load {file_path} as HDF5 or legacy MATLAB.")
+            raise ValueError(
+                f"Failed to load {file_path} as HDF5 or legacy MATLAB."
+            )
 
         if "V" not in data:
-            raise ValueError(f"Flow field not found in {file_path} (missing 'V').")
+            raise ValueError(
+                f"Flow field not found in {file_path} (missing 'V')."
+            )
 
         # 3. Process Flow
         flow = data["V"]
@@ -105,13 +114,20 @@ class MATDataSource(FileDataSource):
             # Resize logic
             ratio_y = self.output_shape[0] / flow.shape[0]
             ratio_x = self.output_shape[1] / flow.shape[1]
-            size = (self.output_shape[1], self.output_shape[0])  # PIL expects (W, H)
+            size = (
+                self.output_shape[1],
+                self.output_shape[0],
+            )  # PIL expects (W, H)
 
             flow_u = np.asarray(
-                Image.fromarray(flow[..., 0]).resize(size, Image.Resampling.BILINEAR)
+                Image.fromarray(flow[..., 0]).resize(
+                    size, Image.Resampling.BILINEAR
+                )
             )
             flow_v = np.asarray(
-                Image.fromarray(flow[..., 1]).resize(size, Image.Resampling.BILINEAR)
+                Image.fromarray(flow[..., 1]).resize(
+                    size, Image.Resampling.BILINEAR
+                )
             )
             # Scale values by resize ratio
             flow = np.stack([flow_u * ratio_x, flow_v * ratio_y], axis=-1)

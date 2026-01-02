@@ -4,7 +4,6 @@ from typing import Any
 
 import pytest
 
-
 make_mod = importlib.import_module("synthpix.make")
 make = make_mod.make
 
@@ -34,7 +33,11 @@ class DummySampler:
     """Captures scheduler and batch size for inspection."""
 
     def __init__(
-        self, scheduler: DummyScheduler, batch_size: int, *args: Any, **kwargs: Any
+        self,
+        scheduler: DummyScheduler,
+        batch_size: int,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         self.scheduler = scheduler
         self.batch_size = batch_size
@@ -44,7 +47,9 @@ class DummySampler:
     def from_config(
         cls, scheduler: DummyScheduler, *args: Any, **kwargs: Any
     ) -> "DummySampler":
-        return cls(scheduler=scheduler, batch_size=kwargs["config"]["batch_size"])
+        return cls(
+            scheduler=scheduler, batch_size=kwargs["config"]["batch_size"]
+        )
 
 
 def _patch_common(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
@@ -56,7 +61,9 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setattr(
         make_mod, "PrefetchingFlowFieldScheduler", DummyPrefetchScheduler
     )
-    monkeypatch.setattr(make_mod, "EpisodicFlowFieldScheduler", DummyEpisodicScheduler)
+    monkeypatch.setattr(
+        make_mod, "EpisodicFlowFieldScheduler", DummyEpisodicScheduler
+    )
     monkeypatch.setitem(make_mod.SCHEDULERS, ".mat", DummyScheduler)
     monkeypatch.setitem(make_mod.SCHEDULERS, ".npy", DummyScheduler)
     monkeypatch.setattr(
@@ -64,7 +71,9 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         "logger",
         SimpleNamespace(info=lambda *_: None, warning=lambda *_: None),
     )
-    monkeypatch.setattr(make_mod, "load_configuration", lambda p: {}, raising=False)
+    monkeypatch.setattr(
+        make_mod, "load_configuration", lambda p: {}, raising=False
+    )
     return SimpleNamespace(
         DummyScheduler=DummyScheduler,
         DummyPrefetchScheduler=DummyPrefetchScheduler,
@@ -81,7 +90,9 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
 @pytest.mark.parametrize("bad", [123, 3.14, ["a"], ("t",), None])
 def test_rejects_non_str_or_dict(monkeypatch, bad):
     _patch_common(monkeypatch)
-    with pytest.raises(TypeError, match="config must be a string or a dictionary"):
+    with pytest.raises(
+        TypeError, match="config must be a string or a dictionary"
+    ):
         make(bad)
 
 
@@ -115,7 +126,11 @@ def test_missing_scheduler_class(monkeypatch):
 
 def test_scheduler_class_not_in_mapping(monkeypatch):
     _patch_common(monkeypatch)
-    cfg = {"scheduler_class": ".foo", "batch_size": 2, "flow_fields_per_batch": 1}
+    cfg = {
+        "scheduler_class": ".foo",
+        "batch_size": 2,
+        "flow_fields_per_batch": 1,
+    }
     with pytest.raises(ValueError, match="not found"):
         make(cfg)
 
@@ -123,8 +138,14 @@ def test_scheduler_class_not_in_mapping(monkeypatch):
 @pytest.mark.parametrize("bad", [0, -1])
 def test_rejects_nonpositive_batch(monkeypatch, bad):
     _patch_common(monkeypatch)
-    cfg = {"scheduler_class": ".mat", "batch_size": bad, "flow_fields_per_batch": 1}
-    with pytest.raises(ValueError, match="batch_size must be a positive integer"):
+    cfg = {
+        "scheduler_class": ".mat",
+        "batch_size": bad,
+        "flow_fields_per_batch": 1,
+    }
+    with pytest.raises(
+        ValueError, match="batch_size must be a positive integer"
+    ):
         make(cfg)
 
 
@@ -163,7 +184,11 @@ def test_requires_flow_fields_per_batch(monkeypatch):
 
 def test_requires_batches_per_flow_batch_for_synthetic(monkeypatch):
     _patch_common(monkeypatch)
-    cfg = {"scheduler_class": ".npy", "batch_size": 2, "flow_fields_per_batch": 1}
+    cfg = {
+        "scheduler_class": ".npy",
+        "batch_size": 2,
+        "flow_fields_per_batch": 1,
+    }
     with pytest.raises(ValueError, match="batches_per_flow_batch"):
         make(cfg)
 
@@ -224,7 +249,9 @@ def test_real_sampler_with_episode(monkeypatch):
     }
     sampler = make(cfg)
     assert isinstance(sampler.scheduler, helpers.DummyEpisodicScheduler)
-    assert isinstance(sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler)
+    assert isinstance(
+        sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler
+    )
 
 
 def test_real_sampler_with_prefetch(monkeypatch):
@@ -238,7 +265,9 @@ def test_real_sampler_with_prefetch(monkeypatch):
     }
     sampler = make(cfg)
     assert isinstance(sampler.scheduler, helpers.DummyPrefetchScheduler)
-    assert isinstance(sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler)
+    assert isinstance(
+        sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler
+    )
 
 
 def test_synthetic_sampler_with_prefetch(monkeypatch):
@@ -252,7 +281,9 @@ def test_synthetic_sampler_with_prefetch(monkeypatch):
     }
     sampler = make(cfg)
     assert isinstance(sampler.scheduler, helpers.DummyPrefetchScheduler)
-    assert isinstance(sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler)
+    assert isinstance(
+        sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler
+    )
 
 
 def test_synthetic_sampler_with_episode(monkeypatch):
@@ -266,4 +297,6 @@ def test_synthetic_sampler_with_episode(monkeypatch):
     }
     sampler = make(cfg)
     assert isinstance(sampler.scheduler, helpers.DummyEpisodicScheduler)
-    assert isinstance(sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler)
+    assert isinstance(
+        sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler
+    )

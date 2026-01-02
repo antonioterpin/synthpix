@@ -2,8 +2,8 @@ import jax
 import pytest
 
 from synthpix.sampler import SyntheticImageSampler
-from synthpix.types import ImageGenerationSpecification
 from synthpix.scheduler import BaseFlowFieldScheduler
+from synthpix.types import ImageGenerationSpecification
 
 
 class _DummyScheduler(BaseFlowFieldScheduler):

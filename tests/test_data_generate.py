@@ -1,7 +1,5 @@
 import re
 import timeit
-from synthpix.types import ImageGenerationSpecification
-from tests.example_flows import get_flow_function
 
 import jax
 import jax.numpy as jnp
@@ -12,9 +10,11 @@ from synthpix.data_generate import (
     generate_images_from_flow,
     input_check_gen_img_from_flow,
 )
+from synthpix.types import ImageGenerationSpecification
 
 # Import existing modules
 from synthpix.utils import generate_array_flow_field, load_configuration
+from tests.example_flows import get_flow_function
 
 config = load_configuration("config/testing.yaml")
 
@@ -56,7 +56,8 @@ def test_invalid_image_shape(image_shape):
     """Test that invalid image shapes raise a ValueError."""
     flow_field = jnp.zeros((1, 128, 128, 2))
     with pytest.raises(
-        ValueError, match="image_shape must be a tuple of two positive integers."
+        ValueError,
+        match="image_shape must be a tuple of two positive integers.",
     ):
         input_check_gen_img_from_flow(
             flow_field=flow_field,
@@ -65,7 +66,8 @@ def test_invalid_image_shape(image_shape):
 
 
 @pytest.mark.parametrize(
-    "position_bounds", [(-1, 128), (128, -1), (0, 128), (128, 0), (128.2, 128.2)]
+    "position_bounds",
+    [(-1, 128), (128, -1), (0, 128), (128, 0), (128.2, 128.2)],
 )
 def test_invalid_position_bounds(position_bounds):
     """Test that invalid position_bounds raises a ValueError."""
@@ -73,7 +75,8 @@ def test_invalid_position_bounds(position_bounds):
     image_shape = (128, 128)
     img_offset = (0, 0)
     with pytest.raises(
-        ValueError, match="position_bounds must be a tuple of two positive integers."
+        ValueError,
+        match="position_bounds must be a tuple of two positive integers.",
     ):
         input_check_gen_img_from_flow(
             flow_field=flow_field,
@@ -100,8 +103,14 @@ def test_invalid_position_bounds(position_bounds):
             (-0.5, -0.5),
             "seeding_density_range must be a tuple of two non-negative numbers.",
         ),
-        ((1.0, 0.5), "seeding_density_range must be in the form \\(min, max\\)."),
-        ((0.5, 0.1), "seeding_density_range must be in the form \\(min, max\\)."),
+        (
+            (1.0, 0.5),
+            "seeding_density_range must be in the form \\(min, max\\).",
+        ),
+        (
+            (0.5, 0.1),
+            "seeding_density_range must be in the form \\(min, max\\).",
+        ),
     ],
 )
 def test_invalid_seeding_density_range(seeding_density_range, expected_message):
@@ -123,7 +132,9 @@ def test_invalid_num_images(num_images):
     """Test that invalid num_images raise a ValueError."""
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
-    with pytest.raises(ValueError, match="batch_size must be a positive integer."):
+    with pytest.raises(
+        ValueError, match="batch_size must be a positive integer."
+    ):
         input_check_gen_img_from_flow(
             flow_field=flow_field,
             parameters=ImageGenerationSpecification(
@@ -140,7 +151,8 @@ def test_invalid_img_offset(img_offset):
     position_bounds = (256, 256)
     image_shape = (128, 128)
     with pytest.raises(
-        ValueError, match="img_offset must be a tuple of two non-negative numbers."
+        ValueError,
+        match="img_offset must be a tuple of two non-negative numbers.",
     ):
         input_check_gen_img_from_flow(
             flow_field=flow_field,
@@ -157,7 +169,9 @@ def test_invalid_p_hide_img1(p_hide_img1):
     """Test that invalid p_hide_img1 raise a ValueError."""
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
-    with pytest.raises(ValueError, match="p_hide_img1 must be between 0 and 1."):
+    with pytest.raises(
+        ValueError, match="p_hide_img1 must be between 0 and 1."
+    ):
         input_check_gen_img_from_flow(
             flow_field=flow_field,
             parameters=ImageGenerationSpecification(
@@ -171,7 +185,9 @@ def test_invalid_p_hide_img2(p_hide_img2):
     """Test that invalid p_hide_img2 raise a ValueError."""
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
-    with pytest.raises(ValueError, match="p_hide_img2 must be between 0 and 1."):
+    with pytest.raises(
+        ValueError, match="p_hide_img2 must be between 0 and 1."
+    ):
         input_check_gen_img_from_flow(
             flow_field=flow_field,
             parameters=ImageGenerationSpecification(
@@ -270,7 +286,8 @@ def test_invalid_rho_range(rho_ranges, expected_message):
 
 
 @pytest.mark.parametrize(
-    "dt", ["invalid_dt", jnp.array([1]), jnp.array([1.0, 2.0]), jnp.array([1, 2, 3])]
+    "dt",
+    ["invalid_dt", jnp.array([1]), jnp.array([1.0, 2.0]), jnp.array([1, 2, 3])],
 )
 def test_invalid_dt(dt):
     """Test that invalid dt raise a ValueError."""
@@ -712,7 +729,9 @@ def test_speed_generate_images_from_flow(
     )
 
     def run_generate_jit():
-        imgs1, imgs2, params = jit_generate_images(keys_sharded, flow_field_sharded)
+        imgs1, imgs2, params = jit_generate_images(
+            keys_sharded, flow_field_sharded
+        )
         seeding_densities = params.seeding_densities
         diameter_ranges = params.diameter_ranges
         intensity_ranges = params.intensity_ranges
@@ -741,9 +760,9 @@ def test_speed_generate_images_from_flow(
     average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
 
     # Check if the time is less than the limit
-    assert (
-        average_time_jit < limit_time
-    ), f"The average time is {average_time_jit}, time limit: {limit_time}"
+    assert average_time_jit < limit_time, (
+        f"The average time is {average_time_jit}, time limit: {limit_time}"
+    )
 
 
 @pytest.mark.run_explicitly
@@ -756,7 +775,9 @@ def test_speed_generate_images_from_flow(
 @pytest.mark.parametrize("intensity_ranges", [[(80, 100)]])
 @pytest.mark.parametrize("intensity_var", [0])
 @pytest.mark.parametrize("dt", [0.1])
-@pytest.mark.parametrize("rho_ranges", [[(-0.01, 0.01)]])  # rho cannot be -1 or 1
+@pytest.mark.parametrize(
+    "rho_ranges", [[(-0.01, 0.01)]]
+)  # rho cannot be -1 or 1
 @pytest.mark.parametrize("rho_var", [0])
 @pytest.mark.parametrize("noise_uniform", [0.0])
 @pytest.mark.parametrize("noise_gaussian_mean", [0.0])
@@ -852,7 +873,9 @@ def test_img_parameter_combinations(
     plt.imsave(file_description + "img.png", np.array(img), cmap="gray")
     if warped:
         plt.imsave(
-            file_description + "img_warped.png", np.array(img_warped), cmap="gray"
+            file_description + "img_warped.png",
+            np.array(img_warped),
+            cmap="gray",
         )
 
     # 5. check the shape of the images
@@ -869,7 +892,8 @@ def test_img_parameter_combinations(
 @pytest.mark.parametrize("seeding_density_range", [(0.1, 0.1)])
 @pytest.mark.parametrize("num_images", [1, 100, 500, 1000, 5000, 10000])
 @pytest.mark.parametrize(
-    "image_shape", [(128, 128), (256, 256), (512, 512), (1024, 1024), (2048, 2048)]
+    "image_shape",
+    [(128, 128), (256, 256), (512, 512), (1024, 1024), (2048, 2048)],
 )
 @pytest.mark.parametrize("img_offset", [(0, 0)])
 @pytest.mark.parametrize("num_flow_fields", [100])
@@ -961,7 +985,9 @@ def test_speed_parameter_combinations(
     )
 
     def run_generate_jit():
-        imgs1, imgs2, params = jit_generate_images(keys_sharded, flow_field_sharded)
+        imgs1, imgs2, params = jit_generate_images(
+            keys_sharded, flow_field_sharded
+        )
         seeding_densities = params.seeding_densities
         diameter_ranges = params.diameter_ranges
         intensity_ranges = params.intensity_ranges

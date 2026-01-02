@@ -1,15 +1,15 @@
 """Grain DataSources for synthpix."""
 
 from .base import FileDataSource
-from .mat import MATDataSource
-from .hdf5 import HDF5DataSource
-from .numpy import NumpyDataSource
 from .episodic import EpisodicDataSource
+from .hdf5 import HDF5DataSource
+from .mat import MATDataSource
+from .numpy import NumpyDataSource
 
 __all__ = [
-    "FileDataSource",
-    "MATDataSource",
-    "HDF5DataSource",
-    "NumpyDataSource",
     "EpisodicDataSource",
+    "FileDataSource",
+    "HDF5DataSource",
+    "MATDataSource",
+    "NumpyDataSource",
 ]

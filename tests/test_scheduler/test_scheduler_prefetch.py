@@ -1,8 +1,8 @@
+import multiprocessing
 import os
 import queue
-import time
 import threading
-import multiprocessing
+import time
 
 import numpy as np
 import pytest
@@ -96,7 +96,6 @@ class MinimalEpisodic(EpisodicSchedulerProtocol):
 
 
 def test_single_producer_thread_across_episodes():
-
     shape = (8, 8, 2)
     sched = MinimalEpisodic(total_batches=50, shape=shape)
     sched._episode_length = 3  # short episodes to exercise next_episode() often
@@ -139,7 +138,9 @@ def test_stop_iteration_from_queue_empty():
 def test_worker_eos_signal_when_queue_full():
     scheduler = MinimalScheduler(total_batches=1)
 
-    pf = PrefetchingFlowFieldScheduler(scheduler=scheduler, batch_size=1, buffer_size=1)
+    pf = PrefetchingFlowFieldScheduler(
+        scheduler=scheduler, batch_size=1, buffer_size=1
+    )
     pf.get_batch(1)  # Starts the thread
 
     # Wait until EOS is in queue or timeout
@@ -174,9 +175,9 @@ def test_next_episode_resets_thread_and_flushes_queue():
     pf.get_batch(1)  # start the thread
     time.sleep(0.2)  # allow prefetch
 
-    pf._t = 3  # type: ignore[attr-defined]
+    pf._t = 3
     pf.next_episode()
-    assert pf._t == 0  # type: ignore[attr-defined]
+    assert pf._t == 0
     pf.shutdown()
 
 
@@ -209,7 +210,9 @@ def test_t_counter_wraps_after_episode():
 
 @pytest.mark.parametrize("batch_size", [None, "invalid", -1, 1.3])
 def test_invalid_batch_size_raises_value_error(batch_size):
-    with pytest.raises(ValueError, match="batch_size must be a positive integer."):
+    with pytest.raises(
+        ValueError, match="batch_size must be a positive integer."
+    ):
         PrefetchingFlowFieldScheduler(
             MinimalScheduler(), batch_size=batch_size, buffer_size=1
         )
@@ -217,7 +220,9 @@ def test_invalid_batch_size_raises_value_error(batch_size):
 
 @pytest.mark.parametrize("buffer_size", [None, "invalid", -1, 1.3])
 def test_invalid_buffer_size_raises_value_error(buffer_size):
-    with pytest.raises(ValueError, match="buffer_size must be a positive integer."):
+    with pytest.raises(
+        ValueError, match="buffer_size must be a positive integer."
+    ):
         PrefetchingFlowFieldScheduler(
             MinimalScheduler(), batch_size=1, buffer_size=buffer_size
         )
@@ -265,7 +270,9 @@ def test_reset_stops_thread_and_clears_queue():
             break
         time.sleep(0.1)
 
-    assert not pf._queue.empty(), "Pre-condition queue not empty before reset failed."
+    assert not pf._queue.empty(), (
+        "Pre-condition queue not empty before reset failed."
+    )
     pf.reset()
 
     assert pf._queue.empty(), "Queue should be empty after reset"
@@ -407,7 +414,9 @@ def test_reset_then_next_episode_three_cycles(monkeypatch):
 
 
 def test_next_raises_stop_iteration_when_queue_empty(monkeypatch):
-    pf = PrefetchingFlowFieldScheduler(MinimalScheduler(), batch_size=1, buffer_size=1)
+    pf = PrefetchingFlowFieldScheduler(
+        MinimalScheduler(), batch_size=1, buffer_size=1
+    )
 
     # Monkey-patch Queue.get so it always raises queue.Empty immediately.
     def always_empty(*_a, **_kw):
@@ -506,7 +515,9 @@ class AlwaysEmptyScheduler(SchedulerProtocol):
 def test_worker_eos_signal_via_full_queue_branch_direct():
     # 1) Create a scheduler that has no data at all.
     sched = AlwaysEmptyScheduler(shape=(4, 4, 2))
-    pf = PrefetchingFlowFieldScheduler(scheduler=sched, batch_size=2, buffer_size=1)
+    pf = PrefetchingFlowFieldScheduler(
+        scheduler=sched, batch_size=2, buffer_size=1
+    )
 
     # 2) Manually fill the queue so it's 'full' before the worker runs.
     dummy = np.zeros((2,) + sched.get_flow_fields_shape())
@@ -595,7 +606,8 @@ def test_multiple_get_batch_in_parallel_processes():
 
     processes = [
         multiprocessing.Process(
-            target=worker, args=(result_queue, total_batches, batch_size, buffer_size)
+            target=worker,
+            args=(result_queue, total_batches, batch_size, buffer_size),
         )
         for _ in range(5)
     ]

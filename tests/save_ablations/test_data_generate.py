@@ -1,8 +1,6 @@
 import csv
 import itertools
 import timeit
-from synthpix.types import ImageGenerationSpecification
-from tests.example_flows import get_flow_function
 
 import jax
 import jax.numpy as jnp
@@ -11,9 +9,11 @@ import pytest
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
 from synthpix.data_generate import generate_images_from_flow
+from synthpix.types import ImageGenerationSpecification
 
 # Import existing modules
 from synthpix.utils import generate_array_flow_field, load_configuration
+from tests.example_flows import get_flow_function
 
 config = load_configuration("config/testing.yaml")
 
@@ -158,7 +158,10 @@ def test_speed_generate_images_sweep_all():
                     ),
                 ),
                 mesh=mesh,
-                in_specs=(PartitionSpec(shard_fields), PartitionSpec(shard_fields)),
+                in_specs=(
+                    PartitionSpec(shard_fields),
+                    PartitionSpec(shard_fields),
+                ),
                 out_specs=out_specs,
             )
         )

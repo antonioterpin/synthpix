@@ -1,10 +1,11 @@
 """Integration tests for SyntheticImageSampler with Grain Adapter."""
 
-import pytest
 import grain.python as grain
+import pytest
+
 from synthpix.data_sources.adapter import GrainEpisodicAdapter
-from synthpix.sampler.synthetic import SyntheticImageSampler
 from synthpix.data_sources.mat import MATDataSource
+from synthpix.sampler.synthetic import SyntheticImageSampler
 from synthpix.scheduler.protocol import EpisodicSchedulerProtocol
 
 

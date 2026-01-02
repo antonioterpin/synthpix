@@ -3,13 +3,17 @@ import pytest
 from synthpix.scheduler import EpisodicFlowFieldScheduler, MATFlowFieldScheduler
 
 
-@pytest.mark.parametrize("invalid_scheduler", [None, "not_a_scheduler", 123, [], {}])
+@pytest.mark.parametrize(
+    "invalid_scheduler", [None, "not_a_scheduler", 123, [], {}]
+)
 @pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
 def test_invalid_scheduler(invalid_scheduler, mock_mat_files):
     files, dims = mock_mat_files
 
     with pytest.raises(TypeError):
-        EpisodicFlowFieldScheduler(invalid_scheduler, batch_size=1, episode_length=2)
+        EpisodicFlowFieldScheduler(
+            invalid_scheduler, batch_size=1, episode_length=2
+        )
 
 
 @pytest.mark.parametrize("invalid_batch_size", [-1, 0, 1.5, "two"])
@@ -60,12 +64,12 @@ def test_steps_remaining(episode_length, mock_mat_files):
     epi = EpisodicFlowFieldScheduler(
         base, batch_size=batch_size, episode_length=episode_length
     )
-    assert (
-        epi.steps_remaining() == episode_length
-    ), f"Expected {episode_length} steps remaining, got {epi.steps_remaining()}"
-    assert (
-        len(epi) == episode_length
-    ), f"Expected length {episode_length}, got {len(epi)}"
+    assert epi.steps_remaining() == episode_length, (
+        f"Expected {episode_length} steps remaining, got {epi.steps_remaining()}"
+    )
+    assert len(epi) == episode_length, (
+        f"Expected length {episode_length}, got {len(epi)}"
+    )
 
     for _ in range(episode_length):
         _ = epi.get_batch(batch_size=batch_size)
@@ -83,4 +87,6 @@ def test_not_enough_files_for_episode_length(episode_length, mock_mat_files):
     base = MATFlowFieldScheduler(files, loop=False, output_shape=(H, W))
 
     with pytest.raises(ValueError):
-        EpisodicFlowFieldScheduler(base, batch_size=1, episode_length=episode_length)
+        EpisodicFlowFieldScheduler(
+            base, batch_size=1, episode_length=episode_length
+        )

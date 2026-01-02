@@ -1,8 +1,9 @@
 """HDF5DataSource implementation."""
 
-from typing import Any
-import h5py
 import logging
+from typing import Any
+
+import h5py
 
 from .base import FileDataSource
 
@@ -22,17 +23,21 @@ class HDF5DataSource(FileDataSource):
 
         Returns:
             Dictionary containing data (e.g. 'flow_fields', 'images1', etc).
+
+        Raises:
+            ValueError: If the file does not contain a valid HDF5 dataset.
         """
         data = None
         # NOTE: This implementation remains stateless and loads the full volume
         # from the HDF5 file. It does not yet guarantee the same performance
         # as the legacy HDF5FlowFieldScheduler which served individual slices.
         with h5py.File(file_path, "r") as file:
-            dataset_key = list(file)[0]
+            dataset_key = next(iter(file))
             dset = file[dataset_key]
             if not isinstance(dset, h5py.Dataset):
                 raise ValueError(
-                    f"Expected Dataset but got {type(dset)} for key '{dataset_key}' in {file_path}"
+                    f"Expected Dataset but got {type(dset)} for key "
+                    f"'{dataset_key}' in {file_path}"
                 )
             data = dset[...]
 
