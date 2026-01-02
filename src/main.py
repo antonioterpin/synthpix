@@ -64,16 +64,22 @@ def visualize_and_save(
     logger.info(f"Saved images for {name} to {output_dir}.")
 
 
-def main(config_path: str, output_dir: str, num_images_to_display: int):
+def main(
+    config_path: str,
+    output_dir: str,
+    num_images_to_display: int,
+    use_grain: bool = False,
+):
     """Main function to run the SyntheticImageSampler pipeline.
 
     Args:
         config_path: Configuration file path.
         output_dir: Directory to save visualized images.
         num_images_to_display: Number of images to display and save per batch.
+        use_grain: Whether to use the Grain-based scheduler.
     """
     # Initialize the sampler
-    sampler = synthpix.make(config_path)
+    sampler = synthpix.make(config_path, use_grain_scheduler=use_grain)
 
     # Print where images will be saved
     abs_output_dir = os.path.abspath(output_dir)
@@ -141,12 +147,19 @@ if __name__ == "__main__":
         help="Number of images to display and save from each batch.",
     )
 
+    parser.add_argument(
+        "--use_grain",
+        action="store_true",
+        help="Use the Grain-based dataloading backend.",
+    )
+
     args = parser.parse_args()
 
     main(
         config_path=args.config,
         output_dir=args.output_dir,
         num_images_to_display=args.visualize,
+        use_grain=args.use_grain,
     )
 
     gg.finish()
