@@ -7,11 +7,8 @@ import numpy as np
 import pytest
 import yaml
 
-from synthpix.sanity import (
-    calculate_min_and_max_speeds,
-    missing_speeds_panel,
-    update_config_file,
-)
+from synthpix.sanity import (calculate_min_and_max_speeds, missing_speeds_panel,
+                             update_config_file)
 from synthpix.utils import load_configuration
 
 

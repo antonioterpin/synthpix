@@ -7,11 +7,9 @@ import jax.numpy as jnp
 from goggles import get_logger
 from typing_extensions import Self
 
-from synthpix.scheduler.protocol import (
-    EpisodeEndError,
-    EpisodicSchedulerProtocol,
-    SchedulerProtocol,
-)
+from synthpix.scheduler.protocol import (EpisodeEndError,
+                                         EpisodicSchedulerProtocol,
+                                         SchedulerProtocol)
 from synthpix.types import SynthpixBatch
 from synthpix.utils import SYNTHPIX_SCOPE
 
@@ -64,7 +62,6 @@ class Sampler(ABC):
 
     def _reset(self) -> None:  # noqa: B027
         """Custom reset logic for the sampler."""
-        pass
 
     def shutdown(self) -> None:
         """Shutdown the sampler."""

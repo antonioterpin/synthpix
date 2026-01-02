@@ -9,15 +9,10 @@ import jax.numpy as jnp
 import pytest
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
-from synthpix.utils import (
-    bilinear_interpolate,
-    discover_leaf_dirs,
-    flow_field_adapter,
-    generate_array_flow_field,
-    input_check_flow_field_adapter,
-    load_configuration,
-    trilinear_interpolate,
-)
+from synthpix.utils import (bilinear_interpolate, discover_leaf_dirs,
+                            flow_field_adapter, generate_array_flow_field,
+                            input_check_flow_field_adapter, load_configuration,
+                            trilinear_interpolate)
 from tests.example_flows import get_flow_function
 
 config = load_configuration("config/testing.yaml")
@@ -756,7 +751,8 @@ def test_discover_leaf_dirs(tmp_path):
     (seq_B / "flow_0000.mat").touch()
     (sub_1 / "flow_0002.mat").touch()
 
-    # Collect file paths as strings (API contract), then resolve results for comparison
+    # Collect file paths as strings (API contract), then resolve results for
+    # comparison
     paths = [str(p) for p in tmp_path.rglob("*.mat")]
 
     leaves = {Path(p).resolve() for p in discover_leaf_dirs(paths)}

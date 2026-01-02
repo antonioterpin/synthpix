@@ -68,7 +68,6 @@ def test_numpy_invalid_extension(tmp_path):
     # Unless someone manually passes a list to base class (which isn't shown in __init__ args easily).
     # Wait, FileDataSource takes dataset_path which is list[str] | str.
     # If it's a file path?
-    pass
 
 
 def test_numpy_bad_filename_format(tmp_path):

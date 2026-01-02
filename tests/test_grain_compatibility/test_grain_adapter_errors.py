@@ -4,10 +4,8 @@ import grain.python as grain
 import numpy as np
 import pytest
 
-from synthpix.data_sources.adapter import (
-    GrainEpisodicAdapter,
-    GrainSchedulerAdapter,
-)
+from synthpix.data_sources.adapter import (GrainEpisodicAdapter,
+                                           GrainSchedulerAdapter)
 from synthpix.data_sources.episodic import EpisodicDataSource
 
 
@@ -48,7 +46,8 @@ def test_grain_episodic_missing_metadata_error():
     loader.__iter__.return_value = iter([batch])
 
     # We need a MockDS that is an instance of EpisodicDataSource
-    # To avoid complex __init__ logic of EpisodicDataSource, we can use MagicMock with spec
+    # To avoid complex __init__ logic of EpisodicDataSource, we can use
+    # MagicMock with spec
     mock_eds = MagicMock(spec=EpisodicDataSource)
     mock_eds.episode_length = 10
     mock_eds.include_images = False

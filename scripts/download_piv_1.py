@@ -118,12 +118,14 @@ def fetch_splits(
         n_train = total - n_val - n_tune
 
         new_train = full_train[:n_train]
-        val_split = full_train[n_train : n_train + n_val]
-        tune_split = full_train[n_train + n_val :]
+        val_split = full_train[n_train: n_train + n_val]
+        tune_split = full_train[n_train + n_val:]
 
         print(
-            f"Splitting into:\n  Train: {len(new_train)}\n  Val:   {len(val_split)}\n  Tune:  {len(tune_split)}"
-        )
+            f"Splitting into:\n  Train: {
+                len(new_train)}\n  Val:   {
+                len(val_split)}\n  Tune:  {
+                len(tune_split)}")
 
         # Write out the new splits
         write_list(train_dest, new_train)
@@ -328,7 +330,8 @@ def download_from_gdrive(raw_dir_path: Path) -> None:
         try:
             with zipfile.ZipFile(zip_path, "r") as z:
                 # Extract into the main raw directory to avoid gdrive_folder_X nesting
-                # This flattens the structure so 'backstep' ends up in raw_dir_path/backstep
+                # This flattens the structure so 'backstep' ends up in
+                # raw_dir_path/backstep
                 z.extractall(raw_dir_path)
         except zipfile.BadZipFile:
             print(f"  WARNING: {zip_path} is not a valid zip, skipping.")
@@ -447,9 +450,8 @@ def main(out_dir: str, target_shape: str) -> None:
     try:
         target_shape_tuple = tuple(map(int, target_shape.split("x")))
     except Exception as e:
-        print(
-            f"Target shape is in the wrong format: {target_shape}. Use HxW, e.g., '256x256'. Error: {e}"
-        )
+        print(f"Target shape is in the wrong format: {
+            target_shape}. Use HxW, e.g., '256x256'. Error: {e}")
         return
 
     raw_dir_path = out_dir_path / "raw_class1"
@@ -512,7 +514,6 @@ if __name__ == "__main__":
         fetch_splits(out_path_split, args.split_seed, split_ratios)
         main(args.out_dir, args.target_shape)
     except Exception as e:
-        print(
-            f"Split ratio is in the wrong format: {args.split_ratio}. Use '80/10/10' format summing to 100. Error: {e}"
-        )
+        print(f"Split ratio is in the wrong format: {
+            args.split_ratio}. Use '80/10/10' format summing to 100. Error: {e}")
         exit(1)

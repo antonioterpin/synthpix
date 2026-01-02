@@ -169,10 +169,10 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                     )
 
         flow = data["V"]
-        assert flow.shape[2] == 2 or flow.shape[0] == 2, (
-            f"Flow field shape {flow.shape} is not valid. "
-            "Expected shape to have 2 channels (e.g., (H, W, 2) or (2, H, W))."
-        )
+        if not (flow.shape[2] == 2 or flow.shape[0] == 2):
+            raise ValueError(
+                f"Flow field shape {flow.shape} is not valid. "
+                "Expected shape to have 2 channels (e.g., (H, W, 2) or (2, H, W)).")
         if flow.shape[2] != 2:
             if flow.shape[0] == 2:
                 flow = np.transpose(flow, (1, 2, 0))

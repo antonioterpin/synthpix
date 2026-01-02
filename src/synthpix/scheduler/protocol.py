@@ -11,7 +11,6 @@ class SchedulerProtocol(Protocol):
 
     def shutdown(self) -> None:
         """Shuts down background processes used for prefetching."""
-        pass
 
     def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Returns the shape of the flow field.
@@ -97,10 +96,6 @@ class PrefetchedSchedulerProtocol(EpisodicSchedulerProtocol, Protocol):
 class EpisodeEndError(Exception):
     """Exception raised when an episode ends in a prefetched scheduler."""
 
-    pass
-
 
 class FileEndedError(Exception):
     """Exception raised when the end of a file's data is reached."""
-
-    pass

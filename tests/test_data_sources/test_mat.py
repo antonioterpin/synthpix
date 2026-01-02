@@ -163,7 +163,8 @@ def test_mat_recursive_hdf5_flattening(tmp_path):
         # The code expects `data["V"]`.
         # So this test reveals that the code might NOT handle nested "V" unless checking specific paths.
         # However, we just want to cover the `recursively_load_hdf5_group` function lines 29-30.
-        # Ensure we have a root V so it doesn't fail, but ALSO have a nested group to trigger the recursion.
+        # Ensure we have a root V so it doesn't fail, but ALSO have a nested
+        # group to trigger the recursion.
 
         f.create_dataset(
             "V", data=np.random.rand(64, 64, 2)

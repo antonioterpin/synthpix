@@ -8,11 +8,8 @@ import numpy as np
 import pytest
 
 from synthpix.scheduler import PrefetchingFlowFieldScheduler
-from synthpix.scheduler.protocol import (
-    EpisodeEnd,
-    EpisodicSchedulerProtocol,
-    SchedulerProtocol,
-)
+from synthpix.scheduler.protocol import (EpisodeEnd, EpisodicSchedulerProtocol,
+                                         SchedulerProtocol)
 from synthpix.types import SchedulerData
 
 
@@ -52,7 +49,6 @@ class MinimalScheduler(SchedulerProtocol):
         Args:
             new_file_list: The new list of files to set.
         """
-        pass
 
 
 class MinimalEpisodic(EpisodicSchedulerProtocol):
@@ -251,7 +247,8 @@ def test_next_episode_flushes_remaining_and_restarts():
     else:
         pf.next_episode(join_timeout=1)
 
-    # After next_episode() we must be at t == 0 and the queue empty/new thread alive
+    # After next_episode() we must be at t == 0 and the queue empty/new thread
+    # alive
     assert pf._t == 0
     deadline = time.time() + 0.5
     while time.time() < deadline and not pf.is_running():
@@ -321,7 +318,8 @@ def test_shutdown_when_queue_empty():
 
     assert pf._queue.empty()
 
-    # No exception should occur, and the background thread must be dead afterwards
+    # No exception should occur, and the background thread must be dead
+    # afterwards
     pf.shutdown()
     assert not pf._thread.is_alive()
 
@@ -440,7 +438,8 @@ def test_next_episode_immediate_timeout_break():
     # Start the iterator so _started becomes True
     pf.get_batch(1)
 
-    # Call next_episode with zero timeout to hit the `remaining_time <= 0` branch
+    # Call next_episode with zero timeout to hit the `remaining_time <= 0`
+    # branch
     pf.next_episode(join_timeout=0)
 
     # After calling next_episode the internal counter must be reset
@@ -639,7 +638,8 @@ class SlowMinimalScheduler(MinimalScheduler):
         self._first_call = True
 
     def get_batch(self, batch_size: int):
-        # First call: sleep longer than the *configured* startup_timeout in the test.
+        # First call: sleep longer than the *configured* startup_timeout in the
+        # test.
         if self._first_call:
             self._first_call = False
             time.sleep(0.2)

@@ -33,9 +33,8 @@ def test_compare_legacy_vs_grain_performance(tmp_path, mock_mat_files):
     batch_size = 1
 
     dataset_dir = tmp_path
-    print(
-        f"\n[Setup] Files: {num_files}, Episode Length: {episode_length}, Batch Size: {batch_size}"
-    )
+    print(f"\n[Setup] Files: {num_files}, Episode Length: {
+        episode_length}, Batch Size: {batch_size}")
 
     # Legacy Stack
     legacy_base = MATFlowFieldScheduler(
@@ -235,9 +234,8 @@ def test_compare_worker_modes(tmp_path, mock_mat_files):
                 if curr_t != expected_t:
                     broken_count += 1
                     if broken_count <= 5:  # Print first few errors
-                        print(
-                            f"   [Order Error] Index {i}: Chunk {prev_c} t={prev_t} -> t={curr_t} (Expected {expected_t})"
-                        )
+                        print(f"   [Order Error] Index {i}: Chunk {prev_c} t={
+                            prev_t} -> t={curr_t} (Expected {expected_t})")
 
         if broken_count == 0:
             print("-> Order Verification: PASSED ✅")

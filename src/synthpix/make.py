@@ -8,26 +8,17 @@ import jax
 from rich.console import Console
 from rich.text import Text
 
-from synthpix.data_sources import (
-    EpisodicDataSource,
-    FileDataSource,
-    HDF5DataSource,
-    MATDataSource,
-    NumpyDataSource,
-)
-from synthpix.data_sources.adapter import (
-    GrainEpisodicAdapter,
-    GrainSchedulerAdapter,
-)
+from synthpix.data_sources import (EpisodicDataSource, FileDataSource,
+                                   HDF5DataSource, MATDataSource,
+                                   NumpyDataSource)
+from synthpix.data_sources.adapter import (GrainEpisodicAdapter,
+                                           GrainSchedulerAdapter)
 from synthpix.sampler import RealImageSampler, Sampler, SyntheticImageSampler
-from synthpix.scheduler import (
-    BaseFlowFieldScheduler,
-    EpisodicFlowFieldScheduler,
-    HDF5FlowFieldScheduler,
-    MATFlowFieldScheduler,
-    NumpyFlowFieldScheduler,
-    PrefetchingFlowFieldScheduler,
-)
+from synthpix.scheduler import (BaseFlowFieldScheduler,
+                                EpisodicFlowFieldScheduler,
+                                HDF5FlowFieldScheduler, MATFlowFieldScheduler,
+                                NumpyFlowFieldScheduler,
+                                PrefetchingFlowFieldScheduler)
 
 from .utils import SYNTHPIX_SCOPE, load_configuration
 

@@ -151,7 +151,7 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
         for i in range(num_chunks):
             # Take a chunk of 'batch_size' episodes
             chunk_starts = shuffled_starts[
-                i * self.batch_size : (i + 1) * self.batch_size
+                i * self.batch_size: (i + 1) * self.batch_size
             ]
 
             # Resolve to file paths for these episodes
@@ -159,7 +159,7 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
             for d, s in chunk_starts:
                 # Slice the episode files: [s : s + L]
                 chunk_episodes.append(
-                    self.dir2files[d][s : s + self.episode_length]
+                    self.dir2files[d][s: s + self.episode_length]
                 )
 
             # 3. Interleave in Time-Major order

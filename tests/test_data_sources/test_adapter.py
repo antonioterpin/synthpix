@@ -1,14 +1,14 @@
 """Tests for Grain Adapters."""
 
+from unittest.mock import MagicMock
+
 import grain.python as grain
 import numpy as np
 import pytest
 
 from synthpix.data_sources import EpisodicDataSource, FileDataSource
-from synthpix.data_sources.adapter import (
-    GrainEpisodicAdapter,
-    GrainSchedulerAdapter,
-)
+from synthpix.data_sources.adapter import (GrainEpisodicAdapter,
+                                           GrainSchedulerAdapter)
 from synthpix.scheduler.protocol import EpisodeEnd
 
 
@@ -85,9 +85,6 @@ def test_scheduler_adapter_basic():
     assert batch_rst.flow_fields.shape == (2, 32, 32, 2)
 
 
-from unittest.mock import MagicMock
-
-
 def test_scheduler_adapter_padding():
     """Test padding when requested batch size is larger than data batch side."""
     # Data returns batch size 2 (from Grain), but we ask for 4.
@@ -108,7 +105,7 @@ def test_scheduler_adapter_padding():
     assert batch.flow_fields.shape == (4, 32, 32, 2)
     # First 2 valid, last 2 invalid
     assert np.sum(batch.mask) == 2
-    assert batch.mask[0] == True
+    assert batch.mask[0]
     assert batch.mask[2] == False  # Padded
 
 
@@ -142,7 +139,8 @@ def test_episodic_adapter_exhaustion():
 
 def test_get_flow_fields_shape_empty():
     """Test behavior when loader is empty."""
-    # Mock loader directly since grain.DataLoader doesn't like empty sources easily
+    # Mock loader directly since grain.DataLoader doesn't like empty sources
+    # easily
     loader = MagicMock(spec=grain.DataLoader)
     loader.__iter__.return_value = iter([])  # Empty iterator
 
@@ -566,7 +564,8 @@ def test_episodic_adapter_unknown_length():
     loader._data_source = src
 
     adapter = GrainEpisodicAdapter(loader)
-    # The init reads src.episode_length. If it is None, it sets self._episode_length = None.
+    # The init reads src.episode_length. If it is None, it sets
+    # self._episode_length = None.
 
     with pytest.raises(ValueError, match="Episode length unknown"):
         _ = adapter.episode_length

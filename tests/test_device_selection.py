@@ -85,7 +85,8 @@ def test_sampler_uses_all_devices_when_none_passed():
     sampler = _make_sampler(device_ids=None)
 
     # jax.devices() returns a list; sampler.mesh.devices is a tuple
-    # Compare device IDs rather than device objects to avoid JAX array comparison issues
+    # Compare device IDs rather than device objects to avoid JAX array
+    # comparison issues
     expected_device_ids = [d.id for d in jax.devices()]
     actual_device_ids = [d.id for d in sampler.mesh.devices]
     assert expected_device_ids == actual_device_ids

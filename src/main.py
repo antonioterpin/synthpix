@@ -40,7 +40,7 @@ def visualize_and_save(
     flow_x = flow_field[..., 0]
     flow_y = flow_field[..., 1]
     # Create a grid for the quiver plot
-    y, x = np.mgrid[0 : flow_x.shape[0], 0 : flow_x.shape[1]]
+    y, x = np.mgrid[0: flow_x.shape[0], 0: flow_x.shape[1]]
 
     # Save individual images and flow field
     plt.imsave(

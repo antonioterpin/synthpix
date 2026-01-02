@@ -6,11 +6,8 @@ import jax.numpy as jnp
 
 # Import existing modules
 from synthpix.generate import add_noise_to_image, img_gen_from_data
-from synthpix.types import (
-    ImageGenerationParameters,
-    ImageGenerationSpecification,
-    PRNGKey,
-)
+from synthpix.types import (ImageGenerationParameters,
+                            ImageGenerationSpecification, PRNGKey)
 from synthpix.utils import DEBUG_JIT, SYNTHPIX_SCOPE, match_histogram
 
 from .apply import apply_flow_to_particles
@@ -296,15 +293,15 @@ def generate_images_from_flow(  # noqa: PLR0915
 
         # Crop the images to image_shape
         first_img = first_img[
-            parameters.img_offset[0] : image_shape[0]
+            parameters.img_offset[0]: image_shape[0]
             + parameters.img_offset[0],
-            parameters.img_offset[1] : image_shape[1]
+            parameters.img_offset[1]: image_shape[1]
             + parameters.img_offset[1],
         ]
         second_img = second_img[
-            parameters.img_offset[0] : image_shape[0]
+            parameters.img_offset[0]: image_shape[0]
             + parameters.img_offset[0],
-            parameters.img_offset[1] : image_shape[1]
+            parameters.img_offset[1]: image_shape[1]
             + parameters.img_offset[1],
         ]
 

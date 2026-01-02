@@ -11,19 +11,13 @@ from jax import Array
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from typing_extensions import Self
 
-from synthpix.data_generate import (
-    generate_images_from_flow,
-    input_check_gen_img_from_flow,
-)
+from synthpix.data_generate import (generate_images_from_flow,
+                                    input_check_gen_img_from_flow)
 from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
 from synthpix.scheduler.protocol import SchedulerProtocol
 from synthpix.types import ImageGenerationSpecification, PRNGKey, SynthpixBatch
-from synthpix.utils import (
-    DEBUG_JIT,
-    SYNTHPIX_SCOPE,
-    flow_field_adapter,
-    input_check_flow_field_adapter,
-)
+from synthpix.utils import (DEBUG_JIT, SYNTHPIX_SCOPE, flow_field_adapter,
+                            input_check_flow_field_adapter)
 
 from .base import Sampler
 

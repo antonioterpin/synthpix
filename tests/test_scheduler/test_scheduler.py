@@ -7,12 +7,9 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from synthpix.scheduler import (
-    BaseFlowFieldScheduler,
-    HDF5FlowFieldScheduler,
-    NumpyFlowFieldScheduler,
-    PrefetchingFlowFieldScheduler,
-)
+from synthpix.scheduler import (BaseFlowFieldScheduler, HDF5FlowFieldScheduler,
+                                NumpyFlowFieldScheduler,
+                                PrefetchingFlowFieldScheduler)
 from synthpix.scheduler.base import FileEndedError
 from synthpix.types import SchedulerData
 from synthpix.utils import load_configuration
@@ -175,7 +172,8 @@ def test_numpy_scheduler_missing_images(tmp_path):
     file = tmp_path / "flow_1.npy"
     np.zeros((1, 64, 64, 2)).astype(np.float32).tofile(file)
 
-    pattern = f"Missing images for frame {1}: {tmp_path}/img_0.jpg, {tmp_path}/img_1.jpg"
+    pattern = f"Missing images for frame {1}: {
+        tmp_path}/img_0.jpg, {tmp_path}/img_1.jpg"
     with pytest.raises(FileNotFoundError, match=pattern):
         NumpyFlowFieldScheduler([str(file)], include_images=True)
 

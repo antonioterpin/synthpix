@@ -6,10 +6,8 @@ import jax.numpy as jnp
 import pytest
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
-from synthpix.data_generate import (
-    generate_images_from_flow,
-    input_check_gen_img_from_flow,
-)
+from synthpix.data_generate import (generate_images_from_flow,
+                                    input_check_gen_img_from_flow)
 from synthpix.types import ImageGenerationSpecification
 
 # Import existing modules
@@ -88,31 +86,29 @@ def test_invalid_position_bounds(position_bounds):
         )
 
 
-@pytest.mark.parametrize(
-    "seeding_density_range, expected_message",
-    [
-        (
-            (-1.0, 1.0),
-            "seeding_density_range must be a tuple of two non-negative numbers.",
-        ),
-        (
-            (0.0, -1.0),
-            "seeding_density_range must be a tuple of two non-negative numbers.",
-        ),
-        (
-            (-0.5, -0.5),
-            "seeding_density_range must be a tuple of two non-negative numbers.",
-        ),
-        (
-            (1.0, 0.5),
-            "seeding_density_range must be in the form \\(min, max\\).",
-        ),
-        (
-            (0.5, 0.1),
-            "seeding_density_range must be in the form \\(min, max\\).",
-        ),
-    ],
-)
+@pytest.mark.parametrize("seeding_density_range, expected_message",
+                         [((-1.0,
+                            1.0),
+                           "seeding_density_range must be a tuple of two non-negative numbers.",
+                           ),
+                          ((0.0,
+                            -1.0),
+                           "seeding_density_range must be a tuple of two non-negative numbers.",
+                           ),
+                             ((-0.5,
+                               -0.5),
+                              "seeding_density_range must be a tuple of two non-negative numbers.",
+                              ),
+                             ((1.0,
+                               0.5),
+                              "seeding_density_range must be in the form \\(min, max\\).",
+                              ),
+                             ((0.5,
+                               0.1),
+                              "seeding_density_range must be in the form \\(min, max\\).",
+                              ),
+                          ],
+                         )
 def test_invalid_seeding_density_range(seeding_density_range, expected_message):
     """Test that invalid seeding_density_range raise a ValueError."""
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -586,7 +582,8 @@ def test_generate_images_from_flow(monkeypatch, debug_flag):
     assert img.shape == image_shape
     assert img_warped.shape == image_shape
 
-    # an invalid argument should raise a ValueError (the check is in the function)
+    # an invalid argument should raise a ValueError (the check is in the
+    # function)
     if debug_flag:
         with pytest.raises(
             ValueError,

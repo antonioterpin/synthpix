@@ -5,11 +5,8 @@ import jax.numpy as jnp
 import pytest
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
-from synthpix.apply import (
-    apply_flow_to_image_callable,
-    apply_flow_to_particles,
-    input_check_apply_flow,
-)
+from synthpix.apply import (apply_flow_to_image_callable,
+                            apply_flow_to_particles, input_check_apply_flow)
 from synthpix.generate import img_gen_from_data
 from synthpix.utils import generate_array_flow_field, load_configuration
 from tests.example_flows import get_flow_function

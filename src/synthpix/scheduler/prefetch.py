@@ -7,12 +7,10 @@ from contextlib import suppress
 
 from goggles import get_logger
 
-from synthpix.scheduler.protocol import (
-    EpisodeEndError,
-    EpisodicSchedulerProtocol,
-    PrefetchedSchedulerProtocol,
-    SchedulerProtocol,
-)
+from synthpix.scheduler.protocol import (EpisodeEndError,
+                                         EpisodicSchedulerProtocol,
+                                         PrefetchedSchedulerProtocol,
+                                         SchedulerProtocol)
 from synthpix.types import SchedulerData
 from synthpix.utils import SYNTHPIX_SCOPE
 
@@ -162,8 +160,10 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             try:
                 batch = self.scheduler.get_batch(self.batch_size)
             except EpisodeEndError:
-                assert isinstance(self.scheduler, EpisodicSchedulerProtocol)
-                self.scheduler.next_episode()
+                if isinstance(self.scheduler, EpisodicSchedulerProtocol):
+                    self.scheduler.next_episode()
+                else:
+                    raise
                 continue
             except StopIteration:
                 # Intended behavior here:

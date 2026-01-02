@@ -8,11 +8,9 @@ import jax
 import jax.numpy as jnp
 from typing_extensions import Self
 
-from synthpix.scheduler.protocol import (
-    EpisodeEndError,
-    EpisodicSchedulerProtocol,
-    SchedulerProtocol,
-)
+from synthpix.scheduler.protocol import (EpisodeEndError,
+                                         EpisodicSchedulerProtocol,
+                                         SchedulerProtocol)
 from synthpix.types import PRNGKey, SchedulerData
 from synthpix.utils import SYNTHPIX_SCOPE, discover_leaf_dirs
 
@@ -284,7 +282,7 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         episodes = []
         for d, s in sampled_starts:
             # Extract the time-series pattern for this episode
-            episodes.append(self.dir2files[d][s : s + self.episode_length])
+            episodes.append(self.dir2files[d][s: s + self.episode_length])
 
         # Interleave “time major” → t0_ep0, t0_ep1, …, t1_ep0, …
         interleaved = [

@@ -8,17 +8,11 @@ import numpy as np
 import pytest
 
 from synthpix.sampler import RealImageSampler, SyntheticImageSampler
-from synthpix.scheduler import (
-    EpisodicFlowFieldScheduler,
-    HDF5FlowFieldScheduler,
-    MATFlowFieldScheduler,
-    PrefetchingFlowFieldScheduler,
-)
+from synthpix.scheduler import (EpisodicFlowFieldScheduler,
+                                HDF5FlowFieldScheduler, MATFlowFieldScheduler,
+                                PrefetchingFlowFieldScheduler)
 from synthpix.scheduler.base import BaseFlowFieldScheduler
-from synthpix.scheduler.protocol import (
-    EpisodeEnd,
-    EpisodicSchedulerProtocol,
-)
+from synthpix.scheduler.protocol import EpisodeEnd, EpisodicSchedulerProtocol
 from synthpix.types import ImageGenerationSpecification, SchedulerData
 from synthpix.utils import load_configuration
 
@@ -336,31 +330,29 @@ def test_invalid_img_offset(img_offset, scheduler):
         )
 
 
-@pytest.mark.parametrize(
-    "seeding_density_range, expected_message",
-    [
-        (
-            (-1.0, 1.0),
-            "seeding_density_range must be a tuple of two non-negative numbers.",
-        ),
-        (
-            (0.0, -1.0),
-            "seeding_density_range must be a tuple of two non-negative numbers.",
-        ),
-        (
-            (-0.5, -0.5),
-            "seeding_density_range must be a tuple of two non-negative numbers.",
-        ),
-        (
-            (1.0, 0.5),
-            "seeding_density_range must be in the form \\(min, max\\).",
-        ),
-        (
-            (0.5, 0.1),
-            "seeding_density_range must be in the form \\(min, max\\).",
-        ),
-    ],
-)
+@pytest.mark.parametrize("seeding_density_range, expected_message",
+                         [((-1.0,
+                            1.0),
+                           "seeding_density_range must be a tuple of two non-negative numbers.",
+                           ),
+                          ((0.0,
+                            -1.0),
+                           "seeding_density_range must be a tuple of two non-negative numbers.",
+                           ),
+                             ((-0.5,
+                               -0.5),
+                              "seeding_density_range must be a tuple of two non-negative numbers.",
+                              ),
+                             ((1.0,
+                               0.5),
+                              "seeding_density_range must be in the form \\(min, max\\).",
+                              ),
+                             ((0.5,
+                               0.1),
+                              "seeding_density_range must be in the form \\(min, max\\).",
+                              ),
+                          ],
+                         )
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
@@ -1265,7 +1257,8 @@ def test_reject_wrong_scheduler_for_real_images(mock_mat_files):
         match="Base scheduler must have include_images "
         "set to True to use RealImageSampler.",
     ):
-        # This should raise an error because the scheduler does not include images
+        # This should raise an error because the scheduler does not include
+        # images
         RealImageSampler(scheduler=prefetcher, batch_size=2)
 
 
@@ -1346,7 +1339,6 @@ class EpisodicDummy(_BaseDummy, EpisodicSchedulerProtocol):
 class PlainDummy(_BaseDummy):
     """Non-episodic scheduler - *no* next_episode/steps_remaining/reset/shutdown."""
 
-    pass
 
 
 class NoResetShutdownDummy(_BaseDummy):
@@ -1534,8 +1526,7 @@ def test_warning_when_batch_size_not_divisible_by_flow_fields(monkeypatch):
     # And we should have logged the expected warning
     expected = (
         "batch_size was not divisible by number of flows per batch. "
-        "There will be one more sample for the first 1 flow fields of each batch."
-    )
+        "There will be one more sample for the first 1 flow fields of each batch.")
     assert any(expected in m for m in logged), (
         f"Expected warning: {expected}, but got: {logged}"
     )

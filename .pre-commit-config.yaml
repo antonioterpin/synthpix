@@ -1,40 +1,120 @@
 exclude: ^(tests/|scripts/|examples/)
 repos:
-  - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.5.14
-    hooks:
-      - id: uv-lock
+    # Python dependencies
+    - repo: https://github.com/astral-sh/uv-pre-commit
+      # uv version.
+      rev: 0.9.21
+      hooks:
+        - id: uv-lock
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.0
-    hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-      - id: ruff-format
+    # Python code formatting with autopep8
+    - repo: https://github.com/hhatto/autopep8
+      rev: v2.3.2
+      hooks:
+        - id: autopep8
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.14.0
-    hooks:
-      - id: mypy
-        additional_dependencies: [types-requests, types-setuptools, numpy, jax, jaxlib, typing-extensions]
+    # Import sorting with isort
+    - repo: https://github.com/PyCQA/isort
+      rev: 7.0.0
+      hooks:
+        - id: isort
 
-  - repo: https://github.com/jsh9/pydoclint
-    rev: 0.8.3
-    hooks:
-      - id: pydoclint
-        args:
-          - --style=google
-          - --arg-type-hints-in-docstring=False
-          - --check-return-types=False
-          - --skip-checking-short-docstrings=True
-          - --allow-init-docstring=True
+    # Python linting with flake8
+    - repo: https://github.com/PyCQA/flake8
+      rev: 7.3.0
+      hooks:
+        - id: flake8
 
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
-    hooks:
-      - id: check-yaml
-      - id: end-of-file-fixer
-      - id: trailing-whitespace
-      - id: check-added-large-files
-      - id: check-toml
-      - id: check-merge-conflict
+    # Type checking with mypy
+    - repo: https://github.com/pre-commit/mirrors-mypy
+      rev: v1.19.1
+      hooks:
+        - id: mypy
+          additional_dependencies: [
+            types-tqdm,
+            types-PyYAML,
+            types-setuptools,
+            types-requests,
+          ]
+
+    # Google-style docstring checking
+    - repo: https://github.com/PyCQA/pydocstyle
+      rev: 6.3.0
+      hooks:
+        - id: pydocstyle
+          additional_dependencies: [tomli]
+
+    # Security scanning with bandit
+    - repo: https://github.com/PyCQA/bandit
+      rev: 1.9.2
+      hooks:
+        - id: bandit
+          args: ["-c", "pyproject.toml"]
+          additional_dependencies: ["bandit[toml]", "pbr"]
+
+    # YAML/JSON/TOML formatting and validation
+    - repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v6.0.0
+      hooks:
+        - id: check-yaml
+          args: ["--unsafe"]  # Allow custom YAML tags
+        - id: check-json
+        - id: check-toml
+        - id: end-of-file-fixer
+        - id: trailing-whitespace
+        - id: check-merge-conflict
+        - id: check-case-conflict
+        - id: check-added-large-files
+          args: ["--maxkb=1000"]
+        - id: check-docstring-first
+        - id: debug-statements
+        - id: name-tests-test
+          args: ["--pytest-test-first"]
+
+    # Check for Python import cycles and unused imports (auto-fixes)
+    - repo: https://github.com/PyCQA/autoflake
+      rev: v2.3.1
+      hooks:
+        - id: autoflake
+          args:
+            - --remove-all-unused-imports
+            - --remove-unused-variables
+            - --in-place
+            - --recursive
+
+    # Conventional commit message validation
+    - repo: https://github.com/compilerla/conventional-pre-commit
+      rev: v4.3.0
+      hooks:
+        - id: conventional-pre-commit
+          stages: [commit-msg]
+
+    # Check for proper snake_case/PascalCase naming conventions
+    - repo: https://github.com/pre-commit/pygrep-hooks
+      rev: v1.10.0
+      hooks:
+        - id: python-no-log-warn
+        - id: python-no-eval
+        - id: python-use-type-annotations
+        - id: python-check-blanket-noqa
+        - id: python-check-blanket-type-ignore
+
+    # # Custom hooks for project-specific requirements
+    # - repo: local
+    #   hooks:
+    #     # Check single return statement pattern
+    #     - id: check-single-return
+    #       name: Check single return statements
+    #       entry: python scripts/custom.py
+    #       language: python
+    #       files: \.py$
+    #       exclude: ^(tests/|__pycache__/|\.venv/)
+    #       additional_dependencies: []
+
+    # Spell checking for documentation
+    - repo: https://github.com/crate-ci/typos
+      rev: v1
+      hooks:
+        - id: typos
+          args: ["--format", "brief"]
+          exclude: ^(\.git/|\.venv/|build/|dist/)

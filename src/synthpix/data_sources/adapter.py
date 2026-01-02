@@ -8,11 +8,9 @@ import numpy as np
 
 from synthpix.data_sources.base import FileDataSource
 from synthpix.data_sources.episodic import EpisodicDataSource
-from synthpix.scheduler.protocol import (
-    EpisodeEndError,
-    EpisodicSchedulerProtocol,
-    SchedulerProtocol,
-)
+from synthpix.scheduler.protocol import (EpisodeEndError,
+                                         EpisodicSchedulerProtocol,
+                                         SchedulerProtocol)
 from synthpix.types import SchedulerData
 
 logger = logging.getLogger(__name__)
@@ -47,7 +45,6 @@ class GrainSchedulerAdapter(SchedulerProtocol):
     def shutdown(self) -> None:
         """Compatibility layer for shutdown."""
         # Grain loaders clean up on GC or exit.
-        pass
 
     def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Returns the shape of the flow field.

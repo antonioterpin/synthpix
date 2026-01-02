@@ -6,10 +6,8 @@ import numpy as np
 import pytest
 from jax import jit
 
-from synthpix.data_generate import (
-    generate_images_from_flow,
-    input_check_gen_img_from_flow,
-)
+from synthpix.data_generate import (generate_images_from_flow,
+                                    input_check_gen_img_from_flow)
 from synthpix.sampler import SyntheticImageSampler
 from synthpix.types import ImageGenerationSpecification
 from synthpix.utils import load_configuration, match_histogram

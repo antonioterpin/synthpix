@@ -36,12 +36,13 @@ def test_hdf5_group_error(tmp_path):
         [str(tmp_path)]
     )  # Changed to list for consistency with other tests
     # It will find 'group.h5'
-    # load_file should raise ValueError because `list(file)[0]` is "some_group" which is a Group.
+    # load_file should raise ValueError because `list(file)[0]` is
+    # "some_group" which is a Group.
 
     with pytest.raises(ValueError, match="Expected Dataset but got"):
-        _ = ds[
-            0
-        ]  # Changed from `ds[0]== 2` to `_ = ds[0]` to correctly trigger the load and error
+        # Changed from `ds[0]== 2` to `_ = ds[0]` to correctly trigger the load
+        # and error
+        _ = ds[0]
 
 
 def test_hdf5_invalid_ext(tmp_path):

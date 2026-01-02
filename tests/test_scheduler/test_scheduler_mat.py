@@ -84,13 +84,8 @@ def test_mat_scheduler_iteration(mock_mat_files):
             data = scheduler.get_batch(batch_size=1)
             assert isinstance(data, SchedulerData)
             assert data.flow_fields.shape == (
-                1,
-                256,
-                256,
-                2,
-            ), (
-                f"Expected flow field shape (1, 256, 256, 2), got {data.flow_fields.shape}"
-            )
+                1, 256, 256, 2, ), (f"Expected flow field shape (1, 256, 256, 2), got {
+                    data.flow_fields.shape}")
             count += 1
         except StopIteration:
             break
@@ -532,7 +527,7 @@ def test_mat_scheduler_get_batch_too_large_pads_correctly(
     assert batch.images1.shape == (batch_size, 256, 256)
     assert batch.images2.shape == (batch_size, 256, 256)
     assert (
-        batch.flow_fields[len(files) :, ...].sum() == 0.0
+        batch.flow_fields[len(files):, ...].sum() == 0.0
     )  # padded entries are zeroed out
 
 
