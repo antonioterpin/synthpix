@@ -10,9 +10,10 @@ import grain.python as grain
 
 logger = logging.getLogger(__name__)
 
+
 class FileDataSource(grain.RandomAccessDataSource, ABC):
     """Abstract base class for file-based datasources.
-    
+
     Handles recursive file discovery from a list of paths or directories.
     """
 
@@ -25,17 +26,19 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
             dataset_path: A single path or list of paths (files or directories).
         """
         self._file_list = []
-        
+
         # Normalize input to list
         if isinstance(dataset_path, str):
             dataset_path = [dataset_path]
-            
+
         if (
             dataset_path is None
             or not isinstance(dataset_path, list)
             or not all(isinstance(f, str) for f in dataset_path)
         ):
-            raise ValueError("dataset_path must be a list of file paths (or a single string).")
+            raise ValueError(
+                "dataset_path must be a list of file paths (or a single string)."
+            )
 
         for file_path in dataset_path:
             if os.path.isdir(file_path):
@@ -49,8 +52,10 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
                 self._file_list.append(file_path)
 
         if not self._file_list:
-            raise ValueError(f"No files found in {dataset_path} matching pattern {self._file_pattern}")
-        
+            raise ValueError(
+                f"No files found in {dataset_path} matching pattern {self._file_pattern}"
+            )
+
         super().__init__()
 
     @property
@@ -69,10 +74,10 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
 
     def __getitem__(self, record_key: int) -> dict[str, Any]:
         """Loads a file and returns the data dictionary.
-        
+
         Args:
             record_key: Index of the file to load.
-            
+
         Returns:
             Dictionary containing data (e.g. 'flow_fields', 'images1', etc).
         """
@@ -81,11 +86,11 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
     @abstractmethod
     def load_file(self, file_path: str) -> dict[str, Any]:
         """Loads a file and returns the data dictionary.
-        
+
         Args:
             file_path: Absolute path to the file.
-            
+
         Returns:
             Dictionary containing data (e.g. 'flow_fields', 'images1', etc).
         """
-        pass # pragma: no cover
+        pass  # pragma: no cover

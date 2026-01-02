@@ -9,6 +9,7 @@ from .base import FileDataSource
 
 logger = logging.getLogger(__name__)
 
+
 class EpisodicDataSource(grain.RandomAccessDataSource):
     """Wrapper that serves flow-field *episodes* in parallel batches using Grain.
 
@@ -31,14 +32,14 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
     The files inside each leaf directory must already be in temporal order when
     sorted alphabetically (e.g. zero-padded integers in the file name).
 
-    This class serves as a drop-in replacement for the legacy 
+    This class serves as a drop-in replacement for the legacy
     ``EpisodicFlowFieldScheduler``, but follows the Grain DataSource API.
 
     Wrapper Pattern:
     ----------------
     This class wraps a concrete :class:`FileDataSource` (like :class:`MATDataSource`
     or :class:`HDF5DataSource`). The discovery of files is handled by the wrapped
-    source, but ``EpisodicDataSource`` re-indexes them to form episodes. 
+    source, but ``EpisodicDataSource`` re-indexes them to form episodes.
     It then delegates the actual file loading back to the wrapped source via
     ``source.load_file()``. This ensures that file-format specifics (MAT vs HDF5)
     remain decoupled from the episodic batching logic.
@@ -60,7 +61,9 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
             seed: Random seed for shuffling episodes.
         """
         if not isinstance(source, FileDataSource):
-             raise TypeError(f"source must be an instance of FileDataSource, got {type(source)}")
+            raise TypeError(
+                f"source must be an instance of FileDataSource, got {type(source)}"
+            )
 
         self.source = source
         self.batch_size = batch_size
@@ -72,7 +75,7 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
         # FileDataSource scans recursively.
         # We need to re-group them by directory to identify episodes.
         self.dir2files, self._starts = self._calculate_starts(source.file_list)
-        
+
         logger.info(
             f"EpisodicDataSource: Found {len(self._starts)} valid episode starts "
             f"from {len(source.file_list)} files."
@@ -81,12 +84,14 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
         # 2. Build Interleaved List (Pre-compute epoch order)
         self._interleaved_files = self._build_interleaved_file_list()
 
-    def _calculate_starts(self, file_list: list[str]) -> tuple[dict[str, list[str]], list[tuple[str, int]]]:
+    def _calculate_starts(
+        self, file_list: list[str]
+    ) -> tuple[dict[str, list[str]], list[tuple[str, int]]]:
         """Group files by directory and calculate valid start indices.
-        
+
         Args:
             file_list: List of file paths.
-            
+
         Returns:
             Tuple containing:
                 - dir2files: Dictionary mapping directories to lists of file paths.
@@ -117,12 +122,12 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
 
     def _build_interleaved_file_list(self) -> list[tuple[str, int, int]]:
         """Builds the single interleaved list of files for the epoch.
-        
+
         Returns:
             List of tuples containing (file_path, chunk_id, timestep_in_episode).
         """
         # 1. Shuffle all possible episode starts
-        shuffled_starts = list(self._starts) # copy
+        shuffled_starts = list(self._starts)  # copy
         self._rng.shuffle(shuffled_starts)
 
         # 2. Partition into chunks handling batch_size
@@ -133,8 +138,10 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
         interleaved = []
         for i in range(num_chunks):
             # Take a chunk of 'batch_size' episodes
-            chunk_starts = shuffled_starts[i * self.batch_size : (i + 1) * self.batch_size]
-            
+            chunk_starts = shuffled_starts[
+                i * self.batch_size : (i + 1) * self.batch_size
+            ]
+
             # Resolve to file paths for these episodes
             chunk_episodes = []
             for d, s in chunk_starts:
@@ -157,10 +164,10 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
 
     def __getitem__(self, idx: int):
         """Loads a file and returns the data dictionary.
-        
+
         Args:
             idx: Index of the file to load.
-            
+
         Returns:
             Dictionary containing data (e.g. 'flow_fields', 'images1', etc).
         """
@@ -173,8 +180,8 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
         # (This allows downstream collaors/samplers to know boundaries)
         data["_chunk_id"] = chunk_id
         data["_timestep"] = t
-        data["_is_last_step"] = (t == self.episode_length - 1)
-        
+        data["_is_last_step"] = t == self.episode_length - 1
+
         return data
 
     @property

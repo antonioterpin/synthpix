@@ -11,6 +11,7 @@ from .base import FileDataSource
 
 logger = logging.getLogger(__name__)
 
+
 class NumpyDataSource(FileDataSource):
     """DataSource for loading .npy flow files and paired images."""
 
@@ -18,12 +19,10 @@ class NumpyDataSource(FileDataSource):
     _file_pattern = "flow_*.npy"
 
     def __init__(
-        self, 
-        dataset_path: list[str] | str,
-        include_images: bool = False
+        self, dataset_path: list[str] | str, include_images: bool = False
     ) -> None:
         """Initializes the NumpyDataSource.
-        
+
         Args:
             dataset_path: Path to the dataset.
             include_images: Whether to include images.
@@ -51,22 +50,18 @@ class NumpyDataSource(FileDataSource):
 
     def load_file(self, file_path: str) -> dict[str, Any]:
         """Load .npy flow and optionally paired images.
-        
+
         Args:
             file_path: Path to the .npy file.
-            
+
         Returns:
             Dictionary containing data (e.g. 'flow_fields', 'images1', etc).
         """
-        
         # Load Flow
         flow = np.load(file_path)
-        
-        data = {
-            "flow_fields": flow,
-            "file": file_path
-        }
-        
+
+        data = {"flow_fields": flow, "file": file_path}
+
         # Load Images
         if self.include_images:
             mb = re.match(r"flow_(\d+)\.npy$", os.path.basename(file_path))
@@ -75,25 +70,24 @@ class NumpyDataSource(FileDataSource):
                 raise ValueError(f"Bad filename: {file_path}")
             t = int(mb.group(1))
             folder = os.path.dirname(file_path)
-             
+
             prev_path = os.path.join(folder, f"img_{t-1}.jpg")
             curr_path = os.path.join(folder, f"img_{t}.jpg")
-            
+
             # Load and convert to array
             prev = np.array(Image.open(prev_path).convert("RGB"))
             curr = np.array(Image.open(curr_path).convert("RGB"))
-            
+
             data["images1"] = prev
             data["images2"] = curr
-             
+
         return data
 
     @property
     def include_images(self) -> bool:
         """Whether to include images.
-        
+
         Returns:
             bool: Whether to include images.
         """
         return self._include_images
-

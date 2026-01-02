@@ -15,16 +15,17 @@ from synthpix.scheduler.protocol import (
 
 logger = logging.getLogger(__name__)
 
+
 class GrainSchedulerAdapter(SchedulerProtocol):
     """Adapts a Grain DataLoader to the SchedulerProtocol interface.
-    
+
     This allows legacy Samplers to consume data from a Grain pipeline
     without modification.
     """
 
     def __init__(self, loader: grain.DataLoader):
         """Initialize the adapter.
-        
+
         Args:
             loader: A grain.DataLoader instance.
         """
@@ -34,7 +35,7 @@ class GrainSchedulerAdapter(SchedulerProtocol):
         if not hasattr(self.loader, "__iter__"):
             raise ValueError("loader must be iterable")
         self._iterator = iter(self.loader)
-        
+
         # Shape of the flow fields (H, W, 2)
         self._cached_shape = None
 
@@ -45,7 +46,7 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
     def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Returns the shape of the flow field.
-        
+
         Returns:
             The shape of the flow field (H, W, 2).
         """
@@ -64,13 +65,13 @@ class GrainSchedulerAdapter(SchedulerProtocol):
             flow = batch["flow_fields"]
             # Return (H, W, 2)
             self._cached_shape = flow.shape[1:]
-        
+
         return self._cached_shape
-    
+
     @property
     def include_images(self) -> bool:
         """Returns True if the underlying data source provides images.
-        
+
         Returns:
             True if the underlying data source provides images.
         """
@@ -81,11 +82,11 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
     def _to_scheduler_data(self, batch: dict, target_batch_size: int) -> SchedulerData:
         """Converts a Grain batch dict to SchedulerData with padding and masking.
-        
+
         Args:
             batch: A dict containing the batch data.
             target_batch_size: The target batch size.
-        
+
         Returns:
             A batch of flow fields.
         """
@@ -93,11 +94,11 @@ class GrainSchedulerAdapter(SchedulerProtocol):
         images1 = batch.get("images1")
         images2 = batch.get("images2")
         files = tuple(batch.get("file", ()))
-        
+
         if self.include_images:
             if images1 is None or images2 is None:
                 raise KeyError("Images expected but not found in batch.")
-        
+
         # Validation
         if not isinstance(flow, np.ndarray):
             raise ValueError(f"Flow fields must be a np.ndarray, got {type(flow)}")
@@ -107,26 +108,26 @@ class GrainSchedulerAdapter(SchedulerProtocol):
             raise ValueError(f"Images2 must be a np.ndarray, got {type(images2)}")
 
         B = flow.shape[0]
-        
+
         # Calculate padding needed
         pad_size = target_batch_size - B
-        
+
         valid_mask = np.ones((target_batch_size,), dtype=bool)
         if pad_size > 0:
             valid_mask[B:] = False
-            
+
             # Pad flow
             padding = [(0, pad_size)] + [(0, 0)] * (flow.ndim - 1)
-            flow = np.pad(flow, padding, mode='constant')
-            
+            flow = np.pad(flow, padding, mode="constant")
+
             # Pad images if present
             if images1 is not None:
                 img_padding = [(0, pad_size)] + [(0, 0)] * (images1.ndim - 1)
-                images1 = np.pad(images1, img_padding, mode='constant')
+                images1 = np.pad(images1, img_padding, mode="constant")
             if images2 is not None:
                 img_padding = [(0, pad_size)] + [(0, 0)] * (images2.ndim - 1)
-                images2 = np.pad(images2, img_padding, mode='constant')
-                
+                images2 = np.pad(images2, img_padding, mode="constant")
+
             # Pad files
             files = files + ("",) * pad_size
 
@@ -138,21 +139,21 @@ class GrainSchedulerAdapter(SchedulerProtocol):
             if images2 is not None:
                 images2 = images2[:target_batch_size]
             files = files[:target_batch_size]
-             
+
         return SchedulerData(
             flow_fields=flow,
             images1=images1,
             images2=images2,
             files=files,
-            mask=valid_mask
+            mask=valid_mask,
         )
 
     def get_batch(self, batch_size: int) -> SchedulerData:
         """Retrieves a batch of flow fields.
-        
+
         Args:
             batch_size: The batch size to retrieve.
-        
+
         Returns:
             SchedulerData: A batch of flow fields.
         """
@@ -172,12 +173,14 @@ class GrainSchedulerAdapter(SchedulerProtocol):
     @property
     def file_list(self) -> list[str]:
         """Returns the list of files (if accessible).
-        
+
         Returns:
             The list of files.
         """
         # Best effort: try to get from source
-        if hasattr(self.loader, "_data_source") and isinstance(self.loader._data_source, FileDataSource):
+        if hasattr(self.loader, "_data_source") and isinstance(
+            self.loader._data_source, FileDataSource
+        ):
             return self.loader._data_source.file_list
         return []
 
@@ -187,12 +190,14 @@ class GrainSchedulerAdapter(SchedulerProtocol):
         # Grain loaders are usually immutable after creation regarding file list.
         # Supporting this would require rebuilding the loader.
         # We will remove this from the protocol once we transition completely to Grain.
-        raise NotImplementedError("Setting file_list on GrainSchedulerAdapter is not supported.")
+        raise NotImplementedError(
+            "Setting file_list on GrainSchedulerAdapter is not supported."
+        )
 
 
 class GrainEpisodicAdapter(GrainSchedulerAdapter, EpisodicSchedulerProtocol):
     """Adapts a Grain DataLoader to the EpisodicSchedulerProtocol interface.
-    
+
     Requires data to contain episodic metadata ('_timestep', '_is_last_step')
     produced by EpisodicDataSource.
     """
@@ -200,15 +205,15 @@ class GrainEpisodicAdapter(GrainSchedulerAdapter, EpisodicSchedulerProtocol):
     def __init__(
         self,
         loader: grain.DataLoader,
-        ) -> None:
+    ) -> None:
         """Initialize the adapter.
-        
+
         Args:
             loader: A grain.DataLoader instance.
         """
         super().__init__(loader)
         self._current_timestep = 0
-        
+
         src = getattr(self.loader, "_data_source", None)
         if isinstance(src, EpisodicDataSource):
             self._episode_length = src.episode_length
@@ -216,30 +221,46 @@ class GrainEpisodicAdapter(GrainSchedulerAdapter, EpisodicSchedulerProtocol):
             raise ValueError("Data source is not an EpisodicDataSource.")
 
     def get_batch(self, batch_size: int) -> SchedulerData:
+        """Retrieves a batch of flow fields.
+
+        Args:
+            batch_size: The batch size to retrieve.
+
+        Returns:
+            SchedulerData: A batch of flow fields.
+
+        Raises:
+            EpisodeEnd: If the episode sequence has finished.
+            KeyError: If the batch is missing the required '_timestep' metadata.
+        """
         try:
-             batch = next(self._iterator)
+            batch = next(self._iterator)
         except StopIteration:
-             raise EpisodeEnd("Episode Sequence Finished.")
+            raise EpisodeEnd("Episode Sequence Finished.")
 
         # Update tracking
         if "_timestep" in batch:
-            t = batch["_timestep"][0] 
+            t = batch["_timestep"][0]
             self._current_timestep = int(t)
 
         return self._to_scheduler_data(batch, batch_size)
 
     def steps_remaining(self) -> int:
         """Returns steps remaining in current episode.
-        
+
         Returns:
             Number of steps remaining in current episode.
         """
         return self._episode_length - (self._current_timestep + 1)
 
     def next_episode(self) -> None:
-        """Fast-forwards to the start of the next episode."""
+        """Fast-forwards to the start of the next episode.
+
+        Raises:
+            KeyError: If the batch is missing the required '_timestep' metadata.
+        """
         # In Grain, "next episode" just means "keep reading until timestep goes back to 0".
-        
+
         # If we are NOT at end, we must skip.
         while self.steps_remaining() > 0:
             try:
@@ -253,12 +274,20 @@ class GrainEpisodicAdapter(GrainSchedulerAdapter, EpisodicSchedulerProtocol):
             except StopIteration:
                 # End of data
                 break
-        
+
         # Acts as "before 0"
         self._current_timestep = -1
 
     @property
     def episode_length(self) -> int:
+        """Returns the length of the current episode.
+
+        Returns:
+            int: The length of the current episode.
+
+        Raises:
+            ValueError: If the episode length is unknown.
+        """
         if self._episode_length is None:
             raise ValueError("Episode length unknown.")
         return self._episode_length
