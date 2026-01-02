@@ -1,6 +1,5 @@
 """Tests for FileDataSource base class."""
 
-import os
 import pytest
 from synthpix.data_sources.base import FileDataSource
 

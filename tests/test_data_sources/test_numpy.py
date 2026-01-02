@@ -1,10 +1,8 @@
 """Tests for NumpyDataSource."""
 
 import os
-import tempfile
 import numpy as np
 import pytest
-from PIL import Image
 
 from synthpix.data_sources import NumpyDataSource
 

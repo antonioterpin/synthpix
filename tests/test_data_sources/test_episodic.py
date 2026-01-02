@@ -9,7 +9,7 @@ from synthpix.data_sources import EpisodicDataSource, FileDataSource
 class MockDataSource(FileDataSource):
     """Simple source that returns the filepath."""
     def __init__(self, file_list, include_images=False):
-        self._file_list = file_list
+        super().__init__(dataset_path=file_list)
         self._include_images = include_images
         
     def load_file(self, file_path):
@@ -117,7 +117,7 @@ def test_episodic_grain_integration():
 def test_episodic_type_validation():
     """Test that TypeError is raised if source is not FileDataSource."""
     with pytest.raises(TypeError, match="must be an instance of FileDataSource"):
-        EpisodicDataSource(source="not_a_source", batch_size=2, episode_length=5)
+        EpisodicDataSource(source="not_a_source", batch_size=2, episode_length=5)  # type: ignore
 
 def test_episodic_remainder_handling():
     """Test that data is dropped if it doesn't fit into a full batch of episodes."""

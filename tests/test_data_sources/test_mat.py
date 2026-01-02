@@ -5,7 +5,6 @@ import numpy as np
 import scipy.io
 import pytest
 import h5py
-from unittest.mock import patch, MagicMock
 
 from synthpix.data_sources import MATDataSource
 

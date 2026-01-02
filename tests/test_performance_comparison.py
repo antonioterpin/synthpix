@@ -246,6 +246,7 @@ def test_compare_worker_modes(tmp_path, mock_mat_files):
 
 class SleepingDataSource(grain.RandomAccessDataSource):
     def __init__(self, size=10, sleep_time=0.1):
+        super().__init__()
         self.size = size
         self.sleep_time = sleep_time
         

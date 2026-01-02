@@ -10,6 +10,7 @@ from synthpix.data_sources import EpisodicDataSource, FileDataSource
 class MockDataSource(grain.RandomAccessDataSource):
     """Mock source returning dicts with metadata."""
     def __init__(self, length=10, episode_len=5):
+        super().__init__()
         self._length = length
         self.episode_length = episode_len
         self.include_images = False
@@ -29,7 +30,7 @@ class MockDataSource(grain.RandomAccessDataSource):
 
 class MockFileSource(FileDataSource):
     def __init__(self, files, include_images=False):
-        self._file_list = files
+        super().__init__(dataset_path=files)
         self._include_images = include_images
         
     @property
@@ -221,7 +222,7 @@ def test_episodic_next_episode_logic():
     adapter = GrainEpisodicAdapter(loader)
     
     # 1. Get t0
-    b = adapter.get_batch(1)
+    adapter.get_batch(1)
     assert adapter._current_timestep == 0
     assert adapter.steps_remaining() == 2 # 3 - 1
     
@@ -243,26 +244,7 @@ def test_adapter_init_errors():
     """Test validation errors during initialization."""
     with pytest.raises(ValueError, match="must be a grain.DataLoader"):
         GrainSchedulerAdapter("not_a_loader")
-        
-    class BadLoader:
-        pass # No __iter__
-    
-    # We need to trick isinstance check or strictly pass Grain DataLoader? 
-    # Current impl checks isinstance(loader, grain.DataLoader) first.
-    # So to test HASATTR check, we need an object that IS a DataLoader but HAS NO __iter__?
-    # Grain DataLoader always has __iter__. So that check might be unreachable with type checking.
-    # However, if we mock it:
-    loader = MagicMock(spec=grain.DataLoader)
-    del loader.__iter__ # Mock object allows deleting attrs
-    # But MagicMock might recreate it on access if not careful.
-    # Let's try:
-    
-    # Actually, simpler: bypass isinstance check if possible? No.
-    # If the user passes a subclass that explicitly removes __iter__? Unlikely.
-    # But coverage requires hitting it.
-    
-    # If we pass a Mock that specifies `spec=grain.DataLoader`, isinstance passes.
-    # But if we make sure it doesn't have __iter__:
+
     loader = MagicMock(spec=grain.DataLoader)
     # MagicMock has everything by default.
     # We must explicitly set it to raise AttributeError or delete it.
@@ -373,13 +355,6 @@ def test_adapter_exhaustion():
 
 def test_adapter_invalid_types_validation():
     """Test Validation Errors for non-ndarray outputs."""
-    class BadTypeSource(grain.RandomAccessDataSource):
-        def __len__(self): return 1
-        def __getitem__(self, idx):
-            return {
-                "flow_fields": [0], # List, not ndarray
-                "file": "f"
-            }
     
     # Mocking the iterator is safer to produce exact bad batch.
     loader = MagicMock(spec=grain.DataLoader)

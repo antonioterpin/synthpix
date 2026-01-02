@@ -1,7 +1,6 @@
 
 import importlib
 from types import SimpleNamespace
-from typing import Any
 import pytest
 
 # Import the module to be tested
@@ -55,7 +54,6 @@ def patch_grain(monkeypatch):
     mock_grain = SimpleNamespace()
     mock_grain.IndexSampler = lambda **kwargs: "IndexSampler"
     mock_grain.DataLoader = DummyLoader
-    mock_grain.Batch = lambda **kwargs: "Batch"
     mock_grain.NoSharding = lambda: "NoSharding"
     
     class MockReadOptions:
@@ -64,6 +62,10 @@ def patch_grain(monkeypatch):
             self.kwargs = kwargs
     
     mock_grain.ReadOptions = MockReadOptions
+    
+    from unittest.mock import MagicMock
+    mock_grain.Batch = MagicMock(return_value="Batch")
+
     monkeypatch.setattr(make_mod, "grain", mock_grain)
 
     # Mock DataSources
@@ -160,34 +162,21 @@ def test_make_grain_padding(patch_grain):
     """Test behavior when dataset size is not divisible by batch size."""
     cfg = {
         "scheduler_class": ".mat",
-        "batch_size": 3, # 10 % 3 != 0
+        "batch_size": 3,
         "flow_fields_per_batch": 1,
         "batches_per_flow_batch": 1,
         "include_images": False,
-        "loop": False, # Ensure we don't loop forever
+        "loop": False,
         "randomize": False,
     }
 
-    # We need to spy on the Grain Loader to see if it was created with drop_remainder=False
-    # However, our DummyLoader doesn't store that info unless we modify it.
-    # Alternatively, we can check if the mocked Batch operation was called with drop_remainder=True/False
+    make(cfg, use_grain_scheduler=True)
     
-    # Let's inspect the `operations` argument passed to DummyLoader
-    # In verify_make_logic.py we mocked it, here we are in pytest so we use the patch_grain fixture
-    # which sets make_mod.grain.Batch to a lambda that returns "Batch" (string). 
-    # That's not enough to verify arguments.
-    # Let's upgrade the mock in the test function itself.
-    
-    from unittest.mock import MagicMock
-    mock_batch_op = MagicMock(return_value="BatchOp")
-    make_mod.grain.Batch = mock_batch_op
-    
-    sampler = make(cfg, use_grain_scheduler=True)
-    
-    # Verify grain.Batch call
-    mock_batch_op.assert_called_with(batch_size=3, drop_remainder=False)
-    # NOTE: The user believes it SHOULD be False. So this test confirms CURRENT behavior (True).
-    # After we fix the code, we will update this test to assert False.
+    # Verify grain.Batch was called with drop_remainder=False
+    expected_batch_size = 3
+    make_mod.grain.Batch.assert_called_with(
+        batch_size=expected_batch_size, drop_remainder=False
+    )
 
 def test_make_grain_worker_count(patch_grain, monkeypatch):
     """Test passing worker_count and verify warning for non-episodic multi-worker."""

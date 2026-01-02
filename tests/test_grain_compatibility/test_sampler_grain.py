@@ -1,7 +1,6 @@
 """Integration tests for SyntheticImageSampler with Grain Adapter."""
 
 import pytest
-import numpy as np
 import grain.python as grain
 from synthpix.data_sources.adapter import GrainEpisodicAdapter
 from synthpix.sampler.synthetic import SyntheticImageSampler
