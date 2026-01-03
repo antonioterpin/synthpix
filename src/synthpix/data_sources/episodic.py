@@ -1,6 +1,7 @@
 """EpisodicDataSource implementation (Wrapper)."""
 
 import logging
+import math
 import os
 
 import grain.python as grain
@@ -78,12 +79,14 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
         self.episode_length = episode_length
         self._rng = np.random.default_rng(seed)
 
-        # 1. Discover Episodes from source.file_list
-        # We assume the source.file_list contains ALL valid files sorted/grouped
-        # by dir?
-        # FileDataSource scans recursively.
-        # We need to re-group them by directory to identify episodes.
+        # Discover Episodes from source.file_list
         self.dir2files, self._starts = self._calculate_starts(source.file_list)
+
+        if not self._starts:
+            raise ValueError(
+                f"No valid episodes found. Check that your directories contain "
+                f"at least episode_length={self.episode_length} files."
+            )
 
         logger.info(
             f"EpisodicDataSource: Found {len(self._starts)} valid episode "
@@ -111,6 +114,9 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
         leaf_dirs: dict[str, list[str]] = {}
         for f in file_list:
             d = os.path.dirname(f)
+            if not os.path.isdir(d):
+                raise ValueError(f"Directory not found: {d}")
+
             if d not in leaf_dirs:
                 leaf_dirs[d] = []
             leaf_dirs[d].append(f)
@@ -130,46 +136,51 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
 
         return leaf_dirs, starts
 
-    def _build_interleaved_file_list(self) -> list[tuple[str, int, int]]:
+    def _build_interleaved_file_list(self) -> list[tuple[str, int, int, bool]]:
         """Builds the single interleaved list of files for the epoch.
 
         Returns:
             List of tuples containing (file_path, chunk_id,
-            timestep_in_episode).
+            timestep_in_episode, is_padding).
         """
         # 1. Shuffle all possible episode starts
         shuffled_starts = list(self._starts)  # copy
         self._rng.shuffle(shuffled_starts)
 
         # 2. Partition into chunks handling batch_size
-        num_chunks = len(shuffled_starts) // self.batch_size
-        # Note: We drop remainder episodes that don't fit into a full batch
-        # set. This is consistent with 'drop_remainder' batching logic often
-        # used in training.
+        num_chunks = math.ceil(len(shuffled_starts) / self.batch_size)
 
         interleaved = []
         for i in range(num_chunks):
             # Take a chunk of 'batch_size' episodes
-            chunk_starts = shuffled_starts[
-                i * self.batch_size: (i + 1) * self.batch_size
-            ]
+            start_idx = i * self.batch_size
 
-            # Resolve to file paths for these episodes
             chunk_episodes = []
-            for d, s in chunk_starts:
-                # Slice the episode files: [s : s + L]
-                chunk_episodes.append(
-                    self.dir2files[d][s: s + self.episode_length]
-                )
+            for j in range(self.batch_size):
+                idx = start_idx + j
+                if idx < len(shuffled_starts):
+                    # Actual data
+                    d, s = shuffled_starts[idx]
+                    is_padding = False
+                else:
+                    # Wrap around to fill the batch
+                    wrapped_idx = idx % len(shuffled_starts)
+                    d, s = shuffled_starts[wrapped_idx]
+                    is_padding = True
+
+                # Fetch file paths for this episode
+                # Slice: [s : s + L]
+                files = self.dir2files[d][s: s + self.episode_length]
+                chunk_episodes.append((files, is_padding))
 
             # 3. Interleave in Time-Major order
             # (Time 0 of Ep 0, Time 0 of Ep 1... Time 1 of Ep 0...)
             for t in range(self.episode_length):
                 for ep_idx in range(self.batch_size):
-                    file_path = chunk_episodes[ep_idx][t]
-                    # Store (path, chunk_id, timestep_in_episode) so we can
-                    # attach metadata
-                    interleaved.append((file_path, i, t))
+                    files, is_padding = chunk_episodes[ep_idx]
+                    file_path = files[t]
+                    # Store (path, chunk_id, timestep_in_episode, is_padding)
+                    interleaved.append((file_path, i, t, is_padding))
 
         return interleaved
 
@@ -186,16 +197,16 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
         Returns:
             Dictionary containing data (e.g. 'flow_fields', 'images1', etc).
         """
-        file_path, chunk_id, t = self._interleaved_files[idx]
+        file_path, chunk_id, t, is_padding = self._interleaved_files[idx]
 
         # DELEGATION: Load the file using the wrapped source
         data = self.source.load_file(file_path)
 
         # Attach Episodic Metadata
-        # (This allows downstream collaors/samplers to know boundaries)
         data["_chunk_id"] = chunk_id
         data["_timestep"] = t
         data["_is_last_step"] = t == self.episode_length - 1
+        data["_is_padding"] = is_padding
 
         return data
 

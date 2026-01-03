@@ -98,4 +98,3 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
         Returns:
             Dictionary containing data (e.g. 'flow_fields', 'images1', etc).
         """
-        pass  # pragma: no cover

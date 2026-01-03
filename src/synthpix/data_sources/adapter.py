@@ -42,6 +42,41 @@ class GrainSchedulerAdapter(SchedulerProtocol):
         # Shape of the flow fields (H, W, 2)
         self._cached_shape: tuple[int, int, int] | None = None
 
+        # Epoch-Aware logic state
+        self._items_yielded = 0
+        self._dataset_len = None
+        self._num_epochs = None
+        self._can_determine_epoch = False
+
+        # Try to inspect loader components
+        try:
+            # Grain DataLoader stores sampler in _sampler
+            sampler = getattr(
+                loader, "sampler", getattr(
+                    loader, "_sampler", None))
+            dataset = getattr(
+                loader, "_data_source", getattr(
+                    loader, "_dataset", None))
+
+            if dataset is not None and hasattr(dataset, "__len__"):
+                self._dataset_len = len(dataset)
+
+            # Check for Grain IndexSampler
+            if sampler is not None:
+                if hasattr(sampler, "num_epochs"):
+                    self._num_epochs = sampler.num_epochs
+                elif hasattr(sampler, "_num_epochs"):
+                    self._num_epochs = sampler._num_epochs
+
+            if self._dataset_len is not None:
+                # If num_epochs is None, treated as infinite.
+                self._can_determine_epoch = True
+
+        except Exception:
+            # Fallback to safe default (always respect padding)
+            logger.warning("Could not determine epoch info from Grain loader.")
+            self._can_determine_epoch = False
+
     def shutdown(self) -> None:
         """Compatibility layer for shutdown."""
         # Grain loaders clean up on GC or exit.
@@ -129,7 +164,26 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
         current_batch_size = flow.shape[0]
 
-        # Calculate padding needed
+        # Check for explicit padding flag
+        is_padding = batch.get("_is_padding")
+
+        # Determine if we should respect the padding flag (Last Epoch logic)
+        respect_padding = True
+        if self._can_determine_epoch and is_padding is not None:
+            if self._num_epochs is None:
+                # Infinite epochs: always wrap and treat as valid
+                respect_padding = False
+            else:
+                # Respect padding flag only during the final epoch
+                start_idx = self._items_yielded - current_batch_size
+                epoch_idx = start_idx // self._dataset_len
+
+                if epoch_idx < (self._num_epochs - 1):
+                    respect_padding = False
+                else:
+                    respect_padding = True
+
+        # Calculate padding needed (standard structural padding)
         pad_size = target_batch_size - current_batch_size
 
         valid_mask = np.ones((target_batch_size,), dtype=bool)
@@ -159,6 +213,44 @@ class GrainSchedulerAdapter(SchedulerProtocol):
             if images2 is not None:
                 images2 = images2[:target_batch_size]
             files = files[:target_batch_size]
+            if is_padding is not None:
+                is_padding = is_padding[:target_batch_size]
+
+        # Apply explicit padding if provided AND respected
+        if is_padding is not None and respect_padding:
+            # Ensure is_padding is broadcastable or matches batch size
+            # (It should match target_batch_size if we padded, or current if we didn't)
+            # If we just padded flow/files, we need to pad is_padding too?
+            # 'is_padding' comes from batch, so it has shape (current_batch_size,)
+
+            # Pad is_padding if needed
+            if pad_size > 0:
+                # Assume structural padding is invalid too
+                pad_flags = np.ones((pad_size,), dtype=bool)
+                is_padding = np.concatenate([is_padding, pad_flags])
+
+            # Update mask: existing mask AND NOT is_padding
+            valid_mask = valid_mask & (~is_padding)
+
+            # Zero-out data where is_padding is True
+            # (This satisfies "zero pad" requirement for wrapped items)
+            # is_padding is bool array of shape (B,)
+            # Broadcast to (B, H, W, C)
+
+            # Helper to zero out
+            def zero_out(arr: np.ndarray, mask: np.ndarray) -> np.ndarray:
+                # Expand mask dims to match arr
+                # mask: (B,), arr: (B, ...)
+                expanded = mask
+                while expanded.ndim < arr.ndim:
+                    expanded = expanded[..., np.newaxis]
+                return np.where(expanded, 0, arr)
+
+            flow = zero_out(flow, is_padding)
+            if images1 is not None:
+                images1 = zero_out(images1, is_padding)
+            if images2 is not None:
+                images2 = zero_out(images2, is_padding)
 
         return SchedulerData(
             flow_fields=flow,
@@ -186,11 +278,18 @@ class GrainSchedulerAdapter(SchedulerProtocol):
             # Grain iterator finished
             raise StopIteration("Grain DataLoader exhausted.") from None
 
+        # Track items yielded for epoch detection
+        if self._can_determine_epoch:
+            # batch is dict, check flow_fields size
+            bs = batch["flow_fields"].shape[0]
+            self._items_yielded += bs
+
         return self._to_scheduler_data(batch, batch_size)
 
     def reset(self) -> None:
         """Resets the state (re-creates iterator)."""
         self._iterator = iter(self.loader)
+        self._items_yielded = 0
         logger.debug("GrainSchedulerAdapter reset.")
 
     @property

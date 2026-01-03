@@ -1,3 +1,10 @@
+"""Tests for the prefetching scheduler wrapper.
+
+These tests verify that `PrefetchingFlowFieldScheduler` correctly manages 
+a background producer thread to overlap I/O and rendering, handles thread 
+lifecycle (start, reset, shutdown), and robustly deals with queue 
+full/empty conditions and timeouts.
+"""
 import multiprocessing
 import os
 import queue
@@ -8,12 +15,17 @@ import numpy as np
 import pytest
 
 from synthpix.scheduler import PrefetchingFlowFieldScheduler
-from synthpix.scheduler.protocol import (EpisodeEnd, EpisodicSchedulerProtocol,
+from synthpix.scheduler.protocol import (EpisodeEndError, EpisodicSchedulerProtocol,
                                          SchedulerProtocol)
 from synthpix.types import SchedulerData
 
 
 class MinimalScheduler(SchedulerProtocol):
+    """A minimal mock scheduler for testing prefetcher lifecycle.
+    
+    Implements the `SchedulerProtocol` to yield a fixed number of 
+    constant flow fields.
+    """
     def __init__(self, total_batches=4, shape=(8, 8, 2)):
         self.total = total_batches
         self.count = 0
@@ -92,6 +104,11 @@ class MinimalEpisodic(EpisodicSchedulerProtocol):
 
 
 def test_single_producer_thread_across_episodes():
+    """Verify that the same producer thread is reused across episodic boundaries.
+
+    Ensures that calling `next_episode()` does not needlessly restart the 
+    background thread, maintaining efficiency.
+    """
     shape = (8, 8, 2)
     sched = MinimalEpisodic(total_batches=50, shape=shape)
     sched._episode_length = 3  # short episodes to exercise next_episode() often
@@ -102,7 +119,7 @@ def test_single_producer_thread_across_episodes():
     time.sleep(0.1)  # let it prefetch a bit
 
     first_ident = pf._thread.ident
-    assert pf._thread.is_alive() and first_ident is not None
+    assert pf._thread.is_alive() and first_ident is not None, f"Expected prefetch thread to be alive with ident, but alive={pf._thread.is_alive()}, ident={first_ident}"
 
     # Run several cycles: consume a bit, jump to next episode, repeat.
     for _ in range(5):
@@ -116,13 +133,18 @@ def test_single_producer_thread_across_episodes():
         pf.next_episode(join_timeout=0.2)
 
         # The same producer thread should still be alive (no restart)
-        assert pf._thread.is_alive()
-        assert pf._thread.ident == first_ident
+        assert pf._thread.is_alive(), "Prefetch thread should remain alive across episodes"
+        assert pf._thread.ident == first_ident, f"Prefetch thread ident changed! Expected {first_ident}, got {pf._thread.ident}"
 
     pf.shutdown()
 
 
 def test_stop_iteration_from_queue_empty():
+    """Test that `get_batch` raised `StopIteration` when the source is empty.
+
+    Verifies that the prefetcher correctly propagates the end-of-stream 
+    signal from the underlying scheduler.
+    """
     scheduler = MinimalScheduler(total_batches=0)
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=2)
 
@@ -132,6 +154,11 @@ def test_stop_iteration_from_queue_empty():
 
 
 def test_worker_eos_signal_when_queue_full():
+    """Test end-of-stream signaling when the prefetch queue is full.
+
+    Ensures that even if the queue cannot accept more data, the EOS 
+    sentinel is eventually processed without deadlock.
+    """
     scheduler = MinimalScheduler(total_batches=1)
 
     pf = PrefetchingFlowFieldScheduler(
@@ -157,14 +184,19 @@ def test_reset_stops_and_joins():
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1, buffer_size=2)
 
     pf.get_batch(1)
-    assert pf._thread.is_alive()
+    assert pf._thread.is_alive(), "Prefetch thread should be alive after first get_batch"
 
     pf.reset()
-    assert not pf._thread.is_alive()
-    assert scheduler.reset_called
+    assert not pf._thread.is_alive(), "Prefetch thread should be stopped after reset"
+    assert scheduler.reset_called, "Scheduler reset was not called"
 
 
 def test_next_episode_resets_thread_and_flushes_queue():
+    """Test that `next_episode` correctly flushes the prefetch queue.
+
+    Verifies that any data from the previous episode remaining in the 
+    buffer is discarded when switching to a new sequence.
+    """
     scheduler = MinimalEpisodic(total_batches=5)
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1, buffer_size=5)
 
@@ -173,34 +205,43 @@ def test_next_episode_resets_thread_and_flushes_queue():
 
     pf._t = 3
     pf.next_episode()
-    assert pf._t == 0
+    assert pf._t == 0, f"Expected t=0 after next_episode, got {pf._t}"
     pf.shutdown()
 
 
 def test_shutdown_behavior():
+    """Verify that `shutdown` successfully terminates the background thread.
+    
+    Ensures that the thread pool or producer thread is not left orphaned.
+    """
     scheduler = MinimalScheduler(total_batches=5)
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1)
     pf.get_batch(1)
 
     pf.shutdown()
-    assert not pf._thread.is_alive()
+    assert not pf._thread.is_alive(), "Prefetch thread should be stopped after shutdown"
 
 
 def test_t_counter_wraps_after_episode():
+    """Verify that the internal timestep counter correctly wraps at episode boundaries.
+    
+    Ensures that `EpisodeEndError` is raised when the counter exceeds the 
+    defined episode length.
+    """
     sched = MinimalEpisodic(total_batches=2)
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
 
     pf.get_batch(1)  # _t becomes 1
-    assert pf._t == 1
+    assert pf._t == 1, f"Expected t=1 after first batch, got {pf._t}"
     pf.get_batch(1)  # _t becomes 2
-    assert pf._t == 2  # still inside episode
+    assert pf._t == 2, f"Expected t=2 after second batch, got {pf._t}"  # still inside episode
 
-    with pytest.raises(EpisodeEnd):
+    with pytest.raises(EpisodeEndError):
         pf.get_batch(1)  # _t would wrap to 0 here
     pf.reset()
-    assert pf._t == 0
+    assert pf._t == 0, f"Expected t=0 after reset, got {pf._t}"
     pf.get_batch(1)  # _t wraps to 0
-    assert pf._t == 1
+    assert pf._t == 1, f"Expected t=1 after batch, got {pf._t}"
     pf.shutdown()
 
 
@@ -232,6 +273,11 @@ def test_get_batch_size_mismatch_raises_value_error():
 
 
 def test_next_episode_flushes_remaining_and_restarts():
+    """Verify that `next_episode` resets the iteration counter and continues prefetching.
+
+    Confirms that after flushing, the prefetcher correctly starts 
+    filling the buffer with data from the new episode.
+    """
     TOTAL_BATCHES = 20
     scheduler = MinimalEpisodic(total_batches=TOTAL_BATCHES)
     pf = PrefetchingFlowFieldScheduler(scheduler, batch_size=1, buffer_size=5)
@@ -239,7 +285,7 @@ def test_next_episode_flushes_remaining_and_restarts():
     for _ in range(3):
         pf.get_batch(1)
 
-    assert pf.steps_remaining() == TOTAL_BATCHES - 3
+    assert pf.steps_remaining() == TOTAL_BATCHES - 3, f"Expected {TOTAL_BATCHES - 3} steps remaining, got {pf.steps_remaining()}"
 
     if os.getenv("CI") == "true":
         # CI environments can be slow; give more time to flush
@@ -249,14 +295,18 @@ def test_next_episode_flushes_remaining_and_restarts():
 
     # After next_episode() we must be at t == 0 and the queue empty/new thread
     # alive
-    assert pf._t == 0
+    assert pf._t == 0, f"Expected t=0 after next_episode, got {pf._t}"
     deadline = time.time() + 0.5
     while time.time() < deadline and not pf.is_running():
         time.sleep(0.01)
-    assert pf.is_running()
+    assert pf.is_running(), "Prefetcher should be running after next_episode"
 
 
 def test_reset_stops_thread_and_clears_queue():
+    """Verify that `reset` correctly stops the prefetcher and empties the buffer.
+    
+    Ensures a clean state for the next iteration sequence.
+    """
     sched = MinimalScheduler(total_batches=3)
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=3)
 
@@ -295,12 +345,16 @@ def test_worker_handles_full_queue_on_eos():
 
 
 def test_get_flow_fields_shape_matches_underlying_scheduler():
+    """Verify that the prefetcher reports the correct flow field dimensions.
+    
+    The wrapper must match the shape of the source it is prefetching from.
+    """
     """The wrapper should return the same shape as the wrapped scheduler."""
     shape = (8, 8, 2)
     sched = MinimalScheduler(shape=shape)
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1)
 
-    assert pf.get_flow_fields_shape() == shape
+    assert pf.get_flow_fields_shape() == shape, f"Expected shape {shape}, got {pf.get_flow_fields_shape()}"
 
     pf.shutdown()
 
@@ -316,12 +370,12 @@ def test_shutdown_when_queue_empty():
     with pytest.raises(StopIteration):
         pf.get_batch(1)
 
-    assert pf._queue.empty()
+    assert pf._queue.empty(), "Queue should be empty after consuming all batches and EOS"
 
     # No exception should occur, and the background thread must be dead
     # afterwards
     pf.shutdown()
-    assert not pf._thread.is_alive()
+    assert not pf._thread.is_alive(), "Prefetch thread should be stopped after shutdown"
 
 
 def test_shutdown_when_queue_full():
@@ -337,7 +391,7 @@ def test_shutdown_when_queue_full():
     else:
         pytest.fail("Queue never became full")
 
-    assert pf._queue.full()
+    assert pf._queue.full(), "Queue should be full for this test case"
 
     pf.shutdown()
 
@@ -346,19 +400,19 @@ def test_reset_when_queue_empty_and_thread_not_started():
     sched = MinimalScheduler(total_batches=2)
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
 
-    assert not pf._thread.is_alive()
-    assert pf._queue.empty()
+    assert not pf._thread.is_alive(), "Prefetch thread should not be alive before first batch"
+    assert pf._queue.empty(), "Prefetch queue should be empty before first batch"
 
     # Invoke the method under test
     pf.reset()
-    assert sched.reset_called
-    assert pf._started is False
-    assert pf._queue.empty()
-    assert not pf._thread.is_alive()
+    assert sched.reset_called, "Underlying scheduler reset was not called"
+    assert pf._started is False, "Prefetcher should not be marked as started after reset if it never ran"
+    assert pf._queue.empty(), "Prefetch queue should remain empty after reset"
+    assert not pf._thread.is_alive(), "Prefetch thread should still be dead after reset"
 
     # Ensure wrapper still works end-to-end
     batch = pf.get_batch(1)
-    assert batch.flow_fields.shape == (1,) + sched.shape
+    assert batch.flow_fields.shape == (1,) + sched.shape, f"Expected shape {(1,) + sched.shape}, got {batch.flow_fields.shape}"
     pf.shutdown()
 
 
@@ -372,24 +426,24 @@ def test_reset_then_next_episode_three_cycles(monkeypatch):
 
     # ---------------- Episode 1 ----------------
     first_batch = pf.get_batch(1)
-    assert first_batch.flow_fields.shape == (1,) + shape
-    assert pf._t == 1  # type: ignore[attr-defined]
+    assert first_batch.flow_fields.shape == (1,) + shape, f"Expected shape {(1,) + shape}, got {first_batch.flow_fields.shape}"
+    assert pf._t == 1, f"Expected t=1 after first batch, got {pf._t}"
 
     pf.reset()
-    assert not pf._thread.is_alive()
-    assert pf._queue.empty()
+    assert not pf._thread.is_alive(), "Prefetch thread should be stopped after reset"
+    assert pf._queue.empty(), "Prefetch queue should be cleared after reset"
 
     # ---------------- Episode 2 ----------------
     pf.next_episode(join_timeout=1)
     time.sleep(1)  # allow thread to start
-    assert pf._t == 0 and pf._thread.is_alive()
+    assert pf._t == 0 and pf._thread.is_alive(), f"After next_episode: expected t=0 and thread alive. Got t={pf._t}, alive={pf._thread.is_alive()}"
 
     # Consume one batch
     assert pf.get_batch(1).flow_fields.shape == (1,) + shape
-    assert pf._t == 1  # type: ignore[attr-defined]
+    assert pf._t == 1, f"Expected t=1 after batch, got {pf._t}"
     # Case when queue NOT empty
     pf.next_episode(join_timeout=1)  # flush unfinished episode
-    assert pf._t == 0  # type: ignore[attr-defined]
+    assert pf._t == 0, f"Expected t=0 after flushing next_episode, got {pf._t}"
 
     # ---------------- Episode 3 ----------------
     def always_empty():
@@ -398,14 +452,14 @@ def test_reset_then_next_episode_three_cycles(monkeypatch):
     monkeypatch.setattr(pf._queue, "get_nowait", always_empty, raising=True)
     # Consume one batch so we are mid-episode again (_t == 1)
     assert pf.get_batch(1).flow_fields.shape == (1,) + shape
-    assert pf._t == 1  # type: ignore[attr-defined]
-    assert pf._thread.is_alive()
+    assert pf._t == 1, f"Expected t=1 after batch, got {pf._t}"
+    assert pf._thread.is_alive(), "Prefetch thread should be alive mid-episode"
 
     # case when queue empty
     pf.next_episode(join_timeout=1)
-    assert pf._t == 0  # type: ignore[attr-defined]
+    assert pf._t == 0, f"Expected t=0 after next_episode with empty queue, got {pf._t}"
     # Producer thread was restarted
-    assert pf._thread.is_alive()
+    assert pf._thread.is_alive(), "Prefetch thread should be restarted/alive after next_episode"
 
     # Clean shutdown
     pf.shutdown()
@@ -443,7 +497,7 @@ def test_next_episode_immediate_timeout_break():
     pf.next_episode(join_timeout=0)
 
     # After calling next_episode the internal counter must be reset
-    assert pf._t == 0  # type: ignore[attr-defined]
+    assert pf._t == 0, f"Expected t=0 after next_episode timeout, got {pf._t}"
     pf.shutdown()
 
 
@@ -464,7 +518,7 @@ def test_next_episode_handles_queue_empty(monkeypatch):
 
     # This should complete without raising and reset the internal counter
     pf.next_episode(join_timeout=0.05)
-    assert pf._t == 0  # type: ignore[attr-defined]
+    assert pf._t == 0, f"Expected t=0 after next_episode empty queue, got {pf._t}"
     pf.shutdown()
 
 
@@ -479,7 +533,7 @@ def test_next_episode_breaks_on_eos_sentinel():
 
     # This should notice the EOS and break out, resetting _t
     pf.next_episode(join_timeout=1)
-    assert pf._t == 0  # type: ignore[attr-defined]
+    assert pf._t == 0, f"Expected t=0 after next_episode EOS break, got {pf._t}"
     pf.shutdown()
 
 
@@ -519,9 +573,9 @@ def test_worker_eos_signal_via_full_queue_branch_direct():
     )
 
     # 2) Manually fill the queue so it's 'full' before the worker runs.
-    dummy = np.zeros((2,) + sched.get_flow_fields_shape())
+    dummy = SchedulerData(flow_fields=np.zeros((2,) + sched.get_flow_fields_shape()))
     pf._queue.put(dummy)
-    assert pf._queue.full()
+    assert pf._queue.full(), "Internal test error: queue should be full"
 
     # 3) Invoke _worker() directly: it will catch StopIteration,
     #    try to put(None) → hit queue.Full → run the 'Full' handler.
@@ -546,10 +600,10 @@ def test_get_batch_starts_worker_thread():
     sched = MinimalScheduler(total_batches=100)
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
 
-    assert not pf.is_running()
+    assert not pf.is_running(), "Prefetcher should not be running before first batch"
     pf.get_batch(1)
     time.sleep(0.001)  # allow thread to start
-    assert pf.is_running()
+    assert pf.is_running(), "Prefetcher should be running after first batch"
 
     pf.shutdown()
 
@@ -574,8 +628,8 @@ def test_multiple_get_batch_in_parallel_threads():
     for t in threads:
         t.join()
 
-    assert len(results) == 5
-    assert len(exceptions) == 0
+    assert len(results) == 5, f"Expected 5 results from parallel threads, got {len(results)}"
+    assert len(exceptions) == 0, f"Parallel threads raised exceptions: {exceptions}"
 
     pf.shutdown()
 
@@ -597,6 +651,11 @@ def worker(queue, total_batches, batch_size, buffer_size):
 
 
 def test_multiple_get_batch_in_parallel_processes():
+    """Verify thread-safety and process-safety of the prefetching mechanism.
+    
+    Ensures that multiple concurrent workers can retrieve batches 
+    without data corruption or deadlocks.
+    """
     total_batches = 100
     batch_size = 1
     buffer_size = 10
@@ -687,8 +746,8 @@ def test_startup_and_steady_timeouts_are_used(monkeypatch):
     # Second get_batch -> must use steady_state_timeout
     pf.get_batch(1)
 
-    assert recorded_timeouts[0] == pf.startup_timeout
-    assert recorded_timeouts[1] == pf.steady_state_timeout
+    assert recorded_timeouts[0] == pf.startup_timeout, f"Expected startup timeout {pf.startup_timeout}, got {recorded_timeouts[0]}"
+    assert recorded_timeouts[1] == pf.steady_state_timeout, f"Expected steady state timeout {pf.steady_state_timeout}, got {recorded_timeouts[1]}"
 
     pf.shutdown()
 
@@ -698,13 +757,13 @@ def test_startup_flag_clears_after_first_batch():
     pf = PrefetchingFlowFieldScheduler(sched, batch_size=1, buffer_size=2)
 
     # By construction, we expect startup mode at initialization.
-    assert getattr(pf, "startup", None) is True
+    assert getattr(pf, "startup", None) is True, "Prefetcher should be in startup mode initially"
 
     batch = pf.get_batch(1)
-    assert batch.flow_fields.shape == (1,) + sched.shape
+    assert batch.flow_fields.shape == (1,) + sched.shape, f"Expected shape {(1,) + sched.shape}, got {batch.flow_fields.shape}"
 
     # After the first successful get_batch, startup must be False.
-    assert pf.startup is False
+    assert pf.startup is False, "Startup flag should be False after first successful batch"
 
     pf.shutdown()
 
@@ -715,11 +774,11 @@ def test_reset_restores_startup_flag_and_behavior(monkeypatch):
 
     # 1) Consume first batch -> startup should become False.
     _ = pf.get_batch(1)
-    assert pf.startup is False
+    assert pf.startup is False, "Startup flag should be False after batch"
 
     # 2) Reset → startup should be restored to True.
     pf.reset()
-    assert pf.startup is True
+    assert pf.startup is True, "Startup flag should be restored to True after reset"
 
     # To avoid depending on actual thread timing, patch queue.get again to
     # verify that after reset the next get_batch uses startup_timeout.
@@ -735,7 +794,7 @@ def test_reset_restores_startup_flag_and_behavior(monkeypatch):
     monkeypatch.setattr(pf._queue, "get", fake_get, raising=True)
 
     _ = pf.get_batch(1)
-    assert timeouts[0] == pf.startup_timeout
-    assert pf.startup is False  # and it flips again after that first batch
+    assert timeouts[0] == pf.startup_timeout, f"Expected startup timeout after reset, got {timeouts[0]}"
+    assert pf.startup is False, "Startup flag should flip to False after first batch after reset"
 
     pf.shutdown()

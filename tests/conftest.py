@@ -133,8 +133,16 @@ def numpy_test_dims():
 @pytest.fixture
 def mock_numpy_files(tmp_path, numpy_test_dims, request):
     """Create multiple temporary Numpy files with random data."""
-    num_files = getattr(request, "param", 2)
-    h, w = numpy_test_dims["height"], numpy_test_dims["width"]
+    param = getattr(request, "param", 2)
+    
+    if isinstance(param, dict):
+        num_files = param.get("num_files", 2)
+        dims = param.get("dims", numpy_test_dims)
+        h, w = dims["height"], dims["width"]
+    else:
+        num_files = param
+        dims = numpy_test_dims
+        h, w = dims["height"], dims["width"]
 
     paths = []
     for t in range(1, num_files + 1):
@@ -148,7 +156,7 @@ def mock_numpy_files(tmp_path, numpy_test_dims, request):
         np.save(flow_path, flow)
         paths.append(flow_path)
 
-    yield [str(p) for p in paths], numpy_test_dims
+    yield [str(p) for p in paths], dims
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -163,8 +171,16 @@ def mat_test_dims():
 @pytest.fixture
 def mock_mat_files(tmp_path, mat_test_dims, request):
     """Create multiple temporary .mat files with random data."""
-    num_files = getattr(request, "param", 2)
-    h, w = mat_test_dims["height"], mat_test_dims["width"]
+    param = getattr(request, "param", 2)
+    
+    if isinstance(param, dict):
+        num_files = param.get("num_files", 2)
+        dims = param.get("dims", mat_test_dims)
+        h, w = dims["height"], dims["width"]
+    else:
+        num_files = param
+        dims = mat_test_dims
+        h, w = mat_test_dims["height"], mat_test_dims["width"]
 
     paths = []
     for t in range(1, num_files + 1):
@@ -197,7 +213,7 @@ def mock_mat_files(tmp_path, mat_test_dims, request):
 
         paths.append(mat_path)
 
-    yield [str(p) for p in paths], mat_test_dims
+    yield [str(p) for p in paths], dims
 
 
 # ──────────────────────────────────────────────────────────────────────────────

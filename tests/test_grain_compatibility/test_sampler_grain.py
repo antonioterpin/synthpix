@@ -1,5 +1,9 @@
-"""Integration tests for SyntheticImageSampler with Grain Adapter."""
+"""Integration tests for the synthetic image sampler using a Grain-based backend.
 
+These tests verify that `SyntheticImageSampler` can correctly interact with 
+`GrainEpisodicAdapter` to retrieve flow fields and manage episodic 
+transitions when using Google Grain's `DataLoader`.
+"""
 import grain.python as grain
 import pytest
 
@@ -11,7 +15,12 @@ from synthpix.scheduler.protocol import EpisodicSchedulerProtocol
 
 @pytest.mark.parametrize("mock_mat_files", [10], indirect=True)
 def test_sampler_with_grain_integration(tmp_path, mock_mat_files):
-    """Test standard sampler loop with Grain backend."""
+    """Verify full-stack integration between Grain, the episodic adapter, and the sampler.
+
+    Tests that the sampler correctly retrieves batches from a Grain 
+    loader and that `next_episode()` properly resets the sequence within 
+    the sampler loop.
+    """
     num_files = 10
     batch_size = 2
     episode_length = 5
@@ -20,7 +29,7 @@ def test_sampler_with_grain_integration(tmp_path, mock_mat_files):
     dataset_dir = tmp_path
 
     ds = MATDataSource(str(dataset_dir), include_images=False)
-    assert len(ds) == num_files
+    assert len(ds) == num_files, f"Expected {num_files} files in MATDataSource, got {len(ds)}"
 
     from synthpix.data_sources.episodic import EpisodicDataSource
 
@@ -31,7 +40,7 @@ def test_sampler_with_grain_integration(tmp_path, mock_mat_files):
     num_episodes = num_files - episode_length + 1
     num_chunks = num_episodes // batch_size
     expected_len = num_chunks * batch_size * episode_length
-    assert len(episodic_ds) == expected_len
+    assert len(episodic_ds) == expected_len, f"EpisodicDataSource length mismatch. Expected {expected_len}, got {len(episodic_ds)}"
 
     loader = grain.DataLoader(
         data_source=episodic_ds,
@@ -68,13 +77,13 @@ def test_sampler_with_grain_integration(tmp_path, mock_mat_files):
     )
 
     batch_data = next(sampler)
-    assert batch_data is not None
-    assert batch_data.flow_fields.shape == (batch_size, 256, 256, 2)
+    assert batch_data is not None, "Sampler returned None instead of batch data"
+    assert batch_data.flow_fields.shape == (batch_size, 256, 256, 2), f"Batch flow fields shape mismatch. Expected {(batch_size, 256, 256, 2)}, got {batch_data.flow_fields.shape}"
 
-    assert isinstance(sampler.scheduler, EpisodicSchedulerProtocol)
-    assert sampler.scheduler.steps_remaining() == episode_length - 1
+    assert isinstance(sampler.scheduler, EpisodicSchedulerProtocol), "Sampler scheduler must implement EpisodicSchedulerProtocol"
+    assert sampler.scheduler.steps_remaining() == episode_length - 1, f"Expected {episode_length - 1} steps remaining, got {sampler.scheduler.steps_remaining()}"
 
     sampler.next_episode()
 
     batch_data_2 = next(sampler)
-    assert batch_data_2.flow_fields.shape == (batch_size, 256, 256, 2)
+    assert batch_data_2.flow_fields.shape == (batch_size, 256, 256, 2), f"Second batch flow fields shape mismatch. Expected {(batch_size, 256, 256, 2)}, got {batch_data_2.flow_fields.shape}"

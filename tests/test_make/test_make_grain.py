@@ -1,3 +1,11 @@
+"""Tests for the Grain-based scheduler creation in the `make` module.
+
+These tests verify that the `make` function correctly instantiates the Grain 
+data loading stack, including adapters, samplers, and data sources, when 
+`use_grain_scheduler=True` is provided. It uses extensive monkeypatching to 
+isolate the factory logic from actual Grain or JAX execution.
+"""
+
 import importlib
 from types import SimpleNamespace
 
@@ -107,7 +115,12 @@ def patch_grain(monkeypatch):
 
 
 def test_make_grain_basic(patch_grain, monkeypatch):
-    """Test standard Grain path instantiation."""
+    """Test standard Grain path instantiation for non-episodic data.
+
+    Verifies that the `make` function correctly sets up a `MATDataSource` 
+    (mocked), wraps it in a Grain `DataLoader`, and connects it to a 
+    `GrainSchedulerAdapter`.
+    """
     cfg = {
         "scheduler_class": ".mat",
         "batch_size": 4,
@@ -119,17 +132,21 @@ def test_make_grain_basic(patch_grain, monkeypatch):
 
     sampler = make(cfg, use_grain_scheduler=True)
 
-    assert isinstance(sampler, DummySampler)
+    assert isinstance(sampler, DummySampler), f"Expected DummySampler, got {type(sampler)}"
     adapter = sampler.scheduler
-    assert isinstance(adapter, DummyGrainAdapter)
+    assert isinstance(adapter, DummyGrainAdapter), f"Expected DummyGrainAdapter, got {type(adapter)}"
     loader = adapter.loader
-    assert isinstance(loader.data_source, DummyDataSource)
+    assert isinstance(loader.data_source, DummyDataSource), f"Expected DummyDataSource, got {type(loader.data_source)}"
     # Check that file_list was passed correctly
-    assert loader.data_source.kwargs["dataset_path"] == ["file1.mat"]
+    assert loader.data_source.kwargs["dataset_path"] == ["file1.mat"], f"Expected dataset_path ['file1.mat'], got {loader.data_source.kwargs['dataset_path']}"
 
 
 def test_make_grain_episodic(patch_grain):
-    """Test Grain path with episode_length > 0."""
+    """Test standard Grain path instantiation for episodic data.
+
+    When `episode_length > 0` is specified, the factory should insert an 
+    `EpisodicDataSource` into the stack and use the `GrainEpisodicAdapter`.
+    """
     cfg = {
         "scheduler_class": ".npy",
         "batch_size": 4,
@@ -143,13 +160,17 @@ def test_make_grain_episodic(patch_grain):
     adapter = sampler.scheduler
     # Should wrap in EpisodicDataSource then Adapter
     loader = adapter.loader
-    assert isinstance(loader.data_source, DummyEpisodicDataSource)
-    assert loader.data_source.episode_length == 10
-    assert isinstance(loader.data_source.source, DummyDataSource)
+    assert isinstance(loader.data_source, DummyEpisodicDataSource), f"Expected DummyEpisodicDataSource, got {type(loader.data_source)}"
+    assert loader.data_source.episode_length == 10, f"Expected episode_length 10, got {loader.data_source.episode_length}"
+    assert isinstance(loader.data_source.source, DummyDataSource), f"Expected underlying source to be DummyDataSource, got {type(loader.data_source.source)}"
 
 
 def test_make_grain_include_images(patch_grain):
-    """Test Grain path with include_images=True."""
+    """Test standard Grain path instantiation when images are requested.
+
+    Verifies that `include_images=True` is propagated to the data source 
+    and that a `RealImageSampler` (mocked) is created.
+    """
     cfg = {
         "scheduler_class": ".mat",
         "batch_size": 4,
@@ -161,16 +182,20 @@ def test_make_grain_include_images(patch_grain):
     sampler = make(cfg, use_grain_scheduler=True)
 
     # RealImageSampler logic
-    assert isinstance(sampler, DummySampler)
+    assert isinstance(sampler, DummySampler), f"Expected DummySampler, got {type(sampler)}"
     # Check DataSource got include_images=True
     loader = sampler.scheduler.loader
     ds = loader.data_source
-    assert ds.kwargs["include_images"] is True
-    assert ds.kwargs["output_shape"] == (128, 128)
+    assert ds.kwargs["include_images"] is True, "DataSource should have include_images=True"
+    assert ds.kwargs["output_shape"] == (128, 128), f"Expected output_shape (128, 128), got {ds.kwargs['output_shape']}"
 
 
 def test_make_grain_invalid_datasource(patch_grain):
-    """Test checks for invalid data source extension."""
+    """Test that an unsupported file extension raises a ValueError.
+
+    This ensures the factory correctly identifies and rejects file types 
+    it doesn't have a registered `DataSource` for.
+    """
     cfg = {
         "scheduler_class": ".invalid",
         "batch_size": 4,
@@ -180,7 +205,12 @@ def test_make_grain_invalid_datasource(patch_grain):
 
 
 def test_make_grain_padding(patch_grain):
-    """Test behavior when dataset size is not divisible by batch size."""
+    """Test that Grain padding is correctly configured via `drop_remainder`.
+
+    When `loop=False` and the dataset size isn't a multiple of the batch 
+    size, Grain should be configured to NOT drop the remainder by default 
+    (to ensure all data is seen).
+    """
     cfg = {
         "scheduler_class": ".mat",
         "batch_size": 3,
@@ -201,7 +231,12 @@ def test_make_grain_padding(patch_grain):
 
 
 def test_make_grain_worker_count(patch_grain, monkeypatch):
-    """Test passing worker_count and verify warning for non-episodic multi-worker."""
+    """Test the configuration of multi-process workers in Grain.
+
+    Verifies that `worker_count` is passed to the `DataLoader` and that 
+    a warning is issued when using multiple workers with non-episodic 
+    data (due to potential serialization issues).
+    """
     from unittest.mock import MagicMock
 
     mock_logger = MagicMock()
@@ -218,15 +253,19 @@ def test_make_grain_worker_count(patch_grain, monkeypatch):
     sampler = make(cfg, use_grain_scheduler=True)
 
     loader = sampler.scheduler.loader
-    assert loader.worker_count == 4
+    assert loader.worker_count == 4, f"Expected worker_count 4, got {loader.worker_count}"
     # Verify warning was logged
     mock_logger.warning.assert_called()
     args, _ = mock_logger.warning.call_args
-    assert "This enables multiprocessing in Grain" in args[0]
+    assert "This enables multiprocessing in Grain" in args[0], f"Expected warning message to mention multiprocessing, got: {args[0]}"
 
 
 def test_make_grain_threading(patch_grain):
-    """Test passing num_threads and buffer_size via config."""
+    """Test passing `num_threads` and `buffer_size` via the configuration.
+
+    These parameters should be correctly encapsulated into Grain's 
+    `ReadOptions` and passed to the `DataLoader`.
+    """
     cfg = {
         "scheduler_class": ".mat",
         "batch_size": 4,
@@ -240,14 +279,18 @@ def test_make_grain_threading(patch_grain):
 
     loader = sampler.scheduler.loader
     # Check if correct ReadOptions object was created and passed
-    assert hasattr(loader.read_options, "num_threads")
-    assert loader.read_options.num_threads == 8
+    assert hasattr(loader.read_options, "num_threads"), "ReadOptions should have num_threads attribute"
+    assert loader.read_options.num_threads == 8, f"Expected num_threads 8, got {loader.read_options.num_threads}"
     # Check buffer size (passed to kwargs of ReadOptions mock)
-    assert loader.read_options.kwargs["prefetch_buffer_size"] == 1000
+    assert loader.read_options.kwargs["prefetch_buffer_size"] == 1000, f"Expected prefetch_buffer_size 1000, got {loader.read_options.kwargs['prefetch_buffer_size']}"
 
 
 def test_make_grain_episodic_worker_error(patch_grain):
-    """Test that episodic data raises error with worker_count > 0."""
+    """Test that multiple workers are rejected for episodic data.
+
+    Using `worker_count > 0` with episodic data is prohibited because 
+    it can break the strictly sequential order required for episodes.
+    """
     cfg = {
         "scheduler_class": ".mat",
         "batch_size": 4,

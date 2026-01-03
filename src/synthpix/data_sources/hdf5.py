@@ -29,8 +29,8 @@ class HDF5DataSource(FileDataSource):
         """
         data = None
         # NOTE: This implementation remains stateless and loads the full volume
-        # from the HDF5 file. It does not yet guarantee the same performance
-        # as the legacy HDF5FlowFieldScheduler which served individual slices.
+        # from the HDF5 file. See src/synthpix/data_sources/README.md for
+        # details.
         with h5py.File(file_path, "r") as file:
             dataset_key = next(iter(file))
             dset = file[dataset_key]

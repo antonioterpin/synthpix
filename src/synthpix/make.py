@@ -81,9 +81,169 @@ def get_data_source_class(name: str) -> type[FileDataSource]:
     return DATA_SOURCES[name]
 
 
-def make(  # noqa: PLR0912, PLR0915
+def make_grain_scheduler(
+    dataset_config: dict,
+    scheduler_class_name: str,
+    batch_size: int,
+    episode_length: int,
+    include_images: bool,
+    randomize: bool,
+    loop: bool,
+) -> GrainEpisodicAdapter | GrainSchedulerAdapter:
+    """Create a Grain-based scheduler.
+
+    Args:
+        dataset_config: Dictionary containing the dataset configuration.
+        scheduler_class_name: Name of the scheduler class.
+        batch_size: Batch size.
+        episode_length: Episode length.
+        include_images: Whether to include images.
+        randomize: Whether to randomize the data.
+        loop: Whether to loop the data.
+
+    Returns:
+        A Grain-based scheduler.
+    """
+    # try:
+    #     import grain.python as grain
+    # except ImportError:
+    #     raise ImportError("Grain is required for Grain-based schedulers.")
+
+    # 1. Instantiate Data Source
+    data_source_cls = get_data_source_class(scheduler_class_name)
+
+    # Extract args relevant for DataSource
+    ds_kwargs = {}
+    if dataset_config.get("file_list"):
+        ds_kwargs["dataset_path"] = dataset_config["file_list"]
+    else:
+        ds_kwargs["dataset_path"] = []
+
+    if include_images:
+        ds_kwargs["include_images"] = True
+        ds_kwargs["output_shape"] = tuple(
+            dataset_config.get("image_shape", (256, 256))
+        )
+
+    data_source = data_source_cls(**ds_kwargs)
+
+    # 2. Episodic Wrapping
+    is_episodic = episode_length > 0
+    if is_episodic:
+        data_source = EpisodicDataSource(
+            source=data_source,
+            batch_size=batch_size,
+            episode_length=episode_length,
+            seed=dataset_config.get("seed", 0),
+        )
+
+    # 3. Grain Sampler & Loader
+    # IndexSampler handles shuffling and infinite looping
+    sampler_grain = grain.IndexSampler(
+        num_records=len(data_source),
+        shuffle=randomize,
+        seed=dataset_config.get("seed", 0),
+        shard_options=grain.NoSharding(),
+        num_epochs=None if loop else 1,
+    )
+
+    # Grain Options from Config
+    worker_count = dataset_config.get("worker_count", 0)
+    num_threads = dataset_config.get("num_threads", 16)
+    buffer_size = dataset_config.get(
+        "buffer_size", 500
+    )  # Default grain prefetch
+
+    # Enforce worker_count constraints for Grain
+    if is_episodic and worker_count > 0:
+        raise ValueError(
+            f"worker_count must be 0 when using episodic data "
+            f"(episode_length={episode_length}). Using multiple workers "
+            "(multiprocessing) with EpisodicDataSource disrupts data order "
+            "because workers consume interleaved episode chunks "
+            "independently."
+        )
+    elif not is_episodic and worker_count > 0:
+        logger.warning(
+            f"Using worker_count={worker_count} with non-episodic data. "
+            "This enables multiprocessing in Grain. Note that data order "
+            "is not preserved, though it remains deterministic as long as "
+            "the number of workers is constant."
+        )
+
+    grain_loader = grain.DataLoader(
+        data_source=data_source,
+        sampler=sampler_grain,
+        operations=[
+            grain.Batch(batch_size=batch_size, drop_remainder=False)
+        ],
+        worker_count=worker_count,
+        read_options=grain.ReadOptions(
+            num_threads=num_threads, prefetch_buffer_size=buffer_size
+        ),
+    )
+
+    # 4. Adapter
+    if is_episodic:
+        scheduler = GrainEpisodicAdapter(grain_loader)
+    else:
+        scheduler = GrainSchedulerAdapter(grain_loader)
+
+    return scheduler
+
+
+def make_legacy_scheduler(
+    scheduler_class: type[BaseFlowFieldScheduler],
+    kwargs: dict,
+    batch_size: int,
+    episode_length: int,
+    buffer_size: int,
+    key: jax.Array,
+) -> (
+    BaseFlowFieldScheduler
+    | EpisodicFlowFieldScheduler
+    | PrefetchingFlowFieldScheduler
+):
+    """Create a legacy scheduler.
+
+    Args:
+        scheduler_class: The scheduler class.
+        kwargs: The keyword arguments for the scheduler.
+        batch_size: The batch size.
+        episode_length: The episode length.
+        buffer_size: The buffer size.
+        key: The random key.
+
+    Returns:
+        A legacy scheduler.
+    """
+    # Initialize the base scheduler
+    scheduler = scheduler_class.from_config(kwargs)
+
+    # If episode_length is specified, use EpisodicFlowFieldScheduler
+    if episode_length > 0:
+        _, epi_key = jax.random.split(key)
+        scheduler = EpisodicFlowFieldScheduler(
+            scheduler=scheduler,
+            batch_size=batch_size,
+            episode_length=episode_length,
+            key=epi_key,
+        )
+
+    # If buffer_size is specified, use PrefetchingFlowFieldScheduler
+    if buffer_size > 0:
+        scheduler = PrefetchingFlowFieldScheduler(
+            scheduler=scheduler,
+            batch_size=batch_size,
+            buffer_size=buffer_size,
+        )
+
+    return scheduler
+
+
+def make(
     config: str | dict,
-    use_grain_scheduler: bool = False,
+    use_grain_scheduler: bool = True,
 ) -> Sampler:
     """Load the dataset configuration and initialize the sampler.
 
@@ -236,108 +396,26 @@ def make(  # noqa: PLR0912, PLR0915
 
     # Initialize the scheduler (Legacy or Grain)
     if use_grain_scheduler:
-        # 1. Instantiate Data Source
-        data_source_cls = get_data_source_class(scheduler_class_name)
-
-        # Extract args relevant for DataSource
-        ds_kwargs = {}
-        if dataset_config.get("file_list"):
-            ds_kwargs["dataset_path"] = dataset_config["file_list"]
-        else:
-            ds_kwargs["dataset_path"] = []
-
-        if include_images:
-            ds_kwargs["include_images"] = True
-            ds_kwargs["output_shape"] = tuple(
-                dataset_config.get("image_shape", (256, 256))
-            )
-
-        data_source = data_source_cls(**ds_kwargs)
-
-        # 2. Episodic Wrapping
-        is_episodic = episode_length > 0
-        if is_episodic:
-            data_source = EpisodicDataSource(
-                source=data_source,
-                batch_size=batch_size,
-                episode_length=episode_length,
-                seed=dataset_config.get("seed", 0),
-            )
-
-        # 3. Grain Sampler & Loader
-        # IndexSampler handles shuffling and infinite looping
-        sampler_grain = grain.IndexSampler(
-            num_records=len(data_source),
-            shuffle=kwargs["randomize"],
-            seed=dataset_config.get("seed", 0),
-            shard_options=grain.NoSharding(),
-            num_epochs=None if kwargs["loop"] else 1,
+        scheduler = make_grain_scheduler(
+            dataset_config=dataset_config,
+            scheduler_class_name=scheduler_class_name,
+            batch_size=batch_size,
+            episode_length=episode_length,
+            include_images=include_images,
+            randomize=kwargs["randomize"],
+            loop=kwargs["loop"],
         )
-
-        # Grain Options from Config
-        worker_count = dataset_config.get("worker_count", 0)
-        num_threads = dataset_config.get("num_threads", 16)
-        buffer_size = dataset_config.get(
-            "buffer_size", 500
-        )  # Default grain prefetch
-
-        # Enforce worker_count constraints for Grain
-        if is_episodic and worker_count > 0:
-            raise ValueError(
-                f"worker_count must be 0 when using episodic data "
-                f"(episode_length={episode_length}). Using multiple workers "
-                "(multiprocessing) with EpisodicDataSource breaks data order "
-                "because workers consume the interleaved episode chunks "
-                "independently."
-            )
-        elif not is_episodic and worker_count > 0:
-            logger.warning(
-                f"Using worker_count={worker_count} with non-episodic data. "
-                "This enables multiprocessing in Grain. Notice that the order "
-                "of the data is not preserved,but still deterministic if you "
-                "keep the same number of workers."
-            )
-
-        grain_loader = grain.DataLoader(
-            data_source=data_source,
-            sampler=sampler_grain,
-            operations=[
-                grain.Batch(batch_size=batch_size, drop_remainder=False)
-            ],
-            worker_count=worker_count,
-            read_options=grain.ReadOptions(
-                num_threads=num_threads, prefetch_buffer_size=buffer_size
-            ),
-        )
-
-        # 4. Adapter
-        if is_episodic:
-            scheduler = GrainEpisodicAdapter(grain_loader)
-        else:
-            scheduler = GrainSchedulerAdapter(grain_loader)
 
     else:
         # Legacy Path
-        # Initialize the base scheduler
-        scheduler = scheduler_class.from_config(kwargs)
-
-        # If episode_length is specified, use EpisodicFlowFieldScheduler
-        if episode_length > 0:
-            key, epi_key = jax.random.split(key)
-            scheduler = EpisodicFlowFieldScheduler(
-                scheduler=scheduler,
-                batch_size=batch_size,
-                episode_length=episode_length,
-                key=epi_key,
-            )
-
-        # If buffer_size is specified, use PrefetchingFlowFieldScheduler
-        if buffer_size > 0:
-            scheduler = PrefetchingFlowFieldScheduler(
-                scheduler=scheduler,
-                batch_size=batch_size,
-                buffer_size=buffer_size,
-            )
+        scheduler = make_legacy_scheduler(
+            scheduler_class=scheduler_class,
+            kwargs=kwargs,
+            batch_size=batch_size,
+            episode_length=episode_length,
+            buffer_size=buffer_size,
+            key=key,
+        )
 
     if include_images:
         sampler = RealImageSampler(scheduler, batch_size=batch_size)

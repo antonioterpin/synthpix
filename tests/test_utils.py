@@ -1,3 +1,9 @@
+"""Tests for low-level utility functions and data manipulation helpers.
+
+These tests cover interpolation logic (bilinear, trilinear), flow field 
+adaptation, configuration loading, and directory discovery for dataset 
+preprocessing.
+"""
 import os
 import re
 import sys
@@ -81,7 +87,7 @@ def test_trilinear_interpolate(
         z: The z-coordinates for interpolation.
         expected: The expected interpolated values.
     """
-    assert trilinear_interpolate(image, x, y, z) == expected
+    assert trilinear_interpolate(image, x, y, z) == expected, f"Trilinear interpolation mismatch. Expected {expected}, got {trilinear_interpolate(image, x, y, z)}"
 
 
 @pytest.mark.parametrize(
@@ -104,20 +110,19 @@ def test_trilinear_interpolate(
 def test_generate_array_flow_field(
     shape: tuple[int, int], flow_field_type, expected: jnp.ndarray
 ):
-    """Test the generate_array_flow_field function with various inputs.
+    """Test generating a discretized flow field array from a functional description.
 
-    Args:
-        shape (tuple): The shape of the flow field.
-        flow_field (jnp.ndarray): The expected flow field.
+    Verifies that the resulting array matches the expected shape, dtype, 
+    and values for standard flow types (horizontal, vertical).
     """
     # Generate the flow field using the specified type
     flow_field = get_flow_function(flow_field_type)
     generated_flow_field = generate_array_flow_field(flow_field, shape)
 
-    assert generated_flow_field.shape == (shape[0], shape[1], 2)
-    assert generated_flow_field.shape == expected.shape
-    assert jnp.allclose(generated_flow_field, expected, atol=1e-5)
-    assert generated_flow_field.dtype == jnp.float32
+    assert generated_flow_field.shape == (shape[0], shape[1], 2), f"Generated flow field shape mismatch. Expected {(shape[0], shape[1], 2)}, got {generated_flow_field.shape}"
+    assert generated_flow_field.shape == expected.shape, f"Generated flow field shape {generated_flow_field.shape} does not match expected shape {expected.shape}"
+    assert jnp.allclose(generated_flow_field, expected, atol=1e-5), "Generated flow field values do not match expected values"
+    assert generated_flow_field.dtype == jnp.float32, f"Expected dtype jnp.float32, got {generated_flow_field.dtype}"
 
 
 # Mock valid inputs
@@ -162,7 +167,10 @@ def test_invalid_flow_field(flow_field):
     ],
 )
 def test_invalid_flow_field_dims(flow_field):
-    """Test input_check_flow_field_adapter raises ValueError for invalid flow fields."""
+    """Test that `input_check_flow_field_adapter` rejects flow fields with incorrect rank.
+
+    Expects a 4D array (N, H, W, 2).
+    """
     pattern = (
         r"^flow_field must be a 4D jnp\.ndarray with shape \(N, H, W, 2\), "
         r"got " + re.escape(str(flow_field.shape)) + r"\.$"
@@ -187,7 +195,10 @@ def test_invalid_flow_field_dims(flow_field):
 
 @pytest.mark.parametrize("N", [1, 3, 64, 12, 0])
 def test_invalid_flow_field_channels(N):
-    """Test input_check_flow_field_adapter raises ValueError for invalid flow fields."""
+    """Test that `input_check_flow_field_adapter` rejects flow fields with incorrect channels.
+
+    Expects exactly 2 components (u, v) in the last dimension.
+    """
     ff = jnp.zeros((16, 64, 64, N))
     pattern = (
         r"^flow_field must have shape \(N, H, W, 2\), "
@@ -216,7 +227,10 @@ def test_invalid_flow_field_channels(N):
     [(256,), (256, 1, 3), "invalid", None, (234.1, 243.3), (-256, 245)],
 )
 def test_invalid_new_flow_field_shape(new_flow_field_shape):
-    """Test invalid new_flow_field_shape."""
+    """Test that specifying an invalid target shape raises a ValueError.
+
+    Expects a tuple of two positive integers for (H, W).
+    """
     pattern = (
         r"new_flow_field_shape must be a tuple of two positive integers, "
         r"got " + re.escape(str(new_flow_field_shape)) + r"\.$"
@@ -591,10 +605,10 @@ def test_flow_field_adapter_shape(
     )
 
     # Check the shape of the adapted flow field
-    assert new_flow_field[0][0].shape == expected_shape
+    assert new_flow_field[0][0].shape == expected_shape, f"Adapted flow field shape mismatch. Expected {expected_shape}, got {new_flow_field[0][0].shape}"
 
     # Check the first vector of the adapted flow field
-    assert jnp.allclose(new_flow_field[0][0], expected_first_vector)
+    assert jnp.allclose(new_flow_field[0][0], expected_first_vector), "Adapted flow field values do not match expected first vector"
 
 
 @pytest.mark.parametrize(
@@ -632,7 +646,7 @@ def test_flow_field_adapter(flow_field, new_flow_field_shape, expected):
     )
 
     # Check the flow field
-    assert jnp.allclose(new_flow_field[0][0][1, 1], expected)
+    assert jnp.allclose(new_flow_field[0][0][1, 1], expected), f"Central vector mismatch. Expected {expected}, got {new_flow_field[0][0][1, 1]}"
 
 
 @pytest.mark.skipif(
@@ -646,7 +660,12 @@ def test_flow_field_adapter(flow_field, new_flow_field_shape, expected):
 def test_speed_flow_fields_adapter(
     selected_flow, flow_field_shape, new_flow_field_shape, batch_size
 ):
-    """Test that flow_field_adapter is faster than a limit time."""
+    """Benchmark performance of GPU-parallelized flow field adaptation.
+
+    Uses `shard_map` to distribute interpolation tasks across GPUs and 
+    verifies that the latency stays within acceptable limits for 
+    real-time or batch processing.
+    """
 
     # Check how many GPUs are available
     devices = jax.devices()
@@ -725,6 +744,12 @@ def _abspath(p):  # small helper to compare reliably
 
 
 def test_discover_leaf_dirs(tmp_path):
+    """Test the automatic discovery of leaf directories containing `.mat` files.
+
+    Verifies that the function correctly identifies directories at the end 
+    of the hierarchy that actually contain relevant data files, 
+    ignoring parent or empty branches.
+    """
     """
     tmp_path/
       ├── seq_A/
@@ -783,8 +808,8 @@ def test_discover_leaf_dirs_skips_missing_dirs(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "scandir", fake_scandir)
 
     leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
-    assert _abspath(keep) in leaves
-    assert _abspath(gone) not in leaves
+    assert _abspath(keep) in leaves, f"Expected {_abspath(keep)} to be in leaves: {leaves}"
+    assert _abspath(gone) not in leaves, f"Expected {_abspath(gone)} to be excluded from leaves"
 
 
 def test_discover_leaf_dirs_skips_not_a_directory(tmp_path, monkeypatch):
@@ -809,8 +834,8 @@ def test_discover_leaf_dirs_skips_not_a_directory(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "scandir", fake_scandir)
 
     leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
-    assert _abspath(ok) in leaves
-    assert _abspath(will_be_file) not in leaves
+    assert _abspath(ok) in leaves, f"Expected {_abspath(ok)} to be in leaves, got {leaves}"
+    assert _abspath(will_be_file) not in leaves, f"Expected {_abspath(will_be_file)} (not a directory) to be excluded from leaves"
 
 
 @pytest.mark.skipif(
@@ -839,5 +864,5 @@ def test_discover_leaf_dirs_skips_permission_denied(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "scandir", fake_scandir)
 
     leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
-    assert _abspath(ok) in leaves
-    assert _abspath(denied) not in leaves
+    assert _abspath(ok) in leaves, f"Expected {_abspath(ok)} to be in leaves, got {leaves}"
+    assert _abspath(denied) not in leaves, f"Expected {_abspath(denied)} (permission denied) to be excluded from leaves"

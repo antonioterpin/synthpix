@@ -72,7 +72,7 @@ def main(
     config_path: str,
     output_dir: str,
     num_images_to_display: int,
-    use_grain: bool = False,
+    use_grain: bool = True,
 ) -> None:
     """Main function to run the SyntheticImageSampler pipeline.
 
@@ -157,6 +157,7 @@ if __name__ == "__main__":
         "--use_grain",
         action="store_true",
         help="Use the Grain-based dataloading backend.",
+        default=True,
     )
 
     args = parser.parse_args()

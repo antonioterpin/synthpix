@@ -1,3 +1,9 @@
+"""Tests for synthetic particle image generation from discrete data.
+
+These tests verify the core rendering logic that converts particle positions, 
+diameters, and intensities into a grayscale grayscale image, including 
+noise addition and performance benchmarking.
+"""
 import timeit
 
 import jax
@@ -36,7 +42,11 @@ def test_generate_image_from_data(
     noise_gaussian_std,
     visualize=False,
 ):
-    """Test that we can generate a synthetic particle image."""
+    """Test the generation of a synthetic particle image from raw data.
+
+    Verifies that particles are correctly rendered and that noise is 
+    applied without violating pixel intensity bounds or image dimensions.
+    """
     key = jax.random.PRNGKey(seed)
     diameters_x = jnp.ones(particle_positions.shape[0])
     diameters_y = jnp.ones(particle_positions.shape[0])
@@ -89,7 +99,11 @@ def test_generate_image_from_data(
 def test_speed_img_gen(
     seeding_density, image_shape, diameter_range, intensity_range, rho_range
 ):
-    """Test that img_gen_from_data is faster than a limit time."""
+    """Benchmark performance of GPU-parallelized image generation.
+
+    Uses `shard_map` to distribute the rendering task across multiple 
+    GPUs and verifies that the execution time is within expected bounds.
+    """
 
     # Name of the axis for the device mesh
     shard_particles = "particles"
