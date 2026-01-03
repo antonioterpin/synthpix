@@ -105,7 +105,9 @@ def scheduler(temp_file_module, request):
         randomize = request.param.get("randomize", False)
         loop = request.param.get("loop", False)
 
-    yield HDF5FlowFieldScheduler([temp_file_module], randomize=randomize, loop=loop)
+    yield HDF5FlowFieldScheduler(
+        [temp_file_module], randomize=randomize, loop=loop
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -131,14 +133,22 @@ def numpy_test_dims():
 @pytest.fixture
 def mock_numpy_files(tmp_path, numpy_test_dims, request):
     """Create multiple temporary Numpy files with random data."""
-    num_files = getattr(request, "param", 2)
-    h, w = numpy_test_dims["height"], numpy_test_dims["width"]
+    param = getattr(request, "param", 2)
+    
+    if isinstance(param, dict):
+        num_files = param.get("num_files", 2)
+        dims = param.get("dims", numpy_test_dims)
+        h, w = dims["height"], dims["width"]
+    else:
+        num_files = param
+        dims = numpy_test_dims
+        h, w = dims["height"], dims["width"]
 
     paths = []
     for t in range(1, num_files + 1):
         img0 = np.random.randint(0, 255, size=(h, w, 3), dtype=np.uint8)
         img1 = np.random.randint(0, 255, size=(h, w, 3), dtype=np.uint8)
-        Image.fromarray(img0).save(tmp_path / f"img_{t-1}.jpg")
+        Image.fromarray(img0).save(tmp_path / f"img_{t - 1}.jpg")
         Image.fromarray(img1).save(tmp_path / f"img_{t}.jpg")
 
         flow = np.random.rand(h, w, 2).astype(np.float32)
@@ -146,7 +156,7 @@ def mock_numpy_files(tmp_path, numpy_test_dims, request):
         np.save(flow_path, flow)
         paths.append(flow_path)
 
-    yield [str(p) for p in paths], numpy_test_dims
+    yield [str(p) for p in paths], dims
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -161,20 +171,32 @@ def mat_test_dims():
 @pytest.fixture
 def mock_mat_files(tmp_path, mat_test_dims, request):
     """Create multiple temporary .mat files with random data."""
-    num_files = getattr(request, "param", 2)
-    h, w = mat_test_dims["height"], mat_test_dims["width"]
+    param = getattr(request, "param", 2)
+    
+    if isinstance(param, dict):
+        num_files = param.get("num_files", 2)
+        dims = param.get("dims", mat_test_dims)
+        h, w = dims["height"], dims["width"]
+    else:
+        num_files = param
+        dims = mat_test_dims
+        h, w = mat_test_dims["height"], mat_test_dims["width"]
 
     paths = []
     for t in range(1, num_files + 1):
         mat_path = tmp_path / f"flow_{t:04d}.mat"
         with h5py.File(mat_path, "w", libver="latest", userblock_size=512) as f:
             f.create_dataset(
-                "I0", data=np.random.randint(0, 255, size=(h, w), dtype=np.uint8)
+                "I0",
+                data=np.random.randint(0, 255, size=(h, w), dtype=np.uint8),
             )
             f.create_dataset(
-                "I1", data=np.random.randint(0, 255, size=(h, w), dtype=np.uint8)
+                "I1",
+                data=np.random.randint(0, 255, size=(h, w), dtype=np.uint8),
             )
-            f.create_dataset("V", data=np.random.rand(h, w, 2).astype(np.float32))
+            f.create_dataset(
+                "V", data=np.random.rand(h, w, 2).astype(np.float32)
+            )
 
         # write fake MATLAB header
         header = (
@@ -191,7 +213,7 @@ def mock_mat_files(tmp_path, mat_test_dims, request):
 
         paths.append(mat_path)
 
-    yield [str(p) for p in paths], mat_test_dims
+    yield [str(p) for p in paths], dims
 
 
 # ──────────────────────────────────────────────────────────────────────────────

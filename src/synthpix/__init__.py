@@ -1,7 +1,7 @@
 """Package initialization for the SynthPix module."""
 
 from .make import make
-from .utils import SYNTHPIX_SCOPE
 from .types import SynthpixBatch
+from .utils import SYNTHPIX_SCOPE
 
-__all__ = ["make", "SYNTHPIX_SCOPE", "SynthpixBatch"]
+__all__ = ["SYNTHPIX_SCOPE", "SynthpixBatch", "make"]

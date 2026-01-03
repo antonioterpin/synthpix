@@ -1,13 +1,13 @@
 """Type aliases for SynthPix library."""
 
-from typing import Any, TypeAlias
 from collections.abc import Sequence
-import numpy as np
-from typing_extensions import Self
-import jax.numpy as jnp
-
 from dataclasses import dataclass, field
+from typing import Any, TypeAlias
+
+import jax.numpy as jnp
+import numpy as np
 from jax import tree_util
+from typing_extensions import Self
 
 PRNGKey: TypeAlias = jnp.ndarray
 
@@ -22,7 +22,9 @@ class ImageGenerationParameters:
     intensity_ranges: jnp.ndarray
     rho_ranges: jnp.ndarray
 
-    def tree_flatten(self) -> tuple[
+    def tree_flatten(
+        self,
+    ) -> tuple[
         tuple[
             jnp.ndarray,
             jnp.ndarray,
@@ -46,11 +48,11 @@ class ImageGenerationParameters:
         return (children, aux_data)
 
     @classmethod
-    def tree_unflatten(cls, aux_data, children) -> Self:
-        """Reconstructs an ImageGenerationParameters from its flattened children.
+    def tree_unflatten(cls, _aux_data: Any, children: Any) -> Self:
+        """Reconstructs an ImageGenerationParameters from flattened children.
 
         Args:
-            aux_data: Auxiliary data (not used here).
+            _aux_data: Auxiliary data (not used here).
             children: Tuple containing the flattened fields of the
                 ImageGenerationParameters.
 
@@ -95,7 +97,10 @@ class SynthpixBatch:
     def tree_flatten(
         self,
     ) -> tuple[
-        tuple[jnp.ndarray | ImageGenerationParameters | tuple[str, ...] | None, ...],
+        tuple[
+            jnp.ndarray | ImageGenerationParameters | tuple[str, ...] | None,
+            ...,
+        ],
         None,
     ]:
         """Flattens the SynthpixBatch into its constituent parts.
@@ -116,13 +121,16 @@ class SynthpixBatch:
         return (children, aux_data)
 
     @classmethod
-    def tree_unflatten(cls, aux_data, children):
+    def tree_unflatten(cls, _aux_data: Any, children: Any) -> Self:
         """Reconstructs a SynthpixBatch from its flattened children.
 
         Args:
-            aux_data: Auxiliary data (not used here).
+            _aux_data: Auxiliary data (not used here).
+            children: Tuple containing the flattened fields of the
+                SynthpixBatch.
 
-            children: Tuple containing the flattened fields of the SynthpixBatch.
+        Returns:
+            An instance of SynthpixBatch.
         """
         return cls(*children)
 
@@ -137,7 +145,7 @@ class SchedulerData:
     mask: np.ndarray | None = None
     files: tuple[str, ...] | None = None
 
-    def update(self, **kwargs) -> Self:
+    def update(self, **kwargs: Any) -> Self:
         """Return a new SchedulerData with updated fields.
 
         Args:
@@ -206,7 +214,7 @@ class ImageGenerationSpecification:
     noise_gaussian_mean: float = 0.0
     noise_gaussian_std: float = 0.0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:  # noqa: PLR0912
         """Validate the fields of the dataclass."""
         if not isinstance(self.batch_size, int) or self.batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
@@ -215,7 +223,9 @@ class ImageGenerationSpecification:
             or len(self.image_shape) != 2
             or not all(isinstance(s, int) and s > 0 for s in self.image_shape)
         ):
-            raise ValueError("image_shape must be a tuple of two positive integers.")
+            raise ValueError(
+                "image_shape must be a tuple of two positive integers."
+            )
         if not (0.0 <= self.p_hide_img1 <= 1.0):
             raise ValueError("p_hide_img1 must be between 0 and 1.")
         if not (0.0 <= self.p_hide_img2 <= 1.0):
@@ -226,87 +236,119 @@ class ImageGenerationSpecification:
             or len(self.image_shape) != 2
             or not all(isinstance(s, int) and s > 0 for s in self.image_shape)
         ):
-            raise ValueError("image_shape must be a tuple of two positive integers.")
+            raise ValueError(
+                "image_shape must be a tuple of two positive integers."
+            )
 
         if not (
             isinstance(self.img_offset, tuple)
             and len(self.img_offset) == 2
-            and all(isinstance(s, (int, float)) and s >= 0 for s in self.img_offset)
+            and all(
+                isinstance(s, int | float) and s >= 0 for s in self.img_offset
+            )
         ):
-            raise ValueError("img_offset must be a tuple of two non-negative numbers.")
+            raise ValueError(
+                "img_offset must be a tuple of two non-negative numbers."
+            )
 
         if (
             not isinstance(self.seeding_density_range, tuple)
             or len(self.seeding_density_range) != 2
             or not all(
-                isinstance(s, (int, float)) and s >= 0
+                isinstance(s, int | float) and s >= 0
                 for s in self.seeding_density_range
             )
         ):
             raise ValueError(
-                "seeding_density_range must be a tuple of two non-negative numbers."
+                "seeding_density_range must be a tuple of two "
+                "non-negative numbers."
             )
 
         if self.seeding_density_range[0] > self.seeding_density_range[1]:
-            raise ValueError("seeding_density_range must be in the form (min, max).")
+            raise ValueError(
+                "seeding_density_range must be in the form (min, max)."
+            )
 
         # Check diameter_ranges
         if not (
             isinstance(self.diameter_ranges, list)
             and len(self.diameter_ranges) > 0
-            and all(isinstance(r, tuple) and len(r) == 2 for r in self.diameter_ranges)
+            and all(
+                isinstance(r, tuple) and len(r) == 2
+                for r in self.diameter_ranges
+            )
         ):
-            raise ValueError("diameter_ranges must be a list of (min, max) tuples.")
+            raise ValueError(
+                "diameter_ranges must be a list of (min, max) tuples."
+            )
         if not all(0 < d1 <= d2 for d1, d2 in self.diameter_ranges):
             raise ValueError("Each diameter_range must satisfy 0 < min <= max.")
 
         if not (
             isinstance(self.intensity_ranges, list)
             and len(self.intensity_ranges) > 0
-            and all(isinstance(r, tuple) and len(r) == 2 for r in self.intensity_ranges)
+            and all(
+                isinstance(r, tuple) and len(r) == 2
+                for r in self.intensity_ranges
+            )
         ):
-            raise ValueError("intensity_ranges must be a list of (min, max) tuples.")
+            raise ValueError(
+                "intensity_ranges must be a list of (min, max) tuples."
+            )
         if not all(0 < d1 <= d2 for d1, d2 in self.intensity_ranges):
-            raise ValueError("Each intensity_range must satisfy 0 < min <= max.")
+            raise ValueError(
+                "Each intensity_range must satisfy 0 < min <= max."
+            )
 
         if not (
             isinstance(self.rho_ranges, list)
             and len(self.rho_ranges) > 0
-            and all(isinstance(r, tuple) and len(r) == 2 for r in self.rho_ranges)
+            and all(
+                isinstance(r, tuple) and len(r) == 2 for r in self.rho_ranges
+            )
         ):
             raise ValueError("rho_ranges must be a list of (min, max) tuples.")
 
         if not all(-1 < r1 <= r2 < 1 for r1, r2 in self.rho_ranges):
             raise ValueError("Each rho_range must satisfy -1 < min <= max < 1.")
 
-        if not (isinstance(self.diameter_var, (int, float)) and 0 <= self.diameter_var):
+        if not (
+            isinstance(self.diameter_var, int | float)
+            and self.diameter_var >= 0
+        ):
             raise ValueError("diameter_var must be a non-negative number.")
         if not (
-            isinstance(self.intensity_var, (int, float)) and 0 <= self.intensity_var
+            isinstance(self.intensity_var, int | float)
+            and self.intensity_var >= 0
         ):
             raise ValueError("intensity_var must be a non-negative number.")
-        if not (isinstance(self.rho_var, (int, float)) and 0 <= self.rho_var):
+        if not (isinstance(self.rho_var, int | float) and self.rho_var >= 0):
             raise ValueError("rho_var must be a non-negative number.")
 
         if not (
-            isinstance(self.noise_uniform, (int, float)) and (0 <= self.noise_uniform)
+            isinstance(self.noise_uniform, int | float)
+            and (self.noise_uniform >= 0)
         ):
             raise ValueError("noise_uniform must be a non-negative number.")
 
         if not (
-            isinstance(self.noise_gaussian_mean, (int, float))
+            isinstance(self.noise_gaussian_mean, int | float)
             and self.noise_gaussian_mean >= 0
         ):
-            raise ValueError("noise_gaussian_mean must be a non-negative number.")
+            raise ValueError(
+                "noise_gaussian_mean must be a non-negative number."
+            )
         if (
-            not isinstance(self.noise_gaussian_std, (int, float))
+            not isinstance(self.noise_gaussian_std, int | float)
             or self.noise_gaussian_std < 0
         ):
-            raise ValueError("noise_gaussian_std must be a non-negative number.")
-        if not isinstance(self.dt, (int, float)) or self.dt <= 0:
+            raise ValueError(
+                "noise_gaussian_std must be a non-negative number."
+            )
+        if not isinstance(self.dt, int | float) or self.dt <= 0:
             raise ValueError("dt must be a positive number.")
 
-    def update(self, **kwargs) -> Self:
+    def update(self, **kwargs: Any) -> Self:
         """Return a new ImageGenerationSpecification with updated fields.
 
         Args:
@@ -326,7 +368,9 @@ class ImageGenerationSpecification:
             p_hide_img2=kwargs.get("p_hide_img2", self.p_hide_img2),
             diameter_ranges=kwargs.get("diameter_ranges", self.diameter_ranges),
             diameter_var=kwargs.get("diameter_var", self.diameter_var),
-            intensity_ranges=kwargs.get("intensity_ranges", self.intensity_ranges),
+            intensity_ranges=kwargs.get(
+                "intensity_ranges", self.intensity_ranges
+            ),
             intensity_var=kwargs.get("intensity_var", self.intensity_var),
             rho_ranges=kwargs.get("rho_ranges", self.rho_ranges),
             rho_var=kwargs.get("rho_var", self.rho_var),

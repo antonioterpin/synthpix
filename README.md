@@ -220,12 +220,12 @@ Contributions are more than welcome! 🙏 Please check out our [how to contribut
 If you use this code in your research, please cite our paper:
 ```bash
    @misc{terpin2025synthpixlightspeedpivimages,
-        title={SynthPix: A lightspeed PIV images generator}, 
+        title={SynthPix: A lightspeed PIV images generator},
         author={Antonio Terpin and Alan Bonomi and Francesco Banelli and Raffaello D'Andrea},
         year={2025},
         eprint={2512.09664},
         archivePrefix={arXiv},
         primaryClass={cs.DC},
-        url={https://arxiv.org/abs/2512.09664}, 
+        url={https://arxiv.org/abs/2512.09664},
     }
 ```

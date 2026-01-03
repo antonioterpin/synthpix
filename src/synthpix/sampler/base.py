@@ -2,18 +2,16 @@
 
 from abc import ABC, abstractmethod
 from typing import Any
-from typing_extensions import Self
 
 import jax.numpy as jnp
 from goggles import get_logger
+from typing_extensions import Self
 
-from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.scheduler.protocol import (EpisodeEndError,
+                                         EpisodicSchedulerProtocol,
+                                         SchedulerProtocol)
 from synthpix.types import SynthpixBatch
-from synthpix.scheduler.protocol import (
-    EpisodeEnd,
-    SchedulerProtocol,
-    EpisodicSchedulerProtocol,
-)
+from synthpix.utils import SYNTHPIX_SCOPE
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -35,9 +33,15 @@ class Sampler(ABC):
         Args:
             scheduler: Scheduler instance that provides data.
             batch_size: Number of samples to return in each batch.
+
+        Raises:
+            TypeError: If scheduler does not implement SchedulerProtocol.
+            ValueError: If batch_size is not a positive integer.
         """
         if not isinstance(scheduler, SchedulerProtocol):
-            raise TypeError("scheduler must implement the SchedulerProtocol interface.")
+            raise TypeError(
+                "scheduler must implement the SchedulerProtocol interface."
+            )
 
         if not isinstance(batch_size, int) or batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
@@ -47,16 +51,16 @@ class Sampler(ABC):
 
         episodic = isinstance(self.scheduler, EpisodicSchedulerProtocol)
         logger.info(
-            "The underlying scheduler is " f"{'' if episodic else 'not'} episodic."
+            f"The underlying scheduler is {'' if episodic else 'not'} episodic."
         )  # pragma: no cover
 
         self.batch_size = batch_size
         logger.info(f"Scheduler class: {self.scheduler.__class__.__name__}")
 
-    def _shutdown(self) -> None:
+    def _shutdown(self) -> None:  # noqa: B027
         """Custom shutdown logic for the sampler."""
 
-    def _reset(self) -> None:
+    def _reset(self) -> None:  # noqa: B027
         """Custom reset logic for the sampler."""
 
     def shutdown(self) -> None:
@@ -75,12 +79,15 @@ class Sampler(ABC):
 
         Returns:
             The next batch of data as a SynthpixBatch instance.
+
+        Raises:
+            EpisodeEndError: If the episode has ended.
         """
         if (
             isinstance(self.scheduler, EpisodicSchedulerProtocol)
             and self.scheduler.steps_remaining() == 0
         ):
-            raise EpisodeEnd(
+            raise EpisodeEndError(
                 "Episode ended. No more flow fields available. "
                 "Use next_episode() to continue."
             )
@@ -109,32 +116,44 @@ class Sampler(ABC):
         The underlying scheduler is expected to be the prefetching scheduler.
 
         Raises:
-            AttributeError: If the underlying scheduler does not support episodes.
+            AttributeError: If the underlying scheduler does not support
+                episodes.
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
-            raise AttributeError("Underlying scheduler lacks next_episode() method.")
+            raise AttributeError(
+                "Underlying scheduler lacks next_episode() method."
+            )
         self.scheduler.next_episode()
 
     def _make_done(self) -> jnp.ndarray:
         """Return a `(batch_size,)` bool array if episodic.
 
         Returns:
-            A boolean array indicating the end of episodes for each sample in the batch.
+            A boolean array indicating the end of episodes for each sample in
+            the batch.
+
+        Raises:
+            NotImplementedError: If the scheduler is not episodic.
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
-            raise NotImplementedError("The underlying scheduler is not episodic.")
+            raise NotImplementedError(
+                "The underlying scheduler is not episodic."
+            )
 
         is_last_step = self.scheduler.steps_remaining() == 0
         return jnp.full((self.batch_size,), is_last_step, dtype=bool)
 
     @classmethod
     @abstractmethod
-    def from_config(cls, scheduler: SchedulerProtocol, config: dict[str, Any]) -> Self:
+    def from_config(
+        cls, scheduler: SchedulerProtocol, config: dict[str, Any]
+    ) -> Self:
         """Create a Sampler instance from a configuration dictionary.
 
         Args:
             scheduler: Scheduler instance to be used by the sampler.
             config: Configuration dictionary with sampler parameters.
 
-        Returns: A Sampler instance.
+        Returns:
+            A Sampler instance.
         """

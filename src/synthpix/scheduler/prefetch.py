@@ -3,17 +3,16 @@
 import queue
 import threading
 import time
+from contextlib import suppress
 
 from goggles import get_logger
 
+from synthpix.scheduler.protocol import (EpisodeEndError,
+                                         EpisodicSchedulerProtocol,
+                                         PrefetchedSchedulerProtocol,
+                                         SchedulerProtocol)
 from synthpix.types import SchedulerData
 from synthpix.utils import SYNTHPIX_SCOPE
-from synthpix.scheduler.protocol import (
-    EpisodeEnd,
-    EpisodicSchedulerProtocol,
-    SchedulerProtocol,
-    PrefetchedSchedulerProtocol,
-)
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -44,7 +43,11 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
                 Must match the underlying scheduler.
             buffer_size: Number of batches to prefetch.
             startup_timeout: Timeout in seconds for the initial batch fetch.
-            steady_state_timeout: Timeout in seconds for subsequent batch fetches.
+            steady_state_timeout: Timeout in seconds for subsequent batch
+                fetches.
+
+        Raises:
+            ValueError: If batch_size or buffer_size are not positive integers.
         """
         self.scheduler = scheduler
 
@@ -55,17 +58,19 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         self.batch_size = batch_size
         self.buffer_size = buffer_size
 
-        self._queue = queue.Queue(maxsize=buffer_size)
+        self._queue: queue.Queue[SchedulerData | None] = queue.Queue(
+            maxsize=buffer_size
+        )
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._worker, daemon=True)
 
         self._started = False
         self._t = 0
 
-        if not isinstance(startup_timeout, (int, float)) or startup_timeout <= 0:
+        if not isinstance(startup_timeout, int | float) or startup_timeout <= 0:
             raise ValueError("startup_timeout must be a positive number.")
         if (
-            not isinstance(steady_state_timeout, (int, float))
+            not isinstance(steady_state_timeout, int | float)
             or steady_state_timeout <= 0
         ):
             raise ValueError("steady_state_timeout must be a positive number.")
@@ -86,6 +91,8 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             A preloaded batch of flow fields.
 
         Raises:
+            EpisodeEndError: If the episode has ended.
+            StopIteration: If the dataset is exhausted.
             ValueError: If the requested batch_size does not match
                 the prefetching batch size.
         """
@@ -96,17 +103,23 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             )
         self._start_worker()
 
-        if isinstance(self.scheduler, EpisodicSchedulerProtocol):
-            if self._t >= self.scheduler.episode_length:
-                raise EpisodeEnd(
-                    "Episode ended. No more flow fields available. "
-                    "Use next_episode() to continue."
-                )
+        if (
+            isinstance(self.scheduler, EpisodicSchedulerProtocol)
+            and self._t >= self.scheduler.episode_length
+        ):
+            raise EpisodeEndError(
+                "Episode ended. No more flow fields available. "
+                "Use next_episode() to continue."
+            )
         try:
             if self.startup:
-                batch = self._queue.get(block=True, timeout=self.startup_timeout)
+                batch = self._queue.get(
+                    block=True, timeout=self.startup_timeout
+                )
             else:
-                batch = self._queue.get(block=True, timeout=self.steady_state_timeout)
+                batch = self._queue.get(
+                    block=True, timeout=self.steady_state_timeout
+                )
 
             if self.startup:
                 self.startup = False
@@ -118,15 +131,16 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             return batch
         except queue.Empty:
             logger.info("Unable to get data.")
-            raise StopIteration
+            raise StopIteration from None
 
-    def get_flow_fields_shape(self) -> tuple[int, ...]:
+    def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Return the shape of the flow fields from the underlying scheduler.
 
         Returns:
             Shape of the flow fields as returned by the underlying scheduler.
         """
-        return self.scheduler.get_flow_fields_shape()
+        res = self.scheduler.get_flow_fields_shape()
+        return (int(res[0]), int(res[1]), int(res[2]))
 
     def _start_worker(self) -> None:
         """Starts the background prefetching thread if not already started."""
@@ -145,24 +159,27 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         while not self._stop_event.is_set():
             try:
                 batch = self.scheduler.get_batch(self.batch_size)
-            except EpisodeEnd as e:
-                assert isinstance(self.scheduler, EpisodicSchedulerProtocol)
-                self.scheduler.next_episode()
+            except EpisodeEndError:
+                if isinstance(self.scheduler, EpisodicSchedulerProtocol):
+                    self.scheduler.next_episode()
+                else:
+                    raise
                 continue
             except StopIteration:
                 # Intended behavior here:
                 # I called get_batch() and ran into a StopIteration,
                 # it means there is no more data left.
-                # The underlying scheduler can be implemented in a way that it raises
-                # StopIteration when it has no more data to provide or when it has
-                # produced an incomplete batch. In the latter case, the behavior is so
-                # that the prefetching scheduler will ignore the incomplete batch
-                # and signal end‑of‑stream to consumer
+                # The underlying scheduler can be implemented in a way that it
+                # raises StopIteration when it has no more data to provide or
+                # when it has produced an incomplete batch. In the latter
+                # case, the behavior is so that the prefetching scheduler
+                # will ignore the incomplete batch and signal end-of-stream
+                # to consumer
                 try:
                     self._queue.put(None, block=True, timeout=eos_timeout)
                 except queue.Full:
                     # If the queue is full for <eos_timeout>, I remove one item
-                    # before I can put the end‑of‑stream signal.
+                    # before I can put the end-of-stream signal.
 
                     # Acquire the mutex to ensure atomicity
                     with self._queue.mutex:
@@ -173,15 +190,18 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
                         # Write the EOS sentinel atomically
                         self._queue.queue.append(None)
 
-                        # Notify the consumer that the end-of-stream signal is available
+                        # Notify the consumer that the end-of-stream signal
+                        # is available
                         self._queue.not_empty.notify_all()
 
-                logger.info("No more data to fetch, stopping prefetching thread.")
+                logger.info(
+                    "No more data to fetch, stopping prefetching thread."
+                )
                 self._stop_event.set()
                 return
 
             # This will block until there is free space in the queue:
-            # no busy‑waiting needed.
+            # no busy-waiting needed.
             # Exception cannot be raised here, would be dead code.
             self._queue.put(batch, block=True)
 
@@ -192,10 +212,8 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
 
         # If the thread is stuck on put(), free up one slot in the queue
         # so the thread can check the stop event.
-        try:
+        with suppress(queue.Empty):
             self._queue.get_nowait()
-        except queue.Empty:
-            pass
 
         # Wait for the thread to finish
         if self._thread.is_alive():
@@ -231,16 +249,12 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             return
 
         # If producer is stuck on put(), free up one slot
-        try:
+        with suppress(queue.Empty):
             self._queue.get_nowait()
-        except queue.Empty:
-            pass
 
         # If consumer is stuck on get(), inject the end-of-stream signal
-        try:
+        with suppress(queue.Full):
             self._queue.put(None, block=False)
-        except queue.Full:
-            pass
 
         # Wait for the thread to finish
         if self._thread.is_alive():
@@ -268,7 +282,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
             # return 1 if not episodic... never ending ;)
             return 1
-        return self.scheduler.episode_length - self._t
+        return int(self.scheduler.episode_length - self._t)
 
     def next_episode(self, join_timeout: float = 2.0) -> None:
         """Flush the current episode and prepare for the next one.
@@ -311,10 +325,15 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
 
         Returns:
             The length of the episode.
+
+        Raises:
+            AttributeError: If the underlying scheduler is not episodic.
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
-            raise AttributeError("Underlying scheduler lacks episode_length property.")
-        return self.scheduler.episode_length
+            raise AttributeError(
+                "Underlying scheduler lacks episode_length property."
+            )
+        return int(self.scheduler.episode_length)
 
     @property
     def file_list(self) -> list[str]:
@@ -323,7 +342,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         Returns:
             The list of files.
         """
-        return self.scheduler.file_list
+        return list(self.scheduler.file_list)
 
     @file_list.setter
     def file_list(self, new_file_list: list[str]) -> None:

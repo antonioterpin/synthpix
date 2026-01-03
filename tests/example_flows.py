@@ -1,6 +1,7 @@
 """Example flow functions for testing purposes."""
 
 from collections.abc import Callable
+
 import jax.numpy as jnp
 
 
@@ -65,7 +66,9 @@ def vortex_flow(
 
 def get_flow_function(
     selected_flow: str, image_shape: tuple[int, int] = (128, 128)
-) -> Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]]:
+) -> Callable[
+    [jnp.ndarray, jnp.ndarray, jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]
+]:
     """Generate a flow field for testing purposes.
 
     It creates a flow field function based on the selected_flow.
@@ -87,7 +90,10 @@ def get_flow_function(
         case "no_flow":
             return lambda t, x, y: (0.0, 0.0)
         case "pipe_horizontal":
-            return lambda t, x, y: (20 - 0.004 * (y - image_shape[1] / 2) ** 2, 0.0)
+            return lambda t, x, y: (
+                20 - 0.004 * (y - image_shape[1] / 2) ** 2,
+                0.0,
+            )
         case "vortex":
             return lambda t, x, y: (
                 -((y - 64) * 10.0 / 64.0 * jnp.cos(2 * jnp.pi * t)),

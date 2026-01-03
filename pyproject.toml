@@ -13,7 +13,7 @@ authors = [
 description = "A lightspeed PIV images generator using JAX"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = { text = "MIT" }
 keywords = ["PIV", "synthetic data", "jax"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -37,6 +37,8 @@ dependencies = [
     "robo-goggles>=0.1.7",
     "numpy>=2.2.6",
     "gdown>=5.2.0",
+    "grain>=0.2.13",
+    "orbax-checkpoint>=0.11.31",
 ]
 
 [project.urls]
@@ -46,7 +48,7 @@ Documentation = "https://github.com/antonioterpin/synthpix#readme"
 Issues = "https://github.com/antonioterpin/synthpix/issues"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -63,12 +65,12 @@ dev = [
     "tomli",
     "pyupgrade>=3.19.0",
     "matplotlib>=3.10.1",
+    "ruff>=0.9.0",
+    "mypy>=1.14.0",
 ]
-# cuda
 cuda12 = [
     "jax[cuda12]>=0.6.0",
 ]
-
 download = [
     "gdown>=5.1.0",
     "scipy>=1.10.0",
@@ -112,9 +114,12 @@ strict_equality = true
 show_error_codes = true
 explicit_package_bases = true
 
-# Allow untyped decorators in test files for Hypothesis
+# Relax strictness in tests and examples
 [[tool.mypy.overrides]]
-module = "tests.*"
+module = ["tests.*", "examples.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = false
 disallow_untyped_decorators = false
 
 # Pydocstyle configuration
@@ -130,21 +135,33 @@ exclude_dirs = ["tests", ".venv", "build", "dist"]
 [tool.pytest.ini_options]
 minversion = "7.0"
 addopts = [
-        "-ra",
-        "--strict-markers",
-        "--strict-config",
-        "--cov=goggles",
-        "--cov-branch",
-        "--cov-report=term-missing",
-        "--cov-report=html",
-        "--cov-report=xml",
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
 ]
 testpaths = ["tests"]
 filterwarnings = [
-        "error",
-        "ignore::UserWarning",
-        "ignore::DeprecationWarning",
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
 ]
+
+# Coverage configuration (stable: path-based source)
+[tool.coverage.run]
+branch = true
+source = ["src/synthpix"]
+relative_files = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+omit = [
+    "tests/*",
+    "docs/*",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
 
 # Ruff configuration for linting and modern typing enforcement
 [tool.ruff]
@@ -152,19 +169,23 @@ line-length = 80
 target-version = "py310"
 
 [tool.ruff.lint]
-# Enable comprehensive rule sets
 select = [
     "E",      # pycodestyle errors
     "W",      # pycodestyle warnings
-    "F",      # pyflakes (including unused imports F401)
+    "F",      # pyflakes (including unused imports F401, unused variables F841)
     "UP",     # pyupgrade (modern typing patterns)
     "I",      # isort
     "N",      # pep8-naming
     "D",      # pydocstyle
     "PL",     # pylint
     "RUF",    # ruff-specific rules
+    "TCH",    # flake8-type-checking
+    "TID",    # flake8-tidy-imports
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "SIM",    # flake8-simplify
+    "ARG",    # flake8-unused-arguments
 ]
-
 ignore = [
     "D100",   # Missing docstring in public module
     "D104",   # Missing docstring in public package
@@ -173,7 +194,6 @@ ignore = [
     "PLR2004", # Magic value used in comparison
 ]
 
-# Specific rules for modern typing enforcement
 [tool.ruff.lint.pyupgrade]
 # Keep this empty to use all pyupgrade rules
 
@@ -183,3 +203,11 @@ ignore = [
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.ruff.lint.pep8-naming]
+ignore-names = ["H", "W", "D"]
+
+[dependency-groups]
+dev = [
+    "pydoclint>=0.8.3",
+]
