@@ -35,7 +35,6 @@ def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
     # Unpack fixture
     _, _ = mock_mat_files  # Files are already created in tmp_path
     
-    num_files = 200
     episode_length = 5
     batch_size = 1
     dataset_dir = tmp_path
@@ -130,6 +129,7 @@ def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
             import goggles as gg
             gg.finish()
         except ImportError:
+            # goggles is optional
             pass
             
         time.sleep(0.5)
@@ -231,6 +231,7 @@ def test_benchmark_numpy_speed(tmp_path, mock_numpy_files):
             import goggles as gg
             gg.finish()
         except ImportError:
+            # goggles is optional
             pass
         time.sleep(0.5)
 

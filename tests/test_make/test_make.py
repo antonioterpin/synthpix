@@ -320,7 +320,7 @@ def test_synthetic_sampler_with_episode(monkeypatch):
 
 def test_make_grain_scheduler_call(monkeypatch):
     """Test that make() calls make_grain_scheduler correctly with non-episodic config."""
-    helpers = _patch_common(monkeypatch)
+    _patch_common(monkeypatch)
 
     mock_grain = SimpleNamespace(
         IndexSampler=MagicMock(),
@@ -339,7 +339,7 @@ def test_make_grain_scheduler_call(monkeypatch):
     
     class MockDataSource(FileDataSource):
         def __init__(self, **kwargs):
-            pass
+            super().__init__(dataset_path=["mock_path"])
         def __len__(self):
             return 10
         def load_file(self, f): return {}

@@ -104,11 +104,6 @@ def make_grain_scheduler(
     Returns:
         A Grain-based scheduler.
     """
-    # try:
-    #     import grain.python as grain
-    # except ImportError:
-    #     raise ImportError("Grain is required for Grain-based schedulers.")
-
     # 1. Instantiate Data Source
     data_source_cls = get_data_source_class(scheduler_class_name)
 

@@ -15,7 +15,7 @@ from synthpix.types import ImageGenerationSpecification
 
 class _DummyScheduler(BaseFlowFieldScheduler):
     def __init__(self, h=64, w=64):
-        # Don't call super().__init__() to avoid file list handling
+        super().__init__(file_list=["mock_file"])
         self._shape = (h, w, 2)
 
     def get_flow_fields_shape(self):

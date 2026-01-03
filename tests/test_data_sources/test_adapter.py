@@ -313,7 +313,7 @@ def test_episodic_next_episode_logic():
     adapter = GrainEpisodicAdapter(loader)
 
     # 1. Get t0
-    batch = adapter.get_batch(1)
+    adapter.get_batch(1)
     assert adapter._current_timestep == 0, f"Expected current timestep 0, got {adapter._current_timestep}"
     assert adapter.steps_remaining() == 2, f"Expected 2 steps remaining, got {adapter.steps_remaining()}"
 
@@ -811,13 +811,6 @@ def test_epoch_aware_wrapping_and_padding(tmp_path):
     # Epoch 3
     b5 = batches[5]
     assert b5.mask[1] == False, f"Epoch 3 wrap should be padded (final epoch), but mask[1] is {b5.mask[1]}"
-
-import numpy as np
-import pytest
-from unittest.mock import MagicMock, PropertyMock
-import grain.python as grain
-from synthpix.data_sources.adapter import GrainSchedulerAdapter
-from synthpix.data_sources.base import FileDataSource
 
 class CrashingLoader(grain.DataLoader):
     """Loader that crashes during attribute inspection."""
