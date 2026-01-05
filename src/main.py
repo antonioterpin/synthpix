@@ -40,11 +40,15 @@ def visualize_and_save(
     flow_x = flow_field[..., 0]
     flow_y = flow_field[..., 1]
     # Create a grid for the quiver plot
-    y, x = np.mgrid[0 : flow_x.shape[0], 0 : flow_x.shape[1]]
+    y, x = np.mgrid[0: flow_x.shape[0], 0: flow_x.shape[1]]
 
     # Save individual images and flow field
-    plt.imsave(os.path.join(output_dir, f"{name}_image1.png"), image1, cmap="gray")
-    plt.imsave(os.path.join(output_dir, f"{name}_image2.png"), image2, cmap="gray")
+    plt.imsave(
+        os.path.join(output_dir, f"{name}_image1.png"), image1, cmap="gray"
+    )
+    plt.imsave(
+        os.path.join(output_dir, f"{name}_image2.png"), image2, cmap="gray"
+    )
 
     # Save the quiver plot as a separate image
     quiver_fig, quiver_ax = plt.subplots(figsize=(7, 7))
@@ -64,16 +68,22 @@ def visualize_and_save(
     logger.info(f"Saved images for {name} to {output_dir}.")
 
 
-def main(config_path: str, output_dir: str, num_images_to_display: int):
+def main(
+    config_path: str,
+    output_dir: str,
+    num_images_to_display: int,
+    use_grain: bool = True,
+) -> None:
     """Main function to run the SyntheticImageSampler pipeline.
 
     Args:
         config_path: Configuration file path.
         output_dir: Directory to save visualized images.
         num_images_to_display: Number of images to display and save per batch.
+        use_grain: Whether to use the Grain-based scheduler.
     """
     # Initialize the sampler
-    sampler = synthpix.make(config_path)
+    sampler = synthpix.make(config_path, use_grain_scheduler=use_grain)
 
     # Print where images will be saved
     abs_output_dir = os.path.abspath(output_dir)
@@ -99,7 +109,9 @@ def main(config_path: str, output_dir: str, num_images_to_display: int):
 
             if num_images_to_display > 0:
                 # Ask user if they want to continue generating images
-                choice = input("Do you want to continue generating images? (y/n): ")
+                choice = input(
+                    "Do you want to continue generating images? (y/n): "
+                )
                 if choice.lower() != "y":
                     logger.info("Stopping the pipeline.")
                     break
@@ -141,12 +153,20 @@ if __name__ == "__main__":
         help="Number of images to display and save from each batch.",
     )
 
+    parser.add_argument(
+        "--use_grain",
+        action="store_true",
+        help="Use the Grain-based dataloading backend.",
+        default=True,
+    )
+
     args = parser.parse_args()
 
     main(
         config_path=args.config,
         output_dir=args.output_dir,
         num_images_to_display=args.visualize,
+        use_grain=args.use_grain,
     )
 
     gg.finish()

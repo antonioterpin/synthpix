@@ -1,8 +1,7 @@
 """Utility functions for the vision module."""
 
 import os
-from collections.abc import Sequence
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 import goggles as gg
 import jax
@@ -14,7 +13,9 @@ SYNTHPIX_SCOPE = "synthpix"
 load_configuration = gg.load_configuration
 
 
-def match_histogram(source: jnp.ndarray, template_hist: jnp.ndarray) -> jnp.ndarray:
+def match_histogram(
+    source: jnp.ndarray, template_hist: jnp.ndarray
+) -> jnp.ndarray:
     """Match the histogram of `source` to a desired histogram.
 
     Args:
@@ -93,17 +94,17 @@ def bilinear_interpolate(
     wy = y_f_clamped - y0
 
     # Gather neighboring pixels
-    I00 = image[y0, x0]
-    I10 = image[y0, x1]
-    I01 = image[y1, x0]
-    I11 = image[y1, x1]
+    i00 = image[y0, x0]
+    i10 = image[y0, x1]
+    i01 = image[y1, x0]
+    i11 = image[y1, x1]
 
     # Bilinear
     return (
-        (1 - wx) * (1 - wy) * I00
-        + wx * (1 - wy) * I10
-        + (1 - wx) * wy * I01
-        + wx * wy * I11
+        (1 - wx) * (1 - wy) * i00
+        + wx * (1 - wy) * i10
+        + (1 - wx) * wy * i01
+        + wx * wy * i11
     )
 
 
@@ -146,14 +147,14 @@ def trilinear_interpolate(
     alpha_z = z - jnp.floor(z)
 
     # Retrieve intensities from the eight corners of the cube
-    Ia = volume[z0, y0, x0]
-    Ib = volume[z0, y0, x1]
-    Ic = volume[z0, y1, x0]
-    Id = volume[z0, y1, x1]
-    Ie = volume[z1, y0, x0]
-    If = volume[z1, y0, x1]
-    Ig = volume[z1, y1, x0]
-    Ih = volume[z1, y1, x1]
+    ia = volume[z0, y0, x0]
+    ib = volume[z0, y0, x1]
+    ic = volume[z0, y1, x0]
+    id_corner = volume[z0, y1, x1]
+    ie = volume[z1, y0, x0]
+    if_corner = volume[z1, y0, x1]
+    ig = volume[z1, y1, x0]
+    ih = volume[z1, y1, x1]
 
     # Compute weights for each corner
     wa = (1.0 - alpha_x) * (1.0 - alpha_y) * (1.0 - alpha_z)
@@ -166,7 +167,16 @@ def trilinear_interpolate(
     wh = alpha_x * alpha_y * alpha_z
 
     # Compute the weighted sum of the corner intensities
-    return Ia * wa + Ib * wb + Ic * wc + Id * wd + Ie * we + If * wf + Ig * wg + Ih * wh
+    return (
+        wa * ia
+        + wb * ib
+        + wc * ic
+        + wd * id_corner
+        + we * ie
+        + wf * if_corner
+        + wg * ig
+        + wh * ih
+    )
 
 
 def generate_array_flow_field(
@@ -242,7 +252,7 @@ def flow_field_adapter(
     """
     new_h, new_w = new_flow_field_shape
 
-    def process_single(flow):
+    def process_single(flow: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
         # Apply zero-padding
         pad_y, pad_x = zero_padding
         flow = jnp.pad(
@@ -254,8 +264,10 @@ def flow_field_adapter(
         # flow_resized
         # Create the grid for interpolation
         flow_resized_start = (
-            position_bounds_offset[0] * res_y + img_offset[0] / resolution * res_y,
-            position_bounds_offset[1] * res_x + img_offset[1] / resolution * res_x,
+            position_bounds_offset[0] * res_y
+            + img_offset[0] / resolution * res_y,
+            position_bounds_offset[1] * res_x
+            + img_offset[1] / resolution * res_x,
         )
         flow_resized_end = (
             flow_resized_start[0] + image_shape[0] / resolution * res_y - 1,
@@ -290,8 +302,12 @@ def flow_field_adapter(
             position_bounds_offset[1] * res_x,
         )
         flow_position_bounds_end = (
-            flow_position_bounds_start[0] + position_bounds[0] / resolution * res_y - 1,
-            flow_position_bounds_start[1] + position_bounds[1] / resolution * res_x - 1,
+            flow_position_bounds_start[0]
+            + position_bounds[0] / resolution * res_y
+            - 1,
+            flow_position_bounds_start[1]
+            + position_bounds[1] / resolution * res_x
+            - 1,
         )
         flow_position_bounds_vec_y = jnp.linspace(
             flow_position_bounds_start[0],
@@ -307,10 +323,14 @@ def flow_field_adapter(
             flow_position_bounds_vec_x, flow_position_bounds_vec_y
         )
         flow_position_bounds_x = bilinear_interpolate(
-            flow[..., 0], flow_position_bounds_grid_x, flow_position_bounds_grid_y
+            flow[..., 0],
+            flow_position_bounds_grid_x,
+            flow_position_bounds_grid_y,
         )
         flow_position_bounds_y = bilinear_interpolate(
-            flow[..., 1], flow_position_bounds_grid_x, flow_position_bounds_grid_y
+            flow[..., 1],
+            flow_position_bounds_grid_x,
+            flow_position_bounds_grid_y,
         )
         flow_position_bounds = jnp.stack(
             (flow_position_bounds_x, flow_position_bounds_y), axis=-1
@@ -331,7 +351,7 @@ def flow_field_adapter(
     return tiled[:batch_size, ...], flow_bounds
 
 
-def input_check_flow_field_adapter(
+def input_check_flow_field_adapter(  # noqa: PLR0912
     flow_field: jnp.ndarray,
     new_flow_field_shape: tuple[int, int],
     image_shape: tuple[int, int],
@@ -345,7 +365,7 @@ def input_check_flow_field_adapter(
     output_units: str,
     dt: float,
     zero_padding: tuple[int, ...],
-):
+) -> None:
     """Checks the input arguments of the flow field adapter function.
 
     Args:
@@ -367,6 +387,9 @@ def input_check_flow_field_adapter(
         dt: The time step for the flow field adaptation.
         zero_padding: The amount of zero-padding to apply to the top and left
             edges of the flow field.
+
+    Raises:
+        ValueError: If any input parameter has invalid type, shape, or value.
     """
     if not isinstance(flow_field, jnp.ndarray):
         raise ValueError("flow_field must be a jnp.ndarray.")
@@ -391,27 +414,33 @@ def input_check_flow_field_adapter(
         )
 
     if not isinstance(image_shape, tuple) or len(image_shape) != 2:
-        raise ValueError("image_shape must be a tuple of two positive integers.")
+        raise ValueError(
+            "image_shape must be a tuple of two positive integers."
+        )
     if not all(isinstance(s, int) and s > 0 for s in image_shape):
         raise ValueError("image_shape must contain two positive integers.")
 
     if not isinstance(img_offset, tuple) or len(img_offset) != 2:
-        raise ValueError("img_offset must be a tuple of two non-negative numbers.")
-    if not all(isinstance(s, (int, float)) and s >= 0 for s in img_offset):
+        raise ValueError(
+            "img_offset must be a tuple of two non-negative numbers."
+        )
+    if not all(isinstance(s, int | float) and s >= 0 for s in img_offset):
         raise ValueError("img_offset must contain two non-negative numbers.")
 
-    if not isinstance(resolution, (int, float)) or resolution <= 0:
+    if not isinstance(resolution, int | float) or resolution <= 0:
         raise ValueError("resolution must be a positive number.")
 
-    if not isinstance(res_x, (int, float)) or res_x <= 0:
+    if not isinstance(res_x, int | float) or res_x <= 0:
         raise ValueError("res_x must be a positive number.")
 
-    if not isinstance(res_y, (int, float)) or res_y <= 0:
+    if not isinstance(res_y, int | float) or res_y <= 0:
         raise ValueError("res_y must be a positive number.")
 
     if not isinstance(position_bounds, tuple) or len(position_bounds) != 2:
-        raise ValueError("position_bounds must be a tuple of two positive numbers.")
-    if not all(isinstance(s, (int, float)) and s > 0 for s in position_bounds):
+        raise ValueError(
+            "position_bounds must be a tuple of two positive numbers."
+        )
+    if not all(isinstance(s, int | float) and s > 0 for s in position_bounds):
         raise ValueError("position_bounds must contain two positive numbers.")
 
     if (
@@ -419,9 +448,12 @@ def input_check_flow_field_adapter(
         or len(position_bounds_offset) != 2
     ):
         raise ValueError(
-            "position_bounds_offset must be a tuple of two non-negative numbers."
+            "position_bounds_offset must be a tuple of two "
+            "non-negative numbers."
         )
-    if not all(isinstance(s, (int, float)) and s >= 0 for s in position_bounds_offset):
+    if not all(
+        isinstance(s, int | float) and s >= 0 for s in position_bounds_offset
+    ):
         raise ValueError(
             "position_bounds_offset must contain two non-negative numbers."
         )
@@ -434,10 +466,11 @@ def input_check_flow_field_adapter(
         "measure units per second",
     ]:
         raise ValueError(
-            "output_units must be either 'pixels' or 'measure units per second'."
+            "output_units must be either 'pixels' or 'measure units "
+            "per second'."
         )
 
-    if not isinstance(dt, (int, float)) or dt <= 0:
+    if not isinstance(dt, int | float) or dt <= 0:
         raise ValueError("dt must be a positive number.")
 
     if (
@@ -445,13 +478,15 @@ def input_check_flow_field_adapter(
         or len(zero_padding) != 2
         or not all(isinstance(s, int) and s >= 0 for s in zero_padding)
     ):
-        raise ValueError("zero_padding must be a tuple of two non-negative integers.")
+        raise ValueError(
+            "zero_padding must be a tuple of two non-negative integers."
+        )
 
 
 def discover_leaf_dirs(
     paths: Sequence[str], *, follow_symlinks: bool = False
 ) -> list[str]:
-    """Return every directory that appears in `paths` and has no sub-directories on disk.
+    """Return every directory in `paths` containing no sub-directories.
 
     Args:
         paths: A sequence of file or directory paths.
@@ -460,14 +495,19 @@ def discover_leaf_dirs(
     Returns:
         A list of directory paths that are leaves (have no subdirectories).
     """
-    dir_paths = {os.path.normpath(os.path.dirname(p)) for p in paths}  # dedupe upfront
+    dir_paths = {
+        os.path.normpath(os.path.dirname(p)) for p in paths
+    }  # dedupe upfront
     leaves: list[str] = []
 
     for d in dir_paths:
         try:
             with os.scandir(d) as it:
                 # Early-exit on the first subdirectory
-                if any(entry.is_dir(follow_symlinks=follow_symlinks) for entry in it):
+                if any(
+                    entry.is_dir(follow_symlinks=follow_symlinks)
+                    for entry in it
+                ):
                     continue
             leaves.append(d)  # No subdirs found
         except (FileNotFoundError, NotADirectoryError, PermissionError):

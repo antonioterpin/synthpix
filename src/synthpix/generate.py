@@ -11,10 +11,10 @@ def gaussian_2d_correlated(
     y: jnp.ndarray,
     x0: float,
     y0: float,
-    sigma_x: float,
-    sigma_y: float,
-    rho: float,
-    amplitude: float,
+    sigma_x: float | jnp.ndarray,
+    sigma_y: float | jnp.ndarray,
+    rho: float | jnp.ndarray,
+    amplitude: float | jnp.ndarray,
 ) -> jnp.ndarray:
     """Generate a 2D Gaussian function.
 
@@ -53,7 +53,7 @@ def add_noise_to_image(
     noise_uniform: float = 0.0,
     noise_gaussian_mean: float = 0.0,
     noise_gaussian_std: float = 0.0,
-):
+) -> jnp.ndarray:
     """Add noise to an image.
 
     Args:
@@ -74,7 +74,9 @@ def add_noise_to_image(
     )
     # Add Gaussian noise
     image += noise_gaussian_mean
-    image += jax.random.normal(gaussian_key, shape=image.shape) * noise_gaussian_std
+    image += (
+        jax.random.normal(gaussian_key, shape=image.shape) * noise_gaussian_std
+    )
 
     # Clip the final image to valid range
     return jnp.clip(image, 0, 255)
@@ -121,12 +123,29 @@ def img_gen_from_data(
     # Precompute a (patch_size x patch_size) Gaussian kernel centered at (0,0)
     y = jnp.arange(-patch_radius, patch_radius + 1)
     x = jnp.arange(-patch_radius, patch_radius + 1)
-    Y, X = jnp.meshgrid(y, x, indexing="ij")
+    y_grid, x_grid = jnp.meshgrid(y, x, indexing="ij")
 
     # Flatten positions
     float_pos = jnp.reshape(particle_positions, (-1, 2))
+    n_particles = float_pos.shape[0]
 
-    def single_particle_scatter(pos, diameter_x, diameter_y, rho, amp):
+    # Initialize default values if None
+    if diameters_x is None:
+        diameters_x = jnp.full((n_particles,), max_diameter)
+    if diameters_y is None:
+        diameters_y = jnp.full((n_particles,), max_diameter)
+    if intensities is None:
+        intensities = jnp.full((n_particles,), 255.0)
+    if rho is None:
+        rho = jnp.zeros((n_particles,))
+
+    def single_particle_scatter(
+        pos: jnp.ndarray,
+        diameter_x: jnp.ndarray | float,
+        diameter_y: jnp.ndarray | float,
+        rho: jnp.ndarray | float,
+        amp: jnp.ndarray | float,
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
         y0, x0 = pos[0], pos[1]
 
         # Clip to image bounds
@@ -148,14 +167,23 @@ def img_gen_from_data(
         xx_patch = jnp.arange(patch_size) + top_left[1]
 
         coords = (
-            jnp.array(jnp.meshgrid(yy_patch, xx_patch, indexing="ij")).reshape(2, -1).T
+            jnp.array(jnp.meshgrid(yy_patch, xx_patch, indexing="ij"))
+            .reshape(2, -1)
+            .T
         )
 
         # Flatten kernel and scatter
         sigma_x = diameter_x / 2.0
         sigma_y = diameter_y / 2.0
         kernel = gaussian_2d_correlated(
-            X - frac_x, Y - frac_y, 0, 0, sigma_x, sigma_y, rho, amp
+            x_grid - frac_x,
+            y_grid - frac_y,
+            0,
+            0,
+            sigma_x,
+            sigma_y,
+            rho,
+            amp,
         )
         updates = kernel.flatten()
         return coords, updates

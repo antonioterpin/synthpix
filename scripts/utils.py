@@ -3,8 +3,8 @@
 TODO: add documentation about how to call download_piv_1.py and download_piv_2.py (in the readme)
 """
 
-from pathlib import Path
 import urllib.request
+from pathlib import Path
 
 
 def download_file(url: str, output_path: Path) -> bool:

@@ -4,6 +4,7 @@ import argparse
 import collections
 import os
 import sys
+from typing import Any
 
 import h5py
 import jax.numpy as jnp
@@ -13,7 +14,7 @@ from tqdm import tqdm
 
 from .sampler import SyntheticImageSampler
 from .scheduler import HDF5FlowFieldScheduler
-from .utils import load_configuration, SYNTHPIX_SCOPE
+from .utils import SYNTHPIX_SCOPE, load_configuration
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -32,18 +33,21 @@ def update_config_file(config_path: str, updated_values: dict) -> None:
     config_data = collections.OrderedDict(config_data)
 
     # Convert all values in config_data to standard Python types
-    def convert_to_standard_type(value):
+    def convert_to_standard_type(value: Any) -> Any:
         if isinstance(value, (np.floating)):
             return float(value)
-        elif isinstance(value, (np.integer, jnp.integer)):
+        elif isinstance(value, np.integer | jnp.integer):
             return int(value)
-        elif isinstance(value, (np.ndarray, jnp.ndarray)):
+        elif isinstance(value, np.ndarray | jnp.ndarray):
             return value.tolist()
         return value
 
     # Convert all values in config_data to standard Python types
     config_data = collections.OrderedDict(
-        {key: convert_to_standard_type(value) for key, value in config_data.items()}
+        {
+            key: convert_to_standard_type(value)
+            for key, value in config_data.items()
+        }
     )
 
     # Add new keys at the end
@@ -59,7 +63,7 @@ def update_config_file(config_path: str, updated_values: dict) -> None:
         if file_list and isinstance(file_list, list):
             file.write("file_list:\n")
             for item in file_list:
-                file.write(f"  - {str(item)}\n")
+                file.write(f"  - {item!s}\n")
 
 
 def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
@@ -75,6 +79,9 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
                 - "max_speed_x"
                 - "min_speed_y"
                 - "max_speed_y"
+
+    Raises:
+        ValueError: If a file contains invalid data or not a valid HDF5 dataset.
     """
     running_max_speed_x = float("-inf")
     running_max_speed_y = float("-inf")
@@ -84,7 +91,7 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
     for file in tqdm(file_list, desc="Processing files"):
         with h5py.File(file, "r") as f:
             # Read the file
-            dataset_name = list(f.keys())[0]
+            dataset_name = next(iter(f.keys()))
             dataset = f[dataset_name]
 
             # Ensure we have a dataset, not a group or datatype
@@ -106,13 +113,23 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
                 x_data = data[..., 0]
                 y_data = data[..., 1]
             else:
-                raise ValueError(f"Unexpected data shape: {data.shape} in file {file}")
+                raise ValueError(
+                    f"Unexpected data shape: {data.shape} in file {file}"
+                )
 
             # Find the min and max speeds along each axis
-            running_max_speed_x = max(running_max_speed_x, float(np.max(x_data)))
-            running_max_speed_y = max(running_max_speed_y, float(np.max(y_data)))
-            running_min_speed_x = min(running_min_speed_x, float(np.min(x_data)))
-            running_min_speed_y = min(running_min_speed_y, float(np.min(y_data)))
+            running_max_speed_x = max(
+                running_max_speed_x, float(np.max(x_data))
+            )
+            running_max_speed_y = max(
+                running_max_speed_y, float(np.max(y_data))
+            )
+            running_min_speed_x = min(
+                running_min_speed_x, float(np.min(x_data))
+            )
+            running_min_speed_y = min(
+                running_min_speed_y, float(np.min(y_data))
+            )
 
     return {
         "min_speed_x": running_min_speed_x,
@@ -122,7 +139,7 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
     }
 
 
-def missing_speeds_panel(config_path: str) -> tuple[float, float, float, float]:
+def missing_speeds_panel(config_path: str) -> tuple[float, float, float, float]:  # noqa: PLR0912
     """Check for missing speeds in the configuration file.
 
     Args:
@@ -130,6 +147,10 @@ def missing_speeds_panel(config_path: str) -> tuple[float, float, float, float]:
 
     Returns:
         speeds: The maximum and minimum speeds in the x and y directions.
+
+    Raises:
+        RuntimeError: If user cancels the speed calculation.
+        ValueError: If configuration is invalid or files don't exist.
     """
     config = load_configuration(config_path)
 
@@ -150,13 +171,13 @@ def missing_speeds_panel(config_path: str) -> tuple[float, float, float, float]:
 
     missing_speeds = []
     for key in ["max_speed_x", "max_speed_y", "min_speed_x", "min_speed_y"]:
-        if key not in config or not isinstance(config[key], (int, float)):
+        if key not in config or not isinstance(config[key], int | float):
             missing_speeds.append(key)
 
     if missing_speeds:
         print(
-            "[WARNING]: The following speed values are missing or invalid in the "
-            f"configuration file: {', '.join(missing_speeds)}"
+            "[WARNING]: The following speed values are missing or invalid in "
+            f"the configuration file: {', '.join(missing_speeds)}"
         )
         choice = input(
             "Would you like to "
@@ -172,7 +193,8 @@ def missing_speeds_panel(config_path: str) -> tuple[float, float, float, float]:
             for key, value in calculated_speeds.items():
                 print(f"{key}: {value}")
             advance = input(
-                "Do you want to continue with the updated configuration? (y/n): "
+                "Do you want to continue with the updated configuration? "
+                "(y/n): "
             )
             if advance.lower() == "y":
                 speeds = (
@@ -195,7 +217,9 @@ def missing_speeds_panel(config_path: str) -> tuple[float, float, float, float]:
             print("[WARNING]: Invalid choice. Exiting.")
             raise RuntimeError("Exiting the script.")
     else:
-        logger.info("All required speed values are present in the configuration file.")
+        logger.info(
+            "All required speed values are present in the configuration file."
+        )
         return (
             config["max_speed_x"],
             config["max_speed_y"],

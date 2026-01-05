@@ -3,6 +3,7 @@
 import argparse
 import zipfile
 from pathlib import Path
+
 import h5py
 import numpy as np
 import tensorflow as tf
@@ -12,7 +13,7 @@ from utils import download_file
 ZENODO_URL = "https://zenodo.org/records/4432496/files/Data_ProblemClass2_RAFT-PIV.zip?download=1"
 
 
-def parse_proto(example_proto: tf.Tensor) -> dict:
+def parse_proto(example_proto: tf.Tensor) -> dict[str, tf.Tensor]:
     """Parse a single TFRecord example.
 
     Args:
@@ -32,16 +33,15 @@ def parse_proto(example_proto: tf.Tensor) -> dict:
     return tf.io.parse_single_example(example_proto, feature_description)
 
 
-def process_tfrecord(tfrecord_path: str, out_dir: str) -> None:
+def process_tfrecord(tfrecord_path: str | Path, out_dir: str | Path) -> None:
     """Process a TFRecord file and convert its contents to .mat files.
 
-    TODO: check arguments types
     Args:
-        tfrecord_path (str): Path to the TFRecord file.
-        out_dir (str): Directory to save the converted .mat files.
+        tfrecord_path (str | Path): Path to the TFRecord file.
+        out_dir (str | Path): Directory to save the converted .mat files.
     """
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir_path = Path(out_dir)
+    out_dir_path.mkdir(parents=True, exist_ok=True)
 
     dataset = tf.data.TFRecordDataset(tfrecord_path)
     print(f"Processing {tfrecord_path} -> {out_dir}")
@@ -51,17 +51,26 @@ def process_tfrecord(tfrecord_path: str, out_dir: str) -> None:
         try:
             example = parse_proto(raw_record)
 
-            target_raw = example["target"]
-            flow_raw = example["flow"]
+            target_raw = example.get("target")
+            flow_raw = example.get("flow")
 
-            if target_raw == b"" or flow_raw == b"":
+            if (
+                target_raw is None
+                or flow_raw is None
+                or target_raw == b""
+                or flow_raw == b""
+            ):
                 if count == 0:
-                    print("Keys 'target' or 'flow' not found. Skipping...")
+                    print(
+                        "Keys 'target' or 'flow' not found or empty. Skipping..."
+                    )
                 continue
 
             # Decode target -> I0, I1
             try:
-                target_flat = np.frombuffer(target_raw.numpy(), dtype=np.float32)
+                target_flat = np.frombuffer(
+                    target_raw.numpy(), dtype=np.float32
+                )
                 if target_flat.size != 256 * 256 * 2:
                     print(f"Target size mismatch: {target_flat.size}")
                     continue
@@ -88,7 +97,7 @@ def process_tfrecord(tfrecord_path: str, out_dir: str) -> None:
             # Ensure shapes for .mat (H,W for images and H,W,2 for flow)
             # convert.py used I0 shape (256, 256)
             fname = f"sample_{count:05d}.mat"
-            out_path = out_dir / fname
+            out_path = out_dir_path / fname
 
             with h5py.File(out_path, "w") as f:
                 f.create_dataset("V", data=flow)
@@ -106,7 +115,7 @@ def process_tfrecord(tfrecord_path: str, out_dir: str) -> None:
     print(f"\nFinished {tfrecord_path}: {count} records.")
 
 
-def main(out_dir: str):
+def main(out_dir: str) -> None:
     """Main function to download, extract, and process the PIV class 2 dataset.
 
     Args:
@@ -121,7 +130,9 @@ def main(out_dir: str):
     # 1. Download
     zip_path = raw_dir / "Data_ProblemClass2_RAFT-PIV.zip"
     if not zip_path.exists():
-        print("Starting download... (This is 12GB, ensure you have stable connection)")
+        print(
+            "Starting download... (This is 12GB, ensure you have stable connection)"
+        )
         if not download_file(ZENODO_URL, zip_path):
             print("Download failed.")
             return
@@ -134,7 +145,9 @@ def main(out_dir: str):
         with zipfile.ZipFile(zip_path, "r") as z:
             z.extractall(raw_dir)
     except zipfile.BadZipFile:
-        print("CRITICAL: Bad zip file. The download might be incomplete or corrupted.")
+        print(
+            "CRITICAL: Bad zip file. The download might be incomplete or corrupted."
+        )
         return
     except Exception as e:
         print(f"Extraction error: {e}")

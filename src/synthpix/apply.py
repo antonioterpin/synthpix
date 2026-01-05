@@ -13,11 +13,12 @@ def apply_flow_to_image_forward(
     flow_field: jnp.ndarray,
     dt: float,
 ) -> jnp.ndarray:
-    """Warp a 2D image of particles according to a given flow field using forward mapping.
+    """Warp a 2D image according to a given flow field using forward mapping.
 
     For each pixel (y, x) in the input image, we compute a velocity (u, v)
     from `flow_field[y, x]`, then deposit the pixel value at the displaced
-    location (y + v * dt, x + u * dt) in the output image using bilinear splatting.
+    location (y + v * dt, x + u * dt) in the output image using bilinear
+    splatting.
 
     Args:
         image: 2D array (H, W) representing the input particle image.
@@ -25,7 +26,7 @@ def apply_flow_to_image_forward(
         dt: Time step for the forward mapping.
 
     Returns:
-        A new 2D array of shape (H, W) with the particles displaced using forward mapping.
+        A new 2D array of shape (H, W) with the particles displaced.
     """
     H, W = image.shape
     y_grid, x_grid = jnp.indices((H, W))
@@ -39,14 +40,19 @@ def apply_flow_to_image_forward(
 
     new_image = jnp.zeros_like(image)
 
-    def deposit_pixel(new_image, x_src, y_src, val):
+    def deposit_pixel(
+        new_image: jnp.ndarray,
+        x_src: jnp.ndarray,
+        y_src: jnp.ndarray,
+        val: jnp.ndarray,
+    ) -> jnp.ndarray:
         x0 = jnp.floor(x_src).astype(int)
         y0 = jnp.floor(y_src).astype(int)
 
         wx = x_src - x0
         wy = y_src - y0
 
-        def in_bounds(x, y):
+        def in_bounds(x: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
             return (x >= 0) & (x < W) & (y >= 0) & (y < H)
 
         for dx, dy, weight in [
@@ -60,13 +66,15 @@ def apply_flow_to_image_forward(
             cond = in_bounds(xi, yi)
             new_image = jax.lax.cond(
                 cond,
-                lambda img: img.at[yi, xi].add(val * weight),
+                lambda img, yi=yi, xi=xi, val=val, weight=weight: img.at[
+                    yi, xi
+                ].add(val * weight),
                 lambda img: img,
                 operand=new_image,
             )
         return new_image
 
-    def body_fn(i, new_image):
+    def body_fn(i: int, new_image: jnp.ndarray) -> jnp.ndarray:
         y, x = divmod(i, W)
         return deposit_pixel(new_image, x_d[y, x], y_d[y, x], image[y, x])
 
@@ -127,10 +135,9 @@ def apply_flow_to_image_callable(
 
     Args:
         image: 2D array (H, W) representing the input particle image.
-        flow_field (Callable[[float, float, float], Tuple[float, float]]):
-            Function that takes (x, y, t) and returns (u, v) velocity.
-                - x, y: coordinates
-                - t: time parameter (or any scalar)
+        flow_field: Function that takes (x, y, t) and returns (u, v) velocity.
+            - x, y: coordinates
+            - t: time parameter (or any scalar)
         t: Time parameter passed to flow_field.
         dt: Time step for the backward mapping.
         forward: If True, use forward mapping; else use backward mapping.
@@ -163,7 +170,7 @@ def input_check_apply_flow(
     flow_field_res_x: float = 1.0,
     flow_field_res_y: float = 1.0,
     flow_field_res_z: float = 1.0,
-):
+) -> None:
     """Check the input arguments for apply_flow_to_particles.
 
     Args:
@@ -179,6 +186,10 @@ def input_check_apply_flow(
             in grid steps per length measure unit
         flow_field_res_z: Resolution of the flow field in the z direction
             in grid steps per length measure unit
+
+    Raises:
+        ValueError: If particle_positions or flow_field have invalid shapes,
+            or if dt or resolution parameters are not positive.
     """
     if (
         not isinstance(particle_positions, jnp.ndarray)
@@ -186,7 +197,8 @@ def input_check_apply_flow(
         or particle_positions.shape[1] not in (2, 3)
     ):
         raise ValueError(
-            "Particle_positions must be a 2D jnp.ndarray with shape (N, 2) or (N, 3)"
+            "Particle_positions must be a 2D jnp.ndarray with shape "
+            "(N, 2) or (N, 3)"
         )
 
     if (
@@ -195,24 +207,35 @@ def input_check_apply_flow(
         or flow_field.shape[2] not in (2, 3)
     ):
         raise ValueError(
-            "Flow_field must be a 3D jnp.ndarray with shape (H, W, 2) or (H, W, 3)"
+            "Flow_field must be a 3D jnp.ndarray with shape (H, W, 2) or "
+            "(H, W, 3)"
         )
 
     if particle_positions.shape[1] == 2 and flow_field.shape[2] != 2:
-        raise ValueError("Particle positions are in 2D, but the flow field is in 3D.")
+        raise ValueError(
+            "Particle positions are in 2D, but the flow field is in 3D."
+        )
 
     if particle_positions.shape[1] == 3 and flow_field.shape[2] != 3:
-        raise ValueError("Particle positions are in 3D, but the flow field is in 2D.")
+        raise ValueError(
+            "Particle positions are in 3D, but the flow field is in 2D."
+        )
 
-    if not isinstance(dt, (int, float)):
+    if not isinstance(dt, int | float) or dt <= 0:
         raise ValueError("dt must be a scalar (int or float)")
 
-    if not isinstance(flow_field_res_x, (int, float)) or flow_field_res_x <= 0:
-        raise ValueError("flow_field_res_x must be a positive scalar (int or float)")
-    if not isinstance(flow_field_res_y, (int, float)) or flow_field_res_y <= 0:
-        raise ValueError("flow_field_res_y must be a positive scalar (int or float)")
-    if not isinstance(flow_field_res_z, (int, float)) or flow_field_res_z <= 0:
-        raise ValueError("flow_field_res_z must be a positive scalar (int or float)")
+    if not isinstance(flow_field_res_x, int | float) or flow_field_res_x <= 0:
+        raise ValueError(
+            "flow_field_res_x must be a positive scalar (int or float)"
+        )
+    if not isinstance(flow_field_res_y, int | float) or flow_field_res_y <= 0:
+        raise ValueError(
+            "flow_field_res_y must be a positive scalar (int or float)"
+        )
+    if not isinstance(flow_field_res_z, int | float) or flow_field_res_z <= 0:
+        raise ValueError(
+            "flow_field_res_z must be a positive scalar (int or float)"
+        )
 
 
 def apply_flow_to_particles(
@@ -259,8 +282,14 @@ def apply_flow_to_particles(
             # Compute the velocity (u, v) for the given particle
             # with bilinear interpolation.
             # Note: velocity u corresponds to the x-direction and v to y.
-            u = bilinear_interpolate(flow_field[..., 0], x, y) * flow_field_res_x
-            v = bilinear_interpolate(flow_field[..., 1], x, y) * flow_field_res_y
+            u = (
+                bilinear_interpolate(flow_field[..., 0], x, y)
+                * flow_field_res_x
+            )
+            v = (
+                bilinear_interpolate(flow_field[..., 1], x, y)
+                * flow_field_res_y
+            )
 
             # Return the new position: (y + v * dt, x + u * dt)
             return jnp.array([y + v * dt, x + u * dt])
@@ -276,10 +305,20 @@ def apply_flow_to_particles(
 
             # Compute the velocity (u, v, w) for the given particle
             # with trilinear interpolation.
-            # Note: velocity u corresponds to the x-direction, v to y, and w to z.
-            u = trilinear_interpolate(flow_field[..., 0], x, y, z) * flow_field_res_x
-            v = trilinear_interpolate(flow_field[..., 1], x, y, z) * flow_field_res_y
-            w = trilinear_interpolate(flow_field[..., 2], x, y, z) * flow_field_res_z
+            # Note: velocity u corresponds to the x-direction, v to y,
+            # and w to z.
+            u = (
+                trilinear_interpolate(flow_field[..., 0], x, y, z)
+                * flow_field_res_x
+            )
+            v = (
+                trilinear_interpolate(flow_field[..., 1], x, y, z)
+                * flow_field_res_y
+            )
+            w = (
+                trilinear_interpolate(flow_field[..., 2], x, y, z)
+                * flow_field_res_z
+            )
 
             # Return the new position: (z + w * dt, y + v * dt, x + u * dt)
             return jnp.array([z + w * dt, y + v * dt, x + u * dt])

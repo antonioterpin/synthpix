@@ -4,12 +4,12 @@ import jax.numpy as jnp
 from goggles import get_logger
 from typing_extensions import Self
 
-from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
-from synthpix.scheduler.prefetch import PrefetchingFlowFieldScheduler
-from synthpix.utils import SYNTHPIX_SCOPE
-from synthpix.types import SynthpixBatch
 from synthpix.sampler.base import Sampler
 from synthpix.scheduler import SchedulerProtocol
+from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
+from synthpix.scheduler.prefetch import PrefetchingFlowFieldScheduler
+from synthpix.types import SynthpixBatch
+from synthpix.utils import SYNTHPIX_SCOPE
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -23,12 +23,16 @@ class RealImageSampler(Sampler):
         Args:
             scheduler: Scheduler instance that provides real images.
             batch_size: Number of images to sample in each batch.
+
+        Raises:
+            ValueError: If base scheduler does not have include_images=True.
         """
         super().__init__(scheduler, batch_size)
 
         while not getattr(scheduler, "include_images", False):
             if isinstance(
-                scheduler, (EpisodicFlowFieldScheduler, PrefetchingFlowFieldScheduler)
+                scheduler,
+                EpisodicFlowFieldScheduler | PrefetchingFlowFieldScheduler,
             ):
                 scheduler = scheduler.scheduler
             else:
@@ -59,7 +63,7 @@ class RealImageSampler(Sampler):
         return batch
 
     @classmethod
-    def from_config(cls, scheduler, config) -> Self:
+    def from_config(cls, scheduler: SchedulerProtocol, config: dict) -> Self:
         """Create a RealImageSampler from configuration.
 
         Args:

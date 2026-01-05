@@ -1,16 +1,20 @@
+"""Tests for image masking during synthetic data generation.
+
+These tests verify that binary masks are correctly loaded and applied to 
+generated images, ensuring that masked regions are strictly zeroed out 
+while unmasked regions retain their rendered content.
+"""
 import re
-from synthpix.types import ImageGenerationSpecification
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from synthpix.data_generate import (
-    generate_images_from_flow,
-    input_check_gen_img_from_flow,
-)
+from synthpix.data_generate import (generate_images_from_flow,
+                                    input_check_gen_img_from_flow)
 from synthpix.sampler import SyntheticImageSampler
+from synthpix.types import ImageGenerationSpecification
 
 # Import existing modules
 from synthpix.utils import load_configuration
@@ -58,7 +62,10 @@ def mock_mask_file(tmp_path, numpy_test_dims):
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_invalid_mask_type(mask, scheduler):
-    """Test that invalid mask raises a ValueError."""
+    """Test that the sampler rejects non-string mask paths during initialization.
+
+    The `mask` parameter in the configuration should be a path to a `.npy` file.
+    """
     with pytest.raises(
         ValueError, match="mask must be a string representing the mask path."
     ):
@@ -84,7 +91,7 @@ def test_invalid_mask_type(mask, scheduler):
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_invalid_mask_path(mask, scheduler):
-    """Test that invalid mask path raises a ValueError."""
+    """Test that the sampler raises a ValueError for missing or invalid mask file paths."""
     with pytest.raises(ValueError, match=f"Mask file {mask} does not exist."):
         config = sampler_config.copy()
         config["mask"] = mask
@@ -98,16 +105,22 @@ def test_invalid_mask_path(mask, scheduler):
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-@pytest.mark.parametrize("mock_invalid_mask_file", [0.0, 1.0, 0.0], indirect=True)
+@pytest.mark.parametrize(
+    "mock_invalid_mask_file", [0.0, 1.0, 0.0], indirect=True
+)
 def test_invalid_mask_shape(scheduler, mock_invalid_mask_file, image_shape):
-    """Test that mask with invalid shape raises a ValueError."""
+    """Test that a mask with dimensions mismatched to the image raises a ValueError.
+
+    Ensures that the mask can be applied bitwise without shape broadcasting issues.
+    """
     # Create a dummy mask with an invalid shape
     mask = jnp.array(np.load(mock_invalid_mask_file[0]))
     if mask.shape != image_shape:
         with pytest.raises(
             ValueError,
             match=re.escape(
-                f"Mask shape {mask.shape} does not match image shape " f"{image_shape}."
+                f"Mask shape {mask.shape} does not match image shape "
+                f"{image_shape}."
             ),
         ):
             config = sampler_config.copy()
@@ -126,11 +139,16 @@ def test_invalid_mask_shape(scheduler, mock_invalid_mask_file, image_shape):
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_invalid_mask_values(scheduler, mock_invalid_mask_file):
-    """Test that mask with invalid values raises a ValueError."""
+    """Test that masks containing values other than 0 or 1 raise a ValueError.
+
+    Masks are expected to be binary indicators for valid/invalid regions.
+    """
     # Create a dummy mask with an invalid shape
     mask = jnp.array(np.load(mock_invalid_mask_file[0]))
 
-    with pytest.raises(ValueError, match="Mask must only contain 0 and 1 values."):
+    with pytest.raises(
+        ValueError, match="Mask must only contain 0 and 1 values."
+    ):
         config = sampler_config.copy()
         config["mask"] = mock_invalid_mask_file[0]
         config["image_shape"] = mask.shape  # Use the shape of the mask
@@ -144,7 +162,10 @@ def test_invalid_mask_values(scheduler, mock_invalid_mask_file):
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
 def test_mask_is_correct(scheduler, mock_mask_file):
-    """Test that correct mask gets loaded."""
+    """Test that a valid mask is correctly loaded and stored in the sampler.
+
+    Verifies the integrity of the mask data after being read from disk.
+    """
     # Create a dummy mask with a valid shape
     mask = jnp.array(np.load(mock_mask_file[0]))
 
@@ -156,11 +177,11 @@ def test_mask_is_correct(scheduler, mock_mask_file):
         config=config,
     )
 
-    assert isinstance(sampler.mask_images, jnp.ndarray)
-    assert sampler.mask_images.shape == mask.shape
-    assert jnp.array_equal(
-        sampler.mask_images, mask
-    ), "Mask loaded from file does not match the expected mask."
+    assert isinstance(sampler.mask_images, jnp.ndarray), f"Expected mask_images to be jnp.ndarray, got {type(sampler.mask_images)}"
+    assert sampler.mask_images.shape == mask.shape, f"Mask shape mismatch. Expected {mask.shape}, got {sampler.mask_images.shape}"
+    assert jnp.array_equal(sampler.mask_images, mask), (
+        "Mask loaded from file does not match the expected mask."
+    )
 
 
 def test_input_check_gen_img_from_flow_logs_mask(monkeypatch):
@@ -173,7 +194,9 @@ def test_input_check_gen_img_from_flow_logs_mask(monkeypatch):
 
     # Collect debug messages
     logged = []
-    monkeypatch.setattr(generate_mod.logger, "debug", lambda msg: logged.append(msg))
+    monkeypatch.setattr(
+        generate_mod.logger, "debug", lambda msg: logged.append(msg)
+    )
 
     # Call the function to test
     generate_mod.input_check_gen_img_from_flow(
@@ -185,15 +208,18 @@ def test_input_check_gen_img_from_flow_logs_mask(monkeypatch):
     )
 
     # Check if the mask shape was logged
-    expected_msg = f"Masking out {16 - jnp.sum(mask)} pixels " "in the images."
-    assert any(
-        expected_msg in m for m in logged
-    ), f"Expected :{expected_msg}, got: {logged}"
+    expected_msg = f"Masking out {16 - jnp.sum(mask)} pixels in the images."
+    assert any(expected_msg in m for m in logged), (
+        f"Expected :{expected_msg}, got: {logged}"
+    )
 
 
 @pytest.mark.parametrize("mask", ["a", [1, 2]])
 def test_invalid_mask_type_in_generate(mask):
-    """Test that invalid mask type raise a ValueError."""
+    """Test that direct calls to generation functions reject non-array masks.
+
+    Ensures type safety in the low-level rendering API.
+    """
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(ValueError, match="mask must be a jnp.ndarray or None."):
@@ -215,7 +241,7 @@ def test_invalid_mask_type_in_generate(mask):
     ],  # Invalid shapes
 )
 def test_invalid_mask_shape_in_generate(mask):
-    """Test that invalid mask shape raise a ValueError."""
+    """Test that generation functions enforce mask-image shape matching."""
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
@@ -243,6 +269,11 @@ def test_invalid_mask_shape_in_generate(mask):
     ],
 )
 def test_mask_applies_zeros(mask):
+    """Verify that the mask correctly zeros out specific regions in the output images.
+
+    Tests multiple mask geometries (identity, horizontal, eye, full) and 
+    confirms that pixels are zeroed exactly where indicated.
+    """
     key = jax.random.PRNGKey(1)
     flow_field = jnp.zeros((1, 32, 32, 2))  # no motion
     image_shape = (32, 32)
@@ -265,8 +296,12 @@ def test_mask_applies_zeros(mask):
     # Masked regions (where mask == 0) should be exactly zero
     masked1 = images1[mask == 0]
     masked2 = images2[mask == 0]
-    assert jnp.all(masked1 == 0), f"Masked region in images1 is not zero: {masked1}"
-    assert jnp.all(masked2 == 0), f"Masked region in images2 is not zero: {masked2}"
+    assert jnp.all(masked1 == 0), (
+        f"Masked region in images1 is not zero: {masked1}"
+    )
+    assert jnp.all(masked2 == 0), (
+        f"Masked region in images2 is not zero: {masked2}"
+    )
 
     # Unmasked regions (where mask == 1) should be nonzero
     # for at least some pixels (unless all masked)

@@ -3,16 +3,16 @@
 import glob
 import os
 from abc import ABC, abstractmethod
-import numpy as np
-from typing_extensions import Self
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from goggles import get_logger
+from typing_extensions import Self
 
-from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.scheduler.protocol import FileEndedError, SchedulerProtocol
 from synthpix.types import PRNGKey, SchedulerData
-from synthpix.scheduler.protocol import SchedulerProtocol, FileEndedError
+from synthpix.utils import SYNTHPIX_SCOPE
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
@@ -47,7 +47,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         """
         self._file_list = value
 
-    def __init__(
+    def __init__(  # noqa: PLR0912
         self,
         file_list: list[str],
         randomize: bool = False,
@@ -61,6 +61,10 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             randomize: If True, shuffle the order of files.
             loop: If True, loop over the dataset indefinitely.
             key: Random key for reproducibility.
+
+        Raises:
+            ValueError: If file_list is not a list of file paths or if no
+                valid files are found.
         """
         # Check if file_list is a list of files or directories
         self._file_list = []
@@ -110,8 +114,12 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             self.key, shuffle_key = jax.random.split(self.key)
             cpu = jax.devices("cpu")[0]
             file_list_indices = jnp.arange(len(self.file_list), device=cpu)
-            file_list_indices = jax.random.permutation(shuffle_key, file_list_indices)
-            self.file_list = [self.file_list[i] for i in file_list_indices.tolist()]
+            file_list_indices = jax.random.permutation(
+                shuffle_key, file_list_indices
+            )
+            self.file_list = [
+                self.file_list[i] for i in file_list_indices.tolist()
+            ]
 
         self._cached_data: SchedulerData | None = None
         self._cached_file: str | None = None
@@ -148,8 +156,12 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             self.key, shuffle_key = jax.random.split(self.key)
             cpu = jax.devices("cpu")[0]
             file_list_indices = jnp.arange(len(self.file_list), device=cpu)
-            file_list_indices = jax.random.permutation(shuffle_key, file_list_indices)
-            self.file_list = [self.file_list[i] for i in file_list_indices.tolist()]
+            file_list_indices = jax.random.permutation(
+                shuffle_key, file_list_indices
+            )
+            self.file_list = [
+                self.file_list[i] for i in file_list_indices.tolist()
+            ]
 
     def _get_next(self) -> SchedulerData:
         """Returns the next flow field slice from the dataset.
@@ -187,13 +199,13 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
                 sample = self.get_next_slice()
                 self._slice_idx += 1
                 return sample
-            except FileEndedError as e:
+            except FileEndedError:
                 self.index += 1
                 continue  # Skip to the next file
 
         raise StopIteration
 
-    def get_batch(self, batch_size: int) -> SchedulerData:
+    def get_batch(self, batch_size: int) -> SchedulerData:  # noqa: PLR0912
         """Retrieves a batch of flow fields using the current scheduler state.
 
         This method repeatedly calls `__next__()` to store a batch
@@ -208,6 +220,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         Raises:
             StopIteration: If the dataset is exhausted before reaching the
                 desired batch size and `loop` is set to False.
+            ValueError: If batch_size is invalid or batch assembly fails.
         """
         batch: list[SchedulerData] = []
         mask = np.ones((batch_size,), dtype=bool)
@@ -229,15 +242,20 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
 
         images1, images2 = None, None
         if all(data.images1 is not None for data in batch):
-            images1 = np.stack([data.images1 for data in batch])  # type: ignore
+            images1 = np.stack(
+                [d.images1 for d in batch if d.images1 is not None]
+            )
         if all(data.images2 is not None for data in batch):
-            images2 = np.stack([data.images2 for data in batch])  # type: ignore
+            images2 = np.stack(
+                [d.images2 for d in batch if d.images2 is not None]
+            )
 
         flow_fields = np.stack([data.flow_fields for data in batch])
 
         if batch and any(data.files is not None for data in batch):
             if not all(
-                data.files is not None and len(data.files) <= 1 for data in batch
+                data.files is not None and len(data.files) <= 1
+                for data in batch
             ):
                 raise ValueError("Inconsistent files information in batch.")
 

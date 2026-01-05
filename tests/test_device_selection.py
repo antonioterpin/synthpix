@@ -1,14 +1,21 @@
+"""Tests for GPU device selection and mesh configuration in `SyntheticImageSampler`.
+
+These tests verify that the sampler correctly identifies available NVIDIA GPUs 
+and allows users to specify exactly which devices should be used for 
+JAX-accelerated image generation via the `device_ids` parameter.
+"""
+
 import jax
 import pytest
 
 from synthpix.sampler import SyntheticImageSampler
-from synthpix.types import ImageGenerationSpecification
 from synthpix.scheduler import BaseFlowFieldScheduler
+from synthpix.types import ImageGenerationSpecification
 
 
 class _DummyScheduler(BaseFlowFieldScheduler):
     def __init__(self, h=64, w=64):
-        # Don't call super().__init__() to avoid file list handling
+        super().__init__(file_list=["mock_file"])
         self._shape = (h, w, 2)
 
     def get_flow_fields_shape(self):
@@ -38,6 +45,11 @@ class _DummyScheduler(BaseFlowFieldScheduler):
 
 
 def _make_sampler(device_ids):
+    """Helper to create a `SyntheticImageSampler` with specific device IDs.
+
+    Uses a dummy scheduler and minimal configuration to isolate the device 
+    selection logic.
+    """
     return SyntheticImageSampler(
         scheduler=_DummyScheduler(),
         batches_per_flow_batch=1,
@@ -81,15 +93,20 @@ def _make_sampler(device_ids):
     reason="User not connected to the server.",
 )
 def test_sampler_uses_all_devices_when_none_passed():
-    """If `device_ids=None`, the sampler should use every available device."""
+    """Test that the sampler defaults to using all available JAX devices.
+
+    If `device_ids=None` is passed to the constructor, the internal 
+    sharding mesh should encompass all physical GPUs detected by JAX.
+    """
     sampler = _make_sampler(device_ids=None)
 
     # jax.devices() returns a list; sampler.mesh.devices is a tuple
-    # Compare device IDs rather than device objects to avoid JAX array comparison issues
+    # Compare device IDs rather than device objects to avoid JAX array
+    # comparison issues
     expected_device_ids = [d.id for d in jax.devices()]
     actual_device_ids = [d.id for d in sampler.mesh.devices]
-    assert expected_device_ids == actual_device_ids
-    assert len(sampler.mesh.devices) >= 1
+    assert expected_device_ids == actual_device_ids, f"Default device IDs mismatch. Expected {expected_device_ids}, got {actual_device_ids}"
+    assert len(sampler.mesh.devices) >= 1, "Sampler mesh should contain at least one device"
 
 
 @pytest.mark.skipif(
@@ -98,7 +115,11 @@ def test_sampler_uses_all_devices_when_none_passed():
 )
 @pytest.mark.parametrize("ids", [[0], [0, 1]])
 def test_sampler_uses_requested_subset(ids):
-    """Sampler should pick exactly the devices specified by `device_ids`."""
+    """Test that the sampler respects a specific subset of device IDs.
+
+    Verifies that only the requested indices are included in the 
+    sampler's sharding mesh, ignoring other available devices.
+    """
     if max(ids) >= len(jax.devices()):
         pytest.skip("Not enough physical devices for this parametrisation.")
 
@@ -113,7 +134,11 @@ def test_sampler_uses_requested_subset(ids):
     reason="User not connected to the server.",
 )
 def test_sampler_rejects_invalid_device_ids():
-    """Passing only out-of-range IDs must raise a ValueError."""
+    """Test that specifying only non-existent device IDs raises a ValueError.
+
+    Ensures that the sampler fails early if it cannot map any of the 
+    provided `device_ids` to actual physical hardware.
+    """
     invalid_id = len(jax.devices())  # one past the last valid index
     with pytest.raises(ValueError, match="No valid device IDs provided."):
         _make_sampler(device_ids=[invalid_id])

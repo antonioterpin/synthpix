@@ -50,21 +50,21 @@ This script is intended to reproduce the dataset organization
 used in many modern deep-learning-based PIV benchmarking pipelines.
 """
 
-import os
+import argparse
 import glob
-import numpy as np
-import h5py
-from PIL import Image
+import os
+import random
+import re
+import shutil
 import struct
 import zipfile
-import argparse
 from pathlib import Path
-import shutil
-import re
-import gdown
-import random
-from utils import download_file, read_list, write_list
 
+import gdown
+import h5py
+import numpy as np
+from PIL import Image
+from utils import download_file, read_list, write_list
 
 # --- Google Drive folders provided by the dataset authors ---
 GDRIVE_FOLDERS = [
@@ -78,7 +78,9 @@ GDRIVE_FOLDERS = [
 BASE_URL = "https://raw.githubusercontent.com/shengzesnail/PIV_dataset/master"
 
 
-def fetch_splits(out_path: Path, split_seed: int, split_ratios: list[int]) -> None:
+def fetch_splits(
+    out_path: Path, split_seed: int, split_ratios: list[int]
+) -> None:
     """Fetch official train/test split files and generate val/tune splits.
 
     Args:
@@ -116,12 +118,14 @@ def fetch_splits(out_path: Path, split_seed: int, split_ratios: list[int]) -> No
         n_train = total - n_val - n_tune
 
         new_train = full_train[:n_train]
-        val_split = full_train[n_train : n_train + n_val]
-        tune_split = full_train[n_train + n_val :]
+        val_split = full_train[n_train: n_train + n_val]
+        tune_split = full_train[n_train + n_val:]
 
         print(
-            f"Splitting into:\n  Train: {len(new_train)}\n  Val:   {len(val_split)}\n  Tune:  {len(tune_split)}"
-        )
+            f"Splitting into:\n  Train: {
+                len(new_train)}\n  Val:   {
+                len(val_split)}\n  Tune:  {
+                len(tune_split)}")
 
         # Write out the new splits
         write_list(train_dest, new_train)
@@ -202,10 +206,14 @@ def resize_flow(flow: np.ndarray, shape: tuple) -> np.ndarray:
     # Resize each channel separately using PIL (bilinear interpolation)
     # PIL resize expects (width, height), so we reverse the shape
     flow_u = np.asarray(
-        Image.fromarray(flow[..., 0]).resize(shape[::-1], Image.Resampling.BILINEAR)
+        Image.fromarray(flow[..., 0]).resize(
+            shape[::-1], Image.Resampling.BILINEAR
+        )
     )
     flow_v = np.asarray(
-        Image.fromarray(flow[..., 1]).resize(shape[::-1], Image.Resampling.BILINEAR)
+        Image.fromarray(flow[..., 1]).resize(
+            shape[::-1], Image.Resampling.BILINEAR
+        )
     )
     # Scale flow to new size
     flow_resized = np.stack(
@@ -215,7 +223,11 @@ def resize_flow(flow: np.ndarray, shape: tuple) -> np.ndarray:
 
 
 def pack_triplet(
-    flow_path: str, img1_path: str, img2_path: str, out_path: str, target_shape: tuple
+    flow_path: str,
+    img1_path: str,
+    img2_path: str,
+    out_path: str,
+    target_shape: tuple,
 ) -> None:
     """Pack a flow and its two corresponding images into a .mat file.
 
@@ -265,7 +277,9 @@ def convert(dataset_dir: str, out_dir: str, target_shape: tuple) -> None:
         out_name = os.path.basename(prefix) + ".mat"
         out_path = os.path.join(out_subdir, out_name)
         try:
-            pack_triplet(flow_path, img1_path, img2_path, out_path, target_shape)
+            pack_triplet(
+                flow_path, img1_path, img2_path, out_path, target_shape
+            )
         except Exception as e:
             print(f"Failed for {prefix}: {e}")
 
@@ -281,7 +295,9 @@ def download_from_gdrive(raw_dir_path: Path) -> None:
     """
     raw_dir_path.mkdir(parents=True, exist_ok=True)
 
-    print("Press Ctrl+C to interrupt download safely and proceed to processing.")
+    print(
+        "Press Ctrl+C to interrupt download safely and proceed to processing."
+    )
 
     try:
         for idx, url in enumerate(GDRIVE_FOLDERS, start=1):
@@ -314,7 +330,8 @@ def download_from_gdrive(raw_dir_path: Path) -> None:
         try:
             with zipfile.ZipFile(zip_path, "r") as z:
                 # Extract into the main raw directory to avoid gdrive_folder_X nesting
-                # This flattens the structure so 'backstep' ends up in raw_dir_path/backstep
+                # This flattens the structure so 'backstep' ends up in
+                # raw_dir_path/backstep
                 z.extractall(raw_dir_path)
         except zipfile.BadZipFile:
             print(f"  WARNING: {zip_path} is not a valid zip, skipping.")
@@ -433,9 +450,8 @@ def main(out_dir: str, target_shape: str) -> None:
     try:
         target_shape_tuple = tuple(map(int, target_shape.split("x")))
     except Exception as e:
-        print(
-            f"Target shape is in the wrong format: {target_shape}. Use HxW, e.g., '256x256'. Error: {e}"
-        )
+        print(f"Target shape is in the wrong format: {
+            target_shape}. Use HxW, e.g., '256x256'. Error: {e}")
         return
 
     raw_dir_path = out_dir_path / "raw_class1"
@@ -498,7 +514,6 @@ if __name__ == "__main__":
         fetch_splits(out_path_split, args.split_seed, split_ratios)
         main(args.out_dir, args.target_shape)
     except Exception as e:
-        print(
-            f"Split ratio is in the wrong format: {args.split_ratio}. Use '80/10/10' format summing to 100. Error: {e}"
-        )
+        print(f"Split ratio is in the wrong format: {
+            args.split_ratio}. Use '80/10/10' format summing to 100. Error: {e}")
         exit(1)

@@ -1,6 +1,7 @@
 """Protocol that needs to be followed by schedulers."""
 
 from typing import Protocol, runtime_checkable
+
 from synthpix.types import SchedulerData
 
 
@@ -9,8 +10,7 @@ class SchedulerProtocol(Protocol):
     """Protocol that needs to be followed by schedulers."""
 
     def shutdown(self) -> None:
-        """Shuts down any background processes or threads used for prefetching."""
-        pass
+        """Shuts down background processes used for prefetching."""
 
     def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Returns the shape of the flow field.
@@ -93,13 +93,9 @@ class PrefetchedSchedulerProtocol(EpisodicSchedulerProtocol, Protocol):
     """Protocol that needs to be followed by prefetched schedulers."""
 
 
-class EpisodeEnd(Exception):
+class EpisodeEndError(Exception):
     """Exception raised when an episode ends in a prefetched scheduler."""
-
-    pass
 
 
 class FileEndedError(Exception):
     """Exception raised when the end of a file's data is reached."""
-
-    pass
