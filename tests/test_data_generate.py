@@ -102,29 +102,30 @@ def test_invalid_position_bounds(position_bounds):
         )
 
 
-@pytest.mark.parametrize("seeding_density_range, expected_message",
-                         [((-1.0,
-                            1.0),
-                           "seeding_density_range must be a tuple of two non-negative numbers.",
-                           ),
-                          ((0.0,
-                            -1.0),
-                           "seeding_density_range must be a tuple of two non-negative numbers.",
-                           ),
-                             ((-0.5,
-                               -0.5),
-                              "seeding_density_range must be a tuple of two non-negative numbers.",
-                              ),
-                             ((1.0,
-                               0.5),
-                              "seeding_density_range must be in the form \\(min, max\\).",
-                              ),
-                             ((0.5,
-                               0.1),
-                              "seeding_density_range must be in the form \\(min, max\\).",
-                              ),
-                          ],
-                         )
+@pytest.mark.parametrize(
+    "seeding_density_range, expected_message",
+    [((-1.0,
+       1.0),
+      "seeding_density_range must be a tuple of two non-negative numbers.",
+      ),
+     ((0.0,
+       -1.0),
+      "seeding_density_range must be a tuple of two non-negative numbers.",
+      ),
+     ((-0.5,
+       -0.5),
+      "seeding_density_range must be a tuple of two non-negative numbers.",
+      ),
+     ((1.0,
+       0.5),
+      "seeding_density_range must be in the form \\(min, max\\).",
+      ),
+     ((0.5,
+       0.1),
+      "seeding_density_range must be in the form \\(min, max\\).",
+      ),
+     ],
+)
 def test_invalid_seeding_density_range(seeding_density_range, expected_message):
     """Test various invalid seeding_density_range configurations.
 
