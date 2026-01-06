@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
+import grain.python as grain
 import jax.numpy as jnp
 from goggles import get_logger
 from typing_extensions import Self
@@ -157,3 +158,53 @@ class Sampler(ABC):
         Returns:
             A Sampler instance.
         """
+
+    @property
+    def state(self) -> dict[str, Any]:
+        """Returns the state of the sampler for checkpointing.
+
+        Returns:
+            A dictionary containing the state of the sampler and scheduler.
+        """
+        return {"scheduler_state": self.scheduler.state}
+
+    @property
+    def restore_state(self) -> dict[str, Any]:
+        """Returns the state schema of the sampler for restoration.
+
+        Returns:
+            A dictionary containing the state of the sampler and scheduler
+            to be used as a schema for restoration.
+        """
+        return self.state
+
+    @state.setter
+    def state(self, value: dict[str, Any]) -> None:
+        """Sets the state of the sampler from a checkpoint.
+
+        Args:
+            value: A dictionary containing the state of the sampler and scheduler.
+
+        Raises:
+            TypeError: If state is not a dictionary.
+            KeyError: If scheduler_state is missing.
+        """
+        if not isinstance(value, dict):
+            raise TypeError(f"Expected state dict, got {type(value)}")
+
+        if "scheduler_state" not in value:
+            raise KeyError(
+                "State dictionary is missing 'scheduler_state'. "
+                "This checkpoint might be corrupted or from an older version."
+            )
+
+        self.scheduler.state = value["scheduler_state"]
+
+    @property
+    def grain_iterator(self) -> grain.PyGrainDatasetIterator | None:
+        """Returns the underlying grain iterator for the sampler.
+
+        Returns:
+            The underlying grain iterator for the sampler.
+        """
+        return self.scheduler.grain_iterator

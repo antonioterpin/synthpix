@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import Sequence
+from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
@@ -481,6 +482,11 @@ class SyntheticImageSampler(Sampler):
         self._current_flows: np.ndarray | Array | None = None
         self.output_flow_fields: Array | None = None
         self._batches_generated: int = 0
+        self._step: int = 0
+        self._jax_seeds: np.ndarray | None = None
+        self._scheduler_epoch: int | None = None
+        self._mask_scheduler: np.ndarray | None = None
+        self._files_scheduler: tuple[str, ...] | None = None
 
     def _get_next(self) -> SynthpixBatch:
         """Generates the next batch of synthetic images.
@@ -510,6 +516,8 @@ class SyntheticImageSampler(Sampler):
             # While instead self.mask_images refers to the static mask
             # provided at initialization
             self._files_scheduler = scheduler_batch.files
+            self._jax_seeds = scheduler_batch.jax_seed
+            self._scheduler_epoch = scheduler_batch.epoch
 
             # Shard the flow fields across devices
             current_flows_array = jnp.array(
@@ -524,9 +532,28 @@ class SyntheticImageSampler(Sampler):
             if isinstance(self._current_flows, Array):
                 self._current_flows.block_until_ready()
 
-        # Generate a new random key for image generation
-        self._rng, subkey = jax.random.split(self._rng)
-        keys = jax.random.split(subkey, self.ndevices)
+        # Generate keys
+        if self._jax_seeds is not None:
+            # Grain Path: Use fold_in(record_seed, rep_idx)
+            # record_seed is (B,), rep_idx is int
+
+            def derive_key(seed_val, rep_idx):
+                key = jax.random.PRNGKey(seed_val)
+                return jax.random.fold_in(key, rep_idx)
+
+            # Vectorize over the seeds in the batch
+            derive_keys_vmap = jax.vmap(derive_key, in_axes=(0, None))
+            batch_keys = derive_keys_vmap(
+                self._jax_seeds, self._batches_generated)
+            # batch_keys is (B, 2)
+
+            # Now we need to shard/split these keys for the devices
+            # img_gen_fn_jit expects (ndevices, 2) keys
+            keys = batch_keys.reshape(self.ndevices, -1, 2)[:, 0]
+        else:
+            # Legacy Path: Use internal _rng
+            self._rng, subkey = jax.random.split(self._rng)
+            keys = jax.random.split(subkey, self.ndevices)
 
         # Generate a new batch of images using the current flow fields
         imgs1, imgs2, params = self.img_gen_fn_jit(keys, self._current_flows)
@@ -534,6 +561,7 @@ class SyntheticImageSampler(Sampler):
             raise RuntimeError("output_flow_fields is None.")
 
         self._batches_generated += 1
+        self._step += 1
 
         return SynthpixBatch(
             images1=imgs1,
@@ -547,7 +575,93 @@ class SyntheticImageSampler(Sampler):
                 else None
             ),
             files=self._files_scheduler,
+            epoch=self._scheduler_epoch,
+            jax_seed=(
+                jnp.array(self._jax_seeds)
+                if self._jax_seeds is not None
+                else None
+            ),
         )
+
+    @property
+    def state(self) -> dict[str, Any]:
+        """Returns the state of the sampler for checkpointing.
+
+        Returns:
+            A dictionary containing the sampler state.
+        """
+        state_dict = super().state
+        state_dict.update({
+            "step": self._step,
+            "rng": self._rng,
+            "batches_generated": self._batches_generated,
+            "current_flows": self._current_flows,
+            "mask_scheduler": self._mask_scheduler,
+            "scheduler_epoch": self._scheduler_epoch,
+            "jax_seeds": self._jax_seeds,
+        })
+        return state_dict
+
+    @property
+    def restore_state(self) -> dict[str, Any]:
+        """Returns the state schema of the sampler for restoration.
+
+        Returns:
+            A dictionary containing the sampler state schema.
+        """
+        state_dict = self.state
+        if state_dict["current_flows"] is None:
+            # Calculate expected shape based on utils.flow_field_adapter logic
+            h_bounds_raw = self.position_bounds[0] / \
+                self.resolution * self.flow_field_res_y
+            w_bounds_raw = self.position_bounds[1] / \
+                self.resolution * self.flow_field_res_x
+
+            h_bounds = max(1, int(h_bounds_raw))
+            w_bounds = max(1, int(w_bounds_raw))
+
+            shape = (self.batch_size, h_bounds, w_bounds, 2)
+
+            state_dict["current_flows"] = jax.ShapeDtypeStruct(
+                shape, jnp.float32)
+
+        return state_dict
+
+    @state.setter
+    def state(self, value: dict[str, Any]) -> None:
+        """Sets the state of the sampler from a checkpoint.
+
+        Args:
+            value: A dictionary containing the sampler state.
+
+        Raises:
+            KeyError: If required keys are missing from the state dict.
+        """
+        # Call base class for common validation and scheduler restoration
+        Sampler.state.fset(self, value)  # type: ignore
+
+        required_keys = {
+            "step",
+            "rng",
+            "batches_generated",
+            "current_flows",
+            "mask_scheduler",
+            "scheduler_epoch",
+            "jax_seeds",
+        }
+        missing = required_keys - set(value.keys())
+        if missing:
+            raise KeyError(f"Missing required keys in sampler state: {missing}")
+
+        self._step = value["step"]
+        self._rng = value["rng"]
+        self._batches_generated = value["batches_generated"]
+        self._current_flows = value["current_flows"]
+        self._mask_scheduler = value["mask_scheduler"]
+        self._scheduler_epoch = value["scheduler_epoch"]
+        self._jax_seeds = value["jax_seeds"]
+        self.output_flow_fields = cast(
+            jnp.ndarray, self._current_flows) if self._current_flows is not None else None
 
     @classmethod
     def from_config(cls, scheduler: SchedulerProtocol, config: dict) -> Self:

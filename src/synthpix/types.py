@@ -74,6 +74,8 @@ class SynthpixBatch:
     done: jnp.ndarray | None = None
     mask: jnp.ndarray | None = None
     files: tuple[str, ...] | None = None
+    epoch: int | None = None
+    jax_seed: jnp.ndarray | None = None
 
     def update(self, **kwargs: Any) -> Self:
         """Return a new SynthpixBatch with updated fields.
@@ -92,13 +94,15 @@ class SynthpixBatch:
             done=kwargs.get("done", self.done),
             mask=kwargs.get("mask", self.mask),
             files=kwargs.get("files", self.files),
+            epoch=kwargs.get("epoch", self.epoch),
+            jax_seed=kwargs.get("jax_seed", self.jax_seed),
         )
 
     def tree_flatten(
         self,
     ) -> tuple[
         tuple[
-            jnp.ndarray | ImageGenerationParameters | tuple[str, ...] | None,
+            jnp.ndarray | ImageGenerationParameters | tuple[str, ...] | int | None,
             ...,
         ],
         None,
@@ -116,6 +120,8 @@ class SynthpixBatch:
             self.done,
             self.mask,
             self.files,
+            self.epoch,
+            self.jax_seed,
         )
         aux_data = None
         return (children, aux_data)
@@ -144,6 +150,8 @@ class SchedulerData:
     images2: np.ndarray | None = None
     mask: np.ndarray | None = None
     files: tuple[str, ...] | None = None
+    epoch: int | None = None
+    jax_seed: np.ndarray | None = None
 
     def update(self, **kwargs: Any) -> Self:
         """Return a new SchedulerData with updated fields.
@@ -160,6 +168,8 @@ class SchedulerData:
             images2=kwargs.get("images2", self.images2),
             mask=kwargs.get("mask", self.mask),
             files=kwargs.get("files", self.files),
+            epoch=kwargs.get("epoch", self.epoch),
+            jax_seed=kwargs.get("jax_seed", self.jax_seed),
         )
 
 

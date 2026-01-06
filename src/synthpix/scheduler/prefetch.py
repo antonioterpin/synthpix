@@ -4,6 +4,7 @@ import queue
 import threading
 import time
 from contextlib import suppress
+from typing import Any
 
 from goggles import get_logger
 
@@ -352,3 +353,38 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             new_file_list: The new list of files to set.
         """
         self.scheduler.file_list = new_file_list
+
+    @property
+    def state(self) -> dict[str, Any]:
+        """Returns the state of the prefetching scheduler.
+
+        Returns:
+            Dictionary containing the state.
+        """
+        return {
+            "t": self._t,
+            "startup": self.startup,
+            "scheduler_state": self.scheduler.state,
+        }
+
+    @state.setter
+    def state(self, value: dict[str, Any]) -> None:
+        """Sets the state of the prefetching scheduler.
+
+        Args:
+            value: Dictionary containing the state.
+        """
+        self._t = value["t"]
+        self.startup = value["startup"]
+        self.scheduler.state = value["scheduler_state"]
+        # Note: Thread is not automatically restarted here.
+        # User should call reset() or get_batch() to start.
+
+    @property
+    def grain_iterator(self) -> Any | None:
+        """Returns the underlying Grain iterator if available.
+
+        Returns:
+            The Grain iterator or None if not supported.
+        """
+        return self.scheduler.grain_iterator

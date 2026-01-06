@@ -1,6 +1,6 @@
 """Protocol that needs to be followed by schedulers."""
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from synthpix.types import SchedulerData
 
@@ -54,6 +54,33 @@ class SchedulerProtocol(Protocol):
 
         Args:
             value: List of file paths to set.
+        """
+        ...
+
+    @property
+    def state(self) -> dict[str, Any]:
+        """Returns the state of the scheduler.
+
+        Returns:
+            Dictionary containing the scheduler state.
+        """
+        ...
+
+    @state.setter
+    def state(self, value: dict[str, Any]) -> None:
+        """Sets the state of the scheduler.
+
+        Args:
+            value: Dictionary containing the scheduler state.
+        """
+        ...
+
+    @property
+    def grain_iterator(self) -> Any | None:
+        """Returns the underlying Grain iterator if available.
+
+        Returns:
+            The Grain iterator or None if not supported.
         """
         ...
 

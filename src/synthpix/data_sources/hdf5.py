@@ -15,6 +15,14 @@ class HDF5DataSource(FileDataSource):
 
     _file_pattern = "**/*.h5"
 
+    def __repr__(self) -> str:
+        """Returns a stable string representation for Grain checkpointing.
+
+        Returns:
+            A string representation of the HDF5DataSource.
+        """
+        return f"HDF5DataSource(file_list={self._file_list})"
+
     def load_file(self, file_path: str) -> dict[str, Any]:
         """Loads the dataset from the HDF5 file.
 
