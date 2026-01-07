@@ -1,6 +1,5 @@
 """Class for generating synthetic images from flow fields."""
 
-import json
 import os
 from collections.abc import Sequence
 from typing import Any, cast
@@ -18,7 +17,8 @@ from synthpix.data_generate import (generate_images_from_flow,
 from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
 from synthpix.scheduler.protocol import SchedulerProtocol
 from synthpix.types import ImageGenerationSpecification, PRNGKey, SynthpixBatch
-from synthpix.utils import (DEBUG_JIT, SYNTHPIX_SCOPE, flow_field_adapter,
+from synthpix.utils import (DEBUG_JIT, SYNTHPIX_SCOPE, decode_from_uint8,
+                            encode_to_uint8, flow_field_adapter,
                             input_check_flow_field_adapter)
 
 from .base import Sampler
@@ -593,12 +593,7 @@ class SyntheticImageSampler(Sampler):
         """
         state_dict = super().state
 
-        # Encode files_scheduler as uint8 array (valid for Orbax/TensorStore)
-        files_encoded = None
-        if self._files_scheduler is not None:
-            json_str = json.dumps(self._files_scheduler)
-            files_encoded = np.frombuffer(
-                json_str.encode('utf-8'), dtype=np.uint8)
+        state_dict["files_scheduler"] = encode_to_uint8(self._files_scheduler)
 
         state_dict.update({
             "step": self._step,
@@ -608,7 +603,6 @@ class SyntheticImageSampler(Sampler):
             "mask_scheduler": self._mask_scheduler,
             "scheduler_epoch": self._scheduler_epoch,
             "jax_seeds": self._jax_seeds,
-            "files_scheduler": files_encoded,
         })
         return state_dict
 
@@ -674,20 +668,12 @@ class SyntheticImageSampler(Sampler):
 
         # Decode files_scheduler
         val = value["files_scheduler"]
-        if val is not None:
-            if isinstance(val, (np.ndarray, jnp.ndarray)):
-                try:
-                    # Convert to bytes and decode
-                    json_str = bytes(np.array(val)).decode('utf-8')
-                    self._files_scheduler = tuple(json.loads(json_str))
-                except Exception as e:
-                    logger.warning(f"Failed to decode files_scheduler: {e}")
-                    self._files_scheduler = None
-            else:
-                # Fallback if it was somehow saved as object/list (legacy?)
-                self._files_scheduler = val
+        decoded = decode_from_uint8(val)
+        if decoded is not None and not isinstance(
+                decoded, (np.ndarray, jnp.ndarray)):
+            self._files_scheduler = tuple(decoded)
         else:
-            self._files_scheduler = None
+            self._files_scheduler = decoded
 
         self.output_flow_fields = cast(
             jnp.ndarray, self._current_flows) if self._current_flows is not None else None

@@ -1,6 +1,5 @@
 """Sampler for real data."""
 
-from typing import Any
 
 import jax.numpy as jnp
 from goggles import get_logger
@@ -63,24 +62,6 @@ class RealImageSampler(Sampler):
             files=batch.files,
         )
         return batch
-
-    @property
-    def state(self) -> dict[str, Any]:
-        """Returns the state of the sampler for checkpointing.
-
-        Returns:
-            A dictionary containing the state of the sampler and scheduler.
-        """
-        return dict(super().state)
-
-    @state.setter
-    def state(self, value: dict[str, Any]) -> None:
-        """Sets the state of the sampler from a checkpoint.
-
-        Args:
-            value: A dictionary containing the state of the sampler and scheduler.
-        """
-        Sampler.state.fset(self, value)  # type: ignore
 
     @classmethod
     def from_config(cls, scheduler: SchedulerProtocol, config: dict) -> Self:

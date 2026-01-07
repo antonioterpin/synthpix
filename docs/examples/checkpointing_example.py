@@ -20,7 +20,7 @@ import synthpix
 logging.basicConfig(level=logging.INFO)
 
 
-def main():
+def main() -> None:
     # Define paths
     # Assuming script is run from project root
     root_dir = Path.cwd()

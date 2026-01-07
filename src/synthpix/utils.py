@@ -1,16 +1,21 @@
 """Utility functions for the vision module."""
 
+import json
 import os
 from collections.abc import Callable, Sequence
+from typing import Any
 
 import goggles as gg
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 DEBUG_JIT = False
 SYNTHPIX_SCOPE = "synthpix"
 
 load_configuration = gg.load_configuration
+
+logger = gg.get_logger(__name__)
 
 
 def match_histogram(
@@ -515,3 +520,44 @@ def discover_leaf_dirs(
             continue
 
     return leaves
+
+
+def encode_to_uint8(data: Any) -> jnp.ndarray | None:
+    """Encodes arbitrary data to a uint8 array via JSON.
+
+    Args:
+        data: Data to encode.
+
+    Returns:
+        The encoded uint8 array or None if data is None.
+    """
+    if data is None:
+        return None
+    json_str = json.dumps(data)
+    return jnp.frombuffer(json_str.encode("utf-8"), dtype=jnp.uint8)
+
+
+def decode_from_uint8(buffer: Any) -> Any:
+    """Decodes data from a uint8 array via JSON.
+
+    Args:
+        buffer: uint8 array or other compatible data to decode.
+
+    Returns:
+        The decoded data.
+    """
+    if buffer is None:
+        return None
+
+    if isinstance(buffer, (np.ndarray, jnp.ndarray)):
+        try:
+            # Convert to bytes and decode
+            json_str = bytes(np.array(buffer)).decode("utf-8")
+            return json.loads(json_str)
+        except Exception:
+            # If it's not a valid JSON string encoded as uint8,
+            # it might be a legacy format or something else.
+            logger.warning("Failed to decode uint8 array as JSON string.")
+            return buffer
+
+    return buffer
