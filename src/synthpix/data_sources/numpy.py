@@ -56,6 +56,17 @@ class NumpyDataSource(FileDataSource):
                         f"Missing images for frame {t}: {prev_img}, {next_img}"
                     )
 
+    def __repr__(self) -> str:
+        """Returns a stable string representation for Grain checkpointing.
+
+        Returns:
+            A string representation of the NumpyDataSource.
+        """
+        return (
+            f"NumpyDataSource(file_list={self._file_list}, "
+            f"include_images={self._include_images})"
+        )
+
     def load_file(self, file_path: str) -> dict[str, Any]:
         """Load .npy flow and optionally paired images.
 

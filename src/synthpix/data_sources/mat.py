@@ -55,6 +55,14 @@ class MATDataSource(FileDataSource):
         self.output_shape = output_shape
         super().__init__(dataset_path)
 
+    def __repr__(self) -> str:
+        """Returns a stable string representation for Grain checkpointing."""
+        return (
+            f"MATDataSource(file_list={self._file_list}, "
+            f"include_images={self._include_images}, "
+            f"output_shape={self.output_shape})"
+        )
+
     @property
     def include_images(self) -> bool:
         """Whether to include images.

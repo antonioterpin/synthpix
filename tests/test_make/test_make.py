@@ -1,3 +1,10 @@
+"""Tests for the `make` factory function and configuration validation.
+
+This module verifies that the `make` function correctly instantiates the 
+appropriate scheduler and sampler combinations based on user configuration. 
+It covers parameter validation, legacy vs. Grain stack selection, and 
+correct delegation of arguments to underlying components.
+"""
 import importlib
 from types import SimpleNamespace
 from typing import Any

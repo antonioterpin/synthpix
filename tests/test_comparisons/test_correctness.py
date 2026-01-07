@@ -1,4 +1,9 @@
-"""Correctness comparison between Legacy and Grain schedulers."""
+"""Correctness comparison between Legacy and Grain schedulers.
+
+These tests verify that the modern Grain-based data loading stack produces 
+bit-identical results to the legacy scheduler implementation for the same 
+input data and seeds, ensuring a direct and reliable migration path.
+"""
 
 import h5py
 import grain.python as grain

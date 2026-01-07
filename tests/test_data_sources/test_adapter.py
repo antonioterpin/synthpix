@@ -979,3 +979,84 @@ def test_truncation_with_padding_flag():
     
     # We don't strictly assert the internal is_padding truncation happened 
     # but execution path guarantees it.
+
+def test_adapter_epoch_calculation_accuracy():
+    """Verify that GrainSchedulerAdapter correctly tracks epochs across multiple dataset wraps.
+    
+    This test ensures that the epoch counter increments precisely at the dataset 
+    boundary and stays constant during the epoch.
+    """
+    # Dataset size 2. Batch size 1. 3 Epochs = 6 items.
+    data_source = MagicMock()
+    data_source.__len__.return_value = 2
+    data_source.include_images = False
+    
+    # Mock loader
+    batch_f = {"flow_fields": np.zeros((1, 4, 4, 2))}
+    loader = MagicMock(spec=grain.DataLoader)
+    # 6 batches
+    loader.__iter__.return_value = iter([batch_f] * 6)
+    loader._sampler = MagicMock()
+    loader._sampler.num_epochs = 3
+    loader._data_source = data_source
+    
+    adapter = GrainSchedulerAdapter(loader)
+    
+    epochs = []
+    for _ in range(6):
+        data = adapter.get_batch(1)
+        epochs.append(data.epoch)
+    
+    # Expected: [0, 0, 1, 1, 2, 2]
+    expected = [0, 0, 1, 1, 2, 2]
+    assert epochs == expected, f"Epoch sequence mismatch. Expected {expected}, got {epochs}"
+
+
+def test_adapter_jax_seed_delivery():
+    """Verify that GrainSchedulerAdapter extracts and delivers jax_seed from Grain records.
+    
+    Grain records might contain a '_jax_seed' key injected by the AddJAXSeed transform.
+    This test verifies that the adapter extracts this key and provides it as 'jax_seed'
+    in the SchedulerData output.
+    """
+    batch_size = 2
+    jax_seeds = np.array([123, 456], dtype=np.uint32)
+    
+    # Mock Grain batch as returned by DataLoader
+    batch = {
+        "flow_fields": np.zeros((batch_size, 4, 4, 2)),
+        "jax_seed": jax_seeds
+    }
+    
+    loader = MagicMock(spec=grain.DataLoader)
+    loader.__iter__.return_value = iter([batch])
+    loader._sampler = None # Unsafe epoch logic
+    loader._data_source = None
+    
+    adapter = GrainSchedulerAdapter(loader)
+    
+    data = adapter.get_batch(batch_size)
+    
+    assert data.jax_seed is not None, "jax_seed should be present in SchedulerData if provided by Grain record"
+    assert np.array_equal(data.jax_seed, jax_seeds), f"jax_seed values mismatch. Expected {jax_seeds}, got {data.jax_seed}"
+    assert data.jax_seed.dtype == np.uint32, f"Expected jax_seed dtype uint32, got {data.jax_seed.dtype}"
+
+
+def test_adapter_handling_missing_seed():
+    """Verify that GrainSchedulerAdapter handles records without _jax_seed gracefully.
+    
+    For legacy pipelines or records without the AddJAXSeed transform, 
+    the adapter should return None for jax_seed.
+    """
+    batch = {
+        "flow_fields": np.zeros((1, 4, 4, 2))
+    }
+    loader = MagicMock(spec=grain.DataLoader)
+    loader.__iter__.return_value = iter([batch])
+    loader._sampler = None
+    loader._data_source = None
+    
+    adapter = GrainSchedulerAdapter(loader)
+    data = adapter.get_batch(1)
+    
+    assert data.jax_seed is None, f"jax_seed should be None if missing from record, got {data.jax_seed}"

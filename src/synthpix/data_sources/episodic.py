@@ -96,6 +96,18 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
         # 2. Build Interleaved List (Pre-compute epoch order)
         self._interleaved_files = self._build_interleaved_file_list()
 
+    def __repr__(self) -> str:
+        """Returns a stable string representation for Grain checkpointing.
+
+        Returns:
+            A string representation of the EpisodicDataSource.
+        """
+        return (
+            f"EpisodicDataSource(source={repr(self.source)}, "
+            f"batch_size={self.batch_size}, "
+            f"episode_length={self.episode_length})"
+        )
+
     def _calculate_starts(
         self, file_list: list[str]
     ) -> tuple[dict[str, list[str]], list[tuple[str, int]]]:

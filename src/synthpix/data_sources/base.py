@@ -63,6 +63,14 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
 
         super().__init__()
 
+    def __repr__(self) -> str:
+        """Returns a stable string representation for Grain checkpointing.
+
+        Returns:
+            A string representation of the FileDataSource.
+        """
+        return f"{self.__class__.__name__}(file_list={self._file_list})"
+
     @property
     def file_list(self) -> list[str]:
         """Returns the list of files discovered."""

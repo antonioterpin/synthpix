@@ -1,10 +1,14 @@
 """Make module to instantiate SynthPix."""
 
 import os
+from dataclasses import dataclass
+from pathlib import Path
 
 import goggles as gg
 import grain.python as grain
 import jax
+import numpy as np
+import orbax.checkpoint as ocp
 from rich.console import Console
 from rich.text import Text
 
@@ -170,6 +174,7 @@ def make_grain_scheduler(
         data_source=data_source,
         sampler=sampler_grain,
         operations=[
+            AddJAXSeed(),
             grain.Batch(batch_size=batch_size, drop_remainder=False)
         ],
         worker_count=worker_count,
@@ -236,9 +241,33 @@ def make_legacy_scheduler(
     return scheduler
 
 
+@dataclass
+class AddJAXSeed(grain.RandomMapTransform):
+    """Grain transform that adds a deterministic seed to every record."""
+
+    def random_map(
+        self,
+        record: dict,
+        rng: np.random.Generator
+    ) -> dict:
+        """Add a random seed to the record.
+
+        Args:
+            record: The record to add the seed to.
+            rng: The random number generator.
+
+        Returns:
+            The record with the seed added.
+        """
+        # We attach a unique uint32 seed to each record
+        record["jax_seed"] = rng.integers(0, 2**32 - 1)
+        return record
+
+
 def make(
     config: str | dict,
     use_grain_scheduler: bool = True,
+    load_from: str | Path | None = None,
 ) -> Sampler:
     """Load the dataset configuration and initialize the sampler.
 
@@ -271,9 +300,14 @@ def make(
             configuration dictionary.
         use_grain_scheduler: Whether to use the new Grain-based scheduler
             (default False).
+        load_from: Optional path to a checkpoint directory to restore from.
+            If provided, the sampler will be restored to the state saved in
+            the latest checkpoint in this directory (or specific step if
+            Orbax allows, otherwise defaults to latest).
 
     Returns:
-        The initialized sampler (RealImageSampler or SyntheticImageSampler).
+        The initialized sampler (RealImageSampler or SyntheticImageSampler),
+        optionally restored from a checkpoint.
 
     Raises:
         TypeError: If config is not a string or dictionary, or if parameter
@@ -439,8 +473,89 @@ def make(
             config=dataset_config,
         )
 
+    # Handle Restoration
+    if load_from:
+        if not isinstance(sampler, Sampler):
+            raise ValueError(
+                "Sampler must inherit from synthpix.sampler.Sampler to support restoration")
+
+        load_from = Path(load_from)
+        if not load_from.exists():
+            raise FileNotFoundError(
+                f"Checkpoint directory {load_from} not found.")
+
+        mngr = ocp.CheckpointManager(load_from)
+        latest_step = mngr.latest_step()
+        if latest_step is None:
+            raise ValueError(f"No checkpoints found in {load_from}")
+
+        logger.info(
+            f"Restoring from checkpoint at step {latest_step} in {load_from}")
+
+        grain_iter = sampler.grain_iterator
+        if grain_iter is None:
+            raise ValueError(
+                "Sampler does not provide access to Grain iterator")
+
+        restore_args = ocp.args.Composite(
+            sampler=ocp.args.StandardRestore(sampler.restore_state),
+            grain=grain.PyGrainCheckpointRestore(grain_iter),
+        )
+
+        restored = mngr.restore(step=latest_step, args=restore_args)
+        sampler.state = restored["sampler"]
+        logger.info("Sampler and Loader state restored successfully.")
+
     logger.info(
         f"--- SynthPix sampler and scheduler initialized ---\n{dataset_config}"
     )
 
     return sampler
+
+
+def save_checkpoint(
+    checkpoint_dir: str | Path,
+    sampler: Sampler,
+    step: int,
+    max_to_keep: int = 1
+) -> None:
+    """Saves the pipeline state (Sampler + Grain) to a checkpoint.
+
+    Args:
+        checkpoint_dir: Directory where checkpoints are stored.
+        sampler: The sampler instance to save (must be Sampler with
+            Grain scheduler for full state saving).
+        step: The current training step (used as checkpoint ID).
+        max_to_keep: Number of checkpoints to keep (default 1).
+
+    Raises:
+        ValueError: If the Sampler doesn't support Grain checkpointing.
+    """
+    if not isinstance(sampler, Sampler):
+        raise ValueError("Sampler must inherit from synthpix.sampler.Sampler")
+
+    # Ensure directory is Path
+    checkpoint_dir = Path(checkpoint_dir)
+
+    # Initialize Orbax Manager
+    mngr = ocp.CheckpointManager(
+        checkpoint_dir,
+        options=ocp.CheckpointManagerOptions(
+            max_to_keep=max_to_keep,
+            create=True))
+
+    # Prepare Grain iterator state if available
+    grain_iter = sampler.grain_iterator
+    if grain_iter is None:
+        raise ValueError("Sampler does not provide access to Grain iterator")
+
+    # Create Save Args
+    save_args = ocp.args.Composite(
+        sampler=ocp.args.StandardSave(sampler.state),
+        grain=grain.PyGrainCheckpointSave(grain_iter),
+    )
+
+    # Save
+    mngr.save(step=step, args=save_args)
+    mngr.wait_until_finished()
+    logger.info(f"Saved checkpoint to {checkpoint_dir} at step {step}")

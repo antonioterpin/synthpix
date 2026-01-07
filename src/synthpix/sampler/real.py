@@ -1,5 +1,6 @@
 """Sampler for real data."""
 
+
 import jax.numpy as jnp
 from goggles import get_logger
 from typing_extensions import Self

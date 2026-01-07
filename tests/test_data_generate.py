@@ -1,3 +1,11 @@
+"""Tests for the high-level image generation functions and their input validation.
+
+This module contains tests for `generate_images_from_flow`, verifying that 
+particle-based synthetic images are correctly rendered across various 
+parameter spaces (densities, diameters, intensities, noise, etc.). It also 
+includes exhaustive input validation checks and performance benchmarks for 
+the rendering pipeline.
+"""
 import re
 import timeit
 

@@ -1,7 +1,7 @@
 """Adapters to make Grain DataLoaders compatible with Legacy Schedulers."""
 
 import logging
-from typing import cast
+from typing import Any, cast
 
 import grain.python as grain
 import numpy as np
@@ -37,7 +37,7 @@ class GrainSchedulerAdapter(SchedulerProtocol):
         self.loader = loader
         if not hasattr(self.loader, "__iter__"):
             raise ValueError("loader must be iterable")
-        self._iterator = iter(self.loader)
+        self._iterator: grain.PyGrainDatasetIterator = iter(self.loader)
 
         # Shape of the flow fields (H, W, 2)
         self._cached_shape: tuple[int, int, int] | None = None
@@ -68,7 +68,7 @@ class GrainSchedulerAdapter(SchedulerProtocol):
                 elif hasattr(sampler, "_num_epochs"):
                     self._num_epochs = sampler._num_epochs
 
-            if self._dataset_len is not None:
+            if self._dataset_len is not None and self._dataset_len > 0:
                 # If num_epochs is None, treated as infinite.
                 self._can_determine_epoch = True
 
@@ -144,6 +144,7 @@ class GrainSchedulerAdapter(SchedulerProtocol):
         images1 = batch.get("images1")
         images2 = batch.get("images2")
         files = tuple(batch.get("file", ()))
+        jax_seed = batch.get("jax_seed")
 
         if self.include_images and (images1 is None or images2 is None):
             raise KeyError("Images expected but not found in batch.")
@@ -213,6 +214,8 @@ class GrainSchedulerAdapter(SchedulerProtocol):
             if images2 is not None:
                 images2 = images2[:target_batch_size]
             files = files[:target_batch_size]
+            if jax_seed is not None:
+                jax_seed = jax_seed[:target_batch_size]
             if is_padding is not None:
                 is_padding = is_padding[:target_batch_size]
 
@@ -252,13 +255,30 @@ class GrainSchedulerAdapter(SchedulerProtocol):
             if images2 is not None:
                 images2 = zero_out(images2, is_padding)
 
+        # Calculate epoch for the batch
+        epoch = None
+        if self._can_determine_epoch:
+            start_idx = self._items_yielded - current_batch_size
+            epoch = start_idx // self._dataset_len
+
         return SchedulerData(
             flow_fields=flow,
             images1=images1,
             images2=images2,
             files=files,
             mask=valid_mask,
+            epoch=epoch,
+            jax_seed=jax_seed,
         )
+
+    @property
+    def grain_iterator(self) -> grain.PyGrainDatasetIterator:
+        """Returns the underlying Grain iterator for checkpointing.
+
+        Returns:
+            The grain.PyGrainDatasetIterator instance.
+        """
+        return self._iterator
 
     def get_batch(self, batch_size: int) -> SchedulerData:
         """Retrieves a batch of flow fields.
@@ -285,6 +305,26 @@ class GrainSchedulerAdapter(SchedulerProtocol):
             self._items_yielded += bs
 
         return self._to_scheduler_data(batch, batch_size)
+
+    @property
+    def state(self) -> dict[str, Any]:
+        """Returns the state of the adapter.
+
+        Note: Grain state is handled via grain_iterator.
+
+        Returns:
+            The state of the adapter.
+        """
+        return {"items_yielded": self._items_yielded}
+
+    @state.setter
+    def state(self, value: dict[str, Any]) -> None:
+        """Sets the state of the adapter.
+
+        Args:
+            value: The state to set.
+        """
+        self._items_yielded = value.get("items_yielded", 0)
 
     def reset(self) -> None:
         """Resets the state (re-creates iterator)."""

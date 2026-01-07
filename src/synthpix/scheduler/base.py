@@ -3,6 +3,7 @@
 import glob
 import os
 from abc import ABC, abstractmethod
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -162,6 +163,59 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             self.file_list = [
                 self.file_list[i] for i in file_list_indices.tolist()
             ]
+
+    @property
+    def state(self) -> dict[str, Any]:
+        """Returns the state of the scheduler.
+
+        Returns:
+            Dictionary containing the scheduler state.
+        """
+        state_dict = {
+            "index": self.index,
+            "slice_idx": self._slice_idx,
+            "randomize": self.randomize,
+            "loop": self.loop,
+            "file_list": self.file_list,
+        }
+        # Save key if it exists
+        if hasattr(self, "key") and self.key is not None:
+            state_dict["key"] = self.key
+
+        return state_dict
+
+    @state.setter
+    def state(self, value: dict[str, Any]) -> None:
+        """Sets the state of the scheduler.
+
+        Args:
+            value: Dictionary containing the scheduler state.
+
+        Raises:
+            KeyError: If state is missing required keys.
+        """
+        self.index = value["index"]
+        self._slice_idx = value["slice_idx"]
+        self.randomize = value["randomize"]
+        self.loop = value["loop"]
+        if "file_list" in value:
+            self.file_list = value["file_list"]
+
+        if "key" in value:
+            self.key = value["key"]
+
+        # Invalidate cache on state restore
+        self._cached_data = None
+        self._cached_file = None
+
+    @property
+    def grain_iterator(self) -> Any | None:
+        """Returns the underlying Grain iterator if available.
+
+        Returns:
+            None for legacy schedulers.
+        """
+        return None
 
     def _get_next(self) -> SchedulerData:
         """Returns the next flow field slice from the dataset.

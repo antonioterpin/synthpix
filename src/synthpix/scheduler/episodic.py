@@ -2,6 +2,7 @@
 
 import glob
 import os
+from typing import Any
 
 import goggles as gg
 import jax
@@ -131,6 +132,41 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
             value: New file list to set.
         """
         self.scheduler.file_list = value
+
+    @property
+    def state(self) -> dict[str, Any]:
+        """Returns the state of the episodic scheduler.
+
+        Returns:
+            Dictionary containing the state.
+        """
+        return {
+            "t": self._t,
+            "key": self._key,
+            "scheduler_state": self.scheduler.state,
+        }
+
+    @state.setter
+    def state(self, value: dict[str, Any]) -> None:
+        """Sets the state of the episodic scheduler.
+
+        Args:
+            value: Dictionary containing the state.
+        """
+        self._t = value["t"]
+        self._key = value["key"]
+        self.scheduler.state = value["scheduler_state"]
+        # Re-derive starts/episodes based on the restored file_list in scheduler
+        self.dir2files, self._starts = self._calculate_starts()
+
+    @property
+    def grain_iterator(self) -> Any | None:
+        """Returns the underlying Grain iterator if available.
+
+        Returns:
+            The Grain iterator or None if not supported.
+        """
+        return self.scheduler.grain_iterator
 
     def get_batch(self, batch_size: int) -> SchedulerData:
         """Return exactly one time-step for `batch_size` parallel episodes.

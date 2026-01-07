@@ -1,3 +1,9 @@
+"""Ablation benchmarks for the SyntheticImageSampler.
+
+These tests perform detailed timing sweeps across various sampler 
+configurations, recording performance statistics (mean, std, percentiles) 
+to CSV for offline analysis of throughput bottlenecks.
+"""
 import csv
 import timeit
 

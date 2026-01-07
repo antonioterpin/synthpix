@@ -1,3 +1,9 @@
+"""Ablation benchmarks for low-level image generation.
+
+This module evaluates the performance of the rendering pipeline through 
+parameter sweeps (batch sizes, image sizes, seeding densities), logging 
+GPU-accelerated throughput statistics to CSV files.
+"""
 import csv
 import itertools
 import timeit
