@@ -1,3 +1,7 @@
+"""Tests for comprehensive checkpointing functionality.
+
+These tests check the edge cases of checkpointing and resuming from a Grain iterator.
+"""
 import os
 import shutil
 import jax.numpy as jnp
@@ -5,11 +9,8 @@ import numpy as np
 import pytest
 import scipy.io
 import h5py
-from typing import cast
-from pathlib import Path
 
 from synthpix import make, save_checkpoint
-from synthpix.sampler import SyntheticImageSampler, RealImageSampler, Sampler
 
 
 def get_valid_config(paths, source_type, include_images=False, episode_length=0):

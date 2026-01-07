@@ -309,7 +309,7 @@ class GrainSchedulerAdapter(SchedulerProtocol):
     @property
     def state(self) -> dict[str, Any]:
         """Returns the state of the adapter.
-        
+
         Note: Grain state is handled via grain_iterator.
 
         Returns:

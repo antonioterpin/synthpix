@@ -6,11 +6,9 @@ They also ensure that the sampler's state (RNG and step counter) is correctly
 managed for checkpointing reproducibility using the high-level `make` API.
 """
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from pathlib import Path
 
 from typing import cast
 from synthpix import make, save_checkpoint

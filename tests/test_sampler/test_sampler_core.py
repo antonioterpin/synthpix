@@ -1,3 +1,10 @@
+"""Unit tests for the core behavior of the sampler module.
+
+These tests verify the initialization, configuration, and basic execution 
+of `SyntheticImageSampler` and `RealImageSampler`. They cover input 
+validation for all sampler parameters, device selection logic, and the 
+ordering of generated batches.
+"""
 import os
 import re
 import timeit

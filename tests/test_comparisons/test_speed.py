@@ -1,4 +1,10 @@
-"""Speed comparison between Legacy and Grain schedulers."""
+"""Throughput and scaling benchmarks for Legacy and Grain schedulers.
+
+This module compares the execution speed of the data loading stacks, 
+evaluating Grain's multi-threading capabilities and comparing its 
+performance against the single-threaded legacy baseline across different 
+file formats and configurations.
+"""
 
 import os
 import gc
