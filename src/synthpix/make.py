@@ -264,6 +264,38 @@ class AddJAXSeed(grain.RandomMapTransform):
         return record
 
 
+def checkpoint_args(
+    sampler: Sampler,
+    is_restore: bool = False
+) -> ocp.args.Composite:
+    """Consolidates Save/Restore args for the SynthPix pipeline.
+
+    Args:
+        sampler: The sampler instance.
+        is_restore: Whether to return RestoreArgs instead of SaveArgs.
+
+    Returns:
+        A Composite Orbax argument object.
+
+    Raises:
+        ValueError: If the Sampler doesn't support Grain checkpointing.
+    """
+    grain_iter = sampler.grain_iterator
+    if grain_iter is None:
+        raise ValueError("Sampler does not provide access to Grain iterator")
+
+    if is_restore:
+        return ocp.args.Composite(
+            sampler=ocp.args.StandardRestore(sampler.restore_state),
+            grain=grain.PyGrainCheckpointRestore(grain_iter),
+        )
+    else:
+        return ocp.args.Composite(
+            sampler=ocp.args.StandardSave(sampler.state),
+            grain=grain.PyGrainCheckpointSave(grain_iter),
+        )
+
+
 def make(
     config: str | dict,
     use_grain_scheduler: bool = True,
@@ -492,15 +524,7 @@ def make(
         logger.info(
             f"Restoring from checkpoint at step {latest_step} in {load_from}")
 
-        grain_iter = sampler.grain_iterator
-        if grain_iter is None:
-            raise ValueError(
-                "Sampler does not provide access to Grain iterator")
-
-        restore_args = ocp.args.Composite(
-            sampler=ocp.args.StandardRestore(sampler.restore_state),
-            grain=grain.PyGrainCheckpointRestore(grain_iter),
-        )
+        restore_args = checkpoint_args(sampler, is_restore=True)
 
         restored = mngr.restore(step=latest_step, args=restore_args)
         sampler.state = restored["sampler"]
@@ -544,16 +568,8 @@ def save_checkpoint(
             max_to_keep=max_to_keep,
             create=True))
 
-    # Prepare Grain iterator state if available
-    grain_iter = sampler.grain_iterator
-    if grain_iter is None:
-        raise ValueError("Sampler does not provide access to Grain iterator")
-
     # Create Save Args
-    save_args = ocp.args.Composite(
-        sampler=ocp.args.StandardSave(sampler.state),
-        grain=grain.PyGrainCheckpointSave(grain_iter),
-    )
+    save_args = checkpoint_args(sampler, is_restore=False)
 
     # Save
     mngr.save(step=step, args=save_args)
