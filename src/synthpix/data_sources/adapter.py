@@ -78,8 +78,11 @@ class GrainSchedulerAdapter(SchedulerProtocol):
             self._can_determine_epoch = False
 
     def shutdown(self) -> None:
-        """Compatibility layer for shutdown."""
-        # Grain loaders clean up on GC or exit.
+        """Closes the iterator."""
+        try:
+            self._iterator.close()
+        except Exception as e:
+            logger.warning("Failed to close iterator: %s", e)
 
     def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Returns the shape of the flow field.
@@ -328,7 +331,8 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
     def reset(self) -> None:
         """Resets the state (re-creates iterator)."""
-        self._iterator = iter(self.loader)
+        self._iterator: grain.PyGrainDatasetIterator = iter(
+            self.loader)
         self._items_yielded = 0
         logger.debug("GrainSchedulerAdapter reset.")
 
