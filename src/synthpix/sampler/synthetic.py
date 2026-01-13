@@ -485,7 +485,7 @@ class SyntheticImageSampler(Sampler):
         self._batches_generated: int = 0
         self._step: int = 0
         self._jax_seeds: np.ndarray | None = None
-        self._scheduler_epoch: int | None = None
+        self._scheduler_epoch: np.ndarray | None = None
         self._mask_scheduler: np.ndarray | None = None
         self._files_scheduler: tuple[str, ...] | None = None
 
@@ -512,13 +512,34 @@ class SyntheticImageSampler(Sampler):
             self._current_flows = scheduler_batch.flow_fields
             # Notice that self._mask refers to the current mask provided by the
             # scheduler denoting the valid flows of the current batch,
-            # shape (batch_size,)
+            # shape (flow_fields_per_batch,)
             self._mask_scheduler = scheduler_batch.mask
             # While instead self.mask_images refers to the static mask
             # provided at initialization
             self._files_scheduler = scheduler_batch.files
             self._jax_seeds = scheduler_batch.jax_seed
             self._scheduler_epoch = scheduler_batch.epoch
+
+            # Expand metadata to match self.batch_size
+            n_flows = self.flow_fields_per_batch
+            if n_flows < self.batch_size:
+                repeats = (self.batch_size + n_flows - 1) // n_flows
+
+                def expand_arr(arr: Any) -> Any:
+                    if arr is None:
+                        return None
+                    arr = jnp.array(arr)
+                    tiled = jnp.tile(arr, (repeats,) + (1,) * (arr.ndim - 1))
+                    return tiled[:self.batch_size]
+
+                self._mask_scheduler = expand_arr(self._mask_scheduler)
+                self._scheduler_epoch = expand_arr(self._scheduler_epoch)
+                self._jax_seeds = expand_arr(self._jax_seeds)
+
+                if self._files_scheduler is not None:
+                    # Repeat tuple
+                    expanded_files = self._files_scheduler * repeats
+                    self._files_scheduler = expanded_files[:self.batch_size]
 
             # Shard the flow fields across devices
             current_flows_array = jnp.array(
@@ -536,16 +557,29 @@ class SyntheticImageSampler(Sampler):
         # Generate keys
         if self._jax_seeds is not None:
             # Grain Path: Use fold_in(record_seed, rep_idx)
-            # record_seed is (B,), rep_idx is int
+            # record_seed is (B,) or (B, 2), rep_idx is int
 
-            def derive_key(seed_val, rep_idx):
-                key = jax.random.PRNGKey(seed_val)
-                return jax.random.fold_in(key, rep_idx)
+            def derive_key(seed_val, rep_idx, batch_idx):
+                # Ensure we have a key (2,) from the input seed value
+                if seed_val.shape == ():
+                    key = jax.random.PRNGKey(seed_val)
+                else:
+                    key = seed_val
+
+                # Fold in batch index to ensure uniqueness across the batch
+                # (even if seeds are tiled)
+                key = jax.random.fold_in(key, batch_idx)
+                # Fold in repetition index
+                key = jax.random.fold_in(key, rep_idx)
+                return key
 
             # Vectorize over the seeds in the batch
-            derive_keys_vmap = jax.vmap(derive_key, in_axes=(0, None))
+            derive_keys_vmap = jax.vmap(derive_key, in_axes=(0, None, 0))
             batch_keys = derive_keys_vmap(
-                self._jax_seeds, self._batches_generated)
+                self._jax_seeds,
+                self._batches_generated,
+                jnp.arange(self.batch_size),
+            )
             # batch_keys is (B, 2)
 
             # Now we need to shard/split these keys for the devices
@@ -576,12 +610,12 @@ class SyntheticImageSampler(Sampler):
                 else None
             ),
             files=self._files_scheduler,
-            epoch=self._scheduler_epoch,
-            jax_seed=(
-                jnp.array(self._jax_seeds)
-                if self._jax_seeds is not None
-                else None
-            ),
+            epoch=jnp.array(self._scheduler_epoch)
+            if self._scheduler_epoch is not None
+            else None,
+            seeds=jnp.array(self._jax_seeds)
+            if self._jax_seeds is not None
+            else None,
         )
 
     @property

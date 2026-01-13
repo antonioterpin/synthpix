@@ -92,12 +92,12 @@ def test_full_pipeline_checkpoint_reproducibility(mock_mat_files, tmp_path):
     assert jnp.allclose(resumed_batch.images1, gt_batch.images1), "Resumed images are not bit-perfectly identical to ground truth"
     
     # 7. Verify jax_seed and epoch preservation
-    if gt_batch.jax_seed is not None:
-        assert resumed_batch.jax_seed is not None, "jax_seed should not be None after restore"
-        assert jnp.array_equal(resumed_batch.jax_seed, gt_batch.jax_seed), "jax_seed mismatch after restore"
+    if gt_batch.seeds is not None:
+        assert resumed_batch.seeds is not None, "seeds should not be None after restore"
+        assert jnp.array_equal(resumed_batch.seeds, gt_batch.seeds), "seeds mismatch after restore"
     else:
-        assert resumed_batch.jax_seed is None, "jax_seed should be None after restore"
-    assert resumed_batch.epoch == gt_batch.epoch, f"Epoch mismatch after restore. Expected {gt_batch.epoch}, got {resumed_batch.epoch}"
+        assert resumed_batch.seeds is None, "seeds should be None after restore"
+    assert jnp.allclose(resumed_batch.epoch, gt_batch.epoch), f"Epoch mismatch after restore. Expected {gt_batch.epoch}, got {resumed_batch.epoch}"
 
 
 def test_empty_dataset_handling(tmp_path):

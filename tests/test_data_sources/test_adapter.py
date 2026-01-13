@@ -1060,3 +1060,85 @@ def test_adapter_handling_missing_seed():
     data = adapter.get_batch(1)
     
     assert data.jax_seed is None, f"jax_seed should be None if missing from record, got {data.jax_seed}"
+
+
+
+def test_grain_scheduler_adapter_epoch_logic():
+    """Test that GrainSchedulerAdapter correctly calculates and returns epoch information."""
+    # Mock source
+    ds = MockDataSource(length=4)
+    # Mock loader
+    loader = MagicMock(spec=grain.DataLoader)
+    loader._data_source = ds
+    
+    loader.sampler = MagicMock()
+    loader.sampler.num_epochs = 2
+    
+    # Create batches with epoch metadata
+    batch_content = {
+        "flow_fields": np.zeros((2, 32, 32, 2)),
+        "images1": np.zeros((2, 32, 32, 3)),
+        "images2": np.zeros((2, 32, 32, 3)),
+        "file": ("f1", "f2"), 
+    }
+    
+    loader.__iter__.return_value = iter([batch_content, batch_content, batch_content])
+    loader._data_source.include_images = True
+    
+    adapter = GrainSchedulerAdapter(loader)
+    
+    # Force epoch determination if mocks are imperfect
+    if not adapter._can_determine_epoch:
+        adapter._dataset_len = 4
+        adapter._num_epochs = 2
+        adapter._can_determine_epoch = True
+        
+    # Batch 1 (Epoch 0)
+    b1 = adapter.get_batch(2)
+    assert np.all(b1.epoch == 0), f"Expected Epoch 0, got {b1.epoch}"
+    
+    # Batch 2 (Epoch 0)
+    b2 = adapter.get_batch(2)
+    assert np.all(b2.epoch == 0), f"Expected Epoch 0, got {b2.epoch}"
+
+    # Batch 3 (Epoch 1)
+    b3 = adapter.get_batch(2)
+    assert np.all(b3.epoch == 1), f"Expected Epoch 1, got {b3.epoch}"
+
+
+def test_grain_episodic_adapter_epoch_logic():
+    """Test that GrainEpisodicAdapter correctly calculates and returns epoch information."""
+    ds_ep = MagicMock(spec=EpisodicDataSource)
+    ds_ep.episode_length = 2
+    ds_ep.__len__.return_value = 4
+    ds_ep.include_images = False
+    
+    loader_ep = MagicMock(spec=grain.DataLoader)
+    loader_ep._data_source = ds_ep
+    loader_ep.sampler = MagicMock()
+    loader_ep.sampler.num_epochs = 2
+    
+    batch_ep = {
+        "flow_fields": np.zeros((2, 32, 32, 2)),
+        "_timestep": np.array([0, 1]),
+    }
+    loader_ep.__iter__.return_value = iter([batch_ep, batch_ep, batch_ep])
+    
+    adapter_ep = GrainEpisodicAdapter(loader_ep)
+    
+    if not adapter_ep._can_determine_epoch:
+        adapter_ep._dataset_len = 4
+        adapter_ep._num_epochs = 2
+        adapter_ep._can_determine_epoch = True
+        
+    # Batch 1 (Epoch 0)
+    be1 = adapter_ep.get_batch(2)
+    assert np.all(be1.epoch == 0), f"Episodic: Expected Epoch 0, got {be1.epoch}"
+    
+    # Batch 2 (Epoch 0)
+    be2 = adapter_ep.get_batch(2)
+    assert np.all(be2.epoch == 0), f"Episodic: Expected Epoch 0, got {be2.epoch}"
+    
+    # Batch 3 (Epoch 1)
+    be3 = adapter_ep.get_batch(2)
+    assert np.all(be3.epoch == 1), f"Episodic: Expected Epoch 1, got {be3.epoch}"
