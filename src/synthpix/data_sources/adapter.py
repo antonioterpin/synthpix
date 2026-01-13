@@ -37,7 +37,7 @@ class GrainSchedulerAdapter(SchedulerProtocol):
         self.loader = loader
         if not hasattr(self.loader, "__iter__"):
             raise ValueError("loader must be iterable")
-        self._iterator: grain.PyGrainDatasetIterator = iter(self.loader)
+        self._iterator: grain.PyGrainDatasetIterator | None = iter(self.loader)
 
         # Shape of the flow fields (H, W, 2)
         self._cached_shape: tuple[int, int, int] | None = None
@@ -79,10 +79,8 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
     def shutdown(self) -> None:
         """Closes the iterator."""
-        try:
-            self._iterator.close()
-        except Exception as e:
-            logger.warning("Failed to close iterator: %s", e)
+        # De-reference iterator to allow garbage collection
+        self._iterator = None
 
     def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Returns the shape of the flow field.
@@ -329,7 +327,7 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
     def reset(self) -> None:
         """Resets the state (re-creates iterator)."""
-        self._iterator: grain.PyGrainDatasetIterator = iter(
+        self._iterator: grain.PyGrainDatasetIterator | None = iter(
             self.loader)
         self._items_yielded = 0
         logger.debug("GrainSchedulerAdapter reset.")
