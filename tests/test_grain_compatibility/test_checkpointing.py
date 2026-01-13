@@ -92,12 +92,12 @@ def test_full_pipeline_checkpoint_reproducibility(mock_mat_files, tmp_path):
     assert jnp.allclose(resumed_batch.images1, gt_batch.images1), "Resumed images are not bit-perfectly identical to ground truth"
     
     # 7. Verify jax_seed and epoch preservation
-    if gt_batch.jax_seed is not None:
-        assert resumed_batch.jax_seed is not None, "jax_seed should not be None after restore"
-        assert jnp.array_equal(resumed_batch.jax_seed, gt_batch.jax_seed), "jax_seed mismatch after restore"
+    if gt_batch.seeds is not None:
+        assert resumed_batch.seeds is not None, "seeds should not be None after restore"
+        assert jnp.array_equal(resumed_batch.seeds, gt_batch.seeds), "seeds mismatch after restore"
     else:
-        assert resumed_batch.jax_seed is None, "jax_seed should be None after restore"
-    assert resumed_batch.epoch == gt_batch.epoch, f"Epoch mismatch after restore. Expected {gt_batch.epoch}, got {resumed_batch.epoch}"
+        assert resumed_batch.seeds is None, "seeds should be None after restore"
+    assert jnp.allclose(resumed_batch.epoch, gt_batch.epoch), f"Epoch mismatch after restore. Expected {gt_batch.epoch}, got {resumed_batch.epoch}"
 
 
 def test_empty_dataset_handling(tmp_path):
@@ -167,3 +167,100 @@ def test_real_sampler_checkpointing(tmp_path):
     
     assert type(s1_state) == type(s2_state), "Scheduler states are not structurally compatible"
     assert s1_state == s2_state, "Scheduler states do not match after restore"
+
+
+def test_files_scheduler_restoration(tmp_path):
+    """Verify that files_scheduler is restored correctly from checkpoint.
+    
+    This test reproduces a previous bug where `files_scheduler` (and other
+    dynamic metadata) was lost during restoration because `restore_state`
+    returned `None` for uninitialized fields, causing Orbax to skip them.
+    
+    The test ensures that:
+    1. A sampler initialized and run for one step has a valid `files_scheduler`.
+    2. After saving and restoring, the `files_scheduler` is present in the
+       restored instance.
+    3. The restored sampler continues to generate valid batches with correct
+       file metadata.
+    """
+    checkpoint_dir = tmp_path / "checkpoints_files_scheduler"
+    
+    # Create dummy data
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    file1 = data_dir / "file1.npy"
+    np.save(file1, np.random.randn(64, 64, 2).astype(np.float32))
+    
+    config = {
+        "scheduler_class": ".npy",
+        "file_list": [str(file1)],
+        "batch_size": 1,
+        "image_shape": (32, 32),
+        "flow_field_size": (64, 64),
+        "resolution": 1.0,
+        "velocities_per_pixel": 1.0,
+        "seed": 42,
+        "max_speed_x": 0.0,
+        "max_speed_y": 0.0,
+        "min_speed_x": 0.0,
+        "min_speed_y": 0.0,
+        "output_units": "pixels",
+        "batches_per_flow_batch": 2, # Generate 2 batches per flow to allow mid-buffer save
+        "flow_fields_per_batch": 1,
+        "img_offset": (0, 0),
+        "seeding_density_range": (0.01, 0.01),
+        "p_hide_img1": 0.0,
+        "p_hide_img2": 0.0,
+        "diameter_ranges": [(1.0, 1.0)],
+        "diameter_var": 0.0,
+        "intensity_ranges": [(100, 100)],
+        "intensity_var": 0.0,
+        "rho_ranges": [(0.0, 0.0)],
+        "rho_var": 0.0,
+        "dt": 1.0,
+        "noise_uniform": 0.0,
+        "noise_gaussian_mean": 0.0,
+        "noise_gaussian_std": 0.0,
+        "randomize": False,
+        "loop": True,
+    }
+    
+    # 1. Run Sampler
+    sampler = make(config, use_grain_scheduler=True)
+    batch1 = next(sampler)
+    
+    # Verify we have files initially
+    assert batch1.files is not None
+    assert len(batch1.files) > 0
+    
+    # 2. Save Checkpoint (at step 1, 1/2 batches generated for this flow)
+    save_checkpoint(checkpoint_dir, sampler, step=1)
+    
+    # 3. Restore
+    restored_sampler = make(config, use_grain_scheduler=True, load_from=checkpoint_dir)
+    
+    # Verify state BEFORE next()
+    # current_flows should be restored
+    assert restored_sampler._current_flows is not None
+    
+    # files_scheduler should ALSO be restored (the fix)
+    assert restored_sampler._files_scheduler is not None, "files_scheduler is None after restore!"
+    
+    # Verify the content of files_scheduler matches what we expect
+    # Note: _files_scheduler stores the tuple of filenames
+    assert isinstance(restored_sampler._files_scheduler, tuple)
+    assert len(restored_sampler._files_scheduler) > 0
+    assert restored_sampler._files_scheduler[0] == str(file1)
+
+    # 4. Generate next batch
+    batch2 = next(restored_sampler)
+    assert batch2.files is not None, "Batch files are None after restore!"
+    assert batch2.files == batch1.files, "Restored batch files should match original flow files"
+    
+    # 5. Verify mask_scheduler is also restored (as it shares the same logic)
+    assert restored_sampler._mask_scheduler is not None, "mask_scheduler is None after restore!"
+    assert batch2.mask is not None, "Batch mask is None after restore!"
+
+    # 6. Verify scheduler_epoch is also restored
+    assert restored_sampler._scheduler_epoch is not None, "scheduler_epoch is None after restore!"
+    assert batch2.epoch is not None, "Batch epoch is None after restore!"

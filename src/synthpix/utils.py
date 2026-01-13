@@ -351,9 +351,9 @@ def flow_field_adapter(
 
     n = adapted_flows.shape[0]
     repeats = (batch_size + n - 1) // n
-    tiled = jnp.tile(adapted_flows, (repeats, 1, 1, 1))
+    tiled_flows = jnp.tile(adapted_flows, (repeats, 1, 1, 1))
 
-    return tiled[:batch_size, ...], flow_bounds
+    return tiled_flows[:batch_size, ...], flow_bounds
 
 
 def input_check_flow_field_adapter(  # noqa: PLR0912

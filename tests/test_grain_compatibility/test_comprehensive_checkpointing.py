@@ -129,10 +129,10 @@ def test_checkpoint_matrix(source_type, mode, include_images, tmp_path):
     
     assert resumed_batch.epoch == gt_batch.epoch
     
-    if gt_batch.jax_seed is not None:
-        assert jnp.array_equal(resumed_batch.jax_seed, gt_batch.jax_seed)
+    if gt_batch.seeds is not None:
+        assert jnp.array_equal(resumed_batch.seeds, gt_batch.seeds)
     else:
-        assert resumed_batch.jax_seed is None
+        assert resumed_batch.seeds is None
 
 
 def test_legacy_scheduler_exclusion(mock_mat_files, tmp_path):

@@ -67,15 +67,15 @@ class ImageGenerationParameters:
 class SynthpixBatch:
     """Dataclass representing a batch of SynthPix data."""
 
-    images1: jnp.ndarray
-    images2: jnp.ndarray
-    flow_fields: jnp.ndarray
+    images1: jnp.ndarray  # (B, H, W)
+    images2: jnp.ndarray  # (B, H, W)
+    flow_fields: jnp.ndarray  # (B, H, W, 2)
     params: ImageGenerationParameters | None = None
-    done: jnp.ndarray | None = None
-    mask: jnp.ndarray | None = None
+    done: jnp.ndarray | None = None  # (B,)
+    mask: jnp.ndarray | None = None  # (B,)
     files: tuple[str, ...] | None = None
-    epoch: int | None = None
-    jax_seed: jnp.ndarray | None = None
+    epoch: jnp.ndarray | None = None  # (B,)
+    seeds: jnp.ndarray | None = None  # (B,)
 
     def update(self, **kwargs: Any) -> Self:
         """Return a new SynthpixBatch with updated fields.
@@ -95,7 +95,7 @@ class SynthpixBatch:
             mask=kwargs.get("mask", self.mask),
             files=kwargs.get("files", self.files),
             epoch=kwargs.get("epoch", self.epoch),
-            jax_seed=kwargs.get("jax_seed", self.jax_seed),
+            seeds=kwargs.get("seeds", self.seeds),
         )
 
     def tree_flatten(
@@ -121,7 +121,7 @@ class SynthpixBatch:
             self.mask,
             self.files,
             self.epoch,
-            self.jax_seed,
+            self.seeds,
         )
         aux_data = None
         return (children, aux_data)
@@ -150,7 +150,7 @@ class SchedulerData:
     images2: np.ndarray | None = None
     mask: np.ndarray | None = None
     files: tuple[str, ...] | None = None
-    epoch: int | None = None
+    epoch: np.ndarray | None = None
     jax_seed: np.ndarray | None = None
 
     def update(self, **kwargs: Any) -> Self:

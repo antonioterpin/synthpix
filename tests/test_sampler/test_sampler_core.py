@@ -20,7 +20,8 @@ from synthpix.scheduler import (EpisodicFlowFieldScheduler,
                                 PrefetchingFlowFieldScheduler)
 from synthpix.scheduler.base import BaseFlowFieldScheduler
 from synthpix.scheduler.protocol import (EpisodeEndError,
-                                        EpisodicSchedulerProtocol)
+                                        EpisodicSchedulerProtocol,
+                                        SchedulerProtocol)
 from synthpix.types import ImageGenerationSpecification, SchedulerData
 from synthpix.utils import load_configuration
 
@@ -1710,3 +1711,126 @@ def test_sampler_outputs_files(sampler_class, mock_mat_files):
     )
     for file in batch.files:
         assert file in files, f"File {file} not found in original file list."
+
+
+class MockSchedulerEpoch(SchedulerProtocol):
+    def __init__(self, batch_size, flow_shape=(40, 40, 2)):
+        self.batch_size = batch_size
+        self.flow_shape = flow_shape
+        self.epoch_counter = 0
+
+    def get_batch(self, batch_size: int) -> SchedulerData:
+        # Return a smaller batch of flows
+        flows = np.zeros((batch_size,) + self.flow_shape)
+        # Epoch array corresponding to these flows
+        epoch = np.full((batch_size,), self.epoch_counter)
+        
+        return SchedulerData(
+            flow_fields=flows,
+            epoch=epoch,
+            mask=np.ones((batch_size,), dtype=bool),
+            files=tuple(f"f{i}" for i in range(batch_size)),
+            jax_seed=np.zeros((batch_size,), dtype=np.uint32)
+        )
+
+    def get_flow_fields_shape(self):
+        return self.flow_shape
+
+    def shutdown(self):
+        pass
+
+    def reset(self):
+        pass
+
+    @property
+    def state(self):
+        return {}
+
+    @state.setter
+    def state(self, value):
+        pass
+
+    @property
+    def file_list(self):
+        return []
+
+    @file_list.setter
+    def file_list(self, value):
+        pass
+
+    @property
+    def grain_iterator(self):
+        return None
+
+
+def test_sampler_epoch_expansion():
+    """Verify that SyntheticImageSampler expands epoch and other metadata 
+    when flow_fields_per_batch < batch_size.
+    """
+    from unittest.mock import MagicMock
+    
+    # 1 flow field per batch, but we generate 4 images per batch
+    flow_fields_per_batch = 1
+    batch_size = 4
+    
+    scheduler = MockSchedulerEpoch(batch_size=flow_fields_per_batch)
+    
+    # Minimal gen spec
+    gen_spec = ImageGenerationSpecification(
+        batch_size=batch_size,
+        image_shape=(32, 32),
+        img_offset=(2, 2),
+        dt=1.0
+    )
+    
+    # We need to set device_ids to avoid using all GPU devices which might split the batch weirdly
+    # or just use CPU to be safe?
+    # SyntheticImageSampler enforces batch_size % n_devices == 0
+    # Let's use 1 device (CPU or GPU 0)
+    devices = jax.devices()[:1]
+    
+    sampler = SyntheticImageSampler(
+        scheduler=scheduler,
+        batches_per_flow_batch=1,
+        flow_fields_per_batch=flow_fields_per_batch,
+        flow_field_size=(40, 40),
+        resolution=1.0,
+        velocities_per_pixel=1.0,
+        seed=42,
+        max_speed_x=1.0,
+        max_speed_y=1.0,
+        min_speed_x=0.0,
+        min_speed_y=0.0,
+        output_units="pixels",
+        device_ids=[d.id for d in devices],
+        generation_specification=gen_spec
+    )
+    
+    # Override gen function to avoid calling actual JAX heavy logic
+    sampler.img_gen_fn_jit = MagicMock(return_value=(
+        jnp.zeros((batch_size, 32, 32)), # img1
+        jnp.zeros((batch_size, 32, 32)), # img2
+        None # params
+    ))
+    
+    # Mock flow_field_adapter_jit to return dummy expanded flows
+    sampler.flow_field_adapter_jit = MagicMock(return_value=(
+        jnp.zeros((batch_size, 32, 32, 2)), # output flows
+        jnp.zeros((batch_size, 32, 32, 2))  # current flows (tiled/adapted)
+    ))
+    
+    # Get a batch
+    batch = sampler._get_next()
+    
+    # Verify metadata expansion
+    assert batch.epoch is not None
+    assert batch.epoch.shape == (batch_size,), f"Epoch shape mismatch. Expected ({batch_size},), got {batch.epoch.shape}"
+    assert np.all(batch.epoch == 0)
+    
+    assert batch.mask is not None
+    assert batch.mask.shape == (batch_size,), f"Mask shape mismatch. Expected ({batch_size},), got {batch.mask.shape}"
+    
+    # Check files expansion (tuple)
+    assert batch.files is not None
+    assert len(batch.files) == batch_size, f"Files length mismatch. Expected {batch_size}, got {len(batch.files)}"
+    assert batch.files == ("f0", "f0", "f0", "f0") # Should be repeated 4 times since we had 1 flow field

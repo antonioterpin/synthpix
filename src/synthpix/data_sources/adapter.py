@@ -37,7 +37,7 @@ class GrainSchedulerAdapter(SchedulerProtocol):
         self.loader = loader
         if not hasattr(self.loader, "__iter__"):
             raise ValueError("loader must be iterable")
-        self._iterator: grain.PyGrainDatasetIterator = iter(self.loader)
+        self._iterator: grain.PyGrainDatasetIterator | None = iter(self.loader)
 
         # Shape of the flow fields (H, W, 2)
         self._cached_shape: tuple[int, int, int] | None = None
@@ -79,10 +79,8 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
     def shutdown(self) -> None:
         """Closes the iterator."""
-        try:
-            self._iterator.close()
-        except Exception as e:
-            logger.warning("Failed to close iterator: %s", e)
+        # De-reference iterator to allow garbage collection
+        self._iterator = None
 
     def get_flow_fields_shape(self) -> tuple[int, int, int]:
         """Returns the shape of the flow field.
@@ -168,6 +166,13 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
         current_batch_size = flow.shape[0]
 
+        # Calculate per-item epoch
+        epoch_arr = None
+        if self._can_determine_epoch:
+            start_idx = self._items_yielded - current_batch_size
+            indices = np.arange(start_idx, self._items_yielded)
+            epoch_arr = indices // self._dataset_len
+
         # Check for explicit padding flag
         is_padding = batch.get("_is_padding")
 
@@ -206,6 +211,11 @@ class GrainSchedulerAdapter(SchedulerProtocol):
                 img_padding = [(0, pad_size)] + [(0, 0)] * (images2.ndim - 1)
                 images2 = np.pad(images2, img_padding, mode="constant")
 
+            # Pad epoch if present
+            if epoch_arr is not None:
+                # Pad with the last value to maintain continuity
+                epoch_arr = np.pad(epoch_arr, (0, pad_size), mode="edge")
+
             # Pad files
             files = files + ("",) * pad_size
 
@@ -221,14 +231,11 @@ class GrainSchedulerAdapter(SchedulerProtocol):
                 jax_seed = jax_seed[:target_batch_size]
             if is_padding is not None:
                 is_padding = is_padding[:target_batch_size]
+            if epoch_arr is not None:
+                epoch_arr = epoch_arr[:target_batch_size]
 
         # Apply explicit padding if provided AND respected
         if is_padding is not None and respect_padding:
-            # Ensure is_padding is broadcastable or matches batch size
-            # (It should match target_batch_size if we padded, or current if we didn't)
-            # If we just padded flow/files, we need to pad is_padding too?
-            # 'is_padding' comes from batch, so it has shape (current_batch_size,)
-
             # Pad is_padding if needed
             if pad_size > 0:
                 # Assume structural padding is invalid too
@@ -237,11 +244,6 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
             # Update mask: existing mask AND NOT is_padding
             valid_mask = valid_mask & (~is_padding)
-
-            # Zero-out data where is_padding is True
-            # (This satisfies "zero pad" requirement for wrapped items)
-            # is_padding is bool array of shape (B,)
-            # Broadcast to (B, H, W, C)
 
             # Helper to zero out
             def zero_out(arr: np.ndarray, mask: np.ndarray) -> np.ndarray:
@@ -258,19 +260,13 @@ class GrainSchedulerAdapter(SchedulerProtocol):
             if images2 is not None:
                 images2 = zero_out(images2, is_padding)
 
-        # Calculate epoch for the batch
-        epoch = None
-        if self._can_determine_epoch:
-            start_idx = self._items_yielded - current_batch_size
-            epoch = start_idx // self._dataset_len
-
         return SchedulerData(
             flow_fields=flow,
             images1=images1,
             images2=images2,
             files=files,
             mask=valid_mask,
-            epoch=epoch,
+            epoch=epoch_arr,
             jax_seed=jax_seed,
         )
 
@@ -331,7 +327,7 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
     def reset(self) -> None:
         """Resets the state (re-creates iterator)."""
-        self._iterator: grain.PyGrainDatasetIterator = iter(
+        self._iterator: grain.PyGrainDatasetIterator | None = iter(
             self.loader)
         self._items_yielded = 0
         logger.debug("GrainSchedulerAdapter reset.")
@@ -410,6 +406,10 @@ class GrainEpisodicAdapter(GrainSchedulerAdapter, EpisodicSchedulerProtocol):
             raise EpisodeEndError("Episode Sequence Finished.") from None
 
         # Update tracking
+        if self._can_determine_epoch:
+            bs = batch["flow_fields"].shape[0]
+            self._items_yielded += bs
+
         if "_timestep" in batch:
             t = batch["_timestep"][0]
             self._current_timestep = int(t)
