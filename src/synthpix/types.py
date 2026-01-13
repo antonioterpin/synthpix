@@ -72,10 +72,10 @@ class SynthpixBatch:
     flow_fields: jnp.ndarray  # (B, H, W, 2)
     params: ImageGenerationParameters | None = None
     done: jnp.ndarray | None = None  # (B,)
-    mask: jnp.ndarray | None = None  # (B, )
+    mask: jnp.ndarray | None = None  # (B,)
     files: tuple[str, ...] | None = None
-    epoch: jnp.ndarray | None = None  # (B, )
-    seeds: jnp.ndarray | None = None  # (B, )
+    epoch: jnp.ndarray | None = None  # (B,)
+    seeds: jnp.ndarray | None = None  # (B,)
 
     def update(self, **kwargs: Any) -> Self:
         """Return a new SynthpixBatch with updated fields.

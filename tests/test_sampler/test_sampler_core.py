@@ -13,7 +13,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from typing import Any
 
 from synthpix.sampler import RealImageSampler, SyntheticImageSampler
 from synthpix.scheduler import (EpisodicFlowFieldScheduler,
@@ -1834,4 +1833,4 @@ def test_sampler_epoch_expansion():
     # Check files expansion (tuple)
     assert batch.files is not None
     assert len(batch.files) == batch_size, f"Files length mismatch. Expected {batch_size}, got {len(batch.files)}"
-    assert batch.files == ("f0", "f0", "f0", "f0") # Should be repeated 4 times since we had 1 flow flow
+    assert batch.files == ("f0", "f0", "f0", "f0") # Should be repeated 4 times since we had 1 flow field

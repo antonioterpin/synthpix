@@ -106,7 +106,7 @@ def test_sampler_legacy_randomness_path(base_config):
     
     # Legacy path usually doesn't provide seeds in batch (it's None)
     
-    assert batch1.seeds is None or jnp.all(batch1.seeds == None), "Batch should have None seeds from legacy scheduler"
+    assert batch1.seeds is None, "Batch should have None seeds from legacy scheduler"
     assert not jnp.allclose(batch1.images1, batch2.images1), "Images should be different (randomized by internal RNG)"
 
 
@@ -339,6 +339,6 @@ def test_jax_seeds_uniqueness():
     )
     
     # Should not crash
-    batch_keys = sampler_keys._get_next()
+    sampler_keys._get_next()
     print("Successfully generated batch using keys as seeds")
 
