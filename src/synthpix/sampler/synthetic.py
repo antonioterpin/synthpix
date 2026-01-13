@@ -663,6 +663,23 @@ class SyntheticImageSampler(Sampler):
             state_dict["current_flows"] = jax.ShapeDtypeStruct(
                 shape, jnp.float32)
 
+        if state_dict["mask_scheduler"] is None:
+            # mask_scheduler is expanded to batch_size in _get_next
+            state_dict["mask_scheduler"] = jax.ShapeDtypeStruct(
+                (self.batch_size,), jnp.bool_)
+
+        if state_dict["scheduler_epoch"] is None:
+            # scheduler_epoch is expanded to batch_size in _get_next
+            # Assuming int32 or int64 for epoch
+            state_dict["scheduler_epoch"] = jax.ShapeDtypeStruct(
+                (self.batch_size,), jnp.int32)
+
+        if state_dict["files_scheduler"] is None:
+            # files_scheduler is encoded as uint8 array of variable length
+            # Use np.nan to indicate unknown dimension size for restoration
+            state_dict["files_scheduler"] = jax.ShapeDtypeStruct(
+                (np.nan,), jnp.uint8)
+
         return state_dict
 
     @state.setter
