@@ -11,20 +11,11 @@ import jax.numpy as jnp
 import numpy as np
 from tqdm import tqdm
 
-from . import ON_UNIX
 from .sampler import SyntheticImageSampler
 from .scheduler import HDF5FlowFieldScheduler
-from .utils import SYNTHPIX_SCOPE, load_configuration
+from .utils import SYNTHPIX_SCOPE, get_logger, load_configuration
 
-if ON_UNIX:
-    import goggles as gg
-    logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
-else:
-    import logging
-
-    logger = logging.getLogger(__name__)
-    if not logging.getLogger().handlers:
-        logging.basicConfig(level=logging.INFO)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 def update_config_file(config_path: str, updated_values: dict) -> None:

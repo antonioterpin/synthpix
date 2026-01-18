@@ -3,25 +3,16 @@
 import jax
 import jax.numpy as jnp
 
-from synthpix import ON_UNIX
-
 # Import existing modules
 from synthpix.generate import add_noise_to_image, img_gen_from_data
 from synthpix.types import (ImageGenerationParameters,
                             ImageGenerationSpecification, PRNGKey)
-from synthpix.utils import DEBUG_JIT, SYNTHPIX_SCOPE, match_histogram
+from synthpix.utils import (DEBUG_JIT, SYNTHPIX_SCOPE, get_logger,
+                            match_histogram)
 
 from .apply import apply_flow_to_particles
 
-if ON_UNIX:
-    import goggles as gg
-    logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
-else:
-    import logging
-
-    logger = logging.getLogger(__name__)
-    if not logging.getLogger().handlers:
-        logging.basicConfig(level=logging.INFO)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 def generate_images_from_flow(  # noqa: PLR0915

@@ -4,23 +4,14 @@
 import jax.numpy as jnp
 from typing_extensions import Self
 
-from synthpix import ON_UNIX
 from synthpix.sampler.base import Sampler
 from synthpix.scheduler import SchedulerProtocol
 from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
 from synthpix.scheduler.prefetch import PrefetchingFlowFieldScheduler
 from synthpix.types import SynthpixBatch
-from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.utils import SYNTHPIX_SCOPE, get_logger
 
-if ON_UNIX:
-    import goggles as gg
-    logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
-else:
-    import logging
-
-    logger = logging.getLogger(__name__)
-    if not logging.getLogger().handlers:
-        logging.basicConfig(level=logging.INFO)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class RealImageSampler(Sampler):

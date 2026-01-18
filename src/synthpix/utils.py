@@ -1,6 +1,9 @@
 """Utility functions for the vision module."""
 
+from __future__ import annotations
+
 import json
+import logging
 import os
 from collections.abc import Callable, Sequence
 from typing import Any
@@ -10,23 +13,48 @@ import jax.numpy as jnp
 import numpy as np
 from goggles import config as gg_config
 
-from synthpix import ON_UNIX
-
 DEBUG_JIT = False
 SYNTHPIX_SCOPE = "synthpix"
+ON_UNIX = os.name == "posix"
 
 load_configuration = gg_config.load_configuration
 
 
-if ON_UNIX:
-    import goggles as gg
-    logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
-else:
-    import logging
+def get_logger(
+    name: str,
+    *,
+    scope: str | None = None,
+    level: int = logging.INFO,
+) -> logging.Logger:
+    """Return a module-level logger with platform-specific behavior.
 
-    logger = logging.getLogger(__name__)
+    On Unix systems, this uses `goggles`.
+    On non-Unix systems, it falls back to the standard logging module.
+
+    Args:
+        name: Logger name.
+        scope: Optional goggles scope.
+        level: Logging level for the fallback logger.
+
+    Returns:
+        A configured logger.
+    """
+    if ON_UNIX:
+        import goggles as gg
+        if scope is None:
+            return gg.get_logger(name)  # type: ignore[no-any-return]
+        return gg.get_logger(name, scope=scope)  # type: ignore[no-any-return]
+
+    logger = logging.getLogger(name)
+
+    # Configure root logger only once
     if not logging.getLogger().handlers:
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level=level)
+
+    return logger
+
+
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 def match_histogram(

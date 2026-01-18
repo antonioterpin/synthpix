@@ -11,7 +11,6 @@ import orbax.checkpoint as ocp
 from rich.console import Console
 from rich.text import Text
 
-from synthpix import ON_UNIX
 from synthpix.data_sources import (EpisodicDataSource, FileDataSource,
                                    HDF5DataSource, MATDataSource,
                                    NumpyDataSource)
@@ -24,17 +23,9 @@ from synthpix.scheduler import (BaseFlowFieldScheduler,
                                 NumpyFlowFieldScheduler,
                                 PrefetchingFlowFieldScheduler)
 
-from .utils import SYNTHPIX_SCOPE, load_configuration
+from .utils import SYNTHPIX_SCOPE, get_logger, load_configuration
 
-if ON_UNIX:
-    import goggles as gg
-    logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
-else:
-    import logging
-
-    logger = logging.getLogger(__name__)
-    if not logging.getLogger().handlers:
-        logging.basicConfig(level=logging.INFO)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 SCHEDULERS: dict[str, type[BaseFlowFieldScheduler]] = {
     ".h5": HDF5FlowFieldScheduler,

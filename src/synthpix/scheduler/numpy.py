@@ -7,22 +7,13 @@ import numpy as np
 from PIL import Image
 from typing_extensions import Self
 
-from synthpix import ON_UNIX
 from synthpix.scheduler.protocol import FileEndedError
 from synthpix.types import PRNGKey, SchedulerData
-from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.utils import SYNTHPIX_SCOPE, get_logger
 
 from .base import BaseFlowFieldScheduler
 
-if ON_UNIX:
-    import goggles as gg
-    logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
-else:
-    import logging
-
-    logger = logging.getLogger(__name__)
-    if not logging.getLogger().handlers:
-        logging.basicConfig(level=logging.INFO)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):

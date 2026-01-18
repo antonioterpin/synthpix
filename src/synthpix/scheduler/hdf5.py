@@ -3,21 +3,12 @@
 import h5py
 from typing_extensions import Self
 
-from synthpix import ON_UNIX
 from synthpix.scheduler import BaseFlowFieldScheduler
 from synthpix.scheduler.protocol import FileEndedError
 from synthpix.types import PRNGKey, SchedulerData
-from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.utils import SYNTHPIX_SCOPE, get_logger
 
-if ON_UNIX:
-    import goggles as gg
-    logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
-else:
-    import logging
-
-    logger = logging.getLogger(__name__)
-    if not logging.getLogger().handlers:
-        logging.basicConfig(level=logging.INFO)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class HDF5FlowFieldScheduler(BaseFlowFieldScheduler):

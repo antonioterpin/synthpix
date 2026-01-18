@@ -6,23 +6,14 @@ import time
 from contextlib import suppress
 from typing import Any
 
-from synthpix import ON_UNIX
 from synthpix.scheduler.protocol import (EpisodeEndError,
                                          EpisodicSchedulerProtocol,
                                          PrefetchedSchedulerProtocol,
                                          SchedulerProtocol)
 from synthpix.types import SchedulerData
-from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.utils import SYNTHPIX_SCOPE, get_logger
 
-if ON_UNIX:
-    import goggles as gg
-    logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
-else:
-    import logging
-
-    logger = logging.getLogger(__name__)
-    if not logging.getLogger().handlers:
-        logging.basicConfig(level=logging.INFO)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):

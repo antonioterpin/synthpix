@@ -11,27 +11,18 @@ from jax import Array
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from typing_extensions import Self
 
-from synthpix import ON_UNIX
 from synthpix.data_generate import (generate_images_from_flow,
                                     input_check_gen_img_from_flow)
 from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
 from synthpix.scheduler.protocol import SchedulerProtocol
 from synthpix.types import ImageGenerationSpecification, PRNGKey, SynthpixBatch
 from synthpix.utils import (DEBUG_JIT, SYNTHPIX_SCOPE, decode_from_uint8,
-                            encode_to_uint8, flow_field_adapter,
+                            encode_to_uint8, flow_field_adapter, get_logger,
                             input_check_flow_field_adapter)
 
 from .base import Sampler
 
-if ON_UNIX:
-    import goggles as gg
-    logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
-else:
-    import logging
-
-    logger = logging.getLogger(__name__)
-    if not logging.getLogger().handlers:
-        logging.basicConfig(level=logging.INFO)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class SyntheticImageSampler(Sampler):
