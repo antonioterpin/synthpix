@@ -1,21 +1,23 @@
 """Main file to run the SyntheticImageSampler pipeline."""
 
 import argparse
-import logging
 import os
 
-import goggles as gg
 import matplotlib.pyplot as plt
 import numpy as np
 
 import synthpix
+from synthpix.utils import ON_UNIX, SYNTHPIX_SCOPE, get_logger
+
+if ON_UNIX:
+    import goggles as gg
+else:
+    gg = None
+
 
 # To see logs in the console, we need to attach a handler to
 # the Synthpix scope: synthpix.SYNTHPIX_SCOPE
-logger = gg.get_logger(__name__, scope=synthpix.SYNTHPIX_SCOPE)
-gg.attach(
-    gg.ConsoleHandler(level=logging.INFO),
-)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 def visualize_and_save(
@@ -117,7 +119,8 @@ def main(
                     break
     finally:
         sampler.shutdown()
-        gg.finish()
+        if gg is not None:
+            gg.finish()
 
 
 if __name__ == "__main__":
@@ -169,4 +172,5 @@ if __name__ == "__main__":
         use_grain=args.use_grain,
     )
 
-    gg.finish()
+    if gg is not None:
+        gg.finish()

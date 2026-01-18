@@ -1,6 +1,5 @@
 
-"""
-Checkpointing Example for SynthPix
+"""Checkpointing Example for SynthPix.
 
 This script demonstrates how to save and restore the entire state of a SynthPix pipeline
 using the high-level `synthpix.save_checkpoint` and `load_from` APIs.
@@ -21,6 +20,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 def main() -> None:
+    """Main function to demonstrate checkpointing."""
     # Define paths
     # Assuming script is run from project root
     root_dir = Path.cwd()

@@ -1,13 +1,12 @@
 """HDF5FlowFieldScheduler to load flow fields from .h5 files."""
 
 import h5py
-from goggles import get_logger
 from typing_extensions import Self
 
 from synthpix.scheduler import BaseFlowFieldScheduler
 from synthpix.scheduler.protocol import FileEndedError
 from synthpix.types import PRNGKey, SchedulerData
-from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.utils import SYNTHPIX_SCOPE, get_logger
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 

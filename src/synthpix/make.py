@@ -4,7 +4,6 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-import goggles as gg
 import grain.python as grain
 import jax
 import numpy as np
@@ -24,9 +23,9 @@ from synthpix.scheduler import (BaseFlowFieldScheduler,
                                 NumpyFlowFieldScheduler,
                                 PrefetchingFlowFieldScheduler)
 
-from .utils import SYNTHPIX_SCOPE, load_configuration
+from .utils import SYNTHPIX_SCOPE, get_logger, load_configuration
 
-logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 SCHEDULERS: dict[str, type[BaseFlowFieldScheduler]] = {
     ".h5": HDF5FlowFieldScheduler,
