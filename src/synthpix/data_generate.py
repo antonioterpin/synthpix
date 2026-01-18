@@ -1,8 +1,9 @@
 """Processing module for generating images from flow fields."""
 
-import goggles as gg
 import jax
 import jax.numpy as jnp
+
+from synthpix import ON_UNIX
 
 # Import existing modules
 from synthpix.generate import add_noise_to_image, img_gen_from_data
@@ -12,7 +13,15 @@ from synthpix.utils import DEBUG_JIT, SYNTHPIX_SCOPE, match_histogram
 
 from .apply import apply_flow_to_particles
 
-logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
+if ON_UNIX:
+    import goggles as gg
+    logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
+else:
+    import logging
+
+    logger = logging.getLogger(__name__)
+    if not logging.getLogger().handlers:
+        logging.basicConfig(level=logging.INFO)
 
 
 def generate_images_from_flow(  # noqa: PLR0915

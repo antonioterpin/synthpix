@@ -4,18 +4,24 @@ import argparse
 import logging
 import os
 
-import goggles as gg
 import matplotlib.pyplot as plt
 import numpy as np
 
 import synthpix
 
-# To see logs in the console, we need to attach a handler to
-# the Synthpix scope: synthpix.SYNTHPIX_SCOPE
-logger = gg.get_logger(__name__, scope=synthpix.SYNTHPIX_SCOPE)
-gg.attach(
-    gg.ConsoleHandler(level=logging.INFO),
-)
+if synthpix.ON_UNIX:
+    import goggles as gg
+
+    # To see logs in the console, we need to attach a handler to
+    # the Synthpix scope: synthpix.SYNTHPIX_SCOPE
+    logger = gg.get_logger(__name__, scope=synthpix.SYNTHPIX_SCOPE)
+    gg.attach(
+        gg.ConsoleHandler(level=logging.INFO),
+    )
+else:
+    gg = None
+    logger = logging.getLogger(__name__)
+    logging.basicConfig(level=logging.INFO)
 
 
 def visualize_and_save(
@@ -117,7 +123,8 @@ def main(
                     break
     finally:
         sampler.shutdown()
-        gg.finish()
+        if gg is not None:
+            gg.finish()
 
 
 if __name__ == "__main__":
@@ -169,4 +176,5 @@ if __name__ == "__main__":
         use_grain=args.use_grain,
     )
 
-    gg.finish()
+    if gg is not None:
+        gg.finish()

@@ -7,11 +7,11 @@ from typing import Any, cast
 import jax
 import jax.numpy as jnp
 import numpy as np
-from goggles import get_logger
 from jax import Array
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from typing_extensions import Self
 
+from synthpix import ON_UNIX
 from synthpix.data_generate import (generate_images_from_flow,
                                     input_check_gen_img_from_flow)
 from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
@@ -23,7 +23,15 @@ from synthpix.utils import (DEBUG_JIT, SYNTHPIX_SCOPE, decode_from_uint8,
 
 from .base import Sampler
 
-logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
+if ON_UNIX:
+    import goggles as gg
+    logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
+else:
+    import logging
+
+    logger = logging.getLogger(__name__)
+    if not logging.getLogger().handlers:
+        logging.basicConfig(level=logging.INFO)
 
 
 class SyntheticImageSampler(Sampler):
@@ -693,7 +701,7 @@ class SyntheticImageSampler(Sampler):
             KeyError: If required keys are missing from the state dict.
         """
         # Call base class for common validation and scheduler restoration
-        Sampler.state.fset(self, value)  # type: ignore
+        Sampler.state.fset(self, value)
 
         required_keys = {
             "step",

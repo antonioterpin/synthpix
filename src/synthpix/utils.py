@@ -5,17 +5,28 @@ import os
 from collections.abc import Callable, Sequence
 from typing import Any
 
-import goggles as gg
 import jax
 import jax.numpy as jnp
 import numpy as np
+from goggles import config as gg_config
+
+from synthpix import ON_UNIX
 
 DEBUG_JIT = False
 SYNTHPIX_SCOPE = "synthpix"
 
-load_configuration = gg.load_configuration
+load_configuration = gg_config.load_configuration
 
-logger = gg.get_logger(__name__)
+
+if ON_UNIX:
+    import goggles as gg
+    logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
+else:
+    import logging
+
+    logger = logging.getLogger(__name__)
+    if not logging.getLogger().handlers:
+        logging.basicConfig(level=logging.INFO)
 
 
 def match_histogram(
