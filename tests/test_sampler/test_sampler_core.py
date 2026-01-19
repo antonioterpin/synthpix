@@ -13,6 +13,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from typing import Any
 
 from synthpix.sampler import RealImageSampler, SyntheticImageSampler
 from synthpix.scheduler import (EpisodicFlowFieldScheduler,
@@ -1834,3 +1835,254 @@ def test_sampler_epoch_expansion():
     assert batch.files is not None
     assert len(batch.files) == batch_size, f"Files length mismatch. Expected {batch_size}, got {len(batch.files)}"
     assert batch.files == ("f0", "f0", "f0", "f0") # Should be repeated 4 times since we had 1 flow field
+
+    
+class PartialBatchScheduler(SchedulerProtocol):
+    """Scheduler that returns fewer elements than requested, simulating last batch."""
+
+    def __init__(self, actual_batch_size: int, flow_shape=(20, 20, 2), provide_metadata: bool = True):
+        """Initialize scheduler that returns partial batches.
+
+        Args:
+            actual_batch_size: The actual number of elements to return (less than
+                flow_fields_per_batch to simulate last batch scenario)
+            flow_shape: Shape of flow fields
+            provide_metadata: Whether to provide jax_seed, files, mask, and epoch.
+                If False, these will be returned as None to test fallback logic.
+        """
+        self.actual_batch_size = actual_batch_size
+        self.flow_shape = flow_shape
+        self.provide_metadata = provide_metadata
+        self._file_list: list[str] = []
+        self._state: dict[str, Any] = {}
+
+    def get_flow_fields_shape(self):
+        return self.flow_shape
+
+    def get_batch(self, batch_size):
+        # Return fewer elements than requested, simulating last batch
+        actual = min(batch_size, self.actual_batch_size)
+        flows = np.zeros((actual, *self.flow_shape))
+        
+        if self.provide_metadata:
+            jax_seeds = np.arange(actual, dtype=np.uint32)
+            files = tuple(f"file_{i}.npy" for i in range(actual))
+            mask = np.ones(actual, dtype=bool)
+            epoch = np.zeros(actual, dtype=np.int32)
+        else:
+            jax_seeds = None
+            files = None
+            mask = None
+            epoch = None
+
+        return SchedulerData(
+            flow_fields=flows,
+            jax_seed=jax_seeds,
+            files=files,
+            mask=mask,
+            epoch=epoch,
+        )
+
+    def shutdown(self) -> None:
+        pass
+
+    def reset(self) -> None:
+        pass
+
+    @property
+    def file_list(self) -> list[str]:
+        return self._file_list
+
+    @file_list.setter
+    def file_list(self, value: list[str]) -> None:
+        self._file_list = value
+
+    @property
+    def state(self) -> dict[str, Any]:
+        return self._state
+
+    @state.setter
+    def state(self, value: dict[str, Any]) -> None:
+        self._state = value
+
+    @property
+    def grain_iterator(self) -> Any | None:
+        return None
+
+
+def test_partial_batch_handling():
+    """Test sampler handles last batch with fewer elements than batch_size.
+
+    This test verifies the fix for a bug where processing the last batch of a
+    dataset would crash with a vmap size mismatch error. For example, with
+    450 files and batch_size=11, the last batch has only 10 files.
+
+    The bug occurred because the code used `flow_fields_per_batch` (configured
+    value) instead of the actual batch size returned by the scheduler when
+    determining if array expansion was needed.
+
+    Regression test for: ValueError: vmap got inconsistent sizes for array axes
+    """
+    # Simulate: batch_size=11, but scheduler returns only 10 elements (last batch)
+    batch_size = 11
+    actual_elements_in_last_batch = 10
+    flow_fields_per_batch = 11  # Configured value
+
+    scheduler = PartialBatchScheduler(
+        actual_batch_size=actual_elements_in_last_batch,
+        flow_shape=(20, 20, 2)
+    )
+
+    spec = ImageGenerationSpecification(
+        batch_size=batch_size,
+        image_shape=(10, 10),
+        img_offset=(0.2, 0.2),
+        dt=0.1,
+    )
+
+    sampler = SyntheticImageSampler(
+        scheduler=scheduler,
+        batches_per_flow_batch=1,
+        flow_fields_per_batch=flow_fields_per_batch,
+        flow_field_size=(20.0, 20.0),
+        resolution=1.0,
+        velocities_per_pixel=1.0,
+        seed=42,
+        max_speed_x=1.0,
+        max_speed_y=1.0,
+        min_speed_x=0.0,
+        min_speed_y=0.0,
+        output_units="pixels",
+        generation_specification=spec,
+        device_ids=[0],
+    )
+
+    # This should NOT raise ValueError about vmap size mismatch
+    batch = sampler._get_next()
+
+    # Verify batch was correctly expanded to batch_size
+    assert batch.images1.shape[0] == batch_size, (
+        f"Expected batch size {batch_size}, got {batch.images1.shape[0]}"
+    )
+    assert batch.seeds is not None, "Seeds should be present"
+    assert batch.seeds.shape[0] == batch_size, (
+        f"Expected {batch_size} seeds, got {batch.seeds.shape[0]}"
+    )
+    assert batch.files is not None, "Files should be present"
+    assert len(batch.files) == batch_size, (
+        f"Expected {batch_size} files, got {len(batch.files)}"
+    )
+    assert batch.mask is not None, "Mask should be present"
+    assert batch.mask.shape[0] == batch_size, (
+        f"Expected {batch_size} mask elements, got {batch.mask.shape[0]}"
+    )
+    assert batch.epoch is not None, "Epoch should be present"
+    assert batch.epoch.shape[0] == batch_size, (
+        f"Expected {batch_size} epoch elements, got {batch.epoch.shape[0]}"
+    )
+
+@pytest.mark.parametrize("actual_size,batch_size", [
+    (1, 4),    # Single element expanded to 4
+    (3, 10),   # 3 elements expanded to 10
+    (7, 8),    # 7 elements expanded to 8 (off by one)
+    (15, 16),  # 15 elements expanded to 16
+])
+def test_partial_batch_various_sizes(actual_size, batch_size):
+    """Test partial batch handling with various size combinations."""
+    scheduler = PartialBatchScheduler(
+        actual_batch_size=actual_size,
+        flow_shape=(20, 20, 2)
+    )
+
+    spec = ImageGenerationSpecification(
+        batch_size=batch_size,
+        image_shape=(10, 10),
+        img_offset=(0.2, 0.2),
+        dt=0.1,
+    )
+
+    sampler = SyntheticImageSampler(
+        scheduler=scheduler,
+        batches_per_flow_batch=1,
+        flow_fields_per_batch=batch_size,  # Request full batch_size
+        flow_field_size=(20.0, 20.0),
+        resolution=1.0,
+        velocities_per_pixel=1.0,
+        seed=42,
+        max_speed_x=1.0,
+        max_speed_y=1.0,
+        min_speed_x=0.0,
+        min_speed_y=0.0,
+        output_units="pixels",
+        generation_specification=spec,
+        device_ids=[0],
+    )
+
+    # Should not crash
+    batch = sampler._get_next()
+
+    # Verify expansion
+    assert batch.images1.shape[0] == batch_size, (
+        f"Expected batch size {batch_size}, got {batch.images1.shape[0]}"
+    )
+    assert batch.seeds is not None, "Seeds should be present"
+    assert batch.seeds.shape[0] == batch_size, (
+        f"Expected {batch_size} seeds, got {batch.seeds.shape[0]}"
+    )
+    assert batch.files is not None, "Files should be present"
+    assert len(batch.files) == batch_size, (
+        f"Expected {batch_size} files, got {len(batch.files)}"
+    )
+
+
+def test_partial_batch_no_metadata():
+    """Test partial batch handling when no metadata (jax_seed, files) is provided.
+
+    This verifies the robustness of the fallback logic that uses len(current_flows)
+    as a source of truth for n_flows expansion.
+    """
+    batch_size = 8
+    actual_elements = 3
+    
+    scheduler = PartialBatchScheduler(
+        actual_batch_size=actual_elements,
+        flow_shape=(20, 20, 2),
+        provide_metadata=False  # Metadata will be None
+    )
+
+    spec = ImageGenerationSpecification(
+        batch_size=batch_size,
+        image_shape=(10, 10),
+        img_offset=(0.2, 0.2),
+        dt=0.1,
+    )
+
+    sampler = SyntheticImageSampler(
+        scheduler=scheduler,
+        batches_per_flow_batch=1,
+        flow_fields_per_batch=batch_size,
+        flow_field_size=(20.0, 20.0),
+        resolution=1.0,
+        velocities_per_pixel=1.0,
+        seed=42,
+        max_speed_x=1.0,
+        max_speed_y=1.0,
+        min_speed_x=0.0,
+        min_speed_y=0.0,
+        output_units="pixels",
+        generation_specification=spec,
+        device_ids=[0],
+    )
+
+    # This should NOT crash and should use len(current_flows) for expansion
+    batch = sampler._get_next()
+
+    # Verify expansion happened correctly
+    assert batch.images1.shape[0] == batch_size, (
+        f"Expected batch size {batch_size}, got {batch.images1.shape[0]}"
+    )
+    # Metadata should be None in output if None in input
+    assert batch.seeds is None, f"Seeds should be None, got {type(batch.seeds)}"
+    assert batch.files is None, f"Files should be None, got {type(batch.files)}"
+    assert batch.mask is None, f"Mask should be None, got {type(batch.mask)}"
+    assert batch.epoch is None, f"Epoch should be None, got {type(batch.epoch)}"
