@@ -271,11 +271,11 @@ class GrainSchedulerAdapter(SchedulerProtocol):
         )
 
     @property
-    def grain_iterator(self) -> grain.PyGrainDatasetIterator:
+    def grain_iterator(self) -> grain.PyGrainDatasetIterator | None:
         """Returns the underlying Grain iterator for checkpointing.
 
         Returns:
-            The grain.PyGrainDatasetIterator instance.
+            The grain.PyGrainDatasetIterator instance or None if shut down.
         """
         return self._iterator
 
@@ -291,6 +291,9 @@ class GrainSchedulerAdapter(SchedulerProtocol):
         Raises:
             StopIteration: If the Grain DataLoader is exhausted.
         """
+        if self._iterator is None:
+            raise RuntimeError("Grain iterator is already shut down.")
+
         try:
             batch = next(self._iterator)
         except StopIteration:
@@ -327,8 +330,7 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
     def reset(self) -> None:
         """Resets the state (re-creates iterator)."""
-        self._iterator: grain.PyGrainDatasetIterator | None = iter(
-            self.loader)
+        self._iterator = iter(self.loader)
         self._items_yielded = 0
         logger.debug("GrainSchedulerAdapter reset.")
 
@@ -400,6 +402,9 @@ class GrainEpisodicAdapter(GrainSchedulerAdapter, EpisodicSchedulerProtocol):
         Raises:
             EpisodeEndError: If the episode sequence has finished.
         """
+        if self._iterator is None:
+            raise EpisodeEndError("Episode Sequence Finished (Shut down).")
+
         try:
             batch = next(self._iterator)
         except StopIteration:
@@ -432,6 +437,9 @@ class GrainEpisodicAdapter(GrainSchedulerAdapter, EpisodicSchedulerProtocol):
         """
         # In Grain, "next episode" just means "keep reading until timestep goes
         # back to 0".
+
+        if self._iterator is None:
+            raise RuntimeError("Iterator is not initialized.")
 
         # If we are NOT at end, we must skip.
         while self.steps_remaining() > 0:
