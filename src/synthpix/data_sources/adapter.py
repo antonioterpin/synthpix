@@ -327,8 +327,7 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
     def reset(self) -> None:
         """Resets the state (re-creates iterator)."""
-        self._iterator: grain.PyGrainDatasetIterator | None = iter(
-            self.loader)
+        self._iterator = iter(self.loader)
         self._items_yielded = 0
         logger.debug("GrainSchedulerAdapter reset.")
 
@@ -434,6 +433,9 @@ class GrainEpisodicAdapter(GrainSchedulerAdapter, EpisodicSchedulerProtocol):
         # back to 0".
 
         # If we are NOT at end, we must skip.
+        if self._iterator is None:
+            raise RuntimeError("Iterator is not initialized.")
+
         while self.steps_remaining() > 0:
             try:
                 batch = next(self._iterator)
