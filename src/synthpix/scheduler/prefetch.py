@@ -6,14 +6,12 @@ import time
 from contextlib import suppress
 from typing import Any
 
-from goggles import get_logger
-
 from synthpix.scheduler.protocol import (EpisodeEndError,
                                          EpisodicSchedulerProtocol,
                                          PrefetchedSchedulerProtocol,
                                          SchedulerProtocol)
 from synthpix.types import SchedulerData
-from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.utils import SYNTHPIX_SCOPE, get_logger
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 

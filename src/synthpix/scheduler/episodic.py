@@ -4,7 +4,6 @@ import glob
 import os
 from typing import Any
 
-import goggles as gg
 import jax
 import jax.numpy as jnp
 from typing_extensions import Self
@@ -13,9 +12,9 @@ from synthpix.scheduler.protocol import (EpisodeEndError,
                                          EpisodicSchedulerProtocol,
                                          SchedulerProtocol)
 from synthpix.types import PRNGKey, SchedulerData
-from synthpix.utils import SYNTHPIX_SCOPE, discover_leaf_dirs
+from synthpix.utils import SYNTHPIX_SCOPE, discover_leaf_dirs, get_logger
 
-logger = gg.get_logger(__name__, scope=SYNTHPIX_SCOPE)
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
 class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):

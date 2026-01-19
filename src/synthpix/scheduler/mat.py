@@ -3,13 +3,12 @@
 import h5py
 import numpy as np
 import scipy.io
-from goggles import get_logger
 from PIL import Image
 from typing_extensions import Self
 
 from synthpix.scheduler.protocol import FileEndedError
 from synthpix.types import PRNGKey, SchedulerData
-from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.utils import SYNTHPIX_SCOPE, get_logger
 
 from .base import BaseFlowFieldScheduler
 

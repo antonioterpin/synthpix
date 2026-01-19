@@ -9,12 +9,11 @@ from typing import Any
 import h5py
 import jax.numpy as jnp
 import numpy as np
-from goggles import get_logger
 from tqdm import tqdm
 
 from .sampler import SyntheticImageSampler
 from .scheduler import HDF5FlowFieldScheduler
-from .utils import SYNTHPIX_SCOPE, load_configuration
+from .utils import SYNTHPIX_SCOPE, get_logger, load_configuration
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 

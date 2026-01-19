@@ -9,6 +9,8 @@ import re
 import sys
 import timeit
 from pathlib import Path
+import logging
+import types
 
 import jax
 import jax.numpy as jnp
@@ -18,7 +20,8 @@ from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from synthpix.utils import (bilinear_interpolate, discover_leaf_dirs,
                             flow_field_adapter, generate_array_flow_field,
                             input_check_flow_field_adapter, load_configuration,
-                            trilinear_interpolate)
+                            trilinear_interpolate, get_logger)
+import synthpix.utils as utils_module
 from tests.example_flows import get_flow_function
 
 config = load_configuration("config/testing.yaml")
@@ -866,3 +869,39 @@ def test_discover_leaf_dirs_skips_permission_denied(tmp_path, monkeypatch):
     leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
     assert _abspath(ok) in leaves, f"Expected {_abspath(ok)} to be in leaves, got {leaves}"
     assert _abspath(denied) not in leaves, f"Expected {_abspath(denied)} (permission denied) to be excluded from leaves"
+
+
+def test_get_logger_unix_uses_goggles(monkeypatch):
+    """Test that on Unix systems, get_logger uses the goggles module if available."""
+    # Pretend we are on Unix
+    monkeypatch.setattr(utils_module, "ON_UNIX", True, raising=True)
+
+    # Fake goggles module
+    fake_logger = logging.getLogger("fake")
+
+    fake_goggles = types.SimpleNamespace(
+        get_logger=lambda name, scope=None: fake_logger
+    )
+
+    monkeypatch.setitem(__import__("sys").modules, "goggles", fake_goggles)
+
+    logger = get_logger("test.logger", scope="synthpix")
+
+    assert logger is fake_logger, "Expected to receive the fake goggles logger"
+
+
+def test_get_logger_windows_fallback(monkeypatch):
+    """Test that on Windows systems, get_logger falls back to standard logging."""
+    # Pretend we are on Windows
+    monkeypatch.setattr(utils_module, "ON_UNIX", False, raising=True)
+
+    # Clear root handlers to test basicConfig path
+    root = logging.getLogger()
+    for h in list(root.handlers):
+        root.removeHandler(h)
+
+    logger = get_logger("test.logger", scope="synthpix")
+
+    assert isinstance(logger, logging.Logger), "Expected a standard Logger instance"
+    assert logger.name == "test.logger", f"Expected logger name 'test.logger', got '{logger.name}'"
+    assert logging.getLogger().handlers, "Expected root logger to have handlers configured"

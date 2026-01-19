@@ -5,14 +5,13 @@ from typing import Any
 
 import grain.python as grain
 import jax.numpy as jnp
-from goggles import get_logger
 from typing_extensions import Self
 
 from synthpix.scheduler.protocol import (EpisodeEndError,
                                          EpisodicSchedulerProtocol,
                                          SchedulerProtocol)
 from synthpix.types import SynthpixBatch
-from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.utils import SYNTHPIX_SCOPE, get_logger
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 

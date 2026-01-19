@@ -2,7 +2,6 @@
 
 
 import jax.numpy as jnp
-from goggles import get_logger
 from typing_extensions import Self
 
 from synthpix.sampler.base import Sampler
@@ -10,7 +9,7 @@ from synthpix.scheduler import SchedulerProtocol
 from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
 from synthpix.scheduler.prefetch import PrefetchingFlowFieldScheduler
 from synthpix.types import SynthpixBatch
-from synthpix.utils import SYNTHPIX_SCOPE
+from synthpix.utils import SYNTHPIX_SCOPE, get_logger
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
