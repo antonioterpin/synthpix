@@ -525,6 +525,7 @@ class SyntheticImageSampler(Sampler):
             n_flows = (
                 len(self._jax_seeds) if self._jax_seeds is not None
                 else len(self._files_scheduler) if self._files_scheduler is not None
+                else len(self._current_flows) if self._current_flows is not None
                 else self.flow_fields_per_batch
             )
             if n_flows < self.batch_size:

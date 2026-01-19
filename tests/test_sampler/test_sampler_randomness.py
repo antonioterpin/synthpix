@@ -346,16 +346,19 @@ def test_jax_seeds_uniqueness():
 class PartialBatchScheduler(SchedulerProtocol):
     """Scheduler that returns fewer elements than requested, simulating last batch."""
 
-    def __init__(self, actual_batch_size: int, flow_shape=(20, 20, 2)):
+    def __init__(self, actual_batch_size: int, flow_shape=(20, 20, 2), provide_metadata: bool = True):
         """Initialize scheduler that returns partial batches.
 
         Args:
             actual_batch_size: The actual number of elements to return (less than
                 flow_fields_per_batch to simulate last batch scenario)
             flow_shape: Shape of flow fields
+            provide_metadata: Whether to provide jax_seed, files, mask, and epoch.
+                If False, these will be returned as None to test fallback logic.
         """
         self.actual_batch_size = actual_batch_size
         self.flow_shape = flow_shape
+        self.provide_metadata = provide_metadata
         self._file_list: list[str] = []
         self._state: dict[str, Any] = {}
 
@@ -366,10 +369,17 @@ class PartialBatchScheduler(SchedulerProtocol):
         # Return fewer elements than requested, simulating last batch
         actual = min(batch_size, self.actual_batch_size)
         flows = np.zeros((actual, *self.flow_shape))
-        jax_seeds = np.arange(actual, dtype=np.uint32)
-        files = tuple(f"file_{i}.npy" for i in range(actual))
-        mask = np.ones(actual, dtype=bool)
-        epoch = np.zeros(actual, dtype=np.int32)
+        
+        if self.provide_metadata:
+            jax_seeds = np.arange(actual, dtype=np.uint32)
+            files = tuple(f"file_{i}.npy" for i in range(actual))
+            mask = np.ones(actual, dtype=bool)
+            epoch = np.zeros(actual, dtype=np.int32)
+        else:
+            jax_seeds = None
+            files = None
+            mask = None
+            epoch = None
 
         return SchedulerData(
             flow_fields=flows,
@@ -526,3 +536,58 @@ def test_partial_batch_various_sizes(actual_size, batch_size):
     )
     assert batch.seeds is not None and batch.seeds.shape[0] == batch_size
     assert batch.files is not None and len(batch.files) == batch_size
+
+
+def test_partial_batch_no_metadata():
+    """Test partial batch handling when no metadata (jax_seed, files) is provided.
+
+    This verifies the robustness of the fallback logic that uses len(current_flows)
+    as a source of truth for n_flows expansion.
+    """
+    batch_size = 8
+    actual_elements = 3
+    
+    scheduler = PartialBatchScheduler(
+        actual_batch_size=actual_elements,
+        flow_shape=(20, 20, 2),
+        provide_metadata=False  # Metadata will be None
+    )
+
+    spec = ImageGenerationSpecification(
+        batch_size=batch_size,
+        image_shape=(10, 10),
+        img_offset=(0.2, 0.2),
+        dt=0.1,
+    )
+
+    sampler = SyntheticImageSampler(
+        scheduler=scheduler,
+        batches_per_flow_batch=1,
+        flow_fields_per_batch=batch_size,
+        flow_field_size=(20.0, 20.0),
+        resolution=1.0,
+        velocities_per_pixel=1.0,
+        seed=42,
+        max_speed_x=1.0,
+        max_speed_y=1.0,
+        min_speed_x=0.0,
+        min_speed_y=0.0,
+        output_units="pixels",
+        generation_specification=spec,
+        device_ids=[0],
+    )
+
+    # This should NOT crash and should use len(current_flows) for expansion
+    batch = sampler._get_next()
+
+    # Verify expansion happened correctly
+    assert batch.images1.shape[0] == batch_size, (
+        f"Expected batch size {batch_size}, got {batch.images1.shape[0]}"
+    )
+    # Metadata should be None in output if None in input
+    assert batch.seeds is None
+    assert batch.files is None
+    assert batch.mask is None
+    assert batch.epoch is None
+    
+    print("Successfully handled partial batch without any metadata using current_flows fallback")
