@@ -1,6 +1,7 @@
 """Sampler for real data."""
 
 
+import jax
 import jax.numpy as jnp
 from typing_extensions import Self
 
@@ -51,6 +52,9 @@ class RealImageSampler(Sampler):
         """
         # Get the next batch of flow fields from the scheduler
         batch = self.scheduler.get_batch(batch_size=self.batch_size)
+        keys = jax.vmap(
+            jax.random.PRNGKey)(
+            batch.jax_seed) if batch.jax_seed is not None else None
         batch = SynthpixBatch(
             images1=jnp.array(batch.images1, dtype=jnp.float32),
             images2=jnp.array(batch.images2, dtype=jnp.float32),
@@ -61,6 +65,7 @@ class RealImageSampler(Sampler):
             files=batch.files,
             epoch=jnp.array(batch.epoch) if batch.epoch is not None else None,
             seeds=jnp.array(batch.jax_seed) if batch.jax_seed is not None else None,
+            keys=keys,
         )
         return batch
 

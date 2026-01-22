@@ -622,6 +622,7 @@ class SyntheticImageSampler(Sampler):
             seeds=jnp.array(self._jax_seeds)
             if self._jax_seeds is not None
             else None,
+            keys=batch_keys,
         )
 
     @property

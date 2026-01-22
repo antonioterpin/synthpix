@@ -67,15 +67,16 @@ class ImageGenerationParameters:
 class SynthpixBatch:
     """Dataclass representing a batch of SynthPix data."""
 
-    images1: jnp.ndarray  # (B, H, W)
-    images2: jnp.ndarray  # (B, H, W)
-    flow_fields: jnp.ndarray  # (B, H, W, 2)
+    images1: jnp.ndarray                           # (B, H, W)
+    images2: jnp.ndarray                           # (B, H, W)
+    flow_fields: jnp.ndarray                       # (B, H, W, 2)
     params: ImageGenerationParameters | None = None
-    done: jnp.ndarray | None = None  # (B,)
-    mask: jnp.ndarray | None = None  # (B,)
+    done: jnp.ndarray | None = None                # (B,)
+    mask: jnp.ndarray | None = None                # (B,)
     files: tuple[str, ...] | None = None
-    epoch: jnp.ndarray | None = None  # (B,)
-    seeds: jnp.ndarray | None = None  # (B,)
+    epoch: jnp.ndarray | None = None               # (B,)
+    seeds: jnp.ndarray | None = None               # (B,)
+    keys: PRNGKey | None = None                    # (B, 2)
 
     def update(self, **kwargs: Any) -> Self:
         """Return a new SynthpixBatch with updated fields.
@@ -96,6 +97,7 @@ class SynthpixBatch:
             files=kwargs.get("files", self.files),
             epoch=kwargs.get("epoch", self.epoch),
             seeds=kwargs.get("seeds", self.seeds),
+            keys=kwargs.get("keys", self.keys),
         )
 
     def tree_flatten(
