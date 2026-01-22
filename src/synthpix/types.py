@@ -124,6 +124,7 @@ class SynthpixBatch:
             self.files,
             self.epoch,
             self.seeds,
+            self.keys,
         )
         aux_data = None
         return (children, aux_data)

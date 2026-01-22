@@ -595,6 +595,7 @@ class SyntheticImageSampler(Sampler):
             # Legacy Path: Use internal _rng
             self._rng, subkey = jax.random.split(self._rng)
             keys = jax.random.split(subkey, self.ndevices)
+            batch_keys = jax.random.split(subkey, self.batch_size)
 
         # Generate a new batch of images using the current flow fields
         imgs1, imgs2, params = self.img_gen_fn_jit(keys, self._current_flows)
