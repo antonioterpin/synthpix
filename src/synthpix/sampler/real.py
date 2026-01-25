@@ -52,9 +52,11 @@ class RealImageSampler(Sampler):
         """
         # Get the next batch of flow fields from the scheduler
         batch = self.scheduler.get_batch(batch_size=self.batch_size)
-        keys = jax.vmap(
-            jax.random.PRNGKey)(
-            batch.jax_seed) if batch.jax_seed is not None else None
+        keys = (
+            jax.vmap(jax.random.PRNGKey)(batch.jax_seed)
+            if batch.jax_seed is not None
+            else None
+        )
         batch = SynthpixBatch(
             images1=jnp.array(batch.images1, dtype=jnp.float32),
             images2=jnp.array(batch.images2, dtype=jnp.float32),

@@ -65,7 +65,26 @@ class ImageGenerationParameters:
 @tree_util.register_pytree_node_class
 @dataclass(frozen=False)
 class SynthpixBatch:
-    """Dataclass representing a batch of SynthPix data."""
+    """Dataclass representing a batch of SynthPix data.
+
+    NOTE: seeds are unique per-flow-field-file, keys are unique per-image-pair.
+    This is because each flow-field-file can be used to generate multiple
+    image pairs. In the case of 'RealImageSampler', the flow-field-file
+    contains the image pair and the flow field itself, so seeds and keys are
+    unique per flow-field-file.
+
+    Attributes:
+        images1: First image in the pair. (B, H, W)
+        images2: Second image in the pair. (B, H, W)
+        flow_fields: Flow field between the two images. (B, H, W, 2)
+        params: Parameters used to generate the images. (B,)
+        done: Whether the flow field is valid. (B,)
+        mask: Mask indicating the valid regions of the flow field. (B, H, W)
+        files: File paths of the images. (B,)
+        epoch: Epoch of the images. (B,)
+        seeds: Seeds used to generate the images. (B,)
+        keys: PRNG keys used to generate the images. (B, 2)
+    """
 
     images1: jnp.ndarray                           # (B, H, W)
     images2: jnp.ndarray                           # (B, H, W)

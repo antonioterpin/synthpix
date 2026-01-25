@@ -136,7 +136,6 @@ def test_sampler_bit_perfect_reproducibility(base_config, tmp_path):
     _ = next(sampler)
     _ = next(sampler)
     gt_batch = next(sampler)
-    gt_val = gt_batch.images1.mean()
     gt_step = sampler._step
     
     # 2. Resettable Run (Simulate Checkpoint)
