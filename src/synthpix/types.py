@@ -65,17 +65,37 @@ class ImageGenerationParameters:
 @tree_util.register_pytree_node_class
 @dataclass(frozen=False)
 class SynthpixBatch:
-    """Dataclass representing a batch of SynthPix data."""
+    """Dataclass representing a batch of SynthPix data.
 
-    images1: jnp.ndarray  # (B, H, W)
-    images2: jnp.ndarray  # (B, H, W)
-    flow_fields: jnp.ndarray  # (B, H, W, 2)
+    NOTE: seeds are unique per-flow-field-file, keys are unique per-image-pair.
+    This is because each flow-field-file can be used to generate multiple
+    image pairs. In the case of 'RealImageSampler', the flow-field-file
+    contains the image pair and the flow field itself, so seeds and keys are
+    unique per flow-field-file.
+
+    Attributes:
+        images1: First image in the pair. (B, H, W)
+        images2: Second image in the pair. (B, H, W)
+        flow_fields: Flow field between the two images. (B, H, W, 2)
+        params: Parameters used to generate the images. (B,)
+        done: Whether the flow field is valid. (B,)
+        mask: Mask indicating the valid regions of the flow field. (B, H, W)
+        files: File paths of the images. (B,)
+        epoch: Epoch of the images. (B,)
+        seeds: Seeds used to generate the images. (B,)
+        keys: PRNG keys used to generate the images. (B, 2)
+    """
+
+    images1: jnp.ndarray                           # (B, H, W)
+    images2: jnp.ndarray                           # (B, H, W)
+    flow_fields: jnp.ndarray                       # (B, H, W, 2)
     params: ImageGenerationParameters | None = None
-    done: jnp.ndarray | None = None  # (B,)
-    mask: jnp.ndarray | None = None  # (B,)
+    done: jnp.ndarray | None = None                # (B,)
+    mask: jnp.ndarray | None = None                # (B,)
     files: tuple[str, ...] | None = None
-    epoch: jnp.ndarray | None = None  # (B,)
-    seeds: jnp.ndarray | None = None  # (B,)
+    epoch: jnp.ndarray | None = None               # (B,)
+    seeds: jnp.ndarray | None = None               # (B,)
+    keys: PRNGKey | None = None                    # (B, 2)
 
     def update(self, **kwargs: Any) -> Self:
         """Return a new SynthpixBatch with updated fields.
@@ -96,6 +116,7 @@ class SynthpixBatch:
             files=kwargs.get("files", self.files),
             epoch=kwargs.get("epoch", self.epoch),
             seeds=kwargs.get("seeds", self.seeds),
+            keys=kwargs.get("keys", self.keys),
         )
 
     def tree_flatten(
@@ -122,6 +143,7 @@ class SynthpixBatch:
             self.files,
             self.epoch,
             self.seeds,
+            self.keys,
         )
         aux_data = None
         return (children, aux_data)

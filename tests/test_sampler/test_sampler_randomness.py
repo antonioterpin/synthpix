@@ -136,7 +136,6 @@ def test_sampler_bit_perfect_reproducibility(base_config, tmp_path):
     _ = next(sampler)
     _ = next(sampler)
     gt_batch = next(sampler)
-    gt_val = gt_batch.images1.mean()
     gt_step = sampler._step
     
     # 2. Resettable Run (Simulate Checkpoint)
@@ -153,10 +152,9 @@ def test_sampler_bit_perfect_reproducibility(base_config, tmp_path):
     
     # The next batch should be IDENTICAL to gt_batch
     resumed_batch = next(resumed_sampler)
-    resumed_val = resumed_batch.images1.mean()
     
     assert jnp.allclose(gt_batch.images1, resumed_batch.images1), "Images should be bit-perfectly identical after restore"
-    assert float(resumed_val) == pytest.approx(float(gt_val)), f"Mean value mismatch"
+    assert jnp.array_equal(gt_batch.keys, resumed_batch.keys), "Keys should be bit-perfectly identical after restore"
     assert resumed_sampler._step == gt_step
 
 
@@ -341,3 +339,70 @@ def test_jax_seeds_uniqueness():
     # Should not crash
     sampler_keys._get_next()
     print("Successfully generated batch using keys as seeds")
+
+
+def test_sampler_keys_uniqueness_and_ids(base_config):
+    """Verify that keys are unique across the batch and can serve as IDs."""
+    sampler = cast(SyntheticImageSampler, make(base_config, use_grain_scheduler=True))
+    batch = next(sampler)
+
+    assert batch.keys is not None
+    assert batch.keys.shape == (base_config["batch_size"], 2)
+
+    # Check uniqueness: each key (2 uint32) should be unique
+    key_tuples = [tuple(k.tolist()) for k in batch.keys]
+    assert len(set(key_tuples)) == len(key_tuples), "Batch keys must be unique"
+
+
+def test_sampler_keys_across_steps_and_reps(base_config):
+    """Verify that keys change across different steps and repetitions."""
+    config = base_config.copy()
+    config["batches_per_flow_batch"] = 2
+    sampler = cast(SyntheticImageSampler, make(config, use_grain_scheduler=True))
+
+    # Step 0, Rep 0
+    batch1 = next(sampler)
+    keys1 = batch1.keys
+
+    # Step 1, Rep 1 (Same flow, different repetition)
+    batch2 = next(sampler)
+    keys2 = batch2.keys
+
+    # Step 2, Rep 0 (New flow)
+    batch3 = next(sampler)
+    keys3 = batch3.keys
+
+    # All should be different
+    def keys_to_set(keys):
+        return {tuple(k.tolist()) for k in keys}
+
+    s1, s2, s3 = keys_to_set(keys1), keys_to_set(keys2), keys_to_set(keys3)
+
+    assert s1.isdisjoint(s2), "Keys should differ across repetitions of the same flow"
+    assert s1.isdisjoint(s3), "Keys should differ across different flows"
+    assert s2.isdisjoint(s3), "Keys should differ across different flows and repetitions"
+
+
+def test_real_sampler_keys(base_config):
+    """Verify that RealImageSampler also provides unique keys."""
+    class RealMockScheduler(MockScheduler):
+        @property
+        def include_images(self):
+            return True
+
+        def get_batch(self, batch_size):
+            data = super().get_batch(batch_size)
+            # Add dummy images
+            images = np.zeros((batch_size, 32, 32))
+            return data.update(images1=images, images2=images)
+
+    scheduler = RealMockScheduler(flow_fields_per_batch=2)
+    from synthpix.sampler.real import RealImageSampler
+    sampler = RealImageSampler(scheduler=scheduler, batch_size=2)
+
+    batch = next(sampler)
+    assert batch.keys is not None
+    assert batch.keys.shape == (2, 2)
+
+    key_tuples = [tuple(k.tolist()) for k in batch.keys]
+    assert len(set(key_tuples)) == len(key_tuples), "Real batch keys must be unique"
