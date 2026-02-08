@@ -50,5 +50,7 @@ def test_checkpoint_args_no_iterator():
     sampler = MagicMock(spec=Sampler)
     sampler.grain_iterator = None
 
-    with pytest.raises(ValueError, match="Sampler does not provide access to Grain iterator"):
+    with pytest.raises(
+        ValueError, match="Sampler does not provide access to Grain iterator"
+    ):
         checkpoint_args(sampler)

@@ -1,6 +1,5 @@
 """Sampler for real data."""
 
-
 import jax
 import jax.numpy as jnp
 from typing_extensions import Self

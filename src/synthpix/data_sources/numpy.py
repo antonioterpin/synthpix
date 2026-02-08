@@ -38,9 +38,7 @@ class NumpyDataSource(FileDataSource):
 
         # Pre-validation
         if not all(fp.endswith(".npy") for fp in self._file_list):
-            raise ValueError(
-                "All files must be numpy files with '.npy' extension"
-            )
+            raise ValueError("All files must be numpy files with '.npy' extension")
 
         if self.include_images:
             for flow_path in self._file_list:

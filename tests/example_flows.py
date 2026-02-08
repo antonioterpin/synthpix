@@ -1,7 +1,7 @@
 """Example flow functions for testing purposes.
 
-This module provides various analytical flow field functions (horizontal, 
-vertical, diagonal, pipe, vortex) used as ground truth for verifying 
+This module provides various analytical flow field functions (horizontal,
+vertical, diagonal, pipe, vortex) used as ground truth for verifying
 particle advection and image generation logic.
 """
 
@@ -71,9 +71,7 @@ def vortex_flow(
 
 def get_flow_function(
     selected_flow: str, image_shape: tuple[int, int] = (128, 128)
-) -> Callable[
-    [jnp.ndarray, jnp.ndarray, jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]
-]:
+) -> Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]]:
     """Generate a flow field for testing purposes.
 
     It creates a flow field function based on the selected_flow.

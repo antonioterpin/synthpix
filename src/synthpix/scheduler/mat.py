@@ -71,9 +71,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         super().__init__(file_list, randomize, loop, key)
         # ensure all supplied files are .mat
         if not all(file_path.endswith(".mat") for file_path in self.file_list):
-            raise ValueError(
-                "All files must be MATLAB .mat files with HDF5 format"
-            )
+            raise ValueError("All files must be MATLAB .mat files with HDF5 format")
 
         logger.debug(
             f"Initializing MATFlowFieldScheduler with "
@@ -143,15 +141,11 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                     data = recursively_load_hdf5_group(f)
 
         if data is None:
-            raise ValueError(
-                f"Failed to load {file_path} as HDF5 or legacy MATLAB."
-            )
+            raise ValueError(f"Failed to load {file_path} as HDF5 or legacy MATLAB.")
 
         # Validate the loaded data
         if "V" not in data:
-            raise ValueError(
-                f"Flow field not found in {file_path} (missing 'V')."
-            )
+            raise ValueError(f"Flow field not found in {file_path} (missing 'V').")
         if self.include_images and not all(k in data for k in ("I0", "I1")):
             raise ValueError(
                 f"Image visualization not supported for {file_path}: "
@@ -171,7 +165,8 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         if not (flow.shape[2] == 2 or flow.shape[0] == 2):
             raise ValueError(
                 f"Flow field shape {flow.shape} is not valid. "
-                "Expected shape to have 2 channels (e.g., (H, W, 2) or (2, H, W)).")
+                "Expected shape to have 2 channels (e.g., (H, W, 2) or (2, H, W))."
+            )
         if flow.shape[2] != 2:
             if flow.shape[0] == 2:
                 flow = np.transpose(flow, (1, 2, 0))
@@ -185,18 +180,12 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             # PIL resize expects (width, height)
             size = (self.output_shape[1], self.output_shape[0])
             flow_u = np.asarray(
-                Image.fromarray(flow[..., 0]).resize(
-                    size, Image.Resampling.BILINEAR
-                )
+                Image.fromarray(flow[..., 0]).resize(size, Image.Resampling.BILINEAR)
             )
             flow_v = np.asarray(
-                Image.fromarray(flow[..., 1]).resize(
-                    size, Image.Resampling.BILINEAR
-                )
+                Image.fromarray(flow[..., 1]).resize(size, Image.Resampling.BILINEAR)
             )
-            flow_resized = np.stack(
-                [flow_u * ratio_x, flow_v * ratio_y], axis=-1
-            )
+            flow_resized = np.stack([flow_u * ratio_x, flow_v * ratio_y], axis=-1)
             data["V"] = flow_resized
 
         logger.debug(f"Loaded {file_path} with keys {list(data.keys())}")

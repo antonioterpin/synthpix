@@ -8,9 +8,11 @@ import numpy as np
 
 from synthpix.data_sources.base import FileDataSource
 from synthpix.data_sources.episodic import EpisodicDataSource
-from synthpix.scheduler.protocol import (EpisodeEndError,
-                                         EpisodicSchedulerProtocol,
-                                         SchedulerProtocol)
+from synthpix.scheduler.protocol import (
+    EpisodeEndError,
+    EpisodicSchedulerProtocol,
+    SchedulerProtocol,
+)
 from synthpix.types import SchedulerData
 
 logger = logging.getLogger(__name__)
@@ -51,12 +53,8 @@ class GrainSchedulerAdapter(SchedulerProtocol):
         # Try to inspect loader components
         try:
             # Grain DataLoader stores sampler in _sampler
-            sampler = getattr(
-                loader, "sampler", getattr(
-                    loader, "_sampler", None))
-            dataset = getattr(
-                loader, "_data_source", getattr(
-                    loader, "_dataset", None))
+            sampler = getattr(loader, "sampler", getattr(loader, "_sampler", None))
+            dataset = getattr(loader, "_data_source", getattr(loader, "_dataset", None))
 
             if dataset is not None and hasattr(dataset, "__len__"):
                 self._dataset_len = len(dataset)
@@ -125,9 +123,7 @@ class GrainSchedulerAdapter(SchedulerProtocol):
             return getattr(ds, "include_images", False)
         return False
 
-    def _to_scheduler_data(
-        self, batch: dict, target_batch_size: int
-    ) -> SchedulerData:
+    def _to_scheduler_data(self, batch: dict, target_batch_size: int) -> SchedulerData:
         """Converts Grain batch dict to SchedulerData with padding and masking.
 
         Args:
@@ -152,17 +148,11 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
         # Validation
         if not isinstance(flow, np.ndarray):
-            raise ValueError(
-                f"Flow fields must be a np.ndarray, got {type(flow)}"
-            )
+            raise ValueError(f"Flow fields must be a np.ndarray, got {type(flow)}")
         if images1 is not None and not isinstance(images1, np.ndarray):
-            raise ValueError(
-                f"Images1 must be a np.ndarray, got {type(images1)}"
-            )
+            raise ValueError(f"Images1 must be a np.ndarray, got {type(images1)}")
         if images2 is not None and not isinstance(images2, np.ndarray):
-            raise ValueError(
-                f"Images2 must be a np.ndarray, got {type(images2)}"
-            )
+            raise ValueError(f"Images2 must be a np.ndarray, got {type(images2)}")
 
         current_batch_size = flow.shape[0]
 
@@ -450,9 +440,7 @@ class GrainEpisodicAdapter(GrainSchedulerAdapter, EpisodicSchedulerProtocol):
                     t = batch["_timestep"][0]
                     self._current_timestep = t
                 else:
-                    raise KeyError(
-                        "Batch missing required '_timestep' metadata"
-                    )
+                    raise KeyError("Batch missing required '_timestep' metadata")
             except StopIteration:
                 # End of data
                 break

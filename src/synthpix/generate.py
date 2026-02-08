@@ -74,9 +74,7 @@ def add_noise_to_image(
     )
     # Add Gaussian noise
     image += noise_gaussian_mean
-    image += (
-        jax.random.normal(gaussian_key, shape=image.shape) * noise_gaussian_std
-    )
+    image += jax.random.normal(gaussian_key, shape=image.shape) * noise_gaussian_std
 
     # Clip the final image to valid range
     return jnp.clip(image, 0, 255)
@@ -167,9 +165,7 @@ def img_gen_from_data(
         xx_patch = jnp.arange(patch_size) + top_left[1]
 
         coords = (
-            jnp.array(jnp.meshgrid(yy_patch, xx_patch, indexing="ij"))
-            .reshape(2, -1)
-            .T
+            jnp.array(jnp.meshgrid(yy_patch, xx_patch, indexing="ij")).reshape(2, -1).T
         )
 
         # Flatten kernel and scatter

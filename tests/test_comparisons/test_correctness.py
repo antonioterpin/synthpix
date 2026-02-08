@@ -1,7 +1,7 @@
 """Correctness comparison between Legacy and Grain schedulers.
 
-These tests verify that the modern Grain-based data loading stack produces 
-bit-identical results to the legacy scheduler implementation for the same 
+These tests verify that the modern Grain-based data loading stack produces
+bit-identical results to the legacy scheduler implementation for the same
 input data and seeds, ensuring a direct and reliable migration path.
 """
 
@@ -20,9 +20,9 @@ from synthpix.scheduler.mat import MATFlowFieldScheduler
 @pytest.mark.parametrize(
     "batch_size, episode_length",
     [
-        (1, 10),    # Standard
-        (1, 1),     # Single-frame episodes
-        (1, 7),     # Odd episode length
+        (1, 10),  # Standard
+        (1, 1),  # Single-frame episodes
+        (1, 7),  # Odd episode length
     ],
 )
 def test_legacy_vs_grain_equality_simple(
@@ -30,14 +30,14 @@ def test_legacy_vs_grain_equality_simple(
 ):
     """Verify that Legacy and Grain stacks yield identical results for a simple case.
 
-    Generates a single episode of data and confirms that both the old 
-    `EpisodicFlowFieldScheduler` and the new `GrainEpisodicAdapter` 
+    Generates a single episode of data and confirms that both the old
+    `EpisodicFlowFieldScheduler` and the new `GrainEpisodicAdapter`
     produce bit-identical flow field batches.
     """
     # Create exactly episode_length files in one directory
     num_files = episode_length
     h, w = mat_test_dims["height"], mat_test_dims["width"]
-    
+
     # We create a subdirectory to ensure it's treated as an episode
     episode_dir = tmp_path / "episode_0"
     episode_dir.mkdir()
@@ -48,7 +48,7 @@ def test_legacy_vs_grain_equality_simple(
             f.create_dataset("I0", data=np.full((h, w), t, dtype=np.uint8))
             f.create_dataset("I1", data=np.full((h, w), t + 1, dtype=np.uint8))
             f.create_dataset("V", data=np.full((h, w, 2), t / 10.0, dtype=np.float32))
-        
+
         # Fake MATLAB header
         with open(mat_path, "r+b") as fp:
             fp.write(b"MATLAB 7.3 MAT-file".ljust(512, b" "))
@@ -110,8 +110,8 @@ def test_legacy_vs_grain_equality_simple(
 def test_grain_ordering(tmp_path, mock_mat_files):
     """Verify that the Grain adapter maintains strict temporal order of data.
 
-    In single-worker mode (`worker_count=0`), batches produced by Grain 
-    should follow the expected sequence of timesteps within each 
+    In single-worker mode (`worker_count=0`), batches produced by Grain
+    should follow the expected sequence of timesteps within each
     interleaved chunk, ensuring no frame shuffling occurs.
     """
     dataset_dir = tmp_path
@@ -133,12 +133,10 @@ def test_grain_ordering(tmp_path, mock_mat_files):
             shard_options=grain.NoSharding(),
             num_epochs=1,
         ),
-        operations=[
-            grain.Batch(batch_size=batch_size, drop_remainder=False)
-        ],
+        operations=[grain.Batch(batch_size=batch_size, drop_remainder=False)],
         worker_count=0,
     )
-    
+
     trace = []
     for batch in loader:
         t_vals = batch["_timestep"]
@@ -153,6 +151,10 @@ def test_grain_ordering(tmp_path, mock_mat_files):
 
         if prev_c == curr_c:
             expected_t = prev_t + 1
-            assert curr_t == expected_t, f"Order violation at batch {i}: Chunk {prev_c} t={prev_t} -> t={curr_t}"
+            assert (
+                curr_t == expected_t
+            ), f"Order violation at batch {i}: Chunk {prev_c} t={prev_t} -> t={curr_t}"
         else:
-            assert curr_t == 0, f"New chunk {curr_c} should start at t=0, got t={curr_t}"
+            assert (
+                curr_t == 0
+            ), f"New chunk {curr_c} should start at t=0, got t={curr_t}"

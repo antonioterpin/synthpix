@@ -43,10 +43,7 @@ def update_config_file(config_path: str, updated_values: dict) -> None:
 
     # Convert all values in config_data to standard Python types
     config_data = collections.OrderedDict(
-        {
-            key: convert_to_standard_type(value)
-            for key, value in config_data.items()
-        }
+        {key: convert_to_standard_type(value) for key, value in config_data.items()}
     )
 
     # Add new keys at the end
@@ -112,23 +109,13 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
                 x_data = data[..., 0]
                 y_data = data[..., 1]
             else:
-                raise ValueError(
-                    f"Unexpected data shape: {data.shape} in file {file}"
-                )
+                raise ValueError(f"Unexpected data shape: {data.shape} in file {file}")
 
             # Find the min and max speeds along each axis
-            running_max_speed_x = max(
-                running_max_speed_x, float(np.max(x_data))
-            )
-            running_max_speed_y = max(
-                running_max_speed_y, float(np.max(y_data))
-            )
-            running_min_speed_x = min(
-                running_min_speed_x, float(np.min(x_data))
-            )
-            running_min_speed_y = min(
-                running_min_speed_y, float(np.min(y_data))
-            )
+            running_max_speed_x = max(running_max_speed_x, float(np.max(x_data)))
+            running_max_speed_y = max(running_max_speed_y, float(np.max(y_data)))
+            running_min_speed_x = min(running_min_speed_x, float(np.min(x_data)))
+            running_min_speed_y = min(running_min_speed_y, float(np.min(y_data)))
 
     return {
         "min_speed_x": running_min_speed_x,
@@ -138,7 +125,9 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
     }
 
 
-def missing_speeds_panel(config_path: str) -> tuple[float, float, float, float]:  # noqa: PLR0912
+def missing_speeds_panel(
+    config_path: str,
+) -> tuple[float, float, float, float]:  # noqa: PLR0912
     """Check for missing speeds in the configuration file.
 
     Args:
@@ -192,8 +181,7 @@ def missing_speeds_panel(config_path: str) -> tuple[float, float, float, float]:
             for key, value in calculated_speeds.items():
                 print(f"{key}: {value}")
             advance = input(
-                "Do you want to continue with the updated configuration? "
-                "(y/n): "
+                "Do you want to continue with the updated configuration? " "(y/n): "
             )
             if advance.lower() == "y":
                 speeds = (
@@ -216,9 +204,7 @@ def missing_speeds_panel(config_path: str) -> tuple[float, float, float, float]:
             print("[WARNING]: Invalid choice. Exiting.")
             raise RuntimeError("Exiting the script.")
     else:
-        logger.info(
-            "All required speed values are present in the configuration file."
-        )
+        logger.info("All required speed values are present in the configuration file.")
         return (
             config["max_speed_x"],
             config["max_speed_y"],
