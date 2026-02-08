@@ -8,9 +8,11 @@ import jax
 import jax.numpy as jnp
 from typing_extensions import Self
 
-from synthpix.scheduler.protocol import (EpisodeEndError,
-                                         EpisodicSchedulerProtocol,
-                                         SchedulerProtocol)
+from synthpix.scheduler.protocol import (
+    EpisodeEndError,
+    EpisodicSchedulerProtocol,
+    SchedulerProtocol,
+)
 from synthpix.types import PRNGKey, SchedulerData
 from synthpix.utils import SYNTHPIX_SCOPE, discover_leaf_dirs, get_logger
 
@@ -278,9 +280,7 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         """
         # Extract the leaf directories from the file list
         leaf_dirs = discover_leaf_dirs(self.file_list)
-        dir2files = {
-            d: sorted(glob.glob(os.path.join(d, "*.mat"))) for d in leaf_dirs
-        }
+        dir2files = {d: sorted(glob.glob(os.path.join(d, "*.mat"))) for d in leaf_dirs}
 
         # Sanity-check: all directories must contain enough frames
         for d, files in dir2files.items():
@@ -317,7 +317,7 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         episodes = []
         for d, s in sampled_starts:
             # Extract the time-series pattern for this episode
-            episodes.append(self.dir2files[d][s: s + self.episode_length])
+            episodes.append(self.dir2files[d][s : s + self.episode_length])
 
         # Interleave “time major” → t0_ep0, t0_ep1, …, t1_ep0, …
         interleaved = [

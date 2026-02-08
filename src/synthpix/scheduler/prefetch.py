@@ -6,10 +6,12 @@ import time
 from contextlib import suppress
 from typing import Any
 
-from synthpix.scheduler.protocol import (EpisodeEndError,
-                                         EpisodicSchedulerProtocol,
-                                         PrefetchedSchedulerProtocol,
-                                         SchedulerProtocol)
+from synthpix.scheduler.protocol import (
+    EpisodeEndError,
+    EpisodicSchedulerProtocol,
+    PrefetchedSchedulerProtocol,
+    SchedulerProtocol,
+)
 from synthpix.types import SchedulerData
 from synthpix.utils import SYNTHPIX_SCOPE, get_logger
 
@@ -112,13 +114,9 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             )
         try:
             if self.startup:
-                batch = self._queue.get(
-                    block=True, timeout=self.startup_timeout
-                )
+                batch = self._queue.get(block=True, timeout=self.startup_timeout)
             else:
-                batch = self._queue.get(
-                    block=True, timeout=self.steady_state_timeout
-                )
+                batch = self._queue.get(block=True, timeout=self.steady_state_timeout)
 
             if self.startup:
                 self.startup = False
@@ -193,9 +191,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
                         # is available
                         self._queue.not_empty.notify_all()
 
-                logger.info(
-                    "No more data to fetch, stopping prefetching thread."
-                )
+                logger.info("No more data to fetch, stopping prefetching thread.")
                 self._stop_event.set()
                 return
 
@@ -329,9 +325,7 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             AttributeError: If the underlying scheduler is not episodic.
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
-            raise AttributeError(
-                "Underlying scheduler lacks episode_length property."
-            )
+            raise AttributeError("Underlying scheduler lacks episode_length property.")
         return int(self.scheduler.episode_length)
 
     @property

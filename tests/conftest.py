@@ -105,9 +105,7 @@ def scheduler(temp_file_module, request):
         randomize = request.param.get("randomize", False)
         loop = request.param.get("loop", False)
 
-    yield HDF5FlowFieldScheduler(
-        [temp_file_module], randomize=randomize, loop=loop
-    )
+    yield HDF5FlowFieldScheduler([temp_file_module], randomize=randomize, loop=loop)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -134,7 +132,7 @@ def numpy_test_dims():
 def mock_numpy_files(tmp_path, numpy_test_dims, request):
     """Create multiple temporary Numpy files with random data."""
     param = getattr(request, "param", 2)
-    
+
     if isinstance(param, dict):
         num_files = param.get("num_files", 2)
         dims = param.get("dims", numpy_test_dims)
@@ -172,7 +170,7 @@ def mat_test_dims():
 def mock_mat_files(tmp_path, mat_test_dims, request):
     """Create multiple temporary .mat files with random data."""
     param = getattr(request, "param", 2)
-    
+
     if isinstance(param, dict):
         num_files = param.get("num_files", 2)
         dims = param.get("dims", mat_test_dims)
@@ -194,9 +192,7 @@ def mock_mat_files(tmp_path, mat_test_dims, request):
                 "I1",
                 data=np.random.randint(0, 255, size=(h, w), dtype=np.uint8),
             )
-            f.create_dataset(
-                "V", data=np.random.rand(h, w, 2).astype(np.float32)
-            )
+            f.create_dataset("V", data=np.random.rand(h, w, 2).astype(np.float32))
 
         # write fake MATLAB header
         header = (

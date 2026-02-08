@@ -40,8 +40,7 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
             or not all(isinstance(f, str) for f in dataset_path)
         ):
             raise ValueError(
-                "dataset_path must be a list of file paths (or a single "
-                "string)."
+                "dataset_path must be a list of file paths (or a single " "string)."
             )
 
         for file_path in dataset_path:

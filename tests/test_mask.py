@@ -1,9 +1,10 @@
 """Tests for image masking during synthetic data generation.
 
-These tests verify that binary masks are correctly loaded and applied to 
-generated images, ensuring that masked regions are strictly zeroed out 
+These tests verify that binary masks are correctly loaded and applied to
+generated images, ensuring that masked regions are strictly zeroed out
 while unmasked regions retain their rendered content.
 """
+
 import re
 
 import jax
@@ -11,8 +12,10 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from synthpix.data_generate import (generate_images_from_flow,
-                                    input_check_gen_img_from_flow)
+from synthpix.data_generate import (
+    generate_images_from_flow,
+    input_check_gen_img_from_flow,
+)
 from synthpix.sampler import SyntheticImageSampler
 from synthpix.types import ImageGenerationSpecification
 
@@ -105,9 +108,7 @@ def test_invalid_mask_path(mask, scheduler):
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-@pytest.mark.parametrize(
-    "mock_invalid_mask_file", [0.0, 1.0, 0.0], indirect=True
-)
+@pytest.mark.parametrize("mock_invalid_mask_file", [0.0, 1.0, 0.0], indirect=True)
 def test_invalid_mask_shape(scheduler, mock_invalid_mask_file, image_shape):
     """Test that a mask with dimensions mismatched to the image raises a ValueError.
 
@@ -119,8 +120,7 @@ def test_invalid_mask_shape(scheduler, mock_invalid_mask_file, image_shape):
         with pytest.raises(
             ValueError,
             match=re.escape(
-                f"Mask shape {mask.shape} does not match image shape "
-                f"{image_shape}."
+                f"Mask shape {mask.shape} does not match image shape " f"{image_shape}."
             ),
         ):
             config = sampler_config.copy()
@@ -146,9 +146,7 @@ def test_invalid_mask_values(scheduler, mock_invalid_mask_file):
     # Create a dummy mask with an invalid shape
     mask = jnp.array(np.load(mock_invalid_mask_file[0]))
 
-    with pytest.raises(
-        ValueError, match="Mask must only contain 0 and 1 values."
-    ):
+    with pytest.raises(ValueError, match="Mask must only contain 0 and 1 values."):
         config = sampler_config.copy()
         config["mask"] = mock_invalid_mask_file[0]
         config["image_shape"] = mask.shape  # Use the shape of the mask
@@ -177,11 +175,15 @@ def test_mask_is_correct(scheduler, mock_mask_file):
         config=config,
     )
 
-    assert isinstance(sampler.mask_images, jnp.ndarray), f"Expected mask_images to be jnp.ndarray, got {type(sampler.mask_images)}"
-    assert sampler.mask_images.shape == mask.shape, f"Mask shape mismatch. Expected {mask.shape}, got {sampler.mask_images.shape}"
-    assert jnp.array_equal(sampler.mask_images, mask), (
-        "Mask loaded from file does not match the expected mask."
-    )
+    assert isinstance(
+        sampler.mask_images, jnp.ndarray
+    ), f"Expected mask_images to be jnp.ndarray, got {type(sampler.mask_images)}"
+    assert (
+        sampler.mask_images.shape == mask.shape
+    ), f"Mask shape mismatch. Expected {mask.shape}, got {sampler.mask_images.shape}"
+    assert jnp.array_equal(
+        sampler.mask_images, mask
+    ), "Mask loaded from file does not match the expected mask."
 
 
 def test_input_check_gen_img_from_flow_logs_mask(monkeypatch):
@@ -194,9 +196,7 @@ def test_input_check_gen_img_from_flow_logs_mask(monkeypatch):
 
     # Collect debug messages
     logged = []
-    monkeypatch.setattr(
-        generate_mod.logger, "debug", lambda msg: logged.append(msg)
-    )
+    monkeypatch.setattr(generate_mod.logger, "debug", lambda msg: logged.append(msg))
 
     # Call the function to test
     generate_mod.input_check_gen_img_from_flow(
@@ -209,9 +209,9 @@ def test_input_check_gen_img_from_flow_logs_mask(monkeypatch):
 
     # Check if the mask shape was logged
     expected_msg = f"Masking out {16 - jnp.sum(mask)} pixels in the images."
-    assert any(expected_msg in m for m in logged), (
-        f"Expected :{expected_msg}, got: {logged}"
-    )
+    assert any(
+        expected_msg in m for m in logged
+    ), f"Expected :{expected_msg}, got: {logged}"
 
 
 @pytest.mark.parametrize("mask", ["a", [1, 2]])
@@ -271,7 +271,7 @@ def test_invalid_mask_shape_in_generate(mask):
 def test_mask_applies_zeros(mask):
     """Verify that the mask correctly zeros out specific regions in the output images.
 
-    Tests multiple mask geometries (identity, horizontal, eye, full) and 
+    Tests multiple mask geometries (identity, horizontal, eye, full) and
     confirms that pixels are zeroed exactly where indicated.
     """
     key = jax.random.PRNGKey(1)
@@ -296,12 +296,8 @@ def test_mask_applies_zeros(mask):
     # Masked regions (where mask == 0) should be exactly zero
     masked1 = images1[mask == 0]
     masked2 = images2[mask == 0]
-    assert jnp.all(masked1 == 0), (
-        f"Masked region in images1 is not zero: {masked1}"
-    )
-    assert jnp.all(masked2 == 0), (
-        f"Masked region in images2 is not zero: {masked2}"
-    )
+    assert jnp.all(masked1 == 0), f"Masked region in images1 is not zero: {masked1}"
+    assert jnp.all(masked2 == 0), f"Masked region in images2 is not zero: {masked2}"
 
     # Unmasked regions (where mask == 1) should be nonzero
     # for at least some pixels (unless all masked)

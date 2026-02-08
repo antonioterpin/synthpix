@@ -1,7 +1,7 @@
 """Tests for GPU device selection and mesh configuration in `SyntheticImageSampler`.
 
-These tests verify that the sampler correctly identifies available NVIDIA GPUs 
-and allows users to specify exactly which devices should be used for 
+These tests verify that the sampler correctly identifies available NVIDIA GPUs
+and allows users to specify exactly which devices should be used for
 JAX-accelerated image generation via the `device_ids` parameter.
 """
 
@@ -47,7 +47,7 @@ class _DummyScheduler(BaseFlowFieldScheduler):
 def _make_sampler(device_ids):
     """Helper to create a `SyntheticImageSampler` with specific device IDs.
 
-    Uses a dummy scheduler and minimal configuration to isolate the device 
+    Uses a dummy scheduler and minimal configuration to isolate the device
     selection logic.
     """
     return SyntheticImageSampler(
@@ -95,7 +95,7 @@ def _make_sampler(device_ids):
 def test_sampler_uses_all_devices_when_none_passed():
     """Test that the sampler defaults to using all available JAX devices.
 
-    If `device_ids=None` is passed to the constructor, the internal 
+    If `device_ids=None` is passed to the constructor, the internal
     sharding mesh should encompass all physical GPUs detected by JAX.
     """
     sampler = _make_sampler(device_ids=None)
@@ -105,8 +105,12 @@ def test_sampler_uses_all_devices_when_none_passed():
     # comparison issues
     expected_device_ids = [d.id for d in jax.devices()]
     actual_device_ids = [d.id for d in sampler.mesh.devices]
-    assert expected_device_ids == actual_device_ids, f"Default device IDs mismatch. Expected {expected_device_ids}, got {actual_device_ids}"
-    assert len(sampler.mesh.devices) >= 1, "Sampler mesh should contain at least one device"
+    assert (
+        expected_device_ids == actual_device_ids
+    ), f"Default device IDs mismatch. Expected {expected_device_ids}, got {actual_device_ids}"
+    assert (
+        len(sampler.mesh.devices) >= 1
+    ), "Sampler mesh should contain at least one device"
 
 
 @pytest.mark.skipif(
@@ -117,7 +121,7 @@ def test_sampler_uses_all_devices_when_none_passed():
 def test_sampler_uses_requested_subset(ids):
     """Test that the sampler respects a specific subset of device IDs.
 
-    Verifies that only the requested indices are included in the 
+    Verifies that only the requested indices are included in the
     sampler's sharding mesh, ignoring other available devices.
     """
     if max(ids) >= len(jax.devices()):
@@ -136,7 +140,7 @@ def test_sampler_uses_requested_subset(ids):
 def test_sampler_rejects_invalid_device_ids():
     """Test that specifying only non-existent device IDs raises a ValueError.
 
-    Ensures that the sampler fails early if it cannot map any of the 
+    Ensures that the sampler fails early if it cannot map any of the
     provided `device_ids` to actual physical hardware.
     """
     invalid_id = len(jax.devices())  # one past the last valid index

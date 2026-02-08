@@ -1,8 +1,8 @@
 """Throughput and scaling benchmarks for Legacy and Grain schedulers.
 
-This module compares the execution speed of the data loading stacks, 
-evaluating Grain's multi-threading capabilities and comparing its 
-performance against the single-threaded legacy baseline across different 
+This module compares the execution speed of the data loading stacks,
+evaluating Grain's multi-threading capabilities and comparing its
+performance against the single-threaded legacy baseline across different
 file formats and configurations.
 """
 
@@ -24,23 +24,23 @@ from synthpix.scheduler.mat import MATFlowFieldScheduler
 
 
 @pytest.mark.parametrize(
-    "mock_mat_files", 
-    [{"num_files": 200, "dims": {"height": 256, "width": 256}}], 
-    indirect=True
+    "mock_mat_files",
+    [{"num_files": 200, "dims": {"height": 256, "width": 256}}],
+    indirect=True,
 )
 def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
     """Benchmark and compare the throughput of Legacy and Grain schedulers.
 
-    Iterates through batches using both stacks and prints a performance 
-    table comparing Legacy (fixed baseline) against Grain with varying 
+    Iterates through batches using both stacks and prints a performance
+    table comparing Legacy (fixed baseline) against Grain with varying
     thread counts.
-    
-    Uses 256x256 input files (via fixture) to match output shape, eliminating 
+
+    Uses 256x256 input files (via fixture) to match output shape, eliminating
     resize overhead to isolate I/O.
     """
     # Unpack fixture
     _, _ = mock_mat_files  # Files are already created in tmp_path
-    
+
     episode_length = 5
     batch_size = 1
     dataset_dir = tmp_path
@@ -101,7 +101,11 @@ def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
             seed=42,
         )
 
-        read_options = grain.ReadOptions(num_threads=num_threads) if num_threads is not None else None
+        read_options = (
+            grain.ReadOptions(num_threads=num_threads)
+            if num_threads is not None
+            else None
+        )
         grain_loader = grain.DataLoader(
             data_source=grain_episodic_ds,
             sampler=grain.IndexSampler(
@@ -125,19 +129,20 @@ def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
             ),
             number=1,
         )
-        
+
         del grain_loader
         del grain_adapter
         gc.collect()
-        
+
         # Cleanup goggles if active
         try:
             import goggles as gg
+
             gg.finish()
         except ImportError:
             # goggles is optional
             pass
-            
+
         time.sleep(0.5)
 
         speedup = t_legacy / t_grain
@@ -147,25 +152,31 @@ def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
     # Assertions for speedup
     # Grain should be at least slightly faster even with 1 thread due to better implementation,
     # and significantly faster with multiple threads/default config.
-    assert results[1] < t_legacy * 1.5, f"Grain with 1 thread is too slow: {results[1]:.4f}s vs Legacy {t_legacy:.4f}s"
-    assert results[16] < t_legacy, f"Grain with 16 threads should be faster than Legacy: {results[16]:.4f}s vs {t_legacy:.4f}s"
-    assert results[None] < t_legacy, f"Grain default should be faster than Legacy: {results[None]:.4f}s vs {t_legacy:.4f}s"
+    assert (
+        results[1] < t_legacy * 1.5
+    ), f"Grain with 1 thread is too slow: {results[1]:.4f}s vs Legacy {t_legacy:.4f}s"
+    assert (
+        results[16] < t_legacy
+    ), f"Grain with 16 threads should be faster than Legacy: {results[16]:.4f}s vs {t_legacy:.4f}s"
+    assert (
+        results[None] < t_legacy
+    ), f"Grain default should be faster than Legacy: {results[None]:.4f}s vs {t_legacy:.4f}s"
 
 
 @pytest.mark.parametrize(
     "mock_numpy_files",
     [{"num_files": 200, "dims": {"height": 256, "width": 256}}],
-    indirect=True
+    indirect=True,
 )
 def test_benchmark_numpy_speed(tmp_path, mock_numpy_files):
     """Benchmark Grain with NumpyDataSource to show threading scaling.
-    
-    Unlike HDF5/MAT, Numpy (~np.load) releases the GIL, allowing Grain to 
+
+    Unlike HDF5/MAT, Numpy (~np.load) releases the GIL, allowing Grain to
     actually parallelize data loading across multiple threads.
     """
     # Unpack fixture
     _, _ = mock_numpy_files
-    
+
     dataset_dir = tmp_path
     steps = 200
     batch_size = 1
@@ -235,6 +246,7 @@ def test_benchmark_numpy_speed(tmp_path, mock_numpy_files):
         gc.collect()
         try:
             import goggles as gg
+
             gg.finish()
         except ImportError:
             # goggles is optional
@@ -242,16 +254,18 @@ def test_benchmark_numpy_speed(tmp_path, mock_numpy_files):
         time.sleep(0.5)
 
     # Verify scaling: 4 threads should be noticeably faster than 1 thread
-    assert results[4] < results[1] * 0.9, f"Expected at least 10% speedup with 4 threads for Numpy, but got {results[4]:.4f}s vs {results[1]:.4f}s"
-
+    assert (
+        results[4] < results[1] * 0.9
+    ), f"Expected at least 10% speedup with 4 threads for Numpy, but got {results[4]:.4f}s vs {results[1]:.4f}s"
 
 
 class SleepingDataSource(grain.RandomAccessDataSource):
     """Mock data source that simulates high-latency I/O using `time.sleep`.
-    
-    Used to verify that the data loader correctly parallelizes data 
+
+    Used to verify that the data loader correctly parallelizes data
     loading across multiple threads or processes.
     """
+
     def __init__(self, size=10, sleep_time=0.1):
         super().__init__()
         self.size = size
@@ -264,12 +278,13 @@ class SleepingDataSource(grain.RandomAccessDataSource):
         time.sleep(self.sleep_time)
         return {"idx": idx, "pid": os.getpid(), "thread": threading.get_ident()}
 
+
 def test_grain_threading_speedup():
     """Verify that Grain achieves significant speedup using multi-threading.
 
-    Compares the total duration of loading 'slow' records across different 
-    thread counts to verify parallel execution. Also verifies that Grain's 
-    default configuration (worker_count=0, read_options=None) enables 
+    Compares the total duration of loading 'slow' records across different
+    thread counts to verify parallel execution. Also verifies that Grain's
+    default configuration (worker_count=0, read_options=None) enables
     multi-threading automatically.
     """
     size = 64
@@ -278,15 +293,21 @@ def test_grain_threading_speedup():
     thread_counts = [None, 1, 2, 4, 8, 16, 32, 64]
     results = {}
 
-    print(f"\n{'Threads':<10} | {'Duration (s)':<15} | {'Unique Threads':<15} | {'Speedup':<10}")
+    print(
+        f"\n{'Threads':<10} | {'Duration (s)':<15} | {'Unique Threads':<15} | {'Speedup':<10}"
+    )
     print("-" * 60)
 
     # We use 1 thread as the baseline for speedup calculations
     one_thread_duration = None
 
     for num_threads in thread_counts:
-        read_options = grain.ReadOptions(num_threads=num_threads) if num_threads is not None else None
-        
+        read_options = (
+            grain.ReadOptions(num_threads=num_threads)
+            if num_threads is not None
+            else None
+        )
+
         ds = SleepingDataSource(size=size, sleep_time=sleep_time)
         loader = grain.DataLoader(
             data_source=ds,
@@ -317,25 +338,41 @@ def test_grain_threading_speedup():
         duration, num_unique_threads = results[num_threads]
         label = "Default" if num_threads is None else str(num_threads)
         speedup = one_thread_duration / duration if one_thread_duration else 1.0
-        print(f"{label:<10} | {duration:<15.4f} | {num_unique_threads:<15} | {speedup:<10.2f}x")
+        print(
+            f"{label:<10} | {duration:<15.4f} | {num_unique_threads:<15} | {speedup:<10.2f}x"
+        )
 
     # Verify that multi-threading actually happened and improved performance
     # 1. Single thread should take at least size * sleep_time
-    assert results[1][0] >= (size * sleep_time), f"Expected 1 thread to take >= {size * sleep_time}s, got {results[1][0]:.4f}s"
+    assert results[1][0] >= (
+        size * sleep_time
+    ), f"Expected 1 thread to take >= {size * sleep_time}s, got {results[1][0]:.4f}s"
 
     # 2. Max threads should be faster than single thread
-    assert results[16][0] < results[1][0], f"Expected 16 threads ({results[16][0]:.4f}s) to be faster than 1 thread ({results[1][0]:.4f}s)"
+    assert (
+        results[16][0] < results[1][0]
+    ), f"Expected 16 threads ({results[16][0]:.4f}s) to be faster than 1 thread ({results[1][0]:.4f}s)"
 
     # 3. Max threads should use multiple threads
-    assert results[16][1] > 1, f"Expected 16 threads to use > 1 unique thread ID, got {results[16][1]}"
+    assert (
+        results[16][1] > 1
+    ), f"Expected 16 threads to use > 1 unique thread ID, got {results[16][1]}"
 
     # 4. Check for scaling: 4 threads should be roughly faster than 2 threads, etc.
     # We use a lenient margin because overhead/GIL can reduce ideal scaling.
-    assert results[4][0] < results[1][0], f"Expected 4 threads ({results[4][0]:.4f}s) to be faster than 1 thread ({results[1][0]:.4f}s)"
-    assert results[8][0] < results[2][0], f"Expected 8 threads ({results[8][0]:.4f}s) to be faster than 2 threads ({results[2][0]:.4f}s)"
+    assert (
+        results[4][0] < results[1][0]
+    ), f"Expected 4 threads ({results[4][0]:.4f}s) to be faster than 1 thread ({results[1][0]:.4f}s)"
+    assert (
+        results[8][0] < results[2][0]
+    ), f"Expected 8 threads ({results[8][0]:.4f}s) to be faster than 2 threads ({results[2][0]:.4f}s)"
 
     # 5. Verify Default configuration (read_options=None)
     # It should use multiple threads and be significantly faster than 1 thread
     default_duration, default_threads = results[None]
-    assert default_threads > 1, f"Default configuration only used {default_threads} thread(s)"
-    assert default_duration < results[1][0], "Default configuration was not faster than 1 thread"
+    assert (
+        default_threads > 1
+    ), f"Default configuration only used {default_threads} thread(s)"
+    assert (
+        default_duration < results[1][0]
+    ), "Default configuration was not faster than 1 thread"

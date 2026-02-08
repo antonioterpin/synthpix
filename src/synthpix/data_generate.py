@@ -5,10 +5,12 @@ import jax.numpy as jnp
 
 # Import existing modules
 from synthpix.generate import add_noise_to_image, img_gen_from_data
-from synthpix.types import (ImageGenerationParameters,
-                            ImageGenerationSpecification, PRNGKey)
-from synthpix.utils import (DEBUG_JIT, SYNTHPIX_SCOPE, get_logger,
-                            match_histogram)
+from synthpix.types import (
+    ImageGenerationParameters,
+    ImageGenerationSpecification,
+    PRNGKey,
+)
+from synthpix.utils import DEBUG_JIT, SYNTHPIX_SCOPE, get_logger, match_histogram
 
 from .apply import apply_flow_to_particles
 
@@ -84,9 +86,7 @@ def generate_images_from_flow(  # noqa: PLR0915
     # Calculate the number of particles based on the max density
     # Density is given in particles per pixel, so we use
     # the number of pixels in position bounds
-    num_particles = int(
-        position_bounds[0] * position_bounds[1] * max_seeding_density
-    )
+    num_particles = int(position_bounds[0] * position_bounds[1] * max_seeding_density)
 
     # Number of flow fields
     num_flow_fields = flow_field.shape[0]
@@ -130,9 +130,7 @@ def generate_images_from_flow(  # noqa: PLR0915
 
         # Randomly select a range for this image for each property
         diameter_idx = jax.random.randint(subkey7, (), 0, len(diameter_ranges))
-        intensity_idx = jax.random.randint(
-            subkey8, (), 0, len(intensity_ranges)
-        )
+        intensity_idx = jax.random.randint(subkey8, (), 0, len(intensity_ranges))
         rho_idx = jax.random.randint(subkey9, (), 0, len(rho_ranges))
 
         diameter_range = diameter_ranges[diameter_idx]
@@ -189,9 +187,7 @@ def generate_images_from_flow(  # noqa: PLR0915
             minval=-1,
             maxval=+1,
         )
-        diameters_y1 = jnp.clip(
-            diameters_y1, diameter_range[0], diameter_range[1]
-        )
+        diameters_y1 = jnp.clip(diameters_y1, diameter_range[0], diameter_range[1])
 
         # Sample theta in the specified range
         rho1 = jax.random.uniform(
@@ -211,18 +207,18 @@ def generate_images_from_flow(  # noqa: PLR0915
 
         # Generate Gaussian noise with mean 0 and standard deviation =
         # sqrt(variance)
-        noise_dx = jax.random.normal(
-            key_noise_dx, shape=(num_particles,)
-        ) * jnp.sqrt(parameters.diameter_var)
-        noise_dy = jax.random.normal(
-            key_noise_dy, shape=(num_particles,)
-        ) * jnp.sqrt(parameters.diameter_var)
-        noise_rho = jax.random.normal(
-            key_noise_rho, shape=(num_particles,)
-        ) * jnp.sqrt(parameters.rho_var)
-        noise_i = jax.random.normal(
-            key_noise_in, shape=(num_particles,)
-        ) * jnp.sqrt(parameters.intensity_var)
+        noise_dx = jax.random.normal(key_noise_dx, shape=(num_particles,)) * jnp.sqrt(
+            parameters.diameter_var
+        )
+        noise_dy = jax.random.normal(key_noise_dy, shape=(num_particles,)) * jnp.sqrt(
+            parameters.diameter_var
+        )
+        noise_rho = jax.random.normal(key_noise_rho, shape=(num_particles,)) * jnp.sqrt(
+            parameters.rho_var
+        )
+        noise_i = jax.random.normal(key_noise_in, shape=(num_particles,)) * jnp.sqrt(
+            parameters.intensity_var
+        )
 
         # Add noise to the original values
         diameters_x2 = diameters_x1 + noise_dx
@@ -231,16 +227,10 @@ def generate_images_from_flow(  # noqa: PLR0915
         intensities2 = intensities1 + noise_i
 
         # Clip the noisy values to their respective ranges
-        diameters_x2 = jnp.clip(
-            diameters_x2, diameter_range[0], diameter_range[1]
-        )
-        diameters_y2 = jnp.clip(
-            diameters_y2, diameter_range[0], diameter_range[1]
-        )
+        diameters_x2 = jnp.clip(diameters_x2, diameter_range[0], diameter_range[1])
+        diameters_y2 = jnp.clip(diameters_y2, diameter_range[0], diameter_range[1])
         rho2 = jnp.clip(rho2, rho_range[0], rho_range[1])
-        intensities2 = jnp.clip(
-            intensities2, intensity_range[0], intensity_range[1]
-        )
+        intensities2 = jnp.clip(intensities2, intensity_range[0], intensity_range[1])
 
         # First image generation
         first_img = img_gen_from_data(
@@ -293,16 +283,12 @@ def generate_images_from_flow(  # noqa: PLR0915
 
         # Crop the images to image_shape
         first_img = first_img[
-            parameters.img_offset[0]: image_shape[0]
-            + parameters.img_offset[0],
-            parameters.img_offset[1]: image_shape[1]
-            + parameters.img_offset[1],
+            parameters.img_offset[0] : image_shape[0] + parameters.img_offset[0],
+            parameters.img_offset[1] : image_shape[1] + parameters.img_offset[1],
         ]
         second_img = second_img[
-            parameters.img_offset[0]: image_shape[0]
-            + parameters.img_offset[0],
-            parameters.img_offset[1]: image_shape[1]
-            + parameters.img_offset[1],
+            parameters.img_offset[0] : image_shape[0] + parameters.img_offset[0],
+            parameters.img_offset[1] : image_shape[1] + parameters.img_offset[1],
         ]
 
         # Add noise to the images
@@ -350,12 +336,8 @@ def generate_images_from_flow(  # noqa: PLR0915
     images1, images2, diameter_indices, intensity_indices, rho_indices = outs
 
     # Optionally, map indices back to actual tuples for reporting
-    used_diameter_ranges = jnp.array(parameters.diameter_ranges)[
-        diameter_indices
-    ]
-    used_intensity_ranges = jnp.array(parameters.intensity_ranges)[
-        intensity_indices
-    ]
+    used_diameter_ranges = jnp.array(parameters.diameter_ranges)[diameter_indices]
+    used_intensity_ranges = jnp.array(parameters.intensity_ranges)[intensity_indices]
     used_rho_ranges = jnp.array(parameters.rho_ranges)[rho_indices]
 
     return (
@@ -400,9 +382,7 @@ def input_check_gen_img_from_flow(  # noqa: PLR0912, PLR0915
         ValueError: If any input parameter has invalid type, shape, or value.
     """
     if not isinstance(flow_field, jnp.ndarray):
-        raise ValueError(
-            f"flow_field must be a jnp.ndarray, got {type(flow_field)}."
-        )
+        raise ValueError(f"flow_field must be a jnp.ndarray, got {type(flow_field)}.")
     if flow_field.ndim != 4 or flow_field.shape[3] != 2:
         raise ValueError(
             "flow_field must be a 4D jnp.ndarray with shape (N, H, W, 2), "
@@ -413,30 +393,18 @@ def input_check_gen_img_from_flow(  # noqa: PLR0912, PLR0915
         or not all(s > 0 for s in position_bounds)
         or not all(isinstance(s, int) for s in position_bounds)
     ):
-        raise ValueError(
-            "position_bounds must be a tuple of two positive integers."
-        )
+        raise ValueError("position_bounds must be a tuple of two positive integers.")
 
     if not (isinstance(flow_field_res_x, int | float) and flow_field_res_x > 0):
-        raise ValueError(
-            "flow_field_res_x must be a positive scalar (int or float)"
-        )
+        raise ValueError("flow_field_res_x must be a positive scalar (int or float)")
     if not (isinstance(flow_field_res_y, int | float) and flow_field_res_y > 0):
-        raise ValueError(
-            "flow_field_res_y must be a positive scalar (int or float)"
-        )
-    if (
-        position_bounds[0]
-        < parameters.image_shape[0] + parameters.img_offset[0]
-    ):
+        raise ValueError("flow_field_res_y must be a positive scalar (int or float)")
+    if position_bounds[0] < parameters.image_shape[0] + parameters.img_offset[0]:
         raise ValueError(
             "The height of the position_bounds must be greater "
             "than the height of the image plus the offset."
         )
-    if (
-        position_bounds[1]
-        < parameters.image_shape[1] + parameters.img_offset[1]
-    ):
+    if position_bounds[1] < parameters.image_shape[1] + parameters.img_offset[1]:
         raise ValueError(
             "The width of the position_bounds must be greater "
             "than the width of the image plus the offset."
@@ -466,9 +434,7 @@ def input_check_gen_img_from_flow(  # noqa: PLR0912, PLR0915
         )
 
     num_particles = int(
-        position_bounds[0]
-        * position_bounds[1]
-        * parameters.seeding_density_range[1]
+        position_bounds[0] * position_bounds[1] * parameters.seeding_density_range[1]
     )
     logger.debug("Input arguments of generate_images_from_flow are valid.")
     logger.debug(f"Flow field shape: {flow_field.shape}")
@@ -496,9 +462,9 @@ def input_check_gen_img_from_flow(  # noqa: PLR0912, PLR0915
     logger.debug(f"Gaussian noise mean: {parameters.noise_gaussian_mean}")
     logger.debug(f"Gaussian noise std: {parameters.noise_gaussian_std}")
     if mask is not None:
-        num_masked = parameters.image_shape[0] * parameters.image_shape[
-            1
-        ] - jnp.sum(mask)
+        num_masked = parameters.image_shape[0] * parameters.image_shape[1] - jnp.sum(
+            mask
+        )
         debug_msg = f"Masking out {num_masked} pixels in the images."
         logger.debug(debug_msg)
     if histogram is not None:

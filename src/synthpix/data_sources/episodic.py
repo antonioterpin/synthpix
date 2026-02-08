@@ -70,8 +70,7 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
         """
         if not isinstance(source, FileDataSource):
             raise TypeError(
-                f"source must be an instance of FileDataSource, got "
-                f"{type(source)}"
+                f"source must be an instance of FileDataSource, got " f"{type(source)}"
             )
 
         self.source = source
@@ -182,7 +181,7 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
 
                 # Fetch file paths for this episode
                 # Slice: [s : s + L]
-                files = self.dir2files[d][s: s + self.episode_length]
+                files = self.dir2files[d][s : s + self.episode_length]
                 chunk_episodes.append((files, is_padding))
 
             # 3. Interleave in Time-Major order

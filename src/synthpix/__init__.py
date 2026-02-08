@@ -9,4 +9,5 @@ __all__ = [
     "SynthpixBatch",
     "make",
     "save_checkpoint",
-    "checkpoint_args"]
+    "checkpoint_args",
+]

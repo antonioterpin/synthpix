@@ -42,15 +42,11 @@ def visualize_and_save(
     flow_x = flow_field[..., 0]
     flow_y = flow_field[..., 1]
     # Create a grid for the quiver plot
-    y, x = np.mgrid[0: flow_x.shape[0], 0: flow_x.shape[1]]
+    y, x = np.mgrid[0 : flow_x.shape[0], 0 : flow_x.shape[1]]
 
     # Save individual images and flow field
-    plt.imsave(
-        os.path.join(output_dir, f"{name}_image1.png"), image1, cmap="gray"
-    )
-    plt.imsave(
-        os.path.join(output_dir, f"{name}_image2.png"), image2, cmap="gray"
-    )
+    plt.imsave(os.path.join(output_dir, f"{name}_image1.png"), image1, cmap="gray")
+    plt.imsave(os.path.join(output_dir, f"{name}_image2.png"), image2, cmap="gray")
 
     # Save the quiver plot as a separate image
     quiver_fig, quiver_ax = plt.subplots(figsize=(7, 7))
@@ -111,9 +107,7 @@ def main(
 
             if num_images_to_display > 0:
                 # Ask user if they want to continue generating images
-                choice = input(
-                    "Do you want to continue generating images? (y/n): "
-                )
+                choice = input("Do you want to continue generating images? (y/n): ")
                 if choice.lower() != "y":
                     logger.info("Stopping the pipeline.")
                     break
