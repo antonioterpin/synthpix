@@ -419,7 +419,7 @@ def test_invalid_flow_field_res_z(flow_field_res_z):
 # skipif is used to skip the test if the user is not connected to the server
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="user not connected to the server.",
 )
 @pytest.mark.parametrize("selected_flow", ["horizontal"])
 @pytest.mark.parametrize("seeding_density", [0.016])

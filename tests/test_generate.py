@@ -90,7 +90,7 @@ def test_generate_image_from_data(
 # skipif is used to skip the test if there is no GPU available
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="user not connected to the server.",
 )
 @pytest.mark.parametrize("seeding_density", [0.05])
 @pytest.mark.parametrize("image_shape", [(1216, 1936)])

@@ -1113,7 +1113,7 @@ def test_sampler_with_real_img_gen_fn(
 @pytest.mark.slow
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="user not connected to the server.",
 )
 @pytest.mark.parametrize("batch_size", [128])
 @pytest.mark.parametrize("batches_per_flow_batch", [100])

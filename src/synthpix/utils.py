@@ -50,6 +50,7 @@ def get_logger(
             return gg.get_logger(name)
         return gg.get_logger(name, scope=scope)
 
+    print("Not on Unix, using standard logging.")
     logger = logging.getLogger(name)
 
     # Configure root logger only once
