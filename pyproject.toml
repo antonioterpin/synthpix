@@ -119,7 +119,7 @@ select = [
 ]
 
 # NOTE: issue #229 proposes to remove ignore
-# PLR0912 and 
+# PLR0912 and
 # PLR0915
 # They are good checks in principle but stil hard to
 # respect at the moment
@@ -145,7 +145,7 @@ check-return-types = false
 skip-checking-raises = false
 
 # Pyright configuration for type checking
-# We use basedpyright but in this way pylance also 
+# We use basedpyright but in this way pylance also
 # reads this configuration
 [tool.pyright]
 typeCheckingMode = "basic"

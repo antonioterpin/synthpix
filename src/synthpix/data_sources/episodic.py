@@ -70,7 +70,8 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
         """
         if not isinstance(source, FileDataSource):
             raise TypeError(
-                f"source must be an instance of FileDataSource, got " f"{type(source)}"
+                f"source must be an instance of FileDataSource, got "
+                f"{type(source)}"
             )
 
         self.source = source
@@ -102,7 +103,7 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
             A string representation of the EpisodicDataSource.
         """
         return (
-            f"EpisodicDataSource(source={repr(self.source)}, "
+            f"EpisodicDataSource(source={self.source!r}, "
             f"batch_size={self.batch_size}, "
             f"episode_length={self.episode_length})"
         )
