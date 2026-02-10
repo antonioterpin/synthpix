@@ -103,6 +103,7 @@ markers = [
 [tool.ruff]
 line-length = 80
 target-version = "py310"
+exclude = ["tests"]
 
 [tool.ruff.lint]
 # Enable comprehensive rule sets
@@ -143,6 +144,7 @@ allow-init-docstring = true
 arg-type-hints-in-docstring = false
 check-return-types = false
 skip-checking-raises = false
+baseline = ".pydoclint-baseline"
 
 # Pyright configuration for type checking
 # We use basedpyright but in this way pylance also

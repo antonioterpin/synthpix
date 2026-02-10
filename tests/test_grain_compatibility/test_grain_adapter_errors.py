@@ -11,7 +11,10 @@ import grain.python as grain
 import numpy as np
 import pytest
 
-from synthpix.data_sources.adapter import GrainEpisodicAdapter, GrainSchedulerAdapter
+from synthpix.data_sources.adapter import (
+    GrainEpisodicAdapter,
+    GrainSchedulerAdapter,
+)
 from synthpix.data_sources.episodic import EpisodicDataSource
 
 
@@ -81,5 +84,7 @@ def test_grain_episodic_missing_metadata_error():
     # We set _current_timestep to something > -1 to trigger the skip loop
     adapter._current_timestep = 0
 
-    with pytest.raises(KeyError, match="Batch missing required '_timestep' metadata"):
+    with pytest.raises(
+        KeyError, match="Batch missing required '_timestep' metadata"
+    ):
         adapter.next_episode()

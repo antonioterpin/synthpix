@@ -79,27 +79,27 @@ def test_episodic_interleaving(tmp_path):
     item0 = ds[0]
     item1 = ds[1]
 
-    assert (
-        item0["_timestep"] == 0
-    ), f"Initial timestep for item0 should be 0, got {item0['_timestep']}"
-    assert (
-        item1["_timestep"] == 0
-    ), f"Initial timestep for item1 should be 0, got {item1['_timestep']}"
-    assert (
-        item0["_chunk_id"] == 0
-    ), f"Initial chunk ID for item0 should be 0, got {item0['_chunk_id']}"
-    assert (
-        item1["_chunk_id"] == 0
-    ), f"Initial chunk ID for item1 should be 0, got {item1['_chunk_id']}"
+    assert item0["_timestep"] == 0, (
+        f"Initial timestep for item0 should be 0, got {item0['_timestep']}"
+    )
+    assert item1["_timestep"] == 0, (
+        f"Initial timestep for item1 should be 0, got {item1['_timestep']}"
+    )
+    assert item0["_chunk_id"] == 0, (
+        f"Initial chunk ID for item0 should be 0, got {item0['_chunk_id']}"
+    )
+    assert item1["_chunk_id"] == 0, (
+        f"Initial chunk ID for item1 should be 0, got {item1['_chunk_id']}"
+    )
 
     # Check item 2 -> Should be t=1 of first episode in chunk
     item2 = ds[2]
-    assert (
-        item2["_timestep"] == 1
-    ), f"Timestep for item2 should be 1, got {item2['_timestep']}"
-    assert (
-        item2["_chunk_id"] == 0
-    ), f"Chunk ID for item2 should be 0, got {item2['_chunk_id']}"
+    assert item2["_timestep"] == 1, (
+        f"Timestep for item2 should be 1, got {item2['_timestep']}"
+    )
+    assert item2["_chunk_id"] == 0, (
+        f"Chunk ID for item2 should be 0, got {item2['_chunk_id']}"
+    )
 
     # Ensure files are actually sequential in time
     f0 = item0["file"]
@@ -111,12 +111,12 @@ def test_episodic_interleaving(tmp_path):
 
     idx0 = extract_idx(str(f0))
     idx2 = extract_idx(str(f2))
-    assert (
-        idx2 == idx0 + 1
-    ), f"Files in episode should be sequential. Expected {idx0 + 1}, got {idx2}"
-    assert os.path.dirname(str(f0)) == os.path.dirname(
-        str(f2)
-    ), "Sequential items within a chunk should come from the same directory"
+    assert idx2 == idx0 + 1, (
+        f"Files in episode should be sequential. Expected {idx0 + 1}, got {idx2}"
+    )
+    assert os.path.dirname(str(f0)) == os.path.dirname(str(f2)), (
+        "Sequential items within a chunk should come from the same directory"
+    )
 
 
 def test_episodic_grain_integration(tmp_path):
@@ -152,24 +152,28 @@ def test_episodic_grain_integration(tmp_path):
 
     # Batch should contain 4 items.
     timesteps = batch["_timestep"]  # expected shape (4,)
-    assert np.all(
-        timesteps == 0
-    ), f"First batch should have all timesteps=0, got {timesteps}"
+    assert np.all(timesteps == 0), (
+        f"First batch should have all timesteps=0, got {timesteps}"
+    )
 
     # Next batch
     it = iter(loader)
     next(it)  # t=0
     batch_t1 = next(it)  # t=1
-    assert np.all(
-        batch_t1["_timestep"] == 1
-    ), f"Second batch should have all timesteps=1, got {batch_t1['_timestep']}"
+    assert np.all(batch_t1["_timestep"] == 1), (
+        f"Second batch should have all timesteps=1, got {batch_t1['_timestep']}"
+    )
 
 
 def test_episodic_type_validation():
     """Test that TypeError is raised if source is not FileDataSource."""
-    with pytest.raises(TypeError, match="must be an instance of FileDataSource"):
+    with pytest.raises(
+        TypeError, match="must be an instance of FileDataSource"
+    ):
         EpisodicDataSource(
-            source="not_a_source", batch_size=2, episode_length=5  # type: ignore
+            source="not_a_source",
+            batch_size=2,
+            episode_length=5,  # type: ignore
         )
 
 
@@ -188,7 +192,9 @@ def test_episodic_wrap_around_padding(tmp_path):
     ds = EpisodicDataSource(source, batch_size=2, episode_length=5)
 
     # 2 chunks * 2 episodes * 5 steps = 20 items
-    assert len(ds) == 20, f"Expected 20 items after wrap-around padding, got {len(ds)}"
+    assert len(ds) == 20, (
+        f"Expected 20 items after wrap-around padding, got {len(ds)}"
+    )
 
 
 def test_episodic_delegation(tmp_path):
@@ -204,7 +210,9 @@ def test_episodic_delegation(tmp_path):
     source = MockDataSource(files, include_images=True)
     ds = EpisodicDataSource(source, batch_size=1, episode_length=1)
 
-    assert ds.include_images is True, "include_images should be delegated to source"
+    assert ds.include_images is True, (
+        "include_images should be delegated to source"
+    )
     assert ds.file_list == files, "file_list should be delegated to source"
 
 
@@ -295,14 +303,17 @@ def test_padding_flag_accuracy(tmp_path):
     )
 
     # 1 chunk * 3 ep * 2 steps = 6 items
-    assert (
-        len(ds) == 6
-    ), f"Expected 6 items for 1 chunk of size 3 and length 2, got {len(ds)}"
+    assert len(ds) == 6, (
+        f"Expected 6 items for 1 chunk of size 3 and length 2, got {len(ds)}"
+    )
 
     loader = grain.DataLoader(
         data_source=ds,
         sampler=grain.IndexSampler(
-            len(ds), shuffle=False, shard_options=grain.NoSharding(), num_epochs=1
+            len(ds),
+            shuffle=False,
+            shard_options=grain.NoSharding(),
+            num_epochs=1,
         ),
         operations=[grain.Batch(batch_size=batch_size)],
     )
@@ -320,13 +331,13 @@ def test_padding_flag_accuracy(tmp_path):
     # 2 batches * 3 elements per batch = 6
 
     # Each real episode has 2 steps. We have 2 real episodes.
-    assert (
-        np.sum(~is_padding_flat) == 2 * episode_length
-    ), f"Expected 4 non-padding steps, got {np.sum(~is_padding_flat)}"
+    assert np.sum(~is_padding_flat) == 2 * episode_length, (
+        f"Expected 4 non-padding steps, got {np.sum(~is_padding_flat)}"
+    )
     # Each padded episode has 2 steps. We have 1 padded episode.
-    assert (
-        np.sum(is_padding_flat) == 1 * episode_length
-    ), f"Expected 2 padding steps, got {np.sum(is_padding_flat)}"
+    assert np.sum(is_padding_flat) == 1 * episode_length, (
+        f"Expected 2 padding steps, got {np.sum(is_padding_flat)}"
+    )
 
 
 def test_is_last_step_precision(tmp_path):
@@ -343,7 +354,10 @@ def test_is_last_step_precision(tmp_path):
     loader = grain.DataLoader(
         data_source=ds,
         sampler=grain.IndexSampler(
-            len(ds), shuffle=False, shard_options=grain.NoSharding(), num_epochs=1
+            len(ds),
+            shuffle=False,
+            shard_options=grain.NoSharding(),
+            num_epochs=1,
         ),
         operations=[grain.Batch(batch_size=1)],
     )
@@ -352,13 +366,13 @@ def test_is_last_step_precision(tmp_path):
         t = batch["_timestep"][0]
         last = batch["_is_last_step"][0]
         if t == episode_length - 1:
-            assert (
-                last == True
-            ), f"Expected _is_last_step to be True at timestep {t} (end of length {episode_length} episode)"
+            assert last == True, (
+                f"Expected _is_last_step to be True at timestep {t} (end of length {episode_length} episode)"
+            )
         else:
-            assert (
-                last == False
-            ), f"Expected _is_last_step to be False before end of episode (timestep {t})"
+            assert last == False, (
+                f"Expected _is_last_step to be False before end of episode (timestep {t})"
+            )
 
 
 def test_asymmetric_folder_lengths(tmp_path):
@@ -376,16 +390,18 @@ def test_asymmetric_folder_lengths(tmp_path):
     ds = EpisodicDataSource(source, batch_size=1, episode_length=5)
 
     # Total starts should be 7
-    assert len(ds._starts) == 7, f"Expected 7 total starts, got {len(ds._starts)}"
+    assert len(ds._starts) == 7, (
+        f"Expected 7 total starts, got {len(ds._starts)}"
+    )
 
     # Count occurrences of каждой dir in starts
     dirs = [s[0] for s in ds._starts]
-    assert (
-        dirs.count(str(tmp_path / "long")) == 6
-    ), f"Expected 6 starts from 'long' folder, got {dirs.count(str(tmp_path / 'long'))}"
-    assert (
-        dirs.count(str(tmp_path / "short")) == 1
-    ), f"Expected 1 start from 'short' folder, got {dirs.count(str(tmp_path / 'short'))}"
+    assert dirs.count(str(tmp_path / "long")) == 6, (
+        f"Expected 6 starts from 'long' folder, got {dirs.count(str(tmp_path / 'long'))}"
+    )
+    assert dirs.count(str(tmp_path / "short")) == 1, (
+        f"Expected 1 start from 'short' folder, got {dirs.count(str(tmp_path / 'short'))}"
+    )
 
 
 def test_extreme_padding(tmp_path):
@@ -402,17 +418,19 @@ def test_extreme_padding(tmp_path):
 
     # 1 started episode, needs 8 to fill one chunk.
     # 1 chunk * 8 elements * 5 steps = 40
-    assert (
-        len(ds) == 40
-    ), f"Expected 40 items (1 chunk of 8 episodes * 5 steps), got {len(ds)}"
+    assert len(ds) == 40, (
+        f"Expected 40 items (1 chunk of 8 episodes * 5 steps), got {len(ds)}"
+    )
 
     batch = ds[0]  # t=0
-    assert batch["_is_padding"] == False, "First episode in chunk should not be padded"
+    assert batch["_is_padding"] == False, (
+        "First episode in chunk should not be padded"
+    )
 
     batch_padded = ds[1]  # t=0 of second (padded) episode
-    assert (
-        batch_padded["_is_padding"] == True
-    ), "Second episode in chunk should be padded"
+    assert batch_padded["_is_padding"] == True, (
+        "Second episode in chunk should be padded"
+    )
 
 
 def test_reproducibility(tmp_path):
@@ -428,14 +446,16 @@ def test_reproducibility(tmp_path):
     ds1 = EpisodicDataSource(source, batch_size=2, episode_length=3, seed=123)
     ds2 = EpisodicDataSource(source, batch_size=2, episode_length=3, seed=123)
 
-    assert len(ds1) == len(ds2), "Lengths of identical EpisodicDataSources should match"
+    assert len(ds1) == len(ds2), (
+        "Lengths of identical EpisodicDataSources should match"
+    )
     for i in range(len(ds1)):
-        assert (
-            ds1[i]["file"] == ds2[i]["file"]
-        ), f"File mismatch at index {i} between identical seeds"
-        assert (
-            ds1[i]["_chunk_id"] == ds2[i]["_chunk_id"]
-        ), f"Chunk ID mismatch at index {i} between identical seeds"
+        assert ds1[i]["file"] == ds2[i]["file"], (
+            f"File mismatch at index {i} between identical seeds"
+        )
+        assert ds1[i]["_chunk_id"] == ds2[i]["_chunk_id"], (
+            f"Chunk ID mismatch at index {i} between identical seeds"
+        )
 
 
 def test_multiple_epochs_total_count(tmp_path):
@@ -466,6 +486,6 @@ def test_multiple_epochs_total_count(tmp_path):
     batches = list(loader)
     # 1 chunk per epoch * 5 steps per chunk = 5 batches per epoch
     # 3 epochs -> 15 batches
-    assert (
-        len(batches) == 15
-    ), f"Expected 15 total batches for 3 epochs of 5 steps, got {len(batches)}"
+    assert len(batches) == 15, (
+        f"Expected 15 total batches for 3 epochs of 5 steps, got {len(batches)}"
+    )

@@ -5,30 +5,30 @@ adaptation, configuration loading, and directory discovery for dataset
 preprocessing.
 """
 
+import logging
 import os
 import re
 import sys
 import timeit
-from pathlib import Path
-import logging
 import types
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import pytest
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
+import synthpix.utils as utils_module
 from synthpix.utils import (
     bilinear_interpolate,
     discover_leaf_dirs,
     flow_field_adapter,
     generate_array_flow_field,
+    get_logger,
     input_check_flow_field_adapter,
     load_configuration,
     trilinear_interpolate,
-    get_logger,
 )
-import synthpix.utils as utils_module
 from tests.example_flows import get_flow_function
 
 config = load_configuration("config/testing.yaml")
@@ -97,9 +97,9 @@ def test_trilinear_interpolate(
         z: The z-coordinates for interpolation.
         expected: The expected interpolated values.
     """
-    assert (
-        trilinear_interpolate(image, x, y, z) == expected
-    ), f"Trilinear interpolation mismatch. Expected {expected}, got {trilinear_interpolate(image, x, y, z)}"
+    assert trilinear_interpolate(image, x, y, z) == expected, (
+        f"Trilinear interpolation mismatch. Expected {expected}, got {trilinear_interpolate(image, x, y, z)}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -135,16 +135,18 @@ def test_generate_array_flow_field(
         shape[0],
         shape[1],
         2,
-    ), f"Generated flow field shape mismatch. Expected {(shape[0], shape[1], 2)}, got {generated_flow_field.shape}"
-    assert (
-        generated_flow_field.shape == expected.shape
-    ), f"Generated flow field shape {generated_flow_field.shape} does not match expected shape {expected.shape}"
-    assert jnp.allclose(
-        generated_flow_field, expected, atol=1e-5
-    ), "Generated flow field values do not match expected values"
-    assert (
-        generated_flow_field.dtype == jnp.float32
-    ), f"Expected dtype jnp.float32, got {generated_flow_field.dtype}"
+    ), (
+        f"Generated flow field shape mismatch. Expected {(shape[0], shape[1], 2)}, got {generated_flow_field.shape}"
+    )
+    assert generated_flow_field.shape == expected.shape, (
+        f"Generated flow field shape {generated_flow_field.shape} does not match expected shape {expected.shape}"
+    )
+    assert jnp.allclose(generated_flow_field, expected, atol=1e-5), (
+        "Generated flow field values do not match expected values"
+    )
+    assert generated_flow_field.dtype == jnp.float32, (
+        f"Expected dtype jnp.float32, got {generated_flow_field.dtype}"
+    )
 
 
 # Mock valid inputs
@@ -394,7 +396,9 @@ def test_invalid_resolutions(value, param_name):
         "zero_padding": valid_zero_padding,
     }
     args[param_name] = value
-    with pytest.raises(ValueError, match=f"{param_name} must be a positive number."):
+    with pytest.raises(
+        ValueError, match=f"{param_name} must be a positive number."
+    ):
         input_check_flow_field_adapter(**args)
 
 
@@ -491,7 +495,9 @@ def test_invalid_position_bounds_offset_values(position_bounds_offset):
 
 @pytest.mark.parametrize("batch_size", [-1, 0, "1", 1.5])
 def test_invalid_batch_size(batch_size):
-    with pytest.raises(ValueError, match="batch_size must be a positive integer."):
+    with pytest.raises(
+        ValueError, match="batch_size must be a positive integer."
+    ):
         input_check_flow_field_adapter(
             flow_field=valid_flow_field,
             new_flow_field_shape=valid_shape,
@@ -623,14 +629,14 @@ def test_flow_field_adapter_shape(
     )
 
     # Check the shape of the adapted flow field
-    assert (
-        new_flow_field[0][0].shape == expected_shape
-    ), f"Adapted flow field shape mismatch. Expected {expected_shape}, got {new_flow_field[0][0].shape}"
+    assert new_flow_field[0][0].shape == expected_shape, (
+        f"Adapted flow field shape mismatch. Expected {expected_shape}, got {new_flow_field[0][0].shape}"
+    )
 
     # Check the first vector of the adapted flow field
-    assert jnp.allclose(
-        new_flow_field[0][0], expected_first_vector
-    ), "Adapted flow field values do not match expected first vector"
+    assert jnp.allclose(new_flow_field[0][0], expected_first_vector), (
+        "Adapted flow field values do not match expected first vector"
+    )
 
 
 @pytest.mark.parametrize(
@@ -668,9 +674,9 @@ def test_flow_field_adapter(flow_field, new_flow_field_shape, expected):
     )
 
     # Check the flow field
-    assert jnp.allclose(
-        new_flow_field[0][0][1, 1], expected
-    ), f"Central vector mismatch. Expected {expected}, got {new_flow_field[0][0][1, 1]}"
+    assert jnp.allclose(new_flow_field[0][0][1, 1], expected), (
+        f"Central vector mismatch. Expected {expected}, got {new_flow_field[0][0][1, 1]}"
+    )
 
 
 @pytest.mark.skipif(
@@ -758,9 +764,9 @@ def test_speed_flow_fields_adapter(
     )
     average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
 
-    assert (
-        average_time_jit < limit_time
-    ), f"The average time is {average_time_jit}, time limit: {limit_time}"
+    assert average_time_jit < limit_time, (
+        f"The average time is {average_time_jit}, time limit: {limit_time}"
+    )
 
 
 def _abspath(p):  # small helper to compare reliably
@@ -832,12 +838,12 @@ def test_discover_leaf_dirs_skips_missing_dirs(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "scandir", fake_scandir)
 
     leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
-    assert (
-        _abspath(keep) in leaves
-    ), f"Expected {_abspath(keep)} to be in leaves: {leaves}"
-    assert (
-        _abspath(gone) not in leaves
-    ), f"Expected {_abspath(gone)} to be excluded from leaves"
+    assert _abspath(keep) in leaves, (
+        f"Expected {_abspath(keep)} to be in leaves: {leaves}"
+    )
+    assert _abspath(gone) not in leaves, (
+        f"Expected {_abspath(gone)} to be excluded from leaves"
+    )
 
 
 def test_discover_leaf_dirs_skips_not_a_directory(tmp_path, monkeypatch):
@@ -862,12 +868,12 @@ def test_discover_leaf_dirs_skips_not_a_directory(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "scandir", fake_scandir)
 
     leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
-    assert (
-        _abspath(ok) in leaves
-    ), f"Expected {_abspath(ok)} to be in leaves, got {leaves}"
-    assert (
-        _abspath(will_be_file) not in leaves
-    ), f"Expected {_abspath(will_be_file)} (not a directory) to be excluded from leaves"
+    assert _abspath(ok) in leaves, (
+        f"Expected {_abspath(ok)} to be in leaves, got {leaves}"
+    )
+    assert _abspath(will_be_file) not in leaves, (
+        f"Expected {_abspath(will_be_file)} (not a directory) to be excluded from leaves"
+    )
 
 
 @pytest.mark.skipif(
@@ -896,12 +902,12 @@ def test_discover_leaf_dirs_skips_permission_denied(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "scandir", fake_scandir)
 
     leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
-    assert (
-        _abspath(ok) in leaves
-    ), f"Expected {_abspath(ok)} to be in leaves, got {leaves}"
-    assert (
-        _abspath(denied) not in leaves
-    ), f"Expected {_abspath(denied)} (permission denied) to be excluded from leaves"
+    assert _abspath(ok) in leaves, (
+        f"Expected {_abspath(ok)} to be in leaves, got {leaves}"
+    )
+    assert _abspath(denied) not in leaves, (
+        f"Expected {_abspath(denied)} (permission denied) to be excluded from leaves"
+    )
 
 
 def test_get_logger_unix_uses_goggles(monkeypatch):
@@ -935,10 +941,12 @@ def test_get_logger_windows_fallback(monkeypatch):
 
     logger = get_logger("test.logger", scope="synthpix")
 
-    assert isinstance(logger, logging.Logger), "Expected a standard Logger instance"
-    assert (
-        logger.name == "test.logger"
-    ), f"Expected logger name 'test.logger', got '{logger.name}'"
-    assert (
-        logging.getLogger().handlers
-    ), "Expected root logger to have handlers configured"
+    assert isinstance(logger, logging.Logger), (
+        "Expected a standard Logger instance"
+    )
+    assert logger.name == "test.logger", (
+        f"Expected logger name 'test.logger', got '{logger.name}'"
+    )
+    assert logging.getLogger().handlers, (
+        "Expected root logger to have handlers configured"
+    )

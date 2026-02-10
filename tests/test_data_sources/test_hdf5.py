@@ -28,18 +28,20 @@ def test_hdf5_loading(mock_hdf5_files):
     root = os.path.dirname(file_paths[0])
 
     ds = HDF5DataSource([root])
-    assert len(ds) == len(
-        file_paths
-    ), f"Expected {len(file_paths)} files, got {len(ds)}"
+    assert len(ds) == len(file_paths), (
+        f"Expected {len(file_paths)} files, got {len(ds)}"
+    )
     item = ds[0]
 
     # fixture creates (X, Y, Z, C) -> (1536, 100, 2048, 2) by default (non-CI)
     # or (128, 10, 128, 2) in CI.
     assert "flow_fields" in item, "Item missing 'flow_fields' key"
-    assert (
-        item["flow_fields"].shape[-1] == 2
-    ), f"Expected last dimension to be 2 (UV components), got {item['flow_fields'].shape}"
-    assert item["file"] in file_paths, "Item file path not in original file list"
+    assert item["flow_fields"].shape[-1] == 2, (
+        f"Expected last dimension to be 2 (UV components), got {item['flow_fields'].shape}"
+    )
+    assert item["file"] in file_paths, (
+        "Item file path not in original file list"
+    )
 
 
 def test_hdf5_group_error(tmp_path):

@@ -25,17 +25,21 @@ def test_mat_loading(mock_mat_files):
     root = os.path.dirname(file_paths[0])
 
     ds = MATDataSource([root], output_shape=(dims["height"], dims["width"]))
-    assert len(ds) == len(
-        file_paths
-    ), f"Expected {len(file_paths)} files, got {len(ds)}"
+    assert len(ds) == len(file_paths), (
+        f"Expected {len(file_paths)} files, got {len(ds)}"
+    )
     item = ds[0]
     assert "flow_fields" in item, "Item missing 'flow_fields' key"
     assert item["flow_fields"].shape == (
         dims["height"],
         dims["width"],
         2,
-    ), f"Flow field shape mismatch. Expected {(dims['height'], dims['width'], 2)}, got {item['flow_fields'].shape}"
-    assert item["file"] in file_paths, "Item file path not in original file list"
+    ), (
+        f"Flow field shape mismatch. Expected {(dims['height'], dims['width'], 2)}, got {item['flow_fields'].shape}"
+    )
+    assert item["file"] in file_paths, (
+        "Item file path not in original file list"
+    )
 
 
 def test_mat_resizing(mock_mat_files):
@@ -51,9 +55,9 @@ def test_mat_resizing(mock_mat_files):
     new_shape = (50, 50)
     ds = MATDataSource([root], output_shape=new_shape)
     item = ds[0]
-    assert item["flow_fields"].shape == new_shape + (
-        2,
-    ), f"Resized flow field shape mismatch. Expected {new_shape + (2,)}, got {item['flow_fields'].shape}"
+    assert item["flow_fields"].shape == new_shape + (2,), (
+        f"Resized flow field shape mismatch. Expected {new_shape + (2,)}, got {item['flow_fields'].shape}"
+    )
 
 
 def test_mat_missing_images(tmp_path):
@@ -108,12 +112,16 @@ def test_mat_hdf5_fallback(tmp_path):
 
     ds = MATDataSource([str(tmp_path)])
     item = ds[0]
-    assert "flow_fields" in item, "Item missing 'flow_fields' key after HDF5 fallback"
+    assert "flow_fields" in item, (
+        "Item missing 'flow_fields' key after HDF5 fallback"
+    )
     assert item["flow_fields"].shape == (
         256,
         256,
         2,
-    ), f"HDF5 fallback flow field shape mismatch. Expected (256, 256, 2), got {item['flow_fields'].shape}"
+    ), (
+        f"HDF5 fallback flow field shape mismatch. Expected (256, 256, 2), got {item['flow_fields'].shape}"
+    )
 
 
 def test_mat_missing_v_key(tmp_path):
@@ -168,18 +176,20 @@ def test_mat_image_resizing(tmp_path):
 
     # Request 32x32
     target_shape = (32, 32)
-    ds = MATDataSource([str(tmp_path)], output_shape=target_shape, include_images=True)
+    ds = MATDataSource(
+        [str(tmp_path)], output_shape=target_shape, include_images=True
+    )
     item = ds[0]
 
-    assert (
-        item["images1"].shape == target_shape
-    ), f"Image1 shape mismatch. Expected {target_shape}, got {item['images1'].shape}"
-    assert (
-        item["images2"].shape == target_shape
-    ), f"Image2 shape mismatch. Expected {target_shape}, got {item['images2'].shape}"
-    assert item["flow_fields"].shape == target_shape + (
-        2,
-    ), f"Resized flow field shape mismatch. Expected {target_shape + (2,)}, got {item['flow_fields'].shape}"
+    assert item["images1"].shape == target_shape, (
+        f"Image1 shape mismatch. Expected {target_shape}, got {item['images1'].shape}"
+    )
+    assert item["images2"].shape == target_shape, (
+        f"Image2 shape mismatch. Expected {target_shape}, got {item['images2'].shape}"
+    )
+    assert item["flow_fields"].shape == target_shape + (2,), (
+        f"Resized flow field shape mismatch. Expected {target_shape + (2,)}, got {item['flow_fields'].shape}"
+    )
 
 
 def test_mat_recursive_hdf5_flattening(tmp_path):

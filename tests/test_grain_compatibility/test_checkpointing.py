@@ -5,11 +5,12 @@ can be correctly checkpointed and restored using Orbax, achieving
 bit-perfect reproducibility.
 """
 
-import jax.numpy as jnp
-import pytest
-import numpy as np
-import scipy.io
 from typing import cast
+
+import jax.numpy as jnp
+import numpy as np
+import pytest
+import scipy.io
 
 from synthpix import make, save_checkpoint
 from synthpix.sampler import SyntheticImageSampler
@@ -65,8 +66,12 @@ def test_full_pipeline_checkpoint_reproducibility(mock_mat_files, tmp_path):
     }
 
     # 1. Initialize Pipeline
-    sampler = cast(SyntheticImageSampler, make(config, use_grain_scheduler=True))
-    assert isinstance(sampler, SyntheticImageSampler), "Expected SyntheticImageSampler"
+    sampler = cast(
+        SyntheticImageSampler, make(config, use_grain_scheduler=True)
+    )
+    assert isinstance(sampler, SyntheticImageSampler), (
+        "Expected SyntheticImageSampler"
+    )
 
     # 2. Run for 2 steps (Flow 0, Rep 0 and Rep 1)
     _ = next(sampler)
@@ -90,27 +95,29 @@ def test_full_pipeline_checkpoint_reproducibility(mock_mat_files, tmp_path):
     resumed_batch = next(new_sampler)
     resumed_img_mean = float(resumed_batch.images1.mean())
 
-    assert (
-        new_sampler._step == gt_step
-    ), f"Resumed step mismatch. Expected {gt_step}, got {new_sampler._step}"
-    assert resumed_img_mean == pytest.approx(
-        gt_img_mean
-    ), f"Resumed image mean mismatch. Expected {gt_img_mean}, got {resumed_img_mean}"
-    assert jnp.allclose(
-        resumed_batch.images1, gt_batch.images1
-    ), "Resumed images are not bit-perfectly identical to ground truth"
+    assert new_sampler._step == gt_step, (
+        f"Resumed step mismatch. Expected {gt_step}, got {new_sampler._step}"
+    )
+    assert resumed_img_mean == pytest.approx(gt_img_mean), (
+        f"Resumed image mean mismatch. Expected {gt_img_mean}, got {resumed_img_mean}"
+    )
+    assert jnp.allclose(resumed_batch.images1, gt_batch.images1), (
+        "Resumed images are not bit-perfectly identical to ground truth"
+    )
 
     # 7. Verify jax_seed and epoch preservation
     if gt_batch.seeds is not None:
-        assert resumed_batch.seeds is not None, "seeds should not be None after restore"
-        assert jnp.array_equal(
-            resumed_batch.seeds, gt_batch.seeds
-        ), "seeds mismatch after restore"
+        assert resumed_batch.seeds is not None, (
+            "seeds should not be None after restore"
+        )
+        assert jnp.array_equal(resumed_batch.seeds, gt_batch.seeds), (
+            "seeds mismatch after restore"
+        )
     else:
         assert resumed_batch.seeds is None, "seeds should be None after restore"
-    assert jnp.allclose(
-        resumed_batch.epoch, gt_batch.epoch
-    ), f"Epoch mismatch after restore. Expected {gt_batch.epoch}, got {resumed_batch.epoch}"
+    assert jnp.allclose(resumed_batch.epoch, gt_batch.epoch), (
+        f"Epoch mismatch after restore. Expected {gt_batch.epoch}, got {resumed_batch.epoch}"
+    )
 
 
 def test_empty_dataset_handling(tmp_path):
@@ -133,7 +140,9 @@ def test_empty_dataset_handling(tmp_path):
 
     # make() should probably fail early if no files are found
     with pytest.raises((ValueError, RuntimeError), match=".*found.*|.*empty.*"):
-        sampler = cast(SyntheticImageSampler, make(config, use_grain_scheduler=True))
+        sampler = cast(
+            SyntheticImageSampler, make(config, use_grain_scheduler=True)
+        )
 
 
 def test_real_sampler_checkpointing(tmp_path):
@@ -178,9 +187,9 @@ def test_real_sampler_checkpointing(tmp_path):
     s1_state = sampler.scheduler.state
     s2_state = resumed.scheduler.state
 
-    assert type(s1_state) == type(
-        s2_state
-    ), "Scheduler states are not structurally compatible"
+    assert type(s1_state) == type(s2_state), (
+        "Scheduler states are not structurally compatible"
+    )
     assert s1_state == s2_state, "Scheduler states do not match after restore"
 
 
@@ -252,16 +261,18 @@ def test_files_scheduler_restoration(tmp_path):
     save_checkpoint(checkpoint_dir, sampler, step=1)
 
     # 3. Restore
-    restored_sampler = make(config, use_grain_scheduler=True, load_from=checkpoint_dir)
+    restored_sampler = make(
+        config, use_grain_scheduler=True, load_from=checkpoint_dir
+    )
 
     # Verify state BEFORE next()
     # current_flows should be restored
     assert restored_sampler._current_flows is not None
 
     # files_scheduler should ALSO be restored (the fix)
-    assert (
-        restored_sampler._files_scheduler is not None
-    ), "files_scheduler is None after restore!"
+    assert restored_sampler._files_scheduler is not None, (
+        "files_scheduler is None after restore!"
+    )
 
     # Verify the content of files_scheduler matches what we expect
     # Note: _files_scheduler stores the tuple of filenames
@@ -272,18 +283,18 @@ def test_files_scheduler_restoration(tmp_path):
     # 4. Generate next batch
     batch2 = next(restored_sampler)
     assert batch2.files is not None, "Batch files are None after restore!"
-    assert (
-        batch2.files == batch1.files
-    ), "Restored batch files should match original flow files"
+    assert batch2.files == batch1.files, (
+        "Restored batch files should match original flow files"
+    )
 
     # 5. Verify mask_scheduler is also restored (as it shares the same logic)
-    assert (
-        restored_sampler._mask_scheduler is not None
-    ), "mask_scheduler is None after restore!"
+    assert restored_sampler._mask_scheduler is not None, (
+        "mask_scheduler is None after restore!"
+    )
     assert batch2.mask is not None, "Batch mask is None after restore!"
 
     # 6. Verify scheduler_epoch is also restored
-    assert (
-        restored_sampler._scheduler_epoch is not None
-    ), "scheduler_epoch is None after restore!"
+    assert restored_sampler._scheduler_epoch is not None, (
+        "scheduler_epoch is None after restore!"
+    )
     assert batch2.epoch is not None, "Batch epoch is None after restore!"

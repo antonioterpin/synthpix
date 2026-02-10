@@ -6,16 +6,17 @@ They also ensure that the sampler's state (RNG and step counter) is correctly
 managed for checkpointing reproducibility using the high-level `make` API.
 """
 
+from typing import Any, cast
+
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-import jax
 
-from typing import cast, Any
 from synthpix import make, save_checkpoint
 from synthpix.sampler import SyntheticImageSampler
 from synthpix.scheduler import SchedulerProtocol
-from synthpix.types import SchedulerData, ImageGenerationSpecification
+from synthpix.types import ImageGenerationSpecification, SchedulerData
 
 
 @pytest.fixture
@@ -74,14 +75,18 @@ def base_config(dummy_data):
 def test_sampler_grain_randomness_path(base_config):
     """Verify that the sampler uses Grain-provided seeds when available."""
     # Initialize with Grain scheduler
-    sampler = cast(SyntheticImageSampler, make(base_config, use_grain_scheduler=True))
+    sampler = cast(
+        SyntheticImageSampler, make(base_config, use_grain_scheduler=True)
+    )
 
     # 1. Generate batch with Grain seeds
     batch1 = next(sampler)
-    assert batch1.seeds is not None, "Batch should have seeds if provided by scheduler"
-    assert (
-        sampler._batches_generated == 1
-    ), f"Expected 1 batch generated, got {sampler._batches_generated}"
+    assert batch1.seeds is not None, (
+        "Batch should have seeds if provided by scheduler"
+    )
+    assert sampler._batches_generated == 1, (
+        f"Expected 1 batch generated, got {sampler._batches_generated}"
+    )
 
     # 2. Verify that another batch with SAME seeds results in SAME images
     # (if we reset the repetition counter manually, simulating flow reuse logic)
@@ -89,23 +94,25 @@ def test_sampler_grain_randomness_path(base_config):
     sampler._batches_generated = 0
     batch2 = next(sampler)
 
-    assert jnp.allclose(
-        batch1.images1, batch2.images1
-    ), "Images should be identical if seeds and repetition index match"
+    assert jnp.allclose(batch1.images1, batch2.images1), (
+        "Images should be identical if seeds and repetition index match"
+    )
 
     # 3. Verify that changing the repetition counter results in DIFFERENT images
     sampler.batches_per_flow_batch = 10
     sampler._batches_generated = 5
     batch3 = next(sampler)
-    assert not jnp.allclose(
-        batch1.images1, batch3.images1
-    ), "Images should be different if repetition index changes"
+    assert not jnp.allclose(batch1.images1, batch3.images1), (
+        "Images should be different if repetition index changes"
+    )
 
 
 def test_sampler_legacy_randomness_path(base_config):
     """Verify that the sampler falls back to internal RNG if using legacy scheduler."""
     # Initialize with Legacy scheduler
-    sampler = cast(SyntheticImageSampler, make(base_config, use_grain_scheduler=False))
+    sampler = cast(
+        SyntheticImageSampler, make(base_config, use_grain_scheduler=False)
+    )
 
     # Generate two batches
     batch1 = next(sampler)
@@ -113,15 +120,19 @@ def test_sampler_legacy_randomness_path(base_config):
 
     # Legacy path usually doesn't provide seeds in batch (it's None)
 
-    assert batch1.seeds is None, "Batch should have None seeds from legacy scheduler"
-    assert not jnp.allclose(
-        batch1.images1, batch2.images1
-    ), "Images should be different (randomized by internal RNG)"
+    assert batch1.seeds is None, (
+        "Batch should have None seeds from legacy scheduler"
+    )
+    assert not jnp.allclose(batch1.images1, batch2.images1), (
+        "Images should be different (randomized by internal RNG)"
+    )
 
 
 def test_sampler_checkpoint_state_consistency(base_config, tmp_path):
     """Verify that get_state (via make) preserves state structure."""
-    sampler = cast(SyntheticImageSampler, make(base_config, use_grain_scheduler=True))
+    sampler = cast(
+        SyntheticImageSampler, make(base_config, use_grain_scheduler=True)
+    )
 
     # Run a few steps
     _ = next(sampler)
@@ -141,7 +152,9 @@ def test_sampler_bit_perfect_reproducibility(base_config, tmp_path):
     checkpoint_dir = tmp_path / "checkpoints_repro"
 
     # 1. Ground Truth Run
-    sampler = cast(SyntheticImageSampler, make(base_config, use_grain_scheduler=True))
+    sampler = cast(
+        SyntheticImageSampler, make(base_config, use_grain_scheduler=True)
+    )
     _ = next(sampler)
     _ = next(sampler)
     gt_batch = next(sampler)
@@ -165,12 +178,12 @@ def test_sampler_bit_perfect_reproducibility(base_config, tmp_path):
     # The next batch should be IDENTICAL to gt_batch
     resumed_batch = next(resumed_sampler)
 
-    assert jnp.allclose(
-        gt_batch.images1, resumed_batch.images1
-    ), "Images should be bit-perfectly identical after restore"
-    assert jnp.array_equal(
-        gt_batch.keys, resumed_batch.keys
-    ), "Keys should be bit-perfectly identical after restore"
+    assert jnp.allclose(gt_batch.images1, resumed_batch.images1), (
+        "Images should be bit-perfectly identical after restore"
+    )
+    assert jnp.array_equal(gt_batch.keys, resumed_batch.keys), (
+        "Keys should be bit-perfectly identical after restore"
+    )
     assert resumed_sampler._step == gt_step
 
 
@@ -182,7 +195,9 @@ def test_sampler_repetition_logic_across_resumes(base_config, tmp_path):
     config = base_config.copy()
     config["batches_per_flow_batch"] = 4
 
-    sampler = cast(SyntheticImageSampler, make(config, use_grain_scheduler=True))
+    sampler = cast(
+        SyntheticImageSampler, make(config, use_grain_scheduler=True)
+    )
 
     # Step 0: Batch 0 (Rep 0)
     _ = next(sampler)
@@ -214,9 +229,9 @@ def test_sampler_repetition_logic_across_resumes(base_config, tmp_path):
     # Verify flows match original
     assert original_flows is not None
     assert new_sampler._current_flows is not None
-    assert jnp.array_equal(
-        new_sampler._current_flows, original_flows
-    ), "Flow fields should match across resume within repetition block"
+    assert jnp.array_equal(new_sampler._current_flows, original_flows), (
+        "Flow fields should match across resume within repetition block"
+    )
 
 
 class MockScheduler(SchedulerProtocol):
@@ -321,9 +336,9 @@ def test_jax_seeds_uniqueness():
     batch = sampler._get_next()
 
     # flow_fields should all be identical (tiled)
-    assert np.allclose(
-        batch.flow_fields[0], batch.flow_fields[1]
-    ), "Flow fields should be identical due to tiling"
+    assert np.allclose(batch.flow_fields[0], batch.flow_fields[1]), (
+        "Flow fields should be identical due to tiling"
+    )
 
     params = batch.params
     # Seeding densities: sampled per image.
@@ -332,13 +347,15 @@ def test_jax_seeds_uniqueness():
     # Verify they are NOT all identical
     # If keys were identical, these random samples would be identical.
     print(f"Seeding densities: {seeding_densities}")
-    assert not np.allclose(
-        seeding_densities[0], seeding_densities[1]
-    ), "Seeding densities should differ if keys are unique"
+    assert not np.allclose(seeding_densities[0], seeding_densities[1]), (
+        "Seeding densities should differ if keys are unique"
+    )
 
     # Also verify that we support keys as seeds
     # Modify scheduler to return keys
-    scheduler_keys = MockScheduler(flow_fields_per_batch, flow_shape=(20, 20, 2))
+    scheduler_keys = MockScheduler(
+        flow_fields_per_batch, flow_shape=(20, 20, 2)
+    )
 
     def get_batch_keys(bs):
         flows = np.zeros((bs, 20, 20, 2))
@@ -371,7 +388,9 @@ def test_jax_seeds_uniqueness():
 
 def test_sampler_keys_uniqueness_and_ids(base_config):
     """Verify that keys are unique across the batch and can serve as IDs."""
-    sampler = cast(SyntheticImageSampler, make(base_config, use_grain_scheduler=True))
+    sampler = cast(
+        SyntheticImageSampler, make(base_config, use_grain_scheduler=True)
+    )
     batch = next(sampler)
 
     assert batch.keys is not None
@@ -386,7 +405,9 @@ def test_sampler_keys_across_steps_and_reps(base_config):
     """Verify that keys change across different steps and repetitions."""
     config = base_config.copy()
     config["batches_per_flow_batch"] = 2
-    sampler = cast(SyntheticImageSampler, make(config, use_grain_scheduler=True))
+    sampler = cast(
+        SyntheticImageSampler, make(config, use_grain_scheduler=True)
+    )
 
     # Step 0, Rep 0
     batch1 = next(sampler)
@@ -406,11 +427,13 @@ def test_sampler_keys_across_steps_and_reps(base_config):
 
     s1, s2, s3 = keys_to_set(keys1), keys_to_set(keys2), keys_to_set(keys3)
 
-    assert s1.isdisjoint(s2), "Keys should differ across repetitions of the same flow"
+    assert s1.isdisjoint(s2), (
+        "Keys should differ across repetitions of the same flow"
+    )
     assert s1.isdisjoint(s3), "Keys should differ across different flows"
-    assert s2.isdisjoint(
-        s3
-    ), "Keys should differ across different flows and repetitions"
+    assert s2.isdisjoint(s3), (
+        "Keys should differ across different flows and repetitions"
+    )
 
 
 def test_real_sampler_keys(base_config):
@@ -437,4 +460,6 @@ def test_real_sampler_keys(base_config):
     assert batch.keys.shape == (2, 2)
 
     key_tuples = [tuple(k.tolist()) for k in batch.keys]
-    assert len(set(key_tuples)) == len(key_tuples), "Real batch keys must be unique"
+    assert len(set(key_tuples)) == len(key_tuples), (
+        "Real batch keys must be unique"
+    )

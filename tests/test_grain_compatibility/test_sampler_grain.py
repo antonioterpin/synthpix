@@ -30,9 +30,9 @@ def test_sampler_with_grain_integration(tmp_path, mock_mat_files):
     dataset_dir = tmp_path
 
     ds = MATDataSource(str(dataset_dir), include_images=False)
-    assert (
-        len(ds) == num_files
-    ), f"Expected {num_files} files in MATDataSource, got {len(ds)}"
+    assert len(ds) == num_files, (
+        f"Expected {num_files} files in MATDataSource, got {len(ds)}"
+    )
 
     from synthpix.data_sources.episodic import EpisodicDataSource
 
@@ -43,9 +43,9 @@ def test_sampler_with_grain_integration(tmp_path, mock_mat_files):
     num_episodes = num_files - episode_length + 1
     num_chunks = num_episodes // batch_size
     expected_len = num_chunks * batch_size * episode_length
-    assert (
-        len(episodic_ds) == expected_len
-    ), f"EpisodicDataSource length mismatch. Expected {expected_len}, got {len(episodic_ds)}"
+    assert len(episodic_ds) == expected_len, (
+        f"EpisodicDataSource length mismatch. Expected {expected_len}, got {len(episodic_ds)}"
+    )
 
     loader = grain.DataLoader(
         data_source=episodic_ds,
@@ -88,14 +88,16 @@ def test_sampler_with_grain_integration(tmp_path, mock_mat_files):
         256,
         256,
         2,
-    ), f"Batch flow fields shape mismatch. Expected {(batch_size, 256, 256, 2)}, got {batch_data.flow_fields.shape}"
+    ), (
+        f"Batch flow fields shape mismatch. Expected {(batch_size, 256, 256, 2)}, got {batch_data.flow_fields.shape}"
+    )
 
-    assert isinstance(
-        sampler.scheduler, EpisodicSchedulerProtocol
-    ), "Sampler scheduler must implement EpisodicSchedulerProtocol"
-    assert (
-        sampler.scheduler.steps_remaining() == episode_length - 1
-    ), f"Expected {episode_length - 1} steps remaining, got {sampler.scheduler.steps_remaining()}"
+    assert isinstance(sampler.scheduler, EpisodicSchedulerProtocol), (
+        "Sampler scheduler must implement EpisodicSchedulerProtocol"
+    )
+    assert sampler.scheduler.steps_remaining() == episode_length - 1, (
+        f"Expected {episode_length - 1} steps remaining, got {sampler.scheduler.steps_remaining()}"
+    )
 
     sampler.next_episode()
 
@@ -105,4 +107,6 @@ def test_sampler_with_grain_integration(tmp_path, mock_mat_files):
         256,
         256,
         2,
-    ), f"Second batch flow fields shape mismatch. Expected {(batch_size, 256, 256, 2)}, got {batch_data_2.flow_fields.shape}"
+    ), (
+        f"Second batch flow fields shape mismatch. Expected {(batch_size, 256, 256, 2)}, got {batch_data_2.flow_fields.shape}"
+    )

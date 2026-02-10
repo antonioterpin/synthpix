@@ -5,8 +5,8 @@ bit-identical results to the legacy scheduler implementation for the same
 input data and seeds, ensuring a direct and reliable migration path.
 """
 
-import h5py
 import grain.python as grain
+import h5py
 import numpy as np
 import pytest
 
@@ -47,7 +47,9 @@ def test_legacy_vs_grain_equality_simple(
         with h5py.File(mat_path, "w", libver="latest", userblock_size=512) as f:
             f.create_dataset("I0", data=np.full((h, w), t, dtype=np.uint8))
             f.create_dataset("I1", data=np.full((h, w), t + 1, dtype=np.uint8))
-            f.create_dataset("V", data=np.full((h, w, 2), t / 10.0, dtype=np.float32))
+            f.create_dataset(
+                "V", data=np.full((h, w, 2), t / 10.0, dtype=np.float32)
+            )
 
         # Fake MATLAB header
         with open(mat_path, "r+b") as fp:
@@ -151,10 +153,10 @@ def test_grain_ordering(tmp_path, mock_mat_files):
 
         if prev_c == curr_c:
             expected_t = prev_t + 1
-            assert (
-                curr_t == expected_t
-            ), f"Order violation at batch {i}: Chunk {prev_c} t={prev_t} -> t={curr_t}"
+            assert curr_t == expected_t, (
+                f"Order violation at batch {i}: Chunk {prev_c} t={prev_t} -> t={curr_t}"
+            )
         else:
-            assert (
-                curr_t == 0
-            ), f"New chunk {curr_c} should start at t=0, got t={curr_t}"
+            assert curr_t == 0, (
+                f"New chunk {curr_c} should start at t=0, got t={curr_t}"
+            )

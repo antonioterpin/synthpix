@@ -136,12 +136,12 @@ def test_flow_apply_to_image_forward(dt):
     expected = expected.at[2, 3].set(1.0)
 
     # 5. Verify shape, location and intensity.
-    assert (
-        img_warped.shape == expected.shape
-    ), f"Warped image shape mismatch. Expected {expected.shape}, got {img_warped.shape}"
-    assert jnp.allclose(
-        img_warped, expected
-    ), "Forward mapping did not move the pixel correctly."
+    assert img_warped.shape == expected.shape, (
+        f"Warped image shape mismatch. Expected {expected.shape}, got {img_warped.shape}"
+    )
+    assert jnp.allclose(img_warped, expected), (
+        "Forward mapping did not move the pixel correctly."
+    )
 
 
 @pytest.mark.parametrize("dt", [1.0])
@@ -155,12 +155,16 @@ def test_apply_flow_to_particles_3d_constant(dt):
     key = jax.random.PRNGKey(42)
     num_particles = 8
     zyx_max = jnp.array([9.0, 9.0, 9.0])
-    particles = jax.random.uniform(key, (num_particles, 3), minval=0.0, maxval=zyx_max)
+    particles = jax.random.uniform(
+        key, (num_particles, 3), minval=0.0, maxval=zyx_max
+    )
 
     # Build a constant velocity field (u, v, w) = (1, 2, 3) everywhere.
     D = H = W = 10
     u, v, w = 1.0, 2.0, 3.0
-    flow_field = jnp.tile(jnp.array([u, v, w]), (D, H, W, 1))  # shape D, H, W, 3)
+    flow_field = jnp.tile(
+        jnp.array([u, v, w]), (D, H, W, 1)
+    )  # shape D, H, W, 3)
 
     # Apply the flow
     advected = apply_flow_to_particles(particles, flow_field, dt=dt)
@@ -169,12 +173,12 @@ def test_apply_flow_to_particles_3d_constant(dt):
     expected = particles + jnp.array([w * dt, v * dt, u * dt])
 
     # Verify shape and values
-    assert (
-        advected.shape == particles.shape
-    ), f"Advected particles shape mismatch. Expected {particles.shape}, got {advected.shape}"
-    assert jnp.allclose(
-        advected, expected
-    ), "3D particles displacement produced wrong positions."
+    assert advected.shape == particles.shape, (
+        f"Advected particles shape mismatch. Expected {particles.shape}, got {advected.shape}"
+    )
+    assert jnp.allclose(advected, expected), (
+        "3D particles displacement produced wrong positions."
+    )
 
 
 @pytest.mark.parametrize("selected_flow", ["vertical"])
@@ -270,7 +274,9 @@ def test_particles_flow_apply_array(
         plt.imsave("img_warped.png", np.array(img_warped), cmap="gray")
 
     # 6. Check particles shapes
-    assert particles.shape == new_particles.shape, "Particles shapes do not match"
+    assert particles.shape == new_particles.shape, (
+        "Particles shapes do not match"
+    )
 
 
 @pytest.mark.parametrize(
@@ -346,12 +352,16 @@ def test_invalid_flow_field_shape(flow_field, particle_positions, error_msg):
         input_check_apply_flow(particle_positions, flow_field)
 
 
-@pytest.mark.parametrize("dt", ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])])
+@pytest.mark.parametrize(
+    "dt", ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
+)
 def test_invalid_dt(dt):
     """Test that invalid dt raise a ValueError."""
     particle_positions = jnp.zeros((1, 2))
     flow_field = jnp.zeros((128, 128, 2))
-    with pytest.raises(ValueError, match="dt must be a scalar \\(int or float\\)"):
+    with pytest.raises(
+        ValueError, match="dt must be a scalar \\(int or float\\)"
+    ):
         input_check_apply_flow(particle_positions, flow_field, dt)
 
 
@@ -414,7 +424,9 @@ def test_invalid_flow_field_res_z(flow_field_res_z):
 @pytest.mark.parametrize("selected_flow", ["horizontal"])
 @pytest.mark.parametrize("seeding_density", [0.016])
 @pytest.mark.parametrize("image_shape", [(1216, 1936)])
-def test_speed_apply_flow_to_particles(seeding_density, selected_flow, image_shape):
+def test_speed_apply_flow_to_particles(
+    seeding_density, selected_flow, image_shape
+):
     """Benchmark performance of GPU-parallelized particle advection.
 
     Uses `shard_map` to distribute particles across available GPUs and
@@ -493,9 +505,9 @@ def test_speed_apply_flow_to_particles(seeding_density, selected_flow, image_sha
     average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
 
     # Check if the time is less than the limit
-    assert (
-        average_time_jit < limit_time
-    ), f"The average time is {average_time_jit}, time limit: {limit_time}"
+    assert average_time_jit < limit_time, (
+        f"The average time is {average_time_jit}, time limit: {limit_time}"
+    )
 
 
 if __name__ == "__main__":
