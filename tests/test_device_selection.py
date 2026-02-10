@@ -105,12 +105,12 @@ def test_sampler_uses_all_devices_when_none_passed():
     # comparison issues
     expected_device_ids = [d.id for d in jax.devices()]
     actual_device_ids = [d.id for d in sampler.mesh.devices]
-    assert (
-        expected_device_ids == actual_device_ids
-    ), f"Default device IDs mismatch. Expected {expected_device_ids}, got {actual_device_ids}"
-    assert (
-        len(sampler.mesh.devices) >= 1
-    ), "Sampler mesh should contain at least one device"
+    assert expected_device_ids == actual_device_ids, (
+        f"Default device IDs mismatch. Expected {expected_device_ids}, got {actual_device_ids}"
+    )
+    assert len(sampler.mesh.devices) >= 1, (
+        "Sampler mesh should contain at least one device"
+    )
 
 
 @pytest.mark.skipif(

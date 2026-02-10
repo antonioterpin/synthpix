@@ -52,7 +52,7 @@ class SyntheticImageSampler(Sampler):
     outputs also a done flag to indicate the end of an episode.
     """
 
-    def __init__(  # noqa: PLR0912, PLR0915
+    def __init__(
         self,
         scheduler: SchedulerProtocol,
         batches_per_flow_batch: int,
@@ -145,10 +145,13 @@ class SyntheticImageSampler(Sampler):
         if device_ids is None:
             devices = all_devices
             logger.info(
-                "No device IDs provided. Using all available devices " "for sharding."
+                "No device IDs provided. Using all available devices "
+                "for sharding."
             )
         else:
-            devices = [all_devices[i] for i in device_ids if i < len(all_devices)]
+            devices = [
+                all_devices[i] for i in device_ids if i < len(all_devices)
+            ]
             if len(devices) == 0:
                 raise ValueError("No valid device IDs provided.")
             logger.info(f"Using devices {devices} for sharding.")
@@ -168,25 +171,39 @@ class SyntheticImageSampler(Sampler):
             ),
         )
 
-        if not isinstance(batches_per_flow_batch, int) or batches_per_flow_batch <= 0:
-            raise ValueError("batches_per_flow_batch must be a positive integer.")
+        if (
+            not isinstance(batches_per_flow_batch, int)
+            or batches_per_flow_batch <= 0
+        ):
+            raise ValueError(
+                "batches_per_flow_batch must be a positive integer."
+            )
         self.batches_per_flow_batch = batches_per_flow_batch
         if (
             isinstance(self.scheduler, EpisodicFlowFieldScheduler)
             and batches_per_flow_batch != 1
         ):
             self.batches_per_flow_batch = 1
-            logger.warning("Using batches_per_flow_batch = 1 for episodic setting.")
+            logger.warning(
+                "Using batches_per_flow_batch = 1 for episodic setting."
+            )
 
-        if not isinstance(flow_fields_per_batch, int) or flow_fields_per_batch <= 0:
-            raise ValueError("flow_fields_per_batch must be a positive integer.")
+        if (
+            not isinstance(flow_fields_per_batch, int)
+            or flow_fields_per_batch <= 0
+        ):
+            raise ValueError(
+                "flow_fields_per_batch must be a positive integer."
+            )
         if flow_fields_per_batch > self.batch_size:
             raise ValueError("flow_fields_per_batch must be <= batch_size.")
         self.flow_fields_per_batch = flow_fields_per_batch
 
         # Make sure the batch size is divisible by the number of devices
         if self.batch_size % self.ndevices != 0:
-            self.batch_size = (self.batch_size // self.ndevices + 1) * self.ndevices
+            self.batch_size = (
+                self.batch_size // self.ndevices + 1
+            ) * self.ndevices
             logger.warning(
                 f"Batch size was not divisible by the number of devices. "
                 f"Setting batch_size to {self.batch_size}."
@@ -195,9 +212,13 @@ class SyntheticImageSampler(Sampler):
         if (
             # not isinstance(flow_field_size, tuple) or
             # len(flow_field_size) != 2 or
-            not all(isinstance(s, int | float) and s > 0 for s in flow_field_size)
+            not all(
+                isinstance(s, int | float) and s > 0 for s in flow_field_size
+            )
         ):
-            raise ValueError("flow_field_size must be a tuple of two positive numbers.")
+            raise ValueError(
+                "flow_field_size must be a tuple of two positive numbers."
+            )
         self.flow_field_size = flow_field_size
 
         # Use the scheduler to get the flow field shape
@@ -229,7 +250,9 @@ class SyntheticImageSampler(Sampler):
             int(image_shape[1] * velocities_per_pixel),
         )
 
-        self.max_diameter = max(r[1] for r in generation_specification.diameter_ranges)
+        self.max_diameter = max(
+            r[1] for r in generation_specification.diameter_ranges
+        )
 
         if output_units not in ["pixels", "measure units per second"]:
             raise ValueError(
@@ -303,7 +326,8 @@ class SyntheticImageSampler(Sampler):
             )
         if (
             position_bounds[0] + position_bounds_offset[0] > flow_field_size[0]
-            or position_bounds[1] + position_bounds_offset[1] > flow_field_size[1]
+            or position_bounds[1] + position_bounds_offset[1]
+            > flow_field_size[1]
         ):
             raise ValueError(
                 f"The size {flow_field_size} of the flow field is too small. "
@@ -322,7 +346,9 @@ class SyntheticImageSampler(Sampler):
             or generation_specification.p_hide_img2 > 0
             or generation_specification.seeding_density_range[0]
             != generation_specification.seeding_density_range[1]
-        ) and (particle_size > max_speed_x * dt or particle_size > max_speed_y * dt):
+        ) and (
+            particle_size > max_speed_x * dt or particle_size > max_speed_y * dt
+        ):
             # Compute the extra length of the position bounds
             extra_length_x = max(0.0, particle_size - max_speed_x * dt)
             extra_length_y = max(0.0, particle_size - max_speed_y * dt)
@@ -487,7 +513,9 @@ class SyntheticImageSampler(Sampler):
             # Reset the batch counter
             self._batches_generated = 0
 
-            scheduler_batch = self.scheduler.get_batch(self.flow_fields_per_batch)
+            scheduler_batch = self.scheduler.get_batch(
+                self.flow_fields_per_batch
+            )
             self._current_flows = scheduler_batch.flow_fields
             # Notice that self._mask refers to the current mask provided by the
             # scheduler denoting the valid flows of the current batch,
@@ -535,10 +563,12 @@ class SyntheticImageSampler(Sampler):
                     self._files_scheduler = expanded_files[: self.batch_size]
 
             # Shard the flow fields across devices
-            current_flows_array = jnp.array(self._current_flows, device=self.sharding)
+            current_flows_array = jnp.array(
+                self._current_flows, device=self.sharding
+            )
             # Creating the output flow field
-            self.output_flow_fields, self._current_flows = self.flow_field_adapter_jit(
-                current_flows_array
+            self.output_flow_fields, self._current_flows = (
+                self.flow_field_adapter_jit(current_flows_array)
             )
             if isinstance(self.output_flow_fields, Array):
                 self.output_flow_fields.block_until_ready()
@@ -607,7 +637,9 @@ class SyntheticImageSampler(Sampler):
                 if self._scheduler_epoch is not None
                 else None
             ),
-            seeds=jnp.array(self._jax_seeds) if self._jax_seeds is not None else None,
+            seeds=jnp.array(self._jax_seeds)
+            if self._jax_seeds is not None
+            else None,
             keys=batch_keys,
         )
 
@@ -646,10 +678,14 @@ class SyntheticImageSampler(Sampler):
         if state_dict["current_flows"] is None:
             # Calculate expected shape based on utils.flow_field_adapter logic
             h_bounds_raw = (
-                self.position_bounds[0] / self.resolution * self.flow_field_res_y
+                self.position_bounds[0]
+                / self.resolution
+                * self.flow_field_res_y
             )
             w_bounds_raw = (
-                self.position_bounds[1] / self.resolution * self.flow_field_res_x
+                self.position_bounds[1]
+                / self.resolution
+                * self.flow_field_res_x
             )
 
             h_bounds = max(1, int(h_bounds_raw))
@@ -657,7 +693,9 @@ class SyntheticImageSampler(Sampler):
 
             shape = (self.batch_size, h_bounds, w_bounds, 2)
 
-            state_dict["current_flows"] = jax.ShapeDtypeStruct(shape, jnp.float32)
+            state_dict["current_flows"] = jax.ShapeDtypeStruct(
+                shape, jnp.float32
+            )
 
         if state_dict["mask_scheduler"] is None:
             # mask_scheduler is expanded to batch_size in _get_next
@@ -675,7 +713,9 @@ class SyntheticImageSampler(Sampler):
         if state_dict["files_scheduler"] is None:
             # files_scheduler is encoded as uint8 array of variable length
             # Use np.nan to indicate unknown dimension size for restoration
-            state_dict["files_scheduler"] = jax.ShapeDtypeStruct((np.nan,), jnp.uint8)
+            state_dict["files_scheduler"] = jax.ShapeDtypeStruct(
+                (np.nan,), jnp.uint8
+            )
 
         return state_dict
 
@@ -690,7 +730,7 @@ class SyntheticImageSampler(Sampler):
             KeyError: If required keys are missing from the state dict.
         """
         # Call base class for common validation and scheduler restoration
-        Sampler.state.fset(self, value)
+        Sampler.state.fset(self, value)  # pyright: ignore[reportOptionalCall]
 
         required_keys = {
             "step",
@@ -717,10 +757,12 @@ class SyntheticImageSampler(Sampler):
         # Decode files_scheduler
         val = value["files_scheduler"]
         decoded = decode_from_uint8(val)
-        if decoded is not None and not isinstance(decoded, (np.ndarray, jnp.ndarray)):
+        if decoded is not None and not isinstance(
+            decoded, (np.ndarray, jnp.ndarray)
+        ):
             self._files_scheduler = tuple(decoded)
         else:
-            self._files_scheduler = decoded
+            self._files_scheduler = decoded  # pyright: ignore[reportAttributeAccessIssue]
 
         self.output_flow_fields = (
             cast(jnp.ndarray, self._current_flows)
@@ -760,7 +802,9 @@ class SyntheticImageSampler(Sampler):
         mask_path = config.get("mask")
         if mask_path is not None:
             if not isinstance(mask_path, str):
-                raise ValueError("mask must be a string representing the mask path.")
+                raise ValueError(
+                    "mask must be a string representing the mask path."
+                )
             if not os.path.isfile(mask_path):
                 raise ValueError(f"Mask file {mask_path} does not exist.")
             mask_array = np.load(mask_path)
@@ -776,10 +820,13 @@ class SyntheticImageSampler(Sampler):
         if histogram_path is not None:
             if not isinstance(histogram_path, str):
                 raise ValueError(
-                    "histogram must be a string representing the histogram " "path."
+                    "histogram must be a string representing the histogram "
+                    "path."
                 )
             if not os.path.isfile(histogram_path):
-                raise ValueError(f"Histogram file {histogram_path} does not exist.")
+                raise ValueError(
+                    f"Histogram file {histogram_path} does not exist."
+                )
             hist_array = np.load(histogram_path)
             histogram = jnp.array(hist_array)
         else:

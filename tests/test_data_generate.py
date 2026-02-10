@@ -165,7 +165,9 @@ def test_invalid_num_images(num_images):
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
-    with pytest.raises(ValueError, match="batch_size must be a positive integer."):
+    with pytest.raises(
+        ValueError, match="batch_size must be a positive integer."
+    ):
         input_check_gen_img_from_flow(
             flow_field=flow_field,
             parameters=ImageGenerationSpecification(
@@ -207,7 +209,9 @@ def test_invalid_p_hide_img1(p_hide_img1):
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
-    with pytest.raises(ValueError, match="p_hide_img1 must be between 0 and 1."):
+    with pytest.raises(
+        ValueError, match="p_hide_img1 must be between 0 and 1."
+    ):
         input_check_gen_img_from_flow(
             flow_field=flow_field,
             parameters=ImageGenerationSpecification(
@@ -225,7 +229,9 @@ def test_invalid_p_hide_img2(p_hide_img2):
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
-    with pytest.raises(ValueError, match="p_hide_img2 must be between 0 and 1."):
+    with pytest.raises(
+        ValueError, match="p_hide_img2 must be between 0 and 1."
+    ):
         input_check_gen_img_from_flow(
             flow_field=flow_field,
             parameters=ImageGenerationSpecification(
@@ -650,12 +656,12 @@ def test_generate_images_from_flow(monkeypatch, debug_flag):
     img_warped = jnp.squeeze(img_warped)
 
     # 5. check the shape of the images
-    assert (
-        img.shape == image_shape
-    ), f"Image shape mismatch. Expected {image_shape}, got {img.shape}"
-    assert (
-        img_warped.shape == image_shape
-    ), f"Warped image shape mismatch. Expected {image_shape}, got {img_warped.shape}"
+    assert img.shape == image_shape, (
+        f"Image shape mismatch. Expected {image_shape}, got {img.shape}"
+    )
+    assert img_warped.shape == image_shape, (
+        f"Warped image shape mismatch. Expected {image_shape}, got {img_warped.shape}"
+    )
 
     # an invalid argument should raise a ValueError (the check is in the
     # function)
@@ -806,7 +812,9 @@ def test_speed_generate_images_from_flow(
     )
 
     def run_generate_jit():
-        imgs1, imgs2, params = jit_generate_images(keys_sharded, flow_field_sharded)
+        imgs1, imgs2, params = jit_generate_images(
+            keys_sharded, flow_field_sharded
+        )
         seeding_densities = params.seeding_densities
         diameter_ranges = params.diameter_ranges
         intensity_ranges = params.intensity_ranges
@@ -835,9 +843,9 @@ def test_speed_generate_images_from_flow(
     average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
 
     # Check if the time is less than the limit
-    assert (
-        average_time_jit < limit_time
-    ), f"The average time is {average_time_jit}, time limit: {limit_time}"
+    assert average_time_jit < limit_time, (
+        f"The average time is {average_time_jit}, time limit: {limit_time}"
+    )
 
 
 @pytest.mark.run_explicitly
@@ -850,7 +858,9 @@ def test_speed_generate_images_from_flow(
 @pytest.mark.parametrize("intensity_ranges", [[(80, 100)]])
 @pytest.mark.parametrize("intensity_var", [0])
 @pytest.mark.parametrize("dt", [0.1])
-@pytest.mark.parametrize("rho_ranges", [[(-0.01, 0.01)]])  # rho cannot be -1 or 1
+@pytest.mark.parametrize(
+    "rho_ranges", [[(-0.01, 0.01)]]
+)  # rho cannot be -1 or 1
 @pytest.mark.parametrize("rho_var", [0])
 @pytest.mark.parametrize("noise_uniform", [0.0])
 @pytest.mark.parametrize("noise_gaussian_mean", [0.0])
@@ -957,12 +967,12 @@ def test_img_parameter_combinations(
         )
 
     # 5. check the shape of the images
-    assert (
-        img.shape == image_shape
-    ), f"Image shape mismatch. Expected {image_shape}, got {img.shape}"
-    assert (
-        img_warped.shape == image_shape
-    ), f"Warped image shape mismatch. Expected {image_shape}, got {img_warped.shape}"
+    assert img.shape == image_shape, (
+        f"Image shape mismatch. Expected {image_shape}, got {img.shape}"
+    )
+    assert img_warped.shape == image_shape, (
+        f"Warped image shape mismatch. Expected {image_shape}, got {img_warped.shape}"
+    )
 
 
 @pytest.mark.skipif(
@@ -1072,7 +1082,9 @@ def test_speed_parameter_combinations(
     )
 
     def run_generate_jit():
-        imgs1, imgs2, params = jit_generate_images(keys_sharded, flow_field_sharded)
+        imgs1, imgs2, params = jit_generate_images(
+            keys_sharded, flow_field_sharded
+        )
         seeding_densities = params.seeding_densities
         diameter_ranges = params.diameter_ranges
         intensity_ranges = params.intensity_ranges

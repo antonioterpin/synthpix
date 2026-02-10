@@ -58,7 +58,9 @@ class DummySampler:
     def from_config(
         cls, scheduler: DummyScheduler, *args: Any, **kwargs: Any
     ) -> "DummySampler":
-        return cls(scheduler=scheduler, batch_size=kwargs["config"]["batch_size"])
+        return cls(
+            scheduler=scheduler, batch_size=kwargs["config"]["batch_size"]
+        )
 
 
 def _patch_common(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
@@ -70,7 +72,9 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setattr(
         make_mod, "PrefetchingFlowFieldScheduler", DummyPrefetchScheduler
     )
-    monkeypatch.setattr(make_mod, "EpisodicFlowFieldScheduler", DummyEpisodicScheduler)
+    monkeypatch.setattr(
+        make_mod, "EpisodicFlowFieldScheduler", DummyEpisodicScheduler
+    )
     monkeypatch.setitem(make_mod.SCHEDULERS, ".mat", DummyScheduler)
     monkeypatch.setitem(make_mod.SCHEDULERS, ".npy", DummyScheduler)
     monkeypatch.setattr(
@@ -78,7 +82,9 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         "logger",
         SimpleNamespace(info=lambda *_: None, warning=lambda *_: None),
     )
-    monkeypatch.setattr(make_mod, "load_configuration", lambda p: {}, raising=False)
+    monkeypatch.setattr(
+        make_mod, "load_configuration", lambda p: {}, raising=False
+    )
     return SimpleNamespace(
         DummyScheduler=DummyScheduler,
         DummyPrefetchScheduler=DummyPrefetchScheduler,
@@ -100,7 +106,9 @@ def test_rejects_non_str_or_dict(monkeypatch, bad):
     pre-loaded configuration dictionary.
     """
     _patch_common(monkeypatch)
-    with pytest.raises(TypeError, match="config must be a string or a dictionary"):
+    with pytest.raises(
+        TypeError, match="config must be a string or a dictionary"
+    ):
         make(bad)
 
 
@@ -154,7 +162,9 @@ def test_rejects_nonpositive_batch(monkeypatch, bad):
         "batch_size": bad,
         "flow_fields_per_batch": 1,
     }
-    with pytest.raises(ValueError, match="batch_size must be a positive integer"):
+    with pytest.raises(
+        ValueError, match="batch_size must be a positive integer"
+    ):
         make(cfg)
 
 
@@ -243,12 +253,12 @@ def test_make_from_yaml_path_success(monkeypatch, tmp_path):
     }
     monkeypatch.setattr(make_mod, "load_configuration", lambda _: good_cfg)
     sampler = make(str(yaml_path), use_grain_scheduler=False)
-    assert isinstance(
-        sampler, helpers.DummySampler
-    ), f"Expected DummySampler, got {type(sampler)}"
-    assert isinstance(
-        sampler.scheduler, helpers.DummyScheduler
-    ), f"Expected DummyScheduler, got {type(sampler.scheduler)}"
+    assert isinstance(sampler, helpers.DummySampler), (
+        f"Expected DummySampler, got {type(sampler)}"
+    )
+    assert isinstance(sampler.scheduler, helpers.DummyScheduler), (
+        f"Expected DummyScheduler, got {type(sampler.scheduler)}"
+    )
 
 
 def test_real_sampler_with_episode(monkeypatch):
@@ -261,12 +271,14 @@ def test_real_sampler_with_episode(monkeypatch):
         "episode_length": 3,
     }
     sampler = make(cfg, use_grain_scheduler=False)
-    assert isinstance(
-        sampler.scheduler, helpers.DummyEpisodicScheduler
-    ), f"Expected DummyEpisodicScheduler, got {type(sampler.scheduler)}"
+    assert isinstance(sampler.scheduler, helpers.DummyEpisodicScheduler), (
+        f"Expected DummyEpisodicScheduler, got {type(sampler.scheduler)}"
+    )
     assert isinstance(
         sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler
-    ), f"Expected underlying scheduler to be DummyScheduler, got {type(sampler.scheduler.kwargs['scheduler'])}"
+    ), (
+        f"Expected underlying scheduler to be DummyScheduler, got {type(sampler.scheduler.kwargs['scheduler'])}"
+    )
 
 
 def test_real_sampler_with_prefetch(monkeypatch):
@@ -279,12 +291,14 @@ def test_real_sampler_with_prefetch(monkeypatch):
         "buffer_size": 3,
     }
     sampler = make(cfg, use_grain_scheduler=False)
-    assert isinstance(
-        sampler.scheduler, helpers.DummyPrefetchScheduler
-    ), f"Expected DummyPrefetchScheduler, got {type(sampler.scheduler)}"
+    assert isinstance(sampler.scheduler, helpers.DummyPrefetchScheduler), (
+        f"Expected DummyPrefetchScheduler, got {type(sampler.scheduler)}"
+    )
     assert isinstance(
         sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler
-    ), f"Expected underlying scheduler to be DummyScheduler, got {type(sampler.scheduler.kwargs['scheduler'])}"
+    ), (
+        f"Expected underlying scheduler to be DummyScheduler, got {type(sampler.scheduler.kwargs['scheduler'])}"
+    )
 
 
 def test_synthetic_sampler_with_prefetch(monkeypatch):
@@ -297,12 +311,14 @@ def test_synthetic_sampler_with_prefetch(monkeypatch):
         "buffer_size": 2,
     }
     sampler = make(cfg, use_grain_scheduler=False)
-    assert isinstance(
-        sampler.scheduler, helpers.DummyPrefetchScheduler
-    ), f"Expected DummyPrefetchScheduler, got {type(sampler.scheduler)}"
+    assert isinstance(sampler.scheduler, helpers.DummyPrefetchScheduler), (
+        f"Expected DummyPrefetchScheduler, got {type(sampler.scheduler)}"
+    )
     assert isinstance(
         sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler
-    ), f"Expected underlying scheduler to be DummyScheduler, got {type(sampler.scheduler.kwargs['scheduler'])}"
+    ), (
+        f"Expected underlying scheduler to be DummyScheduler, got {type(sampler.scheduler.kwargs['scheduler'])}"
+    )
 
 
 def test_synthetic_sampler_with_episode(monkeypatch):
@@ -315,12 +331,14 @@ def test_synthetic_sampler_with_episode(monkeypatch):
         "episode_length": 5,
     }
     sampler = make(cfg, use_grain_scheduler=False)
-    assert isinstance(
-        sampler.scheduler, helpers.DummyEpisodicScheduler
-    ), f"Expected DummyEpisodicScheduler, got {type(sampler.scheduler)}"
+    assert isinstance(sampler.scheduler, helpers.DummyEpisodicScheduler), (
+        f"Expected DummyEpisodicScheduler, got {type(sampler.scheduler)}"
+    )
     assert isinstance(
         sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler
-    ), f"Expected underlying scheduler to be DummyScheduler, got {type(sampler.scheduler.kwargs['scheduler'])}"
+    ), (
+        f"Expected underlying scheduler to be DummyScheduler, got {type(sampler.scheduler.kwargs['scheduler'])}"
+    )
 
 
 # ---------------------- #
@@ -385,9 +403,9 @@ def test_make_grain_scheduler_call(monkeypatch):
     sampler = make(cfg, use_grain_scheduler=True)
 
     mock_grain_adapter.assert_called_once()
-    assert (
-        sampler.scheduler == adapter_instance
-    ), "Sampler scheduler should be the adapter instance"
+    assert sampler.scheduler == adapter_instance, (
+        "Sampler scheduler should be the adapter instance"
+    )
 
 
 def test_make_grain_scheduler_episodic_error(monkeypatch):
@@ -434,7 +452,9 @@ def test_make_grain_scheduler_episodic_success(monkeypatch):
     )
     monkeypatch.setattr(make_mod, "grain", mock_grain)
     monkeypatch.setattr(make_mod, "EpisodicDataSource", MagicMock())
-    monkeypatch.setattr(make_mod, "get_data_source_class", lambda _: MagicMock())
+    monkeypatch.setattr(
+        make_mod, "get_data_source_class", lambda _: MagicMock()
+    )
     monkeypatch.setattr(
         make_mod, "GrainEpisodicAdapter", MagicMock(return_value="epi_adapter")
     )
@@ -448,9 +468,9 @@ def test_make_grain_scheduler_episodic_success(monkeypatch):
         "batches_per_flow_batch": 1,
     }
     sampler = make(cfg, use_grain_scheduler=True)
-    assert (
-        sampler.scheduler == "epi_adapter"
-    ), f"Expected sampler scheduler to be 'epi_adapter', got {sampler.scheduler}"
+    assert sampler.scheduler == "epi_adapter", (
+        f"Expected sampler scheduler to be 'epi_adapter', got {sampler.scheduler}"
+    )
 
 
 def test_make_grain_scheduler_warning_multi_worker(monkeypatch):
@@ -464,7 +484,9 @@ def test_make_grain_scheduler_warning_multi_worker(monkeypatch):
         ReadOptions=MagicMock(),
     )
     monkeypatch.setattr(make_mod, "grain", mock_grain)
-    monkeypatch.setattr(make_mod, "get_data_source_class", lambda _: MagicMock())
+    monkeypatch.setattr(
+        make_mod, "get_data_source_class", lambda _: MagicMock()
+    )
     # Mock adapter to avoid isinstance(loader, grain.DataLoader) check
     monkeypatch.setattr(make_mod, "GrainSchedulerAdapter", MagicMock())
 
@@ -497,7 +519,9 @@ def test_make_grain_scheduler_with_file_list(monkeypatch):
     monkeypatch.setattr(make_mod, "grain", mock_grain)
     monkeypatch.setattr(make_mod, "GrainSchedulerAdapter", MagicMock())
     mock_ds_cls = MagicMock()
-    monkeypatch.setattr(make_mod, "get_data_source_class", lambda _: mock_ds_cls)
+    monkeypatch.setattr(
+        make_mod, "get_data_source_class", lambda _: mock_ds_cls
+    )
 
     cfg = {
         "scheduler_class": ".mat",
@@ -509,9 +533,9 @@ def test_make_grain_scheduler_with_file_list(monkeypatch):
     make(cfg, use_grain_scheduler=True)
     # Check that data source was instantiated with dataset_path
     args, kwargs = mock_ds_cls.call_args
-    assert kwargs["dataset_path"] == [
-        "f1.mat"
-    ], f"Expected dataset_path ['f1.mat'], got {kwargs['dataset_path']}"
+    assert kwargs["dataset_path"] == ["f1.mat"], (
+        f"Expected dataset_path ['f1.mat'], got {kwargs['dataset_path']}"
+    )
 
 
 def test_get_base_scheduler_invalid():
@@ -530,9 +554,9 @@ def test_get_data_source_class_valid():
     """Test get_data_source_class returns correct class for valid extension."""
     from synthpix.data_sources import MATDataSource
 
-    assert (
-        make_mod.get_data_source_class(".mat") == MATDataSource
-    ), "get_data_source_class('.mat') should return MATDataSource"
+    assert make_mod.get_data_source_class(".mat") == MATDataSource, (
+        "get_data_source_class('.mat') should return MATDataSource"
+    )
 
 
 def test_make_rejects_non_dict_config_loaded(monkeypatch, tmp_path):

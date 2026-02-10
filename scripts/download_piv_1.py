@@ -57,12 +57,14 @@ import random
 import re
 import shutil
 import struct
+import sys
 import zipfile
 from pathlib import Path
 
 import gdown
 import h5py
 import numpy as np
+import scipy.io
 from PIL import Image
 from utils import download_file, read_list, write_list
 
@@ -78,7 +80,9 @@ GDRIVE_FOLDERS = [
 BASE_URL = "https://raw.githubusercontent.com/shengzesnail/PIV_dataset/master"
 
 
-def fetch_splits(out_path: Path, split_seed: int, split_ratios: list[int]) -> None:
+def fetch_splits(
+    out_path: Path, split_seed: int, split_ratios: list[int]
+) -> None:
     """Fetch official train/test split files and generate val/tune splits.
 
     Args:
@@ -145,6 +149,10 @@ def read_flow(path: str) -> np.ndarray:
 
     Returns:
         Numpy array of the optical flow.
+
+    Raises:
+        Exception: If the file format is invalid or unsupported.
+        ValueError: If the .mat file does not contain recognizable flow data.
     """
     if path.endswith(".flo"):
         with open(path, "rb") as f:
@@ -157,8 +165,6 @@ def read_flow(path: str) -> np.ndarray:
             flow = np.reshape(data, (height, width, 2))
         return flow
     elif path.endswith(".mat"):
-        import scipy.io
-
         mat = scipy.io.loadmat(path)
         for k in ["V", "flow", "u", "uv", "F"]:
             if k in mat:
@@ -205,10 +211,14 @@ def resize_flow(flow: np.ndarray, shape: tuple) -> np.ndarray:
     # Resize each channel separately using PIL (bilinear interpolation)
     # PIL resize expects (width, height), so we reverse the shape
     flow_u = np.asarray(
-        Image.fromarray(flow[..., 0]).resize(shape[::-1], Image.Resampling.BILINEAR)
+        Image.fromarray(flow[..., 0]).resize(
+            shape[::-1], Image.Resampling.BILINEAR
+        )
     )
     flow_v = np.asarray(
-        Image.fromarray(flow[..., 1]).resize(shape[::-1], Image.Resampling.BILINEAR)
+        Image.fromarray(flow[..., 1]).resize(
+            shape[::-1], Image.Resampling.BILINEAR
+        )
     )
     # Scale flow to new size
     flow_resized = np.stack(
@@ -272,7 +282,9 @@ def convert(dataset_dir: str, out_dir: str, target_shape: tuple) -> None:
         out_name = os.path.basename(prefix) + ".mat"
         out_path = os.path.join(out_subdir, out_name)
         try:
-            pack_triplet(flow_path, img1_path, img2_path, out_path, target_shape)
+            pack_triplet(
+                flow_path, img1_path, img2_path, out_path, target_shape
+            )
         except Exception as e:
             print(f"Failed for {prefix}: {e}")
 
@@ -288,7 +300,9 @@ def download_from_gdrive(raw_dir_path: Path) -> None:
     """
     raw_dir_path.mkdir(parents=True, exist_ok=True)
 
-    print("Press Ctrl+C to interrupt download safely and proceed to processing.")
+    print(
+        "Press Ctrl+C to interrupt download safely and proceed to processing."
+    )
 
     try:
         for idx, url in enumerate(GDRIVE_FOLDERS, start=1):
@@ -320,7 +334,8 @@ def download_from_gdrive(raw_dir_path: Path) -> None:
         print(f"  Extracting {zip_path}")
         try:
             with zipfile.ZipFile(zip_path, "r") as z:
-                # Extract into the main raw directory to avoid gdrive_folder_X nesting
+                # Extract into the main raw directory to avoid
+                # gdrive_folder_X nesting
                 # This flattens the structure so 'backstep' ends up in
                 # raw_dir_path/backstep
                 z.extractall(raw_dir_path)
@@ -346,12 +361,12 @@ def load_split_file(path: Path) -> set[str]:
     out = []
     with open(path) as f:
         for line in f:
-            line = line.strip()
-            if not line:
+            line_stripped = line.strip()
+            if not line_stripped:
                 continue
             # The split file might contain multiple columns (img1 img2 flow)
             # We want to canonicalize to the expected .mat filename
-            parts = line.split()
+            parts = line_stripped.split()
             base_token = parts[0]
 
             p = Path(base_token)
@@ -377,6 +392,9 @@ def perform_split(packed_root: Path, split_root: Path) -> None:
     Args:
         packed_root: Directory containing packed .mat files.
         split_root: Directory to save split datasets.
+
+    Raises:
+        FileNotFoundError: If any of the split files are missing.
     """
     split_root.mkdir(parents=True, exist_ok=True)
     split_files_dir = packed_root.parent / "splits"
@@ -435,7 +453,8 @@ def main(out_dir: str, target_shape: str) -> None:
 
     Args:
         out_dir: Directory to save raw, packed, and split datasets.
-        target_shape: Target shape (HxW) for resizing images and flow, e.g., '256x256'.
+        target_shape:
+            Target shape (HxW) for resizing images and flow, e.g., '256x256'.
     """
     out_dir_path = Path(out_dir)
     try:
@@ -511,4 +530,4 @@ if __name__ == "__main__":
             f"Split ratio is in the wrong format: {args.split_ratio}. "
             f"Use '80/10/10' format summing to 100. Error: {e}"
         )
-        exit(1)
+        sys.exit(1)

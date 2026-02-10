@@ -47,7 +47,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         """
         self._file_list = value
 
-    def __init__(  # noqa: PLR0912
+    def __init__(
         self,
         file_list: list[str],
         randomize: bool = False,
@@ -114,8 +114,12 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             self.key, shuffle_key = jax.random.split(self.key)
             cpu = jax.devices("cpu")[0]
             file_list_indices = jnp.arange(len(self.file_list), device=cpu)
-            file_list_indices = jax.random.permutation(shuffle_key, file_list_indices)
-            self.file_list = [self.file_list[i] for i in file_list_indices.tolist()]
+            file_list_indices = jax.random.permutation(
+                shuffle_key, file_list_indices
+            )
+            self.file_list = [
+                self.file_list[i] for i in file_list_indices.tolist()
+            ]
 
         self._cached_data: SchedulerData | None = None
         self._cached_file: str | None = None
@@ -152,8 +156,12 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
             self.key, shuffle_key = jax.random.split(self.key)
             cpu = jax.devices("cpu")[0]
             file_list_indices = jnp.arange(len(self.file_list), device=cpu)
-            file_list_indices = jax.random.permutation(shuffle_key, file_list_indices)
-            self.file_list = [self.file_list[i] for i in file_list_indices.tolist()]
+            file_list_indices = jax.random.permutation(
+                shuffle_key, file_list_indices
+            )
+            self.file_list = [
+                self.file_list[i] for i in file_list_indices.tolist()
+            ]
 
     @property
     def state(self) -> dict[str, Any]:
@@ -181,9 +189,6 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
 
         Args:
             value: Dictionary containing the scheduler state.
-
-        Raises:
-            KeyError: If state is missing required keys.
         """
         self.index = value["index"]
         self._slice_idx = value["slice_idx"]
@@ -250,7 +255,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
 
         raise StopIteration
 
-    def get_batch(self, batch_size: int) -> SchedulerData:  # noqa: PLR0912
+    def get_batch(self, batch_size: int) -> SchedulerData:
         """Retrieves a batch of flow fields using the current scheduler state.
 
         This method repeatedly calls `__next__()` to store a batch
@@ -287,15 +292,20 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
 
         images1, images2 = None, None
         if all(data.images1 is not None for data in batch):
-            images1 = np.stack([d.images1 for d in batch if d.images1 is not None])
+            images1 = np.stack(
+                [d.images1 for d in batch if d.images1 is not None]
+            )
         if all(data.images2 is not None for data in batch):
-            images2 = np.stack([d.images2 for d in batch if d.images2 is not None])
+            images2 = np.stack(
+                [d.images2 for d in batch if d.images2 is not None]
+            )
 
         flow_fields = np.stack([data.flow_fields for data in batch])
 
         if batch and any(data.files is not None for data in batch):
             if not all(
-                data.files is not None and len(data.files) <= 1 for data in batch
+                data.files is not None and len(data.files) <= 1
+                for data in batch
             ):
                 raise ValueError("Inconsistent files information in batch.")
 

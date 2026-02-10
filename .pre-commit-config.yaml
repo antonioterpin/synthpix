@@ -1,40 +1,36 @@
 repos:
-  - repo: https://github.com/psf/black
-    rev: 25.9.0
-    hooks:
-      - id: black
-
+  # Ruff: lint + autofix
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.1
     hooks:
       - id: ruff
         stages: [pre-commit, pre-push]
-        # Use hook-level exclude so it actually skips in pre-commit
-        exclude: ^(tests/|examples/)
-        args:
-          [
-            "--fix",
-            "--line-length=80",
-            # Docstring & pandas rules; D includes D419 so this is enough.
-            "--select=D,PD",
-            # Keep D211 (no-blank-line-before-class) by ignoring conflicts:
-          ]
-      - id: ruff
-        name: ruff-typing-modernizer
+        args: ["--fix"]
+
+      - id: ruff-format
         stages: [pre-commit, pre-push]
-        args:
-          [
-            "--fix",
-            "--select=UP,F401,F811",  # UP = pyupgrade rules for modern typing, F401 = unused imports, F811 = redefined unused
-            "--line-length=80",
-          ]
 
-  - repo: https://github.com/asottile/pyupgrade
-    rev: v3.19.0
+  # Pydoclint: docstring linting (refer to pyproject.toml for configuration)
+  - repo: local
     hooks:
-      - id: pyupgrade
-        args: [--py310-plus]  # Enforce Python 3.10+ syntax
+      - id: pydoclint
+        name: pydoclint
+        entry: uv run pydoclint
+        language: system
+        types: [python]
+        stages: [pre-commit, pre-push]
 
+  # Type checking (BasedPyright)
+  - repo: local
+    hooks:
+      - id: basedpyright
+        name: basedpyright
+        entry: uv run basedpyright
+        language: system
+        pass_filenames: false
+        stages: [pre-commit, pre-push]
+
+  # Generic hygiene
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:

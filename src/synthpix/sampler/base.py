@@ -41,7 +41,9 @@ class Sampler(ABC):
             ValueError: If batch_size is not a positive integer.
         """
         if not isinstance(scheduler, SchedulerProtocol):
-            raise TypeError("scheduler must implement the SchedulerProtocol interface.")
+            raise TypeError(
+                "scheduler must implement the SchedulerProtocol interface."
+            )
 
         if not isinstance(batch_size, int) or batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
@@ -71,7 +73,11 @@ class Sampler(ABC):
         logger.info(f"{self.__class__.__name__} shutdown complete.")
 
     def __iter__(self) -> Self:
-        """Returns the iterator instance itself."""
+        """Returns the iterator instance itself.
+
+        Returns:
+            The sampler instance itself as an iterator.
+        """
         return self
 
     def __next__(self) -> SynthpixBatch:
@@ -120,7 +126,9 @@ class Sampler(ABC):
                 episodes.
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
-            raise AttributeError("Underlying scheduler lacks next_episode() method.")
+            raise AttributeError(
+                "Underlying scheduler lacks next_episode() method."
+            )
         self.scheduler.next_episode()
 
     def _make_done(self) -> jnp.ndarray:
@@ -134,14 +142,18 @@ class Sampler(ABC):
             NotImplementedError: If the scheduler is not episodic.
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
-            raise NotImplementedError("The underlying scheduler is not episodic.")
+            raise NotImplementedError(
+                "The underlying scheduler is not episodic."
+            )
 
         is_last_step = self.scheduler.steps_remaining() == 0
         return jnp.full((self.batch_size,), is_last_step, dtype=bool)
 
     @classmethod
     @abstractmethod
-    def from_config(cls, scheduler: SchedulerProtocol, config: dict[str, Any]) -> Self:
+    def from_config(
+        cls, scheduler: SchedulerProtocol, config: dict[str, Any]
+    ) -> Self:
         """Create a Sampler instance from a configuration dictionary.
 
         Args:
@@ -176,7 +188,7 @@ class Sampler(ABC):
         """Sets the state of the sampler from a checkpoint.
 
         Args:
-            value: A dictionary containing the state of the sampler and scheduler.
+            value: A dictionary containing the state of sampler and scheduler.
 
         Raises:
             TypeError: If state is not a dictionary.

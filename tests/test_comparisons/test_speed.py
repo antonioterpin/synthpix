@@ -6,8 +6,8 @@ performance against the single-threaded legacy baseline across different
 file formats and configurations.
 """
 
-import os
 import gc
+import os
 import threading
 import time
 import timeit
@@ -47,7 +47,9 @@ def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
     steps = 500
     grain_thread_counts = [None, 1, 2, 4, 8, 16, 32, 64]
 
-    print(f"\n[Benchmark] Running {steps} steps per configuration (256x256 input)...")
+    print(
+        f"\n[Benchmark] Running {steps} steps per configuration (256x256 input)..."
+    )
 
     def loop_system(sys_next_fn, reset_fn, n_steps):
         count = 0
@@ -81,7 +83,9 @@ def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
     )
 
     print(f"\nLegacy Baseline: {t_legacy:.4f} s")
-    print(f"\n{'Grain Threads':<15} | {'Duration (s)':<15} | {'Speedup vs Legacy':<20}")
+    print(
+        f"\n{'Grain Threads':<15} | {'Duration (s)':<15} | {'Speedup vs Legacy':<20}"
+    )
     print("-" * 55)
 
     results = {}
@@ -152,15 +156,15 @@ def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
     # Assertions for speedup
     # Grain should be at least slightly faster even with 1 thread due to better implementation,
     # and significantly faster with multiple threads/default config.
-    assert (
-        results[1] < t_legacy * 1.5
-    ), f"Grain with 1 thread is too slow: {results[1]:.4f}s vs Legacy {t_legacy:.4f}s"
-    assert (
-        results[16] < t_legacy
-    ), f"Grain with 16 threads should be faster than Legacy: {results[16]:.4f}s vs {t_legacy:.4f}s"
-    assert (
-        results[None] < t_legacy
-    ), f"Grain default should be faster than Legacy: {results[None]:.4f}s vs {t_legacy:.4f}s"
+    assert results[1] < t_legacy * 1.5, (
+        f"Grain with 1 thread is too slow: {results[1]:.4f}s vs Legacy {t_legacy:.4f}s"
+    )
+    assert results[16] < t_legacy, (
+        f"Grain with 16 threads should be faster than Legacy: {results[16]:.4f}s vs {t_legacy:.4f}s"
+    )
+    assert results[None] < t_legacy, (
+        f"Grain default should be faster than Legacy: {results[None]:.4f}s vs {t_legacy:.4f}s"
+    )
 
 
 @pytest.mark.parametrize(
@@ -254,9 +258,9 @@ def test_benchmark_numpy_speed(tmp_path, mock_numpy_files):
         time.sleep(0.5)
 
     # Verify scaling: 4 threads should be noticeably faster than 1 thread
-    assert (
-        results[4] < results[1] * 0.9
-    ), f"Expected at least 10% speedup with 4 threads for Numpy, but got {results[4]:.4f}s vs {results[1]:.4f}s"
+    assert results[4] < results[1] * 0.9, (
+        f"Expected at least 10% speedup with 4 threads for Numpy, but got {results[4]:.4f}s vs {results[1]:.4f}s"
+    )
 
 
 class SleepingDataSource(grain.RandomAccessDataSource):
@@ -344,35 +348,35 @@ def test_grain_threading_speedup():
 
     # Verify that multi-threading actually happened and improved performance
     # 1. Single thread should take at least size * sleep_time
-    assert results[1][0] >= (
-        size * sleep_time
-    ), f"Expected 1 thread to take >= {size * sleep_time}s, got {results[1][0]:.4f}s"
+    assert results[1][0] >= (size * sleep_time), (
+        f"Expected 1 thread to take >= {size * sleep_time}s, got {results[1][0]:.4f}s"
+    )
 
     # 2. Max threads should be faster than single thread
-    assert (
-        results[16][0] < results[1][0]
-    ), f"Expected 16 threads ({results[16][0]:.4f}s) to be faster than 1 thread ({results[1][0]:.4f}s)"
+    assert results[16][0] < results[1][0], (
+        f"Expected 16 threads ({results[16][0]:.4f}s) to be faster than 1 thread ({results[1][0]:.4f}s)"
+    )
 
     # 3. Max threads should use multiple threads
-    assert (
-        results[16][1] > 1
-    ), f"Expected 16 threads to use > 1 unique thread ID, got {results[16][1]}"
+    assert results[16][1] > 1, (
+        f"Expected 16 threads to use > 1 unique thread ID, got {results[16][1]}"
+    )
 
     # 4. Check for scaling: 4 threads should be roughly faster than 2 threads, etc.
     # We use a lenient margin because overhead/GIL can reduce ideal scaling.
-    assert (
-        results[4][0] < results[1][0]
-    ), f"Expected 4 threads ({results[4][0]:.4f}s) to be faster than 1 thread ({results[1][0]:.4f}s)"
-    assert (
-        results[8][0] < results[2][0]
-    ), f"Expected 8 threads ({results[8][0]:.4f}s) to be faster than 2 threads ({results[2][0]:.4f}s)"
+    assert results[4][0] < results[1][0], (
+        f"Expected 4 threads ({results[4][0]:.4f}s) to be faster than 1 thread ({results[1][0]:.4f}s)"
+    )
+    assert results[8][0] < results[2][0], (
+        f"Expected 8 threads ({results[8][0]:.4f}s) to be faster than 2 threads ({results[2][0]:.4f}s)"
+    )
 
     # 5. Verify Default configuration (read_options=None)
     # It should use multiple threads and be significantly faster than 1 thread
     default_duration, default_threads = results[None]
-    assert (
-        default_threads > 1
-    ), f"Default configuration only used {default_threads} thread(s)"
-    assert (
-        default_duration < results[1][0]
-    ), "Default configuration was not faster than 1 thread"
+    assert default_threads > 1, (
+        f"Default configuration only used {default_threads} thread(s)"
+    )
+    assert default_duration < results[1][0], (
+        "Default configuration was not faster than 1 thread"
+    )

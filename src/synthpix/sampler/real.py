@@ -65,7 +65,9 @@ class RealImageSampler(Sampler):
             mask=jnp.array(batch.mask) if batch.mask is not None else None,
             files=batch.files,
             epoch=jnp.array(batch.epoch) if batch.epoch is not None else None,
-            seeds=jnp.array(batch.jax_seed) if batch.jax_seed is not None else None,
+            seeds=jnp.array(batch.jax_seed)
+            if batch.jax_seed is not None
+            else None,
             keys=keys,
         )
         return batch

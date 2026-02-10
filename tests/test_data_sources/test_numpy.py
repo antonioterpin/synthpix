@@ -24,14 +24,14 @@ def test_numpy_simple(mock_numpy_files):
     root = os.path.dirname(file_paths[0])
 
     ds = NumpyDataSource([root], include_images=False)
-    assert len(ds) == len(
-        file_paths
-    ), f"Expected {len(file_paths)} files, got {len(ds)}"
+    assert len(ds) == len(file_paths), (
+        f"Expected {len(file_paths)} files, got {len(ds)}"
+    )
     item = ds[0]
     assert "flow_fields" in item, "Item missing 'flow_fields' key"
-    assert (
-        "images1" not in item
-    ), "Item should not contain 'images1' when include_images=False"
+    assert "images1" not in item, (
+        "Item should not contain 'images1' when include_images=False"
+    )
 
 
 def test_numpy_with_images(mock_numpy_files):
@@ -48,7 +48,9 @@ def test_numpy_with_images(mock_numpy_files):
         dims["height"],
         dims["width"],
         3,
-    ), f"Image shape mismatch. Expected {(dims['height'], dims['width'], 3)}, got {item['images1'].shape}"
+    ), (
+        f"Image shape mismatch. Expected {(dims['height'], dims['width'], 3)}, got {item['images1'].shape}"
+    )
 
 
 def test_numpy_missing_images(tmp_path):

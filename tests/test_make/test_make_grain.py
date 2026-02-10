@@ -109,7 +109,9 @@ def patch_grain(monkeypatch):
         "logger",
         SimpleNamespace(info=lambda *_: None, warning=lambda *_: None),
     )
-    monkeypatch.setattr(make_mod, "load_configuration", lambda p: {}, raising=False)
+    monkeypatch.setattr(
+        make_mod, "load_configuration", lambda p: {}, raising=False
+    )
 
 
 def test_make_grain_basic(patch_grain, monkeypatch):
@@ -130,21 +132,21 @@ def test_make_grain_basic(patch_grain, monkeypatch):
 
     sampler = make(cfg, use_grain_scheduler=True)
 
-    assert isinstance(
-        sampler, DummySampler
-    ), f"Expected DummySampler, got {type(sampler)}"
+    assert isinstance(sampler, DummySampler), (
+        f"Expected DummySampler, got {type(sampler)}"
+    )
     adapter = sampler.scheduler
-    assert isinstance(
-        adapter, DummyGrainAdapter
-    ), f"Expected DummyGrainAdapter, got {type(adapter)}"
+    assert isinstance(adapter, DummyGrainAdapter), (
+        f"Expected DummyGrainAdapter, got {type(adapter)}"
+    )
     loader = adapter.loader
-    assert isinstance(
-        loader.data_source, DummyDataSource
-    ), f"Expected DummyDataSource, got {type(loader.data_source)}"
+    assert isinstance(loader.data_source, DummyDataSource), (
+        f"Expected DummyDataSource, got {type(loader.data_source)}"
+    )
     # Check that file_list was passed correctly
-    assert loader.data_source.kwargs["dataset_path"] == [
-        "file1.mat"
-    ], f"Expected dataset_path ['file1.mat'], got {loader.data_source.kwargs['dataset_path']}"
+    assert loader.data_source.kwargs["dataset_path"] == ["file1.mat"], (
+        f"Expected dataset_path ['file1.mat'], got {loader.data_source.kwargs['dataset_path']}"
+    )
 
 
 def test_make_grain_episodic(patch_grain):
@@ -166,15 +168,15 @@ def test_make_grain_episodic(patch_grain):
     adapter = sampler.scheduler
     # Should wrap in EpisodicDataSource then Adapter
     loader = adapter.loader
-    assert isinstance(
-        loader.data_source, DummyEpisodicDataSource
-    ), f"Expected DummyEpisodicDataSource, got {type(loader.data_source)}"
-    assert (
-        loader.data_source.episode_length == 10
-    ), f"Expected episode_length 10, got {loader.data_source.episode_length}"
-    assert isinstance(
-        loader.data_source.source, DummyDataSource
-    ), f"Expected underlying source to be DummyDataSource, got {type(loader.data_source.source)}"
+    assert isinstance(loader.data_source, DummyEpisodicDataSource), (
+        f"Expected DummyEpisodicDataSource, got {type(loader.data_source)}"
+    )
+    assert loader.data_source.episode_length == 10, (
+        f"Expected episode_length 10, got {loader.data_source.episode_length}"
+    )
+    assert isinstance(loader.data_source.source, DummyDataSource), (
+        f"Expected underlying source to be DummyDataSource, got {type(loader.data_source.source)}"
+    )
 
 
 def test_make_grain_include_images(patch_grain):
@@ -194,15 +196,15 @@ def test_make_grain_include_images(patch_grain):
     sampler = make(cfg, use_grain_scheduler=True)
 
     # RealImageSampler logic
-    assert isinstance(
-        sampler, DummySampler
-    ), f"Expected DummySampler, got {type(sampler)}"
+    assert isinstance(sampler, DummySampler), (
+        f"Expected DummySampler, got {type(sampler)}"
+    )
     # Check DataSource got include_images=True
     loader = sampler.scheduler.loader
     ds = loader.data_source
-    assert (
-        ds.kwargs["include_images"] is True
-    ), "DataSource should have include_images=True"
+    assert ds.kwargs["include_images"] is True, (
+        "DataSource should have include_images=True"
+    )
     assert ds.kwargs["output_shape"] == (
         128,
         128,
@@ -272,15 +274,15 @@ def test_make_grain_worker_count(patch_grain, monkeypatch):
     sampler = make(cfg, use_grain_scheduler=True)
 
     loader = sampler.scheduler.loader
-    assert (
-        loader.worker_count == 4
-    ), f"Expected worker_count 4, got {loader.worker_count}"
+    assert loader.worker_count == 4, (
+        f"Expected worker_count 4, got {loader.worker_count}"
+    )
     # Verify warning was logged
     mock_logger.warning.assert_called()
     args, _ = mock_logger.warning.call_args
-    assert (
-        "This enables multiprocessing in Grain" in args[0]
-    ), f"Expected warning message to mention multiprocessing, got: {args[0]}"
+    assert "This enables multiprocessing in Grain" in args[0], (
+        f"Expected warning message to mention multiprocessing, got: {args[0]}"
+    )
 
 
 def test_make_grain_threading(patch_grain):
@@ -302,16 +304,16 @@ def test_make_grain_threading(patch_grain):
 
     loader = sampler.scheduler.loader
     # Check if correct ReadOptions object was created and passed
-    assert hasattr(
-        loader.read_options, "num_threads"
-    ), "ReadOptions should have num_threads attribute"
-    assert (
-        loader.read_options.num_threads == 8
-    ), f"Expected num_threads 8, got {loader.read_options.num_threads}"
+    assert hasattr(loader.read_options, "num_threads"), (
+        "ReadOptions should have num_threads attribute"
+    )
+    assert loader.read_options.num_threads == 8, (
+        f"Expected num_threads 8, got {loader.read_options.num_threads}"
+    )
     # Check buffer size (passed to kwargs of ReadOptions mock)
-    assert (
-        loader.read_options.kwargs["prefetch_buffer_size"] == 1000
-    ), f"Expected prefetch_buffer_size 1000, got {loader.read_options.kwargs['prefetch_buffer_size']}"
+    assert loader.read_options.kwargs["prefetch_buffer_size"] == 1000, (
+        f"Expected prefetch_buffer_size 1000, got {loader.read_options.kwargs['prefetch_buffer_size']}"
+    )
 
 
 def test_make_grain_episodic_worker_error(patch_grain):

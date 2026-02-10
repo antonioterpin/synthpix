@@ -5,16 +5,19 @@ These tests check the edge cases of checkpointing and resuming from a Grain iter
 
 import os
 import shutil
+
+import h5py
 import jax.numpy as jnp
 import numpy as np
 import pytest
 import scipy.io
-import h5py
 
 from synthpix import make, save_checkpoint
 
 
-def get_valid_config(paths, source_type, include_images=False, episode_length=0):
+def get_valid_config(
+    paths, source_type, include_images=False, episode_length=0
+):
     """Returns a valid configuration dictionary for testing."""
     config = {
         "scheduler_class": source_type,
@@ -63,7 +66,9 @@ def test_checkpoint_matrix(source_type, mode, include_images, tmp_path):
     if source_type == ".h5" and include_images:
         pytest.skip("HDF5DataSource does not support images yet.")
     if source_type == ".npy" and include_images:
-        pytest.skip("NumpyDataSource image extraction is not yet supported in make.py.")
+        pytest.skip(
+            "NumpyDataSource image extraction is not yet supported in make.py."
+        )
 
     checkpoint_dir = tmp_path / "checkpoints"
 
@@ -76,7 +81,9 @@ def test_checkpoint_matrix(source_type, mode, include_images, tmp_path):
         for i in range(num_files):
             p = tmp_path / f"file_{i}.h5"
             with h5py.File(p, "w") as f:
-                f.create_dataset("flow", data=np.zeros((64, 64, 2), dtype=np.float32))
+                f.create_dataset(
+                    "flow", data=np.zeros((64, 64, 2), dtype=np.float32)
+                )
             paths.append(str(p))
     elif source_type == ".mat":
         for i in range(num_files):
@@ -129,7 +136,9 @@ def test_checkpoint_matrix(source_type, mode, include_images, tmp_path):
     gt_batch = next(sampler)
 
     # 5. Resume
-    resumed_sampler = make(config, use_grain_scheduler=True, load_from=checkpoint_dir)
+    resumed_sampler = make(
+        config, use_grain_scheduler=True, load_from=checkpoint_dir
+    )
     resumed_batch = next(resumed_sampler)
 
     # 6. Verify
@@ -216,11 +225,14 @@ def test_edge_case_missing_files(mock_mat_files, tmp_path):
     os.remove(paths[1])
 
     # Restore
-    resumed_sampler = make(config, use_grain_scheduler=True, load_from=checkpoint_dir)
+    resumed_sampler = make(
+        config, use_grain_scheduler=True, load_from=checkpoint_dir
+    )
 
     # next() should fail because it tries to load a non-existent file
     with pytest.raises(
-        (FileNotFoundError, ValueError), match=".*not found.*|.*Failed to load.*"
+        (FileNotFoundError, ValueError),
+        match=".*not found.*|.*Failed to load.*",
     ):
         _ = next(resumed_sampler)
 
@@ -243,6 +255,7 @@ def test_edge_case_config_drift(mock_mat_files, tmp_path):
 
     # Grain validation should catch the sampler repr mismatch
     with pytest.raises(
-        ValueError, match="Sampler in checkpoint does not match dataloader sampler"
+        ValueError,
+        match="Sampler in checkpoint does not match dataloader sampler",
     ):
         make(new_config, use_grain_scheduler=True, load_from=checkpoint_dir)

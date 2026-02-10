@@ -112,7 +112,11 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         self._sample_new_episodes()
 
     def __iter__(self) -> Self:
-        """Returns self so the object can be used in a ``for`` loop."""
+        """Returns self so the object can be used in a ``for`` loop.
+
+        Returns:
+            The EpisodicFlowFieldScheduler instance itself as an iterator.
+        """
         self._t = 0
         return self
 
@@ -280,7 +284,9 @@ class EpisodicFlowFieldScheduler(EpisodicSchedulerProtocol):
         """
         # Extract the leaf directories from the file list
         leaf_dirs = discover_leaf_dirs(self.file_list)
-        dir2files = {d: sorted(glob.glob(os.path.join(d, "*.mat"))) for d in leaf_dirs}
+        dir2files = {
+            d: sorted(glob.glob(os.path.join(d, "*.mat"))) for d in leaf_dirs
+        }
 
         # Sanity-check: all directories must contain enough frames
         for d, files in dir2files.items():

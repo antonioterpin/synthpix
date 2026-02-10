@@ -66,9 +66,9 @@ def apply_flow_to_image_forward(
             cond = in_bounds(xi, yi)
             new_image = jax.lax.cond(
                 cond,
-                lambda img, yi=yi, xi=xi, val=val, weight=weight: img.at[yi, xi].add(
-                    val * weight
-                ),
+                lambda img, yi=yi, xi=xi, val=val, weight=weight: img.at[
+                    yi, xi
+                ].add(val * weight),
                 lambda img: img,
                 operand=new_image,
             )
@@ -197,7 +197,8 @@ def input_check_apply_flow(
         or particle_positions.shape[1] not in (2, 3)
     ):
         raise ValueError(
-            "Particle_positions must be a 2D jnp.ndarray with shape " "(N, 2) or (N, 3)"
+            "Particle_positions must be a 2D jnp.ndarray \
+                with shape (N, 2) or (N, 3)"
         )
 
     if (
@@ -206,24 +207,40 @@ def input_check_apply_flow(
         or flow_field.shape[2] not in (2, 3)
     ):
         raise ValueError(
-            "Flow_field must be a 3D jnp.ndarray with shape (H, W, 2) or " "(H, W, 3)"
+            "Flow_field must be a 3D jnp.ndarray with shape (H, W, 2) or "
+            "(H, W, 3)"
         )
 
     if particle_positions.shape[1] == 2 and flow_field.shape[2] != 2:
-        raise ValueError("Particle positions are in 2D, but the flow field is in 3D.")
+        raise ValueError(
+            "Particle positions are in 2D, \
+            but the flow field is in 3D."
+        )
 
     if particle_positions.shape[1] == 3 and flow_field.shape[2] != 3:
-        raise ValueError("Particle positions are in 3D, but the flow field is in 2D.")
+        raise ValueError(
+            "Particle positions are in 3D, \
+            but the flow field is in 2D."
+        )
 
     if not isinstance(dt, int | float) or dt <= 0:
         raise ValueError("dt must be a scalar (int or float)")
 
     if not isinstance(flow_field_res_x, int | float) or flow_field_res_x <= 0:
-        raise ValueError("flow_field_res_x must be a positive scalar (int or float)")
+        raise ValueError(
+            "flow_field_res_x must be a positive scalar \
+            (int or float)"
+        )
     if not isinstance(flow_field_res_y, int | float) or flow_field_res_y <= 0:
-        raise ValueError("flow_field_res_y must be a positive scalar (int or float)")
+        raise ValueError(
+            "flow_field_res_y must be a positive scalar \
+            (int or float)"
+        )
     if not isinstance(flow_field_res_z, int | float) or flow_field_res_z <= 0:
-        raise ValueError("flow_field_res_z must be a positive scalar (int or float)")
+        raise ValueError(
+            "flow_field_res_z must be a positive scalar \
+            (int or float)"
+        )
 
 
 def apply_flow_to_particles(
@@ -270,8 +287,14 @@ def apply_flow_to_particles(
             # Compute the velocity (u, v) for the given particle
             # with bilinear interpolation.
             # Note: velocity u corresponds to the x-direction and v to y.
-            u = bilinear_interpolate(flow_field[..., 0], x, y) * flow_field_res_x
-            v = bilinear_interpolate(flow_field[..., 1], x, y) * flow_field_res_y
+            u = (
+                bilinear_interpolate(flow_field[..., 0], x, y)
+                * flow_field_res_x
+            )
+            v = (
+                bilinear_interpolate(flow_field[..., 1], x, y)
+                * flow_field_res_y
+            )
 
             # Return the new position: (y + v * dt, x + u * dt)
             return jnp.array([y + v * dt, x + u * dt])
@@ -289,9 +312,18 @@ def apply_flow_to_particles(
             # with trilinear interpolation.
             # Note: velocity u corresponds to the x-direction, v to y,
             # and w to z.
-            u = trilinear_interpolate(flow_field[..., 0], x, y, z) * flow_field_res_x
-            v = trilinear_interpolate(flow_field[..., 1], x, y, z) * flow_field_res_y
-            w = trilinear_interpolate(flow_field[..., 2], x, y, z) * flow_field_res_z
+            u = (
+                trilinear_interpolate(flow_field[..., 0], x, y, z)
+                * flow_field_res_x
+            )
+            v = (
+                trilinear_interpolate(flow_field[..., 1], x, y, z)
+                * flow_field_res_y
+            )
+            w = (
+                trilinear_interpolate(flow_field[..., 2], x, y, z)
+                * flow_field_res_z
+            )
 
             # Return the new position: (z + w * dt, y + v * dt, x + u * dt)
             return jnp.array([z + w * dt, y + v * dt, x + u * dt])

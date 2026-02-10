@@ -17,10 +17,10 @@ def parse_proto(example_proto: tf.Tensor) -> dict[str, tf.Tensor]:
     """Parse a single TFRecord example.
 
     Args:
-        example_proto (tf.Tensor): A serialized TFRecord example.
+        example_proto: A serialized TFRecord example.
 
     Returns:
-        dict: Parsed features.
+        Parsed features.
             - 'target': tf.string tensor - raw bytes of images
             - 'flow': tf.string tensor - raw bytes of optical flow
             - 'label': tf.string tensor (if exists) - raw bytes of labels
@@ -37,13 +37,13 @@ def process_tfrecord(tfrecord_path: str | Path, out_dir: str | Path) -> None:
     """Process a TFRecord file and convert its contents to .mat files.
 
     Args:
-        tfrecord_path (str | Path): Path to the TFRecord file.
-        out_dir (str | Path): Directory to save the converted .mat files.
+        tfrecord_path: Path to the TFRecord file.
+        out_dir: Directory to save the converted .mat files.
     """
     out_dir_path = Path(out_dir)
     out_dir_path.mkdir(parents=True, exist_ok=True)
 
-    dataset = tf.data.TFRecordDataset(tfrecord_path)
+    dataset = tf.data.TFRecordDataset(tfrecord_path)  # pyright: ignore[reportArgumentType]
     print(f"Processing {tfrecord_path} -> {out_dir}")
 
     count = 0
@@ -61,12 +61,14 @@ def process_tfrecord(tfrecord_path: str | Path, out_dir: str | Path) -> None:
                 or flow_raw == b""
             ):
                 if count == 0:
-                    print("Keys 'target' or 'flow' not found or empty. Skipping...")
+                    print("'target' or 'flow' not found or empty. Skipping...")
                 continue
 
             # Decode target -> I0, I1
             try:
-                target_flat = np.frombuffer(target_raw.numpy(), dtype=np.float32)
+                target_flat = np.frombuffer(
+                    target_raw.numpy(), dtype=np.float32
+                )
                 if target_flat.size != 256 * 256 * 2:
                     print(f"Target size mismatch: {target_flat.size}")
                     continue
@@ -115,7 +117,7 @@ def main(out_dir: str) -> None:
     """Main function to download, extract, and process the PIV class 2 dataset.
 
     Args:
-        out_dir (str): Output directory for the processed dataset.
+        out_dir: Output directory for the processed dataset.
     """
     out_path = Path(out_dir)
     raw_dir = out_path / "raw_class2"
@@ -126,7 +128,10 @@ def main(out_dir: str) -> None:
     # 1. Download
     zip_path = raw_dir / "Data_ProblemClass2_RAFT-PIV.zip"
     if not zip_path.exists():
-        print("Starting download... (This is 12GB, ensure you have stable connection)")
+        print(
+            "Starting download... \
+                (This is 12GB, ensure you have stable connection)"
+        )
         if not download_file(ZENODO_URL, zip_path):
             print("Download failed.")
             return
@@ -139,7 +144,10 @@ def main(out_dir: str) -> None:
         with zipfile.ZipFile(zip_path, "r") as z:
             z.extractall(raw_dir)
     except zipfile.BadZipFile:
-        print("CRITICAL: Bad zip file. The download might be incomplete or corrupted.")
+        print(
+            "CRITICAL: Bad zip file. \
+                The download might be incomplete or corrupted."
+        )
         return
     except Exception as e:
         print(f"Extraction error: {e}")

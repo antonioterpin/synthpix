@@ -53,8 +53,12 @@ class GrainSchedulerAdapter(SchedulerProtocol):
         # Try to inspect loader components
         try:
             # Grain DataLoader stores sampler in _sampler
-            sampler = getattr(loader, "sampler", getattr(loader, "_sampler", None))
-            dataset = getattr(loader, "_data_source", getattr(loader, "_dataset", None))
+            sampler = getattr(
+                loader, "sampler", getattr(loader, "_sampler", None)
+            )
+            dataset = getattr(
+                loader, "_data_source", getattr(loader, "_dataset", None)
+            )
 
             if dataset is not None and hasattr(dataset, "__len__"):
                 self._dataset_len = len(dataset)
@@ -123,7 +127,9 @@ class GrainSchedulerAdapter(SchedulerProtocol):
             return getattr(ds, "include_images", False)
         return False
 
-    def _to_scheduler_data(self, batch: dict, target_batch_size: int) -> SchedulerData:
+    def _to_scheduler_data(
+        self, batch: dict, target_batch_size: int
+    ) -> SchedulerData:
         """Converts Grain batch dict to SchedulerData with padding and masking.
 
         Args:
@@ -148,11 +154,17 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
         # Validation
         if not isinstance(flow, np.ndarray):
-            raise ValueError(f"Flow fields must be a np.ndarray, got {type(flow)}")
+            raise ValueError(
+                f"Flow fields must be a np.ndarray, got {type(flow)}"
+            )
         if images1 is not None and not isinstance(images1, np.ndarray):
-            raise ValueError(f"Images1 must be a np.ndarray, got {type(images1)}")
+            raise ValueError(
+                f"Images1 must be a np.ndarray, got {type(images1)}"
+            )
         if images2 is not None and not isinstance(images2, np.ndarray):
-            raise ValueError(f"Images2 must be a np.ndarray, got {type(images2)}")
+            raise ValueError(
+                f"Images2 must be a np.ndarray, got {type(images2)}"
+            )
 
         current_batch_size = flow.shape[0]
 
@@ -280,6 +292,7 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
         Raises:
             StopIteration: If the Grain DataLoader is exhausted.
+            RuntimeError: If the adapter is shut down or no data is cached.
         """
         if self._iterator is None:
             raise RuntimeError("Grain iterator is already shut down.")
@@ -340,7 +353,19 @@ class GrainSchedulerAdapter(SchedulerProtocol):
 
     @file_list.setter
     def file_list(self, value: list[str]) -> None:
-        """Sets the file list (not supported on compiled loaders)."""
+        """Sets the file list (not supported on compiled loaders).
+
+        NOTE: Grain DataLoaders are typically compiled and do not support
+        changing the file list after creation.
+        This setter is not implemented and will raise NotImplementedError.
+
+        Args:
+            value: The list of files to set.
+
+        Raises:
+            NotImplementedError:
+                Always, since changing file list is not supported.
+        """
         # Grain loaders are usually immutable after creation regarding file
         # list.
         # Supporting this would require rebuilding the loader.
@@ -424,6 +449,7 @@ class GrainEpisodicAdapter(GrainSchedulerAdapter, EpisodicSchedulerProtocol):
 
         Raises:
             KeyError: If the batch is missing the required '_timestep' metadata.
+            RuntimeError: If the iterator is not initialized.
         """
         # In Grain, "next episode" just means "keep reading until timestep goes
         # back to 0".
@@ -440,7 +466,9 @@ class GrainEpisodicAdapter(GrainSchedulerAdapter, EpisodicSchedulerProtocol):
                     t = batch["_timestep"][0]
                     self._current_timestep = t
                 else:
-                    raise KeyError("Batch missing required '_timestep' metadata")
+                    raise KeyError(
+                        "Batch missing required '_timestep' metadata"
+                    )
             except StopIteration:
                 # End of data
                 break

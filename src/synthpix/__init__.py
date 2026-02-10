@@ -7,7 +7,7 @@ from .utils import SYNTHPIX_SCOPE
 __all__ = [
     "SYNTHPIX_SCOPE",
     "SynthpixBatch",
+    "checkpoint_args",
     "make",
     "save_checkpoint",
-    "checkpoint_args",
 ]

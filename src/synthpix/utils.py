@@ -6,7 +6,10 @@ import json
 import logging
 import os
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any, overload
+
+if TYPE_CHECKING:
+    import goggles as gg
 
 import jax
 import jax.numpy as jnp
@@ -17,6 +20,9 @@ DEBUG_JIT = False
 SYNTHPIX_SCOPE = "synthpix"
 ON_UNIX = os.name == "posix"
 
+if ON_UNIX:
+    import goggles as gg
+
 load_configuration = gg_config.load_configuration
 
 
@@ -25,7 +31,7 @@ def get_logger(
     *,
     scope: str | None = None,
     level: int = logging.INFO,
-) -> logging.Logger:
+) -> logging.Logger | gg.TextLogger:
     """Return a module-level logger with platform-specific behavior.
 
     On Unix systems, this uses `goggles`.
@@ -40,11 +46,9 @@ def get_logger(
         A configured logger.
     """
     if ON_UNIX:
-        import goggles as gg
-
         if scope is None:
-            return gg.get_logger(name)  # type: ignore[no-any-return]
-        return gg.get_logger(name, scope=scope)  # type: ignore[no-any-return]
+            return gg.get_logger(name)
+        return gg.get_logger(name, scope=scope)
 
     logger = logging.getLogger(name)
 
@@ -58,7 +62,9 @@ def get_logger(
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 
-def match_histogram(source: jnp.ndarray, template_hist: jnp.ndarray) -> jnp.ndarray:
+def match_histogram(
+    source: jnp.ndarray, template_hist: jnp.ndarray
+) -> jnp.ndarray:
     """Match the histogram of `source` to a desired histogram.
 
     Args:
@@ -107,6 +113,18 @@ def match_histogram(source: jnp.ndarray, template_hist: jnp.ndarray) -> jnp.ndar
     return matched.reshape(source.shape)
 
 
+@overload
+def bilinear_interpolate(
+    image: jnp.ndarray, x_f: jnp.ndarray, y_f: jnp.ndarray
+) -> jnp.ndarray: ...
+
+
+@overload
+def bilinear_interpolate(
+    image: np.ndarray, x_f: np.ndarray, y_f: np.ndarray
+) -> np.ndarray: ...
+
+
 def bilinear_interpolate(
     image: jnp.ndarray | np.ndarray,
     x_f: jnp.ndarray | np.ndarray,
@@ -114,7 +132,8 @@ def bilinear_interpolate(
 ) -> jnp.ndarray | np.ndarray:
     """Perform bilinear interpolation at floating-point pixel coordinates.
 
-    it detect if the inputs are jnp.ndarray or np.ndarray and process accordingly.
+    The function detects if the inputs are jnp.ndarray or np.ndarray
+    and processes them accordingly.
 
     Args:
         image: 2D image to sample from, of shape (H, W).
@@ -123,6 +142,9 @@ def bilinear_interpolate(
 
     Returns:
         Interpolated intensities at each (y, x) location, of shape (H, W).
+
+    Raises:
+        TypeError: If the inputs mix jnp.ndarray and np.ndarray types.
     """
     has_np = any(isinstance(a, np.ndarray) for a in (image, x_f, y_f))
     has_jnp = any(isinstance(a, jnp.ndarray) for a in (image, x_f, y_f))
@@ -324,8 +346,10 @@ def flow_field_adapter(
         # flow_resized
         # Create the grid for interpolation
         flow_resized_start = (
-            position_bounds_offset[0] * res_y + img_offset[0] / resolution * res_y,
-            position_bounds_offset[1] * res_x + img_offset[1] / resolution * res_x,
+            position_bounds_offset[0] * res_y
+            + img_offset[0] / resolution * res_y,
+            position_bounds_offset[1] * res_x
+            + img_offset[1] / resolution * res_x,
         )
         flow_resized_end = (
             flow_resized_start[0] + image_shape[0] / resolution * res_y - 1,
@@ -360,8 +384,12 @@ def flow_field_adapter(
             position_bounds_offset[1] * res_x,
         )
         flow_position_bounds_end = (
-            flow_position_bounds_start[0] + position_bounds[0] / resolution * res_y - 1,
-            flow_position_bounds_start[1] + position_bounds[1] / resolution * res_x - 1,
+            flow_position_bounds_start[0]
+            + position_bounds[0] / resolution * res_y
+            - 1,
+            flow_position_bounds_start[1]
+            + position_bounds[1] / resolution * res_x
+            - 1,
         )
         flow_position_bounds_vec_y = jnp.linspace(
             flow_position_bounds_start[0],
@@ -405,7 +433,7 @@ def flow_field_adapter(
     return tiled_flows[:batch_size, ...], flow_bounds
 
 
-def input_check_flow_field_adapter(  # noqa: PLR0912
+def input_check_flow_field_adapter(
     flow_field: jnp.ndarray,
     new_flow_field_shape: tuple[int, int],
     image_shape: tuple[int, int],
@@ -468,12 +496,16 @@ def input_check_flow_field_adapter(  # noqa: PLR0912
         )
 
     if not isinstance(image_shape, tuple) or len(image_shape) != 2:
-        raise ValueError("image_shape must be a tuple of two positive integers.")
+        raise ValueError(
+            "image_shape must be a tuple of two positive integers."
+        )
     if not all(isinstance(s, int) and s > 0 for s in image_shape):
         raise ValueError("image_shape must contain two positive integers.")
 
     if not isinstance(img_offset, tuple) or len(img_offset) != 2:
-        raise ValueError("img_offset must be a tuple of two non-negative numbers.")
+        raise ValueError(
+            "img_offset must be a tuple of two non-negative numbers."
+        )
     if not all(isinstance(s, int | float) and s >= 0 for s in img_offset):
         raise ValueError("img_offset must contain two non-negative numbers.")
 
@@ -487,7 +519,9 @@ def input_check_flow_field_adapter(  # noqa: PLR0912
         raise ValueError("res_y must be a positive number.")
 
     if not isinstance(position_bounds, tuple) or len(position_bounds) != 2:
-        raise ValueError("position_bounds must be a tuple of two positive numbers.")
+        raise ValueError(
+            "position_bounds must be a tuple of two positive numbers."
+        )
     if not all(isinstance(s, int | float) and s > 0 for s in position_bounds):
         raise ValueError("position_bounds must contain two positive numbers.")
 
@@ -496,9 +530,12 @@ def input_check_flow_field_adapter(  # noqa: PLR0912
         or len(position_bounds_offset) != 2
     ):
         raise ValueError(
-            "position_bounds_offset must be a tuple of two " "non-negative numbers."
+            "position_bounds_offset must be a tuple of two "
+            "non-negative numbers."
         )
-    if not all(isinstance(s, int | float) and s >= 0 for s in position_bounds_offset):
+    if not all(
+        isinstance(s, int | float) and s >= 0 for s in position_bounds_offset
+    ):
         raise ValueError(
             "position_bounds_offset must contain two non-negative numbers."
         )
@@ -511,7 +548,8 @@ def input_check_flow_field_adapter(  # noqa: PLR0912
         "measure units per second",
     ]:
         raise ValueError(
-            "output_units must be either 'pixels' or 'measure units " "per second'."
+            "output_units must be either 'pixels' or 'measure units "
+            "per second'."
         )
 
     if not isinstance(dt, int | float) or dt <= 0:
@@ -522,7 +560,9 @@ def input_check_flow_field_adapter(  # noqa: PLR0912
         or len(zero_padding) != 2
         or not all(isinstance(s, int) and s >= 0 for s in zero_padding)
     ):
-        raise ValueError("zero_padding must be a tuple of two non-negative integers.")
+        raise ValueError(
+            "zero_padding must be a tuple of two non-negative integers."
+        )
 
 
 def discover_leaf_dirs(
@@ -537,14 +577,19 @@ def discover_leaf_dirs(
     Returns:
         A list of directory paths that are leaves (have no subdirectories).
     """
-    dir_paths = {os.path.normpath(os.path.dirname(p)) for p in paths}  # dedupe upfront
+    dir_paths = {
+        os.path.normpath(os.path.dirname(p)) for p in paths
+    }  # dedupe upfront
     leaves: list[str] = []
 
     for d in dir_paths:
         try:
             with os.scandir(d) as it:
                 # Early-exit on the first subdirectory
-                if any(entry.is_dir(follow_symlinks=follow_symlinks) for entry in it):
+                if any(
+                    entry.is_dir(follow_symlinks=follow_symlinks)
+                    for entry in it
+                ):
                     continue
             leaves.append(d)  # No subdirs found
         except (FileNotFoundError, NotADirectoryError, PermissionError):

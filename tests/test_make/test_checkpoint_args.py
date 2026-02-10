@@ -2,9 +2,10 @@
 
 from unittest.mock import MagicMock
 
-import pytest
 import grain.python as grain
 import orbax.checkpoint as ocp
+import pytest
+
 from synthpix.make import checkpoint_args
 from synthpix.sampler import Sampler
 

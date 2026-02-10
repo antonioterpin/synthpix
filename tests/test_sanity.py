@@ -49,15 +49,15 @@ def test_update_config_file():
         updated_config = load_configuration(temp_config_path)
         # Assert that the updates were applied correctly
         for key, value in updates.items():
-            assert (
-                updated_config[key] == value
-            ), f"Key '{key}' was not updated correctly. Expected {value}, got {updated_config[key]}"
+            assert updated_config[key] == value, (
+                f"Key '{key}' was not updated correctly. Expected {value}, got {updated_config[key]}"
+            )
         # Assert that other keys remain unchanged
         for key in base_config:
             if key not in updates:
-                assert (
-                    updated_config[key] == base_config[key]
-                ), f"Unrelated key '{key}' was modified. Expected {base_config[key]}, got {updated_config[key]}"
+                assert updated_config[key] == base_config[key], (
+                    f"Unrelated key '{key}' was modified. Expected {base_config[key]}, got {updated_config[key]}"
+                )
     finally:
         # Ensure the temporary file is deleted
         if os.path.exists(temp_config_path):
@@ -92,25 +92,35 @@ def test_convert_to_standard_type(tmp_path):
     cfg = load_configuration(str(cfg_path))
 
     assert (
-        isinstance(cfg["np_float"], float) and pytest.approx(cfg["np_float"]) == 1.23
-    ), f"np_float conversion failed. Expected float around 1.23, got {type(cfg['np_float'])} with value {cfg['np_float']}"
+        isinstance(cfg["np_float"], float)
+        and pytest.approx(cfg["np_float"]) == 1.23
+    ), (
+        f"np_float conversion failed. Expected float around 1.23, got {type(cfg['np_float'])} with value {cfg['np_float']}"
+    )
     assert (
-        isinstance(cfg["jnp_float"], float) and pytest.approx(cfg["jnp_float"]) == 4.56
-    ), f"jnp_float conversion failed. Expected float around 4.56, got {type(cfg['jnp_float'])} with value {cfg['jnp_float']}"
-    assert (
-        isinstance(cfg["np_int"], int) and cfg["np_int"] == 7
-    ), f"np_int conversion failed. Expected int 7, got {type(cfg['np_int'])} with value {cfg['np_int']}"
-    assert (
-        isinstance(cfg["jnp_int"], int) and cfg["jnp_int"] == 8
-    ), f"jnp_int conversion failed. Expected int 8, got {type(cfg['jnp_int'])} with value {cfg['jnp_int']}"
+        isinstance(cfg["jnp_float"], float)
+        and pytest.approx(cfg["jnp_float"]) == 4.56
+    ), (
+        f"jnp_float conversion failed. Expected float around 4.56, got {type(cfg['jnp_float'])} with value {cfg['jnp_float']}"
+    )
+    assert isinstance(cfg["np_int"], int) and cfg["np_int"] == 7, (
+        f"np_int conversion failed. Expected int 7, got {type(cfg['np_int'])} with value {cfg['np_int']}"
+    )
+    assert isinstance(cfg["jnp_int"], int) and cfg["jnp_int"] == 8, (
+        f"jnp_int conversion failed. Expected int 8, got {type(cfg['jnp_int'])} with value {cfg['jnp_int']}"
+    )
 
-    assert cfg["np_array"] == [1, 2, 3], "np.ndarray should be converted to list"
-    assert cfg["jnp_array"] == [4, 5, 6], "jnp.ndarray should be converted to list"
+    assert cfg["np_array"] == [1, 2, 3], (
+        "np.ndarray should be converted to list"
+    )
+    assert cfg["jnp_array"] == [4, 5, 6], (
+        "jnp.ndarray should be converted to list"
+    )
 
     # fallback branch: untouched
-    assert (
-        cfg["string_val"] == "hello"
-    ), f"Expected string_val to be 'hello', got {cfg['string_val']}"
+    assert cfg["string_val"] == "hello", (
+        f"Expected string_val to be 'hello', got {cfg['string_val']}"
+    )
 
 
 @pytest.mark.parametrize("mock_hdf5_files", [2], indirect=True)
@@ -126,26 +136,26 @@ def test_calculate_min_and_max_speeds(mock_hdf5_files):
     result = calculate_min_and_max_speeds(files)
 
     # Assert the results
-    assert (
-        "min_speed_x" in result
-    ), f"'min_speed_x' missing from result keys: {result.keys()}"
-    assert (
-        "max_speed_x" in result
-    ), f"'max_speed_x' missing from result keys: {result.keys()}"
-    assert (
-        "min_speed_y" in result
-    ), f"'min_speed_y' missing from result keys: {result.keys()}"
-    assert (
-        "max_speed_y" in result
-    ), f"'max_speed_y' missing from result keys: {result.keys()}"
+    assert "min_speed_x" in result, (
+        f"'min_speed_x' missing from result keys: {result.keys()}"
+    )
+    assert "max_speed_x" in result, (
+        f"'max_speed_x' missing from result keys: {result.keys()}"
+    )
+    assert "min_speed_y" in result, (
+        f"'min_speed_y' missing from result keys: {result.keys()}"
+    )
+    assert "max_speed_y" in result, (
+        f"'max_speed_y' missing from result keys: {result.keys()}"
+    )
 
     # Ensure the values are within expected ranges based on the mock data
-    assert (
-        result["min_speed_x"] <= result["max_speed_x"]
-    ), f"Expected min_speed_x ({result['min_speed_x']}) <= max_speed_x ({result['max_speed_x']})"
-    assert (
-        result["min_speed_y"] <= result["max_speed_y"]
-    ), f"Expected min_speed_y ({result['min_speed_y']}) <= max_speed_y ({result['max_speed_y']})"
+    assert result["min_speed_x"] <= result["max_speed_x"], (
+        f"Expected min_speed_x ({result['min_speed_x']}) <= max_speed_x ({result['max_speed_x']})"
+    )
+    assert result["min_speed_y"] <= result["max_speed_y"], (
+        f"Expected min_speed_y ({result['min_speed_y']}) <= max_speed_y ({result['max_speed_y']})"
+    )
 
 
 @pytest.mark.parametrize(
@@ -225,8 +235,12 @@ def test_missing_speeds_panel_all_branches(
     cfg_file.write_text(yaml.safe_dump(cfg_dict))
 
     # 1. stub heavy/irrelevant helpers
-    monkeypatch.setattr("synthpix.sanity.calculate_min_and_max_speeds", _fake_calculate)
-    monkeypatch.setattr("synthpix.sanity.update_config_file", lambda *_, **__: None)
+    monkeypatch.setattr(
+        "synthpix.sanity.calculate_min_and_max_speeds", _fake_calculate
+    )
+    monkeypatch.setattr(
+        "synthpix.sanity.update_config_file", lambda *_, **__: None
+    )
     # ensure update_config_file would target our config file path
     import synthpix.sanity as sp_sanity
 
@@ -239,7 +253,9 @@ def test_missing_speeds_panel_all_branches(
     # 3. assert behaviour
     if expect_exception is None:
         speeds = missing_speeds_panel(str(cfg_file))
-        assert speeds == expect_speeds, f"Expected speeds {expect_speeds}, got {speeds}"
+        assert speeds == expect_speeds, (
+            f"Expected speeds {expect_speeds}, got {speeds}"
+        )
     else:
         with pytest.raises(expect_exception):
             missing_speeds_panel(str(cfg_file))

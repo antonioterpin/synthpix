@@ -40,7 +40,7 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
             or not all(isinstance(f, str) for f in dataset_path)
         ):
             raise ValueError(
-                "dataset_path must be a list of file paths (or a single " "string)."
+                "dataset_path must be a list of file paths (or a string)."
             )
 
         for file_path in dataset_path:
@@ -81,7 +81,11 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
         return False
 
     def __len__(self) -> int:
-        """Returns the number of files in the dataset."""
+        """Returns the number of files in the dataset.
+
+        Returns:
+            The number of files in the dataset.
+        """
         return len(self._file_list)
 
     def __getitem__(self, record_key: int) -> dict[str, Any]:

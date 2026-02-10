@@ -9,12 +9,12 @@ ordering of generated batches.
 import os
 import re
 import timeit
+from typing import Any
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from typing import Any
 
 from synthpix.sampler import RealImageSampler, SyntheticImageSampler
 from synthpix.scheduler import (
@@ -140,9 +140,9 @@ def test_batch_size_n_devices(n_devices, scheduler):
         scheduler=scheduler,
         config=config,
     )
-    assert (
-        sampler.batch_size == n_devices
-    ), "Batch size should match number of devices when set to 1."
+    assert sampler.batch_size == n_devices, (
+        "Batch size should match number of devices when set to 1."
+    )
 
 
 @pytest.mark.parametrize("batch_size", [-1, 0, 1.5])
@@ -151,7 +151,9 @@ def test_batch_size_n_devices(n_devices, scheduler):
 )
 def test_invalid_batch_size(batch_size, scheduler):
     """Test that invalid batch_size raises a ValueError."""
-    with pytest.raises(ValueError, match="batch_size must be a positive integer."):
+    with pytest.raises(
+        ValueError, match="batch_size must be a positive integer."
+    ):
         config = sampler_config.copy()
         config["batch_size"] = batch_size
         config["flow_fields_per_batch"] = batch_size
@@ -161,7 +163,9 @@ def test_invalid_batch_size(batch_size, scheduler):
         )
 
 
-@pytest.mark.parametrize("flow_shape", [(-1, 128), (128, -1), (0, 128), (128, 0)])
+@pytest.mark.parametrize(
+    "flow_shape", [(-1, 128), (128, -1), (0, 128), (128, 0)]
+)
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
@@ -292,7 +296,9 @@ def test_invalid_image_shape(image_shape, scheduler):
 )
 def test_invalid_resolution(resolution, scheduler):
     """Test that invalid resolution raises a ValueError."""
-    with pytest.raises(ValueError, match="resolution must be a positive number."):
+    with pytest.raises(
+        ValueError, match="resolution must be a positive number."
+    ):
         config = sampler_config.copy()
         config["resolution"] = resolution
         SyntheticImageSampler.from_config(
@@ -312,7 +318,9 @@ def test_invalid_velocities_per_pixel(velocities_per_pixel, scheduler):
 
     Validation ensures that scaling factors are numerically valid.
     """
-    with pytest.raises(ValueError, match="velocities_per_pixel must be a number."):
+    with pytest.raises(
+        ValueError, match="velocities_per_pixel must be a number."
+    ):
         config = sampler_config.copy()
         config["velocities_per_pixel"] = velocities_per_pixel
         SyntheticImageSampler.from_config(
@@ -417,7 +425,9 @@ def test_invalid_p_hide_img1(p_hide_img1, scheduler):
 
     This parameter represents a probability and must be bounded.
     """
-    with pytest.raises(ValueError, match="p_hide_img1 must be between 0 and 1."):
+    with pytest.raises(
+        ValueError, match="p_hide_img1 must be between 0 and 1."
+    ):
         config = sampler_config.copy()
         config["p_hide_img1"] = p_hide_img1
         SyntheticImageSampler.from_config(
@@ -436,7 +446,9 @@ def test_invalid_p_hide_img2(p_hide_img2, scheduler):
     This parameter represents a probability and must be bounded.
     """
 
-    with pytest.raises(ValueError, match="p_hide_img2 must be between 0 and 1."):
+    with pytest.raises(
+        ValueError, match="p_hide_img2 must be between 0 and 1."
+    ):
         config = sampler_config.copy()
         config["p_hide_img2"] = p_hide_img2
         SyntheticImageSampler.from_config(
@@ -506,7 +518,9 @@ def test_invalid_diameter_var(diameter_var, scheduler):
 
     Diameter variance must be a non-negative number.
     """
-    with pytest.raises(ValueError, match="diameter_var must be a non-negative number."):
+    with pytest.raises(
+        ValueError, match="diameter_var must be a non-negative number."
+    ):
         config = sampler_config.copy()
         config["diameter_var"] = diameter_var
         SyntheticImageSampler.from_config(
@@ -543,7 +557,9 @@ def test_invalid_diameter_var(diameter_var, scheduler):
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_intensity_ranges(intensity_ranges, expected_message, scheduler):
+def test_invalid_intensity_ranges(
+    intensity_ranges, expected_message, scheduler
+):
     """Test that invalid intensity_ranges raise a ValueError.
 
     Ensures that particle intensities are positive and correctly ordered.
@@ -636,7 +652,9 @@ def test_invalid_rho_var(rho_var, scheduler):
 
     Rho variance must be a non-negative number.
     """
-    with pytest.raises(ValueError, match="rho_var must be a non-negative number."):
+    with pytest.raises(
+        ValueError, match="rho_var must be a non-negative number."
+    ):
         config = sampler_config.copy()
         config["rho_var"] = rho_var
         SyntheticImageSampler.from_config(
@@ -645,7 +663,9 @@ def test_invalid_rho_var(rho_var, scheduler):
         )
 
 
-@pytest.mark.parametrize("dt", ["invalid_dt", jnp.array([1]), jnp.array([1.0, 2.0])])
+@pytest.mark.parametrize(
+    "dt", ["invalid_dt", jnp.array([1]), jnp.array([1.0, 2.0])]
+)
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
@@ -893,7 +913,9 @@ def test_invalid_output_units(output_units, scheduler):
     Valid units are 'pixels' or 'measure units per second', determining the
     scale of the generated flow fields.
     """
-    expected_message = "output_units must be 'pixels' or 'measure units per second'."
+    expected_message = (
+        "output_units must be 'pixels' or 'measure units per second'."
+    )
     with pytest.raises(ValueError, match=expected_message):
         config = sampler_config.copy()
         config["output_units"] = output_units
@@ -928,15 +950,15 @@ def test_synthetic_sampler_batches(
     )
 
     for batch in sampler:
-        assert (
-            batch.images1.shape[0] >= batch_size
-        ), f"Batch size {batch.images1.shape[0]} is less than expected {batch_size}"
-        assert (
-            batch.images1[0].shape >= image_shape
-        ), f"Image shape {batch.images1[0].shape} is less than expected {image_shape}"
-        assert isinstance(
-            batch.images1, jnp.ndarray
-        ), f"Expected images1 to be jnp.ndarray, got {type(batch.images1)}"
+        assert batch.images1.shape[0] >= batch_size, (
+            f"Batch size {batch.images1.shape[0]} is less than expected {batch_size}"
+        )
+        assert batch.images1[0].shape >= image_shape, (
+            f"Image shape {batch.images1[0].shape} is less than expected {image_shape}"
+        )
+        assert isinstance(batch.images1, jnp.ndarray), (
+            f"Expected images1 to be jnp.ndarray, got {type(batch.images1)}"
+        )
 
 
 @pytest.mark.skipif(
@@ -994,24 +1016,24 @@ def test_sampler_switches_flow_fields(
 
     batch3 = next(sampler)
 
-    assert not jnp.allclose(
-        batch1.images1, batch2.images1
-    ), "Images1 in batch1 and batch2 should be different"
-    assert not jnp.allclose(
-        batch1.images2, batch2.images2
-    ), "Images2 in batch1 and batch2 should be different"
-    assert jnp.allclose(
-        batch1.flow_fields, batch2.flow_fields
-    ), "Flow fields in batch1 and batch2 should be identical"
-    assert not jnp.allclose(
-        batch2.images1, batch3.images1
-    ), "Images1 in batch2 and batch3 should be different"
-    assert not jnp.allclose(
-        batch2.images2, batch3.images2
-    ), "Images2 in batch2 and batch3 should be different"
-    assert not jnp.allclose(
-        batch2.flow_fields, batch3.flow_fields
-    ), "Flow fields in batch2 and batch3 should be different"
+    assert not jnp.allclose(batch1.images1, batch2.images1), (
+        "Images1 in batch1 and batch2 should be different"
+    )
+    assert not jnp.allclose(batch1.images2, batch2.images2), (
+        "Images2 in batch1 and batch2 should be different"
+    )
+    assert jnp.allclose(batch1.flow_fields, batch2.flow_fields), (
+        "Flow fields in batch1 and batch2 should be identical"
+    )
+    assert not jnp.allclose(batch2.images1, batch3.images1), (
+        "Images1 in batch2 and batch3 should be different"
+    )
+    assert not jnp.allclose(batch2.images2, batch3.images2), (
+        "Images2 in batch2 and batch3 should be different"
+    )
+    assert not jnp.allclose(batch2.flow_fields, batch3.flow_fields), (
+        "Flow fields in batch2 and batch3 should be different"
+    )
 
 
 @pytest.mark.slow
@@ -1062,26 +1084,30 @@ def test_sampler_with_real_img_gen_fn(
 
     expected_size = jnp.array([image_shape[0] / res, image_shape[1] / res, 2])
 
-    assert isinstance(
-        batch.images1, jnp.ndarray
-    ), f"Expected images1 to be jnp.ndarray, got {type(batch.images1)}"
-    assert isinstance(
-        batch.images2, jnp.ndarray
-    ), f"Expected images2 to be jnp.ndarray, got {type(batch.images2)}"
-    assert isinstance(
-        batch.flow_fields, jnp.ndarray
-    ), f"Expected flow_fields to be jnp.ndarray, got {type(batch.flow_fields)}"
+    assert isinstance(batch.images1, jnp.ndarray), (
+        f"Expected images1 to be jnp.ndarray, got {type(batch.images1)}"
+    )
+    assert isinstance(batch.images2, jnp.ndarray), (
+        f"Expected images2 to be jnp.ndarray, got {type(batch.images2)}"
+    )
+    assert isinstance(batch.flow_fields, jnp.ndarray), (
+        f"Expected flow_fields to be jnp.ndarray, got {type(batch.flow_fields)}"
+    )
     assert batch.images1.shape == (
         sampler.batch_size,
         *image_shape,
-    ), f"Expected images1 shape {(sampler.batch_size, *image_shape)}, got {batch.images1.shape}"
+    ), (
+        f"Expected images1 shape {(sampler.batch_size, *image_shape)}, got {batch.images1.shape}"
+    )
     assert batch.images2.shape == (
         sampler.batch_size,
         *image_shape,
-    ), f"Expected images2 shape {(sampler.batch_size, *image_shape)}, got {batch.images2.shape}"
-    assert jnp.allclose(
-        output_size, expected_size, atol=0.01
-    ), f"Output size {output_size} does not match expected size {expected_size}"
+    ), (
+        f"Expected images2 shape {(sampler.batch_size, *image_shape)}, got {batch.images2.shape}"
+    )
+    assert jnp.allclose(output_size, expected_size, atol=0.01), (
+        f"Output size {output_size} does not match expected size {expected_size}"
+    )
 
 
 @pytest.mark.slow
@@ -1132,7 +1158,9 @@ def test_speed_sampler_real_fn(
     config["device_ids"] = [d.id for d in devices]
 
     if config["flow_fields_per_batch"] % num_devices != 0:
-        pytest.skip("flow_fields_per_batch must be divisible by the number of devices.")
+        pytest.skip(
+            "flow_fields_per_batch must be divisible by the number of devices."
+        )
 
     # Limit time in seconds (depends on the number of GPUs)
     if num_devices == 1:
@@ -1178,9 +1206,9 @@ def test_speed_sampler_real_fn(
     finally:
         prefetching_scheduler.shutdown()
 
-    assert (
-        avg_time < limit_time
-    ), f"The average time is {avg_time}, time limit: {limit_time}"
+    assert avg_time < limit_time, (
+        f"The average time is {avg_time}, time limit: {limit_time}"
+    )
 
 
 @pytest.mark.parametrize("mock_mat_files", [64], indirect=True)
@@ -1210,7 +1238,9 @@ def test_stop_after_max_episodes(mock_mat_files):
         episode_length=2,
         key=jax.random.PRNGKey(0),
     )
-    pre = PrefetchingFlowFieldScheduler(epi, batch_size=batch_size, buffer_size=90)
+    pre = PrefetchingFlowFieldScheduler(
+        epi, batch_size=batch_size, buffer_size=90
+    )
 
     sampler = SyntheticImageSampler(
         scheduler=pre,
@@ -1261,22 +1291,22 @@ def test_stop_after_max_episodes(mock_mat_files):
             batch = next(sampler)
             imgs1 = batch.images1
             done = batch.done
-            assert (
-                imgs1.shape[0] == batch_size
-            ), f"Expected batch size {batch_size}, got {imgs1.shape[0]}"
+            assert imgs1.shape[0] == batch_size, (
+                f"Expected batch size {batch_size}, got {imgs1.shape[0]}"
+            )
             assert imgs1[0].shape == (
                 H,
                 W,
             ), f"Expected image shape {(H, W)}, got {imgs1[0].shape}"
-            assert isinstance(
-                imgs1, jnp.ndarray
-            ), f"Expected imgs1 to be jnp.ndarray, got {type(imgs1)}"
+            assert isinstance(imgs1, jnp.ndarray), (
+                f"Expected imgs1 to be jnp.ndarray, got {type(imgs1)}"
+            )
             n_batches += 1
             assert done is not None, "Batch 'done' flag should not be None"
 
-    assert (
-        n_batches == epi.episode_length * num_episodes
-    ), f"Expected {epi.episode_length * num_episodes} batches, but got {n_batches}"
+    assert n_batches == epi.episode_length * num_episodes, (
+        f"Expected {epi.episode_length * num_episodes} batches, but got {n_batches}"
+    )
 
     # Clean up background thread
     sampler.shutdown()
@@ -1311,7 +1341,9 @@ def test_index_error_if_no_next_episode(mock_mat_files):
         episode_length=2,
         key=jax.random.PRNGKey(0),
     )
-    pre = PrefetchingFlowFieldScheduler(epi, batch_size=batch_size, buffer_size=90)
+    pre = PrefetchingFlowFieldScheduler(
+        epi, batch_size=batch_size, buffer_size=90
+    )
 
     sampler = SyntheticImageSampler(
         scheduler=pre,
@@ -1357,16 +1389,16 @@ def test_index_error_if_no_next_episode(mock_mat_files):
         batch = next(sampler)
         imgs1 = batch.images1
         done = batch.done
-        assert (
-            imgs1.shape[0] == batch_size
-        ), f"Expected batch size {batch_size}, got {imgs1.shape[0]}"
+        assert imgs1.shape[0] == batch_size, (
+            f"Expected batch size {batch_size}, got {imgs1.shape[0]}"
+        )
         assert imgs1[0].shape == (
             H,
             W,
         ), f"Expected image shape {(H, W)}, got {imgs1[0].shape}"
-        assert isinstance(
-            imgs1, jnp.ndarray
-        ), f"Expected imgs1 to be jnp.ndarray, got {type(imgs1)}"
+        assert isinstance(imgs1, jnp.ndarray), (
+            f"Expected imgs1 to be jnp.ndarray, got {type(imgs1)}"
+        )
         assert done is not None, "Batch 'done' flag should not be None"
     with pytest.raises(
         EpisodeEndError,
@@ -1394,21 +1426,21 @@ def test_real_sampler(mock_mat_files):
     sampler = RealImageSampler(scheduler=prefetcher, batch_size=2)
 
     for batch in sampler:
-        assert isinstance(
-            batch.images1, jnp.ndarray
-        ), f"Expected images1 to be jnp.ndarray, got {type(batch.images1)}"
-        assert isinstance(
-            batch.images2, jnp.ndarray
-        ), f"Expected images2 to be jnp.ndarray, got {type(batch.images2)}"
-        assert isinstance(
-            batch.flow_fields, jnp.ndarray
-        ), f"Expected flow_fields to be jnp.ndarray, got {type(batch.flow_fields)}"
-        assert (
-            batch.images1.shape[0] == 2
-        ), f"Expected batch size 2, got {batch.images1.shape[0]}"
-        assert (
-            batch.params is None
-        ), f"Expected params to be None for RealImageSampler, got {batch.params}"
+        assert isinstance(batch.images1, jnp.ndarray), (
+            f"Expected images1 to be jnp.ndarray, got {type(batch.images1)}"
+        )
+        assert isinstance(batch.images2, jnp.ndarray), (
+            f"Expected images2 to be jnp.ndarray, got {type(batch.images2)}"
+        )
+        assert isinstance(batch.flow_fields, jnp.ndarray), (
+            f"Expected flow_fields to be jnp.ndarray, got {type(batch.flow_fields)}"
+        )
+        assert batch.images1.shape[0] == 2, (
+            f"Expected batch size 2, got {batch.images1.shape[0]}"
+        )
+        assert batch.params is None, (
+            f"Expected params to be None for RealImageSampler, got {batch.params}"
+        )
 
 
 @pytest.mark.parametrize("mock_mat_files", [10], indirect=True)
@@ -1446,7 +1478,9 @@ class _BaseDummy(BaseFlowFieldScheduler):
     def get_next_slice(self) -> SchedulerData:
         assert False, "Not implemented for dummy scheduler."
 
-    def _make_arrays(self, batch_size) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _make_arrays(
+        self, batch_size
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Return three arrays that differ per call so we can detect resets."""
         val = float(self._batch_ctr)
         self._batch_ctr += 1
@@ -1522,7 +1556,9 @@ class SyntheticImageSamplerWrapper:
         full_config = sampler_config.copy()
         full_config["batch_size"] = config.get("batch_size", 4)
         full_config["flow_fields_per_batch"] = full_config["batch_size"]
-        full_config["batches_per_flow_batch"] = config.get("batches_per_flow_batch", 1)
+        full_config["batches_per_flow_batch"] = config.get(
+            "batches_per_flow_batch", 1
+        )
         return SyntheticImageSampler.from_config(
             scheduler=scheduler,
             config=full_config,
@@ -1546,14 +1582,14 @@ def test_episodic_done_and_episode_end(sampler_class):
     )
 
     first = next(sampler)
-    assert (
-        first.done is not None and not first.done.any()
-    ), "First batch should have 'done' as all False"
+    assert first.done is not None and not first.done.any(), (
+        "First batch should have 'done' as all False"
+    )
 
     last = next(sampler)
-    assert (
-        last.done is not None and last.done.all()
-    ), "Last batch should have 'done' as all True"
+    assert last.done is not None and last.done.all(), (
+        "Last batch should have 'done' as all True"
+    )
 
     with pytest.raises(EpisodeEndError):
         next(sampler)  # overrun episode
@@ -1703,12 +1739,14 @@ def test_warning_when_batch_size_not_divisible_by_flow_fields(monkeypatch):
         "batch_size was not divisible by number of flows per batch. "
         "There will be one more sample for the first 1 flow fields of each batch."
     )
-    assert any(
-        expected in m for m in logged
-    ), f"Expected warning: {expected}, but got: {logged}"
+    assert any(expected in m for m in logged), (
+        f"Expected warning: {expected}, but got: {logged}"
+    )
 
 
-@pytest.mark.parametrize("sampler_class", [SyntheticImageSampler, RealImageSampler])
+@pytest.mark.parametrize(
+    "sampler_class", [SyntheticImageSampler, RealImageSampler]
+)
 def test_sampler_outputs_files(sampler_class, mock_mat_files):
     """Test that the sampler correctly reports the source files for each batch item.
 
@@ -1737,7 +1775,9 @@ def test_sampler_outputs_files(sampler_class, mock_mat_files):
 
     batch = next(sampler)
     assert hasattr(batch, "files"), "Batch should have 'files' attribute."
-    assert isinstance(batch.files, tuple), "'files' attribute should be a tuple."
+    assert isinstance(batch.files, tuple), (
+        "'files' attribute should be a tuple."
+    )
     assert len(batch.files) == sampler.batch_size, (
         f"'files' attribute should have length {sampler.batch_size}, "
         f"but got {len(batch.files)}."
@@ -1858,21 +1898,21 @@ def test_sampler_epoch_expansion():
 
     # Verify metadata expansion
     assert batch.epoch is not None
-    assert batch.epoch.shape == (
-        batch_size,
-    ), f"Epoch shape mismatch. Expected ({batch_size},), got {batch.epoch.shape}"
+    assert batch.epoch.shape == (batch_size,), (
+        f"Epoch shape mismatch. Expected ({batch_size},), got {batch.epoch.shape}"
+    )
     assert np.all(batch.epoch == 0)
 
     assert batch.mask is not None
-    assert batch.mask.shape == (
-        batch_size,
-    ), f"Mask shape mismatch. Expected ({batch_size},), got {batch.mask.shape}"
+    assert batch.mask.shape == (batch_size,), (
+        f"Mask shape mismatch. Expected ({batch_size},), got {batch.mask.shape}"
+    )
 
     # Check files expansion (tuple)
     assert batch.files is not None
-    assert (
-        len(batch.files) == batch_size
-    ), f"Files length mismatch. Expected {batch_size}, got {len(batch.files)}"
+    assert len(batch.files) == batch_size, (
+        f"Files length mismatch. Expected {batch_size}, got {len(batch.files)}"
+    )
     assert batch.files == (
         "f0",
         "f0",
@@ -2009,25 +2049,25 @@ def test_partial_batch_handling():
     batch = sampler._get_next()
 
     # Verify batch was correctly expanded to batch_size
-    assert (
-        batch.images1.shape[0] == batch_size
-    ), f"Expected batch size {batch_size}, got {batch.images1.shape[0]}"
+    assert batch.images1.shape[0] == batch_size, (
+        f"Expected batch size {batch_size}, got {batch.images1.shape[0]}"
+    )
     assert batch.seeds is not None, "Seeds should be present"
-    assert (
-        batch.seeds.shape[0] == batch_size
-    ), f"Expected {batch_size} seeds, got {batch.seeds.shape[0]}"
+    assert batch.seeds.shape[0] == batch_size, (
+        f"Expected {batch_size} seeds, got {batch.seeds.shape[0]}"
+    )
     assert batch.files is not None, "Files should be present"
-    assert (
-        len(batch.files) == batch_size
-    ), f"Expected {batch_size} files, got {len(batch.files)}"
+    assert len(batch.files) == batch_size, (
+        f"Expected {batch_size} files, got {len(batch.files)}"
+    )
     assert batch.mask is not None, "Mask should be present"
-    assert (
-        batch.mask.shape[0] == batch_size
-    ), f"Expected {batch_size} mask elements, got {batch.mask.shape[0]}"
+    assert batch.mask.shape[0] == batch_size, (
+        f"Expected {batch_size} mask elements, got {batch.mask.shape[0]}"
+    )
     assert batch.epoch is not None, "Epoch should be present"
-    assert (
-        batch.epoch.shape[0] == batch_size
-    ), f"Expected {batch_size} epoch elements, got {batch.epoch.shape[0]}"
+    assert batch.epoch.shape[0] == batch_size, (
+        f"Expected {batch_size} epoch elements, got {batch.epoch.shape[0]}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -2073,17 +2113,17 @@ def test_partial_batch_various_sizes(actual_size, batch_size):
     batch = sampler._get_next()
 
     # Verify expansion
-    assert (
-        batch.images1.shape[0] == batch_size
-    ), f"Expected batch size {batch_size}, got {batch.images1.shape[0]}"
+    assert batch.images1.shape[0] == batch_size, (
+        f"Expected batch size {batch_size}, got {batch.images1.shape[0]}"
+    )
     assert batch.seeds is not None, "Seeds should be present"
-    assert (
-        batch.seeds.shape[0] == batch_size
-    ), f"Expected {batch_size} seeds, got {batch.seeds.shape[0]}"
+    assert batch.seeds.shape[0] == batch_size, (
+        f"Expected {batch_size} seeds, got {batch.seeds.shape[0]}"
+    )
     assert batch.files is not None, "Files should be present"
-    assert (
-        len(batch.files) == batch_size
-    ), f"Expected {batch_size} files, got {len(batch.files)}"
+    assert len(batch.files) == batch_size, (
+        f"Expected {batch_size} files, got {len(batch.files)}"
+    )
 
 
 def test_partial_batch_no_metadata():
@@ -2129,9 +2169,9 @@ def test_partial_batch_no_metadata():
     batch = sampler._get_next()
 
     # Verify expansion happened correctly
-    assert (
-        batch.images1.shape[0] == batch_size
-    ), f"Expected batch size {batch_size}, got {batch.images1.shape[0]}"
+    assert batch.images1.shape[0] == batch_size, (
+        f"Expected batch size {batch_size}, got {batch.images1.shape[0]}"
+    )
     # Metadata should be None in output if None in input
     assert batch.seeds is None, f"Seeds should be None, got {type(batch.seeds)}"
     assert batch.files is None, f"Files should be None, got {type(batch.files)}"
