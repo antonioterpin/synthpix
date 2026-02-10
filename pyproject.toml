@@ -165,6 +165,3 @@ reportUnusedVariable = false
 enableTypeIgnoreComments = false
 reportIgnoreCommentWithoutRule = "error"
 reportUnnecessaryTypeIgnoreComment = "error"
-
-[tool.setuptools.dynamic]
-version = {attr = "synthpix.__version__"}
