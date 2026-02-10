@@ -118,11 +118,18 @@ select = [
     "RUF",   # ruff-specific rules
 ]
 
+# NOTE: issue #229 proposes to remove ignore
+# PLR0912 and 
+# PLR0915
+# They are good checks in principle but stil hard to
+# respect at the moment
 ignore = [
     "PLR2004", # Magic value used in comparison
     "PLR0913", # Too many arguments in function definition
     "N803",    # Argument name should be lowercase (CV standard Ix, Iy, ecc.)
     "N806",    # Variable in function should be lowercase (CV standard Ix, Iy, ecc.)
+    "PLR0912", # Too many branches
+    "PLR0915", # Too many statements
 ]
 
 # Pydoclint configuration
