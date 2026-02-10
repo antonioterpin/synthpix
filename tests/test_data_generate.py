@@ -696,7 +696,7 @@ def test_generate_images_from_flow(monkeypatch, debug_flag):
 # skipif is used to skip the test if the user is not connected to the server
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="user not connected to the server.",
 )
 @pytest.mark.parametrize("selected_flow", ["horizontal"])
 @pytest.mark.parametrize("seeding_density_range", [(0.01, 0.1)])
@@ -977,7 +977,7 @@ def test_img_parameter_combinations(
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="user not connected to the server.",
 )
 @pytest.mark.run_explicitly
 @pytest.mark.parametrize("selected_flow", ["horizontal"])

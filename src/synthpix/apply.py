@@ -197,8 +197,8 @@ def input_check_apply_flow(
         or particle_positions.shape[1] not in (2, 3)
     ):
         raise ValueError(
-            "Particle_positions must be a 2D jnp.ndarray \
-                with shape (N, 2) or (N, 3)"
+            "Particle_positions must be a 2D jnp.ndarray "
+            "with shape (N, 2) or (N, 3)"
         )
 
     if (
@@ -228,18 +228,15 @@ def input_check_apply_flow(
 
     if not isinstance(flow_field_res_x, int | float) or flow_field_res_x <= 0:
         raise ValueError(
-            "flow_field_res_x must be a positive scalar \
-            (int or float)"
+            "flow_field_res_x must be a positive scalar (int or float)"
         )
     if not isinstance(flow_field_res_y, int | float) or flow_field_res_y <= 0:
         raise ValueError(
-            "flow_field_res_y must be a positive scalar \
-            (int or float)"
+            "flow_field_res_y must be a positive scalar (int or float)"
         )
     if not isinstance(flow_field_res_z, int | float) or flow_field_res_z <= 0:
         raise ValueError(
-            "flow_field_res_z must be a positive scalar \
-            (int or float)"
+            "flow_field_res_z must be a positive scalar (int or float)"
         )
 
 

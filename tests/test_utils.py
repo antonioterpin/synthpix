@@ -5,7 +5,9 @@ adaptation, configuration loading, and directory discovery for dataset
 preprocessing.
 """
 
+from goggles import TextLogger
 import logging
+from logging import Logger
 import os
 import re
 import sys
@@ -681,7 +683,7 @@ def test_flow_field_adapter(flow_field, new_flow_field_shape, expected):
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="user not connected to the server.",
 )
 @pytest.mark.parametrize("selected_flow", ["horizontal"])
 @pytest.mark.parametrize("flow_field_shape", [(1536, 1024)])
@@ -922,9 +924,9 @@ def test_get_logger_unix_uses_goggles(monkeypatch):
         get_logger=lambda name, scope=None: fake_logger
     )
 
-    monkeypatch.setitem(__import__("sys").modules, "goggles", fake_goggles)
+    monkeypatch.setattr(utils_module, "gg", fake_goggles, raising=True)
 
-    logger = get_logger("test.logger", scope="synthpix")
+    logger: Logger | TextLogger = get_logger("test.logger", scope="synthpix")
 
     assert logger is fake_logger, "Expected to receive the fake goggles logger"
 
