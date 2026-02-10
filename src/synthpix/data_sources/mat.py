@@ -56,7 +56,11 @@ class MATDataSource(FileDataSource):
         super().__init__(dataset_path)
 
     def __repr__(self) -> str:
-        """Returns a stable string representation for Grain checkpointing."""
+        """Returns a stable string representation for Grain checkpointing.
+
+        Returns:
+            A string representation of the MATDataSource.
+        """
         return (
             f"MATDataSource(file_list={self._file_list}, "
             f"include_images={self._include_images}, "
@@ -102,10 +106,14 @@ class MATDataSource(FileDataSource):
                     data = recursively_load_hdf5_group(f)
 
         if data is None:
-            raise ValueError(f"Failed to load {file_path} as HDF5 or legacy MATLAB.")
+            raise ValueError(
+                f"Failed to load {file_path} as HDF5 or legacy MATLAB."
+            )
 
         if "V" not in data:
-            raise ValueError(f"Flow field not found in {file_path} (missing 'V').")
+            raise ValueError(
+                f"Flow field not found in {file_path} (missing 'V')."
+            )
 
         # 3. Process Flow
         flow = data["V"]
@@ -124,10 +132,14 @@ class MATDataSource(FileDataSource):
             )  # PIL expects (W, H)
 
             flow_u = np.asarray(
-                Image.fromarray(flow[..., 0]).resize(size, Image.Resampling.BILINEAR)
+                Image.fromarray(flow[..., 0]).resize(
+                    size, Image.Resampling.BILINEAR
+                )
             )
             flow_v = np.asarray(
-                Image.fromarray(flow[..., 1]).resize(size, Image.Resampling.BILINEAR)
+                Image.fromarray(flow[..., 1]).resize(
+                    size, Image.Resampling.BILINEAR
+                )
             )
             # Scale values by resize ratio
             flow = np.stack([flow_u * ratio_x, flow_v * ratio_y], axis=-1)
