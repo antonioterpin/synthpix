@@ -114,9 +114,13 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             )
         try:
             if self.startup:
-                batch = self._queue.get(block=True, timeout=self.startup_timeout)
+                batch = self._queue.get(
+                    block=True, timeout=self.startup_timeout
+                )
             else:
-                batch = self._queue.get(block=True, timeout=self.steady_state_timeout)
+                batch = self._queue.get(
+                    block=True, timeout=self.steady_state_timeout
+                )
 
             if self.startup:
                 self.startup = False
@@ -152,6 +156,9 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         Args:
             eos_timeout: Timeout in seconds for putting the end-of-stream
                 signal in the queue.
+
+        Raises:
+            EpisodeEndError: If the episode has ended while fetching batches.
         """
         while not self._stop_event.is_set():
             try:
@@ -191,7 +198,9 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
                         # is available
                         self._queue.not_empty.notify_all()
 
-                logger.info("No more data to fetch, stopping prefetching thread.")
+                logger.info(
+                    "No more data to fetch, stopping prefetching thread."
+                )
                 self._stop_event.set()
                 return
 
@@ -325,7 +334,9 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
             AttributeError: If the underlying scheduler is not episodic.
         """
         if not isinstance(self.scheduler, EpisodicSchedulerProtocol):
-            raise AttributeError("Underlying scheduler lacks episode_length property.")
+            raise AttributeError(
+                "Underlying scheduler lacks episode_length property."
+            )
         return int(self.scheduler.episode_length)
 
     @property

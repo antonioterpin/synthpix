@@ -64,7 +64,9 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
 
         # ensure all supplied files are .npy
         if not all(fp.endswith(".npy") for fp in self.file_list):
-            raise ValueError("All files must be numpy files with '.npy' extension")
+            raise ValueError(
+                "All files must be numpy files with '.npy' extension"
+            )
 
         # validate image pairs only if requested
         if self.include_images:
@@ -122,7 +124,9 @@ class NumpyFlowFieldScheduler(BaseFlowFieldScheduler):
         prev = np.array(
             Image.open(os.path.join(folder, f"img_{t - 1}.jpg")).convert("RGB")
         )
-        nxt = np.array(Image.open(os.path.join(folder, f"img_{t}.jpg")).convert("RGB"))
+        nxt = np.array(
+            Image.open(os.path.join(folder, f"img_{t}.jpg")).convert("RGB")
+        )
 
         return data.update(images1=prev, images2=nxt)
 
