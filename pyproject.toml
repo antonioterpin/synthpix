@@ -110,37 +110,55 @@ target-version = "py310"
 [tool.ruff.lint]
 # Enable comprehensive rule sets
 select = [
-    "E",      # pycodestyle errors
-    "W",      # pycodestyle warnings
-    "F",      # pyflakes (including unused imports F401)
-    "UP",     # pyupgrade (modern typing patterns)
-    "I",      # isort
-    "N",      # pep8-naming
-    "D",      # pydocstyle
-    "PL",     # pylint
-    "RUF",    # ruff-specific rules
+    "E",     # pycodestyle errors (style/formatting)
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes (logical errors)
+    "UP",    # pyupgrade (modern Python syntax)
+    "I",     # isort (import sorting)
+    "N",     # pep8-naming (naming conventions)
+    "B",     # flake8-bugbear (potential bugs)
+    "PL",    # pylint (code quality)
+    "RUF",   # ruff-specific rules
 ]
 
 ignore = [
-    "D100",   # Missing docstring in public module
-    "D104",   # Missing docstring in public package
-    "D105",   # Missing docstring in magic method
-    "PLR0913", # Too many arguments to function call
     "PLR2004", # Magic value used in comparison
+    "PLR0913", # Too many arguments in function definition
+    "N803",    # Argument name should be lowercase (CV standard Ix, Iy, ecc.)
+    "N806",    # Variable in function should be lowercase (CV standard Ix, Iy, ecc.)
 ]
 
-# Specific rules for modern typing enforcement
-[tool.ruff.lint.pyupgrade]
-# Keep this empty to use all pyupgrade rules
+# Pydoclint configuration
+# Pydoclint is used together with Ruff because
+# Ruff hasn't yet implemented all the checks that Pydoclint provides.
+# The plan is to migrate to Ruff only when all checks are implemented.
+[tool.pydoclint]
+style = "google"
+skip-checking-short-docstrings = false
+allow-init-docstring = true
+arg-type-hints-in-docstring = false
+check-return-types = false
+skip-checking-raises = false
 
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D", "PLR2004"]  # Ignore docstring rules in tests
-"examples/*" = ["D"]          # Ignore docstring rules in examples
+# Pyright configuration for type checking
+# We use basedpyright but in this way pylance also 
+# reads this configuration
+[tool.pyright]
+typeCheckingMode = "basic"
+pythonVersion = "3.10"
+include = ["src"]
 
-[tool.ruff.lint.pydocstyle]
-convention = "google"
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownParameterType = false
+reportUnknownVariableType = false
 
-[dependency-groups]
-dev = [
-    "pydoclint>=0.8.3",
-]
+reportUnusedImport = false
+reportUnusedVariable = false
+
+enableTypeIgnoreComments = false
+reportIgnoreCommentWithoutRule = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+
+[tool.setuptools.dynamic]
+version = {attr = "synthpix.__version__"}
