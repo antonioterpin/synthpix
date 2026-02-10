@@ -6,7 +6,7 @@ import json
 import logging
 import os
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, overload
 
 import jax
 import jax.numpy as jnp
@@ -106,6 +106,18 @@ def match_histogram(source: jnp.ndarray, template_hist: jnp.ndarray) -> jnp.ndar
     # Reshape back to original image shape
     return matched.reshape(source.shape)
 
+
+@overload
+def bilinear_interpolate(
+    image: jnp.ndarray, x_f: jnp.ndarray, y_f: jnp.ndarray
+) -> jnp.ndarray:
+    ...
+
+@overload
+def bilinear_interpolate(
+    image: np.ndarray, x_f: np.ndarray, y_f: np.ndarray
+) -> np.ndarray:
+    ...
 
 def bilinear_interpolate(
     image: jnp.ndarray | np.ndarray,
