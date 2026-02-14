@@ -236,7 +236,7 @@ Principles:
 - We open a PR to `main` only for milestones.
 
 ### Testing a feature
-To test a new feature, simply add a `test_<feature_to_test>` inside the folder `src/test`. For this, refer to the [`pytest` documentation](https://docs.pytest.org/en/stable/).
+To test a new feature, simply add a `test_<feature_to_test>` inside the folder `tests`. For this, refer to the [`pytest` documentation](https://docs.pytest.org/en/stable/).
 
 To run the tests,
 ```bash
