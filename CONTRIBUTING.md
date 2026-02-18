@@ -9,8 +9,7 @@ This page summarizes the development workflow and software engineering practices
 ```
 ├── .github/
 │   ├── workflows/          # CI/CD pipelines
-│   ├── ISSUE_TEMPLATE/     # Issue templates
-│   └── pull_request_template.md
+│   └─── ISSUE_TEMPLATE/     # Issue templates
 ├── src/                    # Source code
 ├── tests/                  # Test suite
 ├── docs/                   # Documentation
