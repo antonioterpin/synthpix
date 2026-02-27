@@ -576,41 +576,9 @@ class SyntheticImageSampler(Sampler):
                 self._current_flows.block_until_ready()
 
         # Generate keys
-        if self._jax_seeds is not None:
-            # Grain Path: Use fold_in(record_seed, rep_idx)
-            # record_seed is (B,) or (B, 2), rep_idx is int
-
-            def derive_key(seed_val, rep_idx, batch_idx):
-                # Ensure we have a key (2,) from the input seed value
-                if seed_val.shape == ():
-                    key = jax.random.PRNGKey(seed_val)
-                else:
-                    key = seed_val
-
-                # Fold in batch index to ensure uniqueness across the batch
-                # (even if seeds are tiled)
-                key = jax.random.fold_in(key, batch_idx)
-                # Fold in repetition index
-                key = jax.random.fold_in(key, rep_idx)
-                return key
-
-            # Vectorize over the seeds in the batch
-            derive_keys_vmap = jax.vmap(derive_key, in_axes=(0, None, 0))
-            batch_keys = derive_keys_vmap(
-                self._jax_seeds,
-                self._batches_generated,
-                jnp.arange(self.batch_size),
-            )
-            # batch_keys is (B, 2)
-
-            # Now we need to shard/split these keys for the devices
-            # img_gen_fn_jit expects (ndevices, 2) keys
-            keys = batch_keys.reshape(self.ndevices, -1, 2)[:, 0]
-        else:
-            # Legacy Path: Use internal _rng
-            self._rng, subkey = jax.random.split(self._rng)
-            keys = jax.random.split(subkey, self.ndevices)
-            batch_keys = jax.random.split(subkey, self.batch_size)
+        self._rng, subkey = jax.random.split(self._rng)
+        keys = jax.random.split(subkey, self.ndevices)
+        batch_keys = jax.random.split(subkey, self.batch_size)
 
         # Generate a new batch of images using the current flow fields
         imgs1, imgs2, params = self.img_gen_fn_jit(keys, self._current_flows)
