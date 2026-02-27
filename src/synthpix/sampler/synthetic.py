@@ -67,7 +67,9 @@ class SyntheticImageSampler(Sampler):
         min_speed_y: float,
         output_units: str,
         device_ids: Sequence[int] | None = None,
-        generation_specification: ImageGenerationSpecification | None = None,
+        generation_specification: ImageGenerationSpecification = (
+            ImageGenerationSpecification()
+        ),
         mask_images: jnp.ndarray | None = None,
         histogram: jnp.ndarray | None = None,
     ):
@@ -108,10 +110,6 @@ class SyntheticImageSampler(Sampler):
         Raises:
             ValueError: If parameters are invalid or incompatible.
         """
-        # default arguments handling
-        if generation_specification is None:
-            generation_specification = ImageGenerationSpecification()
-
         # abstract class initialization
         super().__init__(scheduler, generation_specification.batch_size)
 
