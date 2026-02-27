@@ -40,24 +40,26 @@ class Sampler(ABC):
             TypeError: If scheduler does not implement SchedulerProtocol.
             ValueError: If batch_size is not a positive integer.
         """
+        # input validation
         if not isinstance(scheduler, SchedulerProtocol):
             raise TypeError(
                 "scheduler must implement the SchedulerProtocol interface."
             )
-
         if not isinstance(batch_size, int) or batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
 
+        # class members ctor
         self.scheduler = scheduler
         self.batch_size = batch_size
 
+        # logging
         episodic = isinstance(self.scheduler, EpisodicSchedulerProtocol)
-        logger.info(
+        logger.info(  # logs whether episodic
             f"The underlying scheduler is {'' if episodic else 'not'} episodic."
         )  # pragma: no cover
-
-        self.batch_size = batch_size
-        logger.info(f"Scheduler class: {self.scheduler.__class__.__name__}")
+        logger.info(  # logs type of scheduler class
+            f"Scheduler class: {self.scheduler.__class__.__name__}"
+        )
 
     def _shutdown(self) -> None:  # noqa: B027
         """Custom shutdown logic for the sampler."""
