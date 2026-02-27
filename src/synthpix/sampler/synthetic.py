@@ -115,7 +115,7 @@ class SyntheticImageSampler(Sampler):
         # abstract class initialization
         super().__init__(scheduler, generation_specification.batch_size)
 
-        # relabel for convenience
+        # unpack input for convenience
         batch_size: int = generation_specification.batch_size
         image_shape: tuple[int, int] = generation_specification.image_shape
         img_offset: tuple[int | float, int | float] = (
@@ -130,6 +130,11 @@ class SyntheticImageSampler(Sampler):
         else:
             devices = all_devices
         ndevices = len(devices)
+        flow_field_shape_full: tuple[int, int, int] = (
+            scheduler.get_flow_fields_shape()
+        )
+        flow_field_shape = flow_field_shape_full[0:2]
+        flow_field_channel = flow_field_shape_full[2]
 
         # input validation
         if mask_images is not None and (mask_images.shape != image_shape):
@@ -197,6 +202,19 @@ class SyntheticImageSampler(Sampler):
             raise ValueError("velocities_per_pixel must be a positive number.")
         if not isinstance(seed, int) or seed < 0:
             raise ValueError("seed must be a positive integer.")
+        if (
+            not isinstance(flow_field_shape_full, tuple)
+            or len(flow_field_shape_full) != 3
+            or (flow_field_channel not in {2, 3})
+            or not all(
+                isinstance(s, int) and s > 0 for s in flow_field_shape_full
+            )
+        ):
+            raise ValueError(
+                "scheduler.get_flow_fields_shape must return a tuple "
+                "of three positive integers with the last being 2 or 3; "
+                f"got {flow_field_shape_full}."
+            )
 
         # class members ctor (with validated arguments)
         # ctors without logic
@@ -235,7 +253,7 @@ class SyntheticImageSampler(Sampler):
         else:
             self.flow_fields_per_batch = flow_fields_per_batch
 
-        # logging and warning
+        # input logging
         if device_ids is None:
             logger.info(
                 "No device IDs provided. Using all available devices "
@@ -273,7 +291,7 @@ class SyntheticImageSampler(Sampler):
                 f"Setting batch_size to {self.flow_fields_per_batch}."
             )
 
-        # body
+        # body(sharding)
         # We want to shard a key to each device
         # and duplicate the flow field.
         # The idea is that each device will generate a num_images images
@@ -286,21 +304,13 @@ class SyntheticImageSampler(Sampler):
             ),
         )
 
-        # Use the scheduler to get the flow field shape
-        flow_field_shape = scheduler.get_flow_fields_shape()
-        if (
-            not isinstance(flow_field_shape, tuple)
-            or len(flow_field_shape) != 3
-            or (flow_field_shape[2] != 2 and flow_field_shape[2] != 3)
-            or not all(isinstance(s, int) and s > 0 for s in flow_field_shape)
-        ):
-            raise ValueError(
-                "scheduler.get_flow_fields_shape must return a tuple "
-                "of three positive integers with the last being 2 or 3; "
-                f"got {flow_field_shape}."
-            )
-        flow_field_shape = (flow_field_shape[0], flow_field_shape[1])
+        # body(resolution)
+        # Calculate the resolution of the flow field
+        # in grid steps per length measure unit
+        self.flow_field_res_y = flow_field_shape[0] / flow_field_size[0]
+        self.flow_field_res_x = flow_field_shape[1] / flow_field_size[1]
 
+        # body(position bound)
         # Clip the max and min speeds.
         # Positive values of min speeds and negative values of max speeds
         # are not useful to create the position bounds
@@ -313,11 +323,6 @@ class SyntheticImageSampler(Sampler):
             f"max_speed_x: {max_speed_x},\n max_speed_y: {max_speed_y},\n "
             f"min_speed_x: {min_speed_x},\n min_speed_y: {min_speed_y}"
         )
-
-        # Calculate the resolution of the flow field
-        # in grid steps per length measure unit
-        self.flow_field_res_y = flow_field_shape[0] / flow_field_size[0]
-        self.flow_field_res_x = flow_field_shape[1] / flow_field_size[1]
 
         # Calculate the position bounds offset in length measure unit
         position_bounds_offset = (
@@ -350,7 +355,6 @@ class SyntheticImageSampler(Sampler):
                 f"({position_bounds[0] + position_bounds_offset[0]},"
                 f"{position_bounds[1] + position_bounds_offset[1]})."
             )
-
         # Compute the particle size in length measure unit
         particle_pixel_radius = int(3 * self.max_diameter / 2)
         particle_size = (2 * particle_pixel_radius + 1) / resolution
