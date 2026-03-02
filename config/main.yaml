@@ -1,11 +1,13 @@
 # Dataset parameters
 seed: 0 # Random seed for reproducibility
-batch_size: 1 # Number of (img1, img2, flow) tuples per batch
-flow_fields_per_batch: 1 # Number of flow fields used for each batch
-batches_per_flow_batch: 1 # Number of batches of (imgs1, imgs2, flows) tuples per flow batch
+batch_size: 1 # Number of (img1, img2, flow) tuples per data batch
+flow_fields_per_batch: 1 # Number of unique flow fields per data batch
+batches_per_flow_batch: 1 # Number of consecutive batches of (imgs1, imgs2, flows) generated with each set of flow fields
 randomize: false # Whether to randomize the order of the files
 loop: true # Whether to loop through the files indefinitely
-device_ids: [0]
+identifiable_flow: false # Whether to allow identification of the flow generating that image
+device_ids: [0] # Indexes of the machine's visible device list that are selected.
+                # Omitt to select all avalable devices.
 
 # Image generation parameters
 image_shape: [1024, 1024] # Shape of the images to be generated

@@ -70,6 +70,7 @@ class SyntheticImageSampler(Sampler):
         generation_specification: ImageGenerationSpecification | None = None,
         mask_images: jnp.ndarray | None = None,
         histogram: jnp.ndarray | None = None,
+        identifiable_flow: bool = False,
     ):
         """Initializes the SyntheticImageSampler.
 
@@ -104,6 +105,9 @@ class SyntheticImageSampler(Sampler):
             histogram: Optional histogram to match during image generation.
                 Should be a jnp.ndarray of shape (256,).
                 NOTE: Histogram equalization is very slow!
+            identifiable_flow: Optional, makes sampled data batches' flows
+                identifiable for the downstream user.
+                NOTE: identifiable_flow is slow!
 
         Raises:
             ValueError: If parameters are invalid or incompatible.
@@ -271,6 +275,8 @@ class SyntheticImageSampler(Sampler):
                 "There will be one more sample for the first "
                 f"{extra_batch_size} flow fields of each batch."
             )
+
+        self.identifiable_flow = identifiable_flow
 
         # Check min and max speeds
         if not isinstance(max_speed_x, int | float):
@@ -532,7 +538,7 @@ class SyntheticImageSampler(Sampler):
             # batch)
             n_flows = (
                 len(self._jax_seeds)
-                if self._jax_seeds is not None
+                if (self.identifiable_flow and self._jax_seeds is not None)
                 else (
                     len(self._files_scheduler)
                     if self._files_scheduler is not None
@@ -576,7 +582,7 @@ class SyntheticImageSampler(Sampler):
                 self._current_flows.block_until_ready()
 
         # Generate keys
-        if self._jax_seeds is not None:
+        if self.identifiable_flow and self._jax_seeds is not None:
             # Grain Path: Use fold_in(record_seed, rep_idx)
             # record_seed is (B,) or (B, 2), rep_idx is int
 
@@ -638,7 +644,7 @@ class SyntheticImageSampler(Sampler):
                 else None
             ),
             seeds=jnp.array(self._jax_seeds)
-            if self._jax_seeds is not None
+            if (self.identifiable_flow and self._jax_seeds is not None)
             else None,
             keys=batch_keys,
         )
@@ -868,6 +874,7 @@ class SyntheticImageSampler(Sampler):
                 generation_specification=gs,
                 mask_images=mask_images,
                 histogram=histogram,
+                identifiable_flow=config["identifiable_flow"],
             )
         except KeyError as e:
             raise KeyError(

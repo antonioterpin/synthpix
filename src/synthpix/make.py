@@ -101,6 +101,7 @@ def make_grain_scheduler(
     include_images: bool,
     randomize: bool,
     loop: bool,
+    identifiable_flow: bool,
 ) -> GrainEpisodicAdapter | GrainSchedulerAdapter:
     """Create a Grain-based scheduler.
 
@@ -112,6 +113,7 @@ def make_grain_scheduler(
         include_images: Whether to include images.
         randomize: Whether to randomize the data.
         loop: Whether to loop the data.
+        identifiable_flow: Whether used flow must be identifiable for the user.
 
     Returns:
         A Grain-based scheduler.
@@ -176,13 +178,21 @@ def make_grain_scheduler(
             "the number of workers is constant."
         )
 
+    # we add a deterministic seed to every record
+    if identifiable_flow:
+        operations = [
+            AddJAXSeed(),
+            grain.Batch(batch_size=batch_size, drop_remainder=False),
+        ]
+    else:
+        operations = [
+            grain.Batch(batch_size=batch_size, drop_remainder=False),
+        ]
+
     grain_loader = grain.DataLoader(
         data_source=data_source,
         sampler=sampler_grain,
-        operations=[
-            AddJAXSeed(),
-            grain.Batch(batch_size=batch_size, drop_remainder=False),
-        ],
+        operations=operations,
         worker_count=worker_count,
         read_options=grain.ReadOptions(
             num_threads=num_threads, prefetch_buffer_size=buffer_size
@@ -351,32 +361,7 @@ def make(
             invalid.
         FileNotFoundError: If the configuration file doesn't exist.
     """
-    # Initialize console for colored output
-    console = Console()
-
-    # SynthPix Banner
-    banner = [
-        r"   ____              _   _     ____  _         ",
-        r"  / ___| _   _ _ __ | |_| |__ |  _ \(_)_  __   ",
-        r"  \___ \| | | | '_ \| __| '_ \| |_) | \ \/ /   ",
-        r"   ___) | |_| | | | | |_| | | |  __/| |>  <    ",
-        r"  |____/ \__, |_| |_|\__|_| |_|_|   |_/_/\_\   ",
-        r"         |___/                           ",
-    ]
-
-    # Define rainbow color cycle
-    rainbow_colors = ["red", "yellow", "green", "cyan", "blue", "magenta"]
-
-    # Print each line with cycling rainbow colors using Rich Text
-    for line in banner:
-        text = Text()
-        for idx, char in enumerate(line):
-            if char == " ":
-                text.append(char)
-            else:
-                color = rainbow_colors[idx % len(rainbow_colors)]
-                text.append(char, style=color)
-        console.print(text)
+    print_banner()
 
     # Input validation
     if not isinstance(config, str | dict):
@@ -443,6 +428,7 @@ def make(
         "loop": dataset_config.get("loop", True),
         "key": sched_key,
         "include_images": include_images,
+        "identifiable_flow": dataset_config.get("identifiable_flow", False),
     }
 
     if include_images:
@@ -468,6 +454,7 @@ def make(
             include_images=include_images,
             randomize=kwargs["randomize"],
             loop=kwargs["loop"],
+            identifiable_flow=kwargs["identifiable_flow"],
         )
 
     else:
@@ -584,3 +571,32 @@ def save_checkpoint(
     mngr.save(step=step, args=save_args)
     mngr.wait_until_finished()
     logger.info(f"Saved checkpoint to {checkpoint_dir} at step {step}")
+
+
+def print_banner():
+    # Initialize console for colored output
+    console = Console()
+
+    # SynthPix Banner
+    banner = [
+        r"   ____              _   _     ____  _         ",
+        r"  / ___| _   _ _ __ | |_| |__ |  _ \(_)_  __   ",
+        r"  \___ \| | | | '_ \| __| '_ \| |_) | \ \/ /   ",
+        r"   ___) | |_| | | | | |_| | | |  __/| |>  <    ",
+        r"  |____/ \__, |_| |_|\__|_| |_|_|   |_/_/\_\   ",
+        r"         |___/                           ",
+    ]
+
+    # Define rainbow color cycle
+    rainbow_colors = ["red", "yellow", "green", "cyan", "blue", "magenta"]
+
+    # Print each line with cycling rainbow colors using Rich Text
+    for line in banner:
+        text = Text()
+        for idx, char in enumerate(line):
+            if char == " ":
+                text.append(char)
+            else:
+                color = rainbow_colors[idx % len(rainbow_colors)]
+                text.append(char, style=color)
+        console.print(text)
