@@ -107,7 +107,9 @@ class SyntheticImageSampler(Sampler):
                 NOTE: Histogram equalization is very slow!
             identifiable_flow: Optional, makes sampled data batches' flows
                 identifiable for the downstream user.
-                NOTE: identifiable_flow is slow!
+                NOTE: identifiable_flow is slow! (on our setup,
+                throughput is more than halved, you can quantify the impact
+                on yours machine using test "test_identifiable_flow_throughput")
 
         Raises:
             ValueError: If parameters are invalid or incompatible.
