@@ -195,10 +195,10 @@ class GrainSchedulerAdapter(SchedulerProtocol):
                     respect_padding = True
 
         # Calculate padding needed (standard structural padding)
-        pad_size = target_batch_size - current_batch_size
 
         valid_mask = np.ones((target_batch_size,), dtype=bool)
-        if pad_size > 0:
+        if target_batch_size > current_batch_size:
+            pad_size = target_batch_size - current_batch_size
             valid_mask[current_batch_size:] = False
 
             # Pad flow
