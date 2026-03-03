@@ -674,7 +674,7 @@ def benchmark_throughput(
     if use_identifiable_flow:
         config["identifiable_flow"] = True
 
-    # Instantiate sampler
+    # Import here to avoid circular dependency
     from .make import make  # noqa: PLC0415
 
     # Instantiate sampler
@@ -725,11 +725,10 @@ def benchmark_throughput(
     if elapsed <= 0:
         return 0
 
-    try:
-        import goggles as gg  # noqa: PLC0415
-
-        gg.finish()
-    except Exception:
-        pass
+    if ON_UNIX:
+        try:
+            gg.finish()
+        except Exception:
+            pass
 
     return int(total_pairs / elapsed)
