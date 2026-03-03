@@ -18,7 +18,10 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 import pytest
+import timeit
+import contextlib
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
+from synthpix.sampler import Sampler
 
 import synthpix.utils as utils_module
 from synthpix.utils import (
@@ -32,6 +35,8 @@ from synthpix.utils import (
     trilinear_interpolate,
 )
 from tests.example_flows import get_flow_function
+
+ON_UNIX = os.name == "posix"
 
 config = load_configuration("config/testing.yaml")
 
@@ -952,3 +957,90 @@ def test_get_logger_windows_fallback(monkeypatch):
     assert logging.getLogger().handlers, (
         "Expected root logger to have handlers configured"
     )
+
+def benchmark_throughput(
+    config_path: str,
+    batches: int = 1000,
+    use_grain: bool = True,
+    use_identifiable_flow: bool = False,
+) -> int:
+    """Benchmark sampler throughput in image pairs per second.
+
+    This utility instantiates a SynthPix sampler from a configuration file,
+    runs a warmup batch, and then iterates over a fixed number of batches
+    while synchronizing the JAX device computations.
+
+    Args:
+        config_path: Path to the YAML configuration file.
+        batches: Number of batches to iterate over for the benchmark.
+        use_grain: Whether to use the Grain-based scheduler backend.
+        use_identifiable_flow: If True, forces ``identifiable_flow`` to be
+            enabled in the loaded configuration (overriding the file).
+
+    Returns:
+        Throughput measured as image pairs per second.
+    """
+
+    # Load configuration and optionally enforce identifiable_flow.
+    config = load_configuration(config_path)
+    if use_identifiable_flow:
+        config["identifiable_flow"] = True
+
+    # Import here to avoid circular dependency
+    from synthpix.make import make  # noqa: PLC0415
+
+    # Instantiate sampler
+    sampler = make(config, use_grain_scheduler=use_grain)
+
+    # Warmup batch to trigger JIT compilation and data pipeline startup.
+    warmup_batch = next(sampler)
+    warmup_batch.images1.block_until_ready()
+    warmup_batch.images2.block_until_ready()
+    warmup_batch.flow_fields.block_until_ready()
+
+    def run_batches(
+        sampler: Sampler = sampler,
+        num_batches: int = batches,
+    ) -> int:
+        """Iterate num_batches from sampler, blocking until ready.
+
+        Returns the total number of image pairs produced.
+
+        Args:
+            sampler: the synthpix sampler to be used
+            num_batches: the number of batches to generate
+
+        Returns:
+            The total number of image pairs produced.
+        """
+        total_pairs = 0
+        for i, batch in enumerate(sampler):
+            batch.images1.block_until_ready()
+            batch.images2.block_until_ready()
+            batch.flow_fields.block_until_ready()
+            total_pairs += batch.images1.shape[0]
+            if (i + 1) >= num_batches:
+                break
+        return total_pairs
+
+    # Time the batches.
+    timer = timeit.default_timer
+    start = timer()
+    try:
+        total_pairs = run_batches()
+    finally:
+        elapsed = timer() - start
+        # Ensure we release resources even if iteration raises.
+        with contextlib.suppress(Exception):
+            sampler.shutdown()
+
+    if elapsed <= 0:
+        return 0
+
+    if ON_UNIX:
+        try:
+            gg.finish()
+        except Exception:
+            pass
+
+    return int(total_pairs / elapsed)
