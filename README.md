@@ -53,44 +53,48 @@ For more examples and tutorials to use custom flow data or real-world data, chec
 
 ## Configuring the synthetic images ⚙️
 
-Configuration is handled through a YAML file, organized into four main groups. Here’s a quick guide to what each set of parameters does:
+Configuration is handled through a YAML file such as [the default one](./config/main.yaml). The parameters contained in this files fully specify Synthpix's behaviour and are organized into five groups.
 
 ### 1. Dataset Parameters
-These parameters allow you to customize how flow field extraction works and the shape of the output batch.
+These parameters allow you to customize the shape of the output and the way data is being used to generate it.
 
-| **Parameter**            | **Description**                         |
-| ------------------------ | --------------------------------------- |
-| `seed`                   | Random seed for reproducibility         |
-| `batch_size`             | Number of image pairs generated at once |
-| `flow_fields_per_batch`  | Number of unique flow fields per batch  |
-| `batches_per_flow_batch` | Number of batches generated before updating to a new set of flow fields |
+| **Parameter**            | **Description**                                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `seed`                   | Seed for random generator. Ensures reproducibility of your results.                                                 |
+| `batch_size`             | Number of data points (e.g. image pairs) generated in each iteration over the sampler.                              |
+| `flow_fields_per_batch`  | Given a batch, this is the number of unique flow fields used in generating it.                                      |
+| `batches_per_flow_batch` | Number of consecutive batches generated using the same set of `flow_fields_per_batch` fields, before updating them. |
 
-### 2. Image Generation Parameters
+Recall that each datapoint consists of a pair of images, their flow field, and a parameters' set.
+
+So, for example, if our configuration was `batch_size=16`, `flow_fields_per_batch=4`, `batches_per_flow_batch=10`, every batch would contain 16 datapoint, these were generated using 4 distinct flow fields, and the set of disting flow fields would change every 10 batches.
+
+### 2. Image Rasterization Parameters
 Define the look and realism of your synthetic PIV images.
 
-| **Parameter**                 | **Description**                                             |
-| ----------------------------- | ----------------------------------------------------------- |
-| `image_shape`                 | Output image size `[height, width]` (pixels)                |
-| `dt`                          | Time between frames (seconds)                               |
-| `seeding_density_range`       | Range of particle densities (particles per pixel)           |
-| `diameter_ranges`             | List of possible ranges for particle sizes (in pixels). (see below)     |
-| `diameter_var`                | Variability in particle size                                |
-| `intensity_ranges`            | List of possible intensity (brightness) ranges. (see below)             |
-| `intensity_var`               | Variability in intensity                                    |
-| `p_hide_img1` / `p_hide_img2` | Per-particle probability of being hidden in image 1 (or 2). |
-| `rho_ranges`                  | List of possible correlation coefficients ranges. (see below)            |
-| `rho_var`                     | Variability in correlation                                  |
-| `noise_uniform`                 | Maximum amplitude of uniform noise added to the image.|
-| `noise_gaussian_mean`                 | Mean of Gaussian noise added to the image.             |
-| `noise_gaussian_std`                 | Standard deviation of Gaussian noise added to the image.           |
-| `mask` (optional)                |  Path to a `.npy` file containing a binary mask (0 and 1) with shape `image_shape`.|
-| `histogram` (optional)                |  Path to a `.npy` file with a 1D array of shape `(256,)`, summing to the number of image pixels. Used to remap output intensities.           |
+| **Parameter**                 | **Description**                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `image_shape`                 | Output image size `[height, width]`. (pixels)                                                                                         |
+| `dt`                          | Time elapsed between frames. (seconds)                                                                                                |
+| `seeding_density_range`       | Range of particle densities. (particles per pixel)                                                                                    |
+| `diameter_ranges`             | List of ranges of particle sizes. (in pixels). (see below)                                                                            |
+| `diameter_var`                | Variance in the distribution of each particle size measured at `t+dt` when conditioned on their size measured at `t`.                 |
+| `intensity_ranges`            | List of ranges of intensity (brightness). (see below)                                                                                 |
+| `intensity_var`               | Variance in the distribution of each particle intensity measured at `t+dt` when conditioned on their intensity measured at `t`.       |
+| `p_hide_img1` [`p_hide_img2`] | Per-particle probability of being hidden in image 1 [2].                                                                              |
+| `rho_ranges`                  | List of ranges off shape skewness. (see below)                                                                                        |
+| `rho_var`                     | Variance in the shape skewness of each particle when measured at `t+dt` and conditioned on their skewness at `t`.                     |
+| `noise_uniform`               | Maximum amplitude of uniform noise added to the image.                                                                                |
+| `noise_gaussian_mean`         | Mean of Gaussian noise added to the image.                                                                                            |
+| `noise_gaussian_std`          | Standard deviation of Gaussian noise added to the image.                                                                              |
+| `mask` (optional)             |  Path to a `.npy` file containing a binary mask (0 and 1) with shape `image_shape`.                                                   |
+| `histogram` (optional)        |  Path to a `.npy` file with a 1D array of shape `(256,)`, summing to the number of image pixels. Used to remap output intensities.    |
 
-For `diameter_ranges`, `intensity_ranges`, and `rho_ranges`, each parameter is a list of possible ranges. For every image pair, one range is randomly selected (uniformly) from each list, and then the particle parameters are sampled from these selected ranges.
+For `diameter_ranges`, `intensity_ranges`, and `rho_ranges`, each parameter is a list of possible ranges. For every image pair generated, for every parameter, one range is uniformly sampled from each list, and then for every particle their associated parameter is uniformly sampled from the selected range.
 
 Each *_var parameter controls how much the property of each particle can change between the first and second image of a pair. The change is applied as Gaussian noise with zero mean and variance given by the corresponding *_var value.
 
-Here’s what each *_var parameter controls:
+Here’s visually what each *_var parameter controls in the rasterization:
 
 **diameter_var:**
 Simulates changes in particle size between frames, making the effect of focus, depth movement, or slight deformations more realistic.
@@ -180,34 +184,35 @@ Effect of `rho_var` on particle shape:
   Note: The example above uses particles with diameter 2.5. The visual effect of ρ also depends on particle size, larger diameters make elongation more noticeable.
   As a result, the recommended "safe range" for realistic particle shapes may vary depending on your chosen `diameter_ranges`.
 
-### 3. Flow generation parameters
-| **Parameter**          | **Description**                          |
-| ---------------------- | ---------------------------------------- |
-| `velocities_per_pixel` | Spatial resolution of the velocity field |
-| `resolution`           | Pixels per unit of physical length       |
+### 3. Physical Sizing
+| **Parameter**          | **Description**                                                        |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `velocities_per_pixel` | Spatial resolution of the velocity field (velocity vectors per pixel)  |
+| `resolution`           | Spatial resolution of images (pixels per unit of physical length)      |
 
 #### Examples:
 
-| **Use Case**                | `velocities_per_pixel` | `resolution` | Explanation                                                                                                       |
-| --------------------------- | ---------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------- |
-| **Normalized flow field**   | 1.0                    | 100          | Flow field has 1 velocity vector per pixel; 100 px = 1 unit of length and flow velocity vectors are in units/s.                          |
-| **Real-world flow in m/s**  | 10.0                   | 50           | Flow field has 10 velocity vectors per image pixel (very fine spatial resolution); 50 px = 1 meter and flow in m/s. |
-| **Pixel displacement flow** | 1.0                    | 1.0          | Flow field has 1 velocity per pixel; 1 px = 1 unit → flow directly describes pixels/second displacements. (use `dt` = 1 to convert it in pixels/frame)           |
-
-
-
+| **Use Case**                | `velocities_per_pixel` | `resolution` | Explanation                                                                                                                                            |
+| --------------------------- | ---------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Normalized flow field**   | 1.0                    | 100          | Flow field has 1 velocity vector per pixel; 100 px = 1 unit of length and flow velocity vectors are in units/s.                                        |
+| **Real-world flow in m/s**  | 10.0                   | 50           | Flow field has 10 velocity vectors per image pixel (very fine spatial resolution); 50 px = 1 meter and flow in m/s.                                    |
+| **Pixel displacement flow** | 1.0                    | 1.0          | Flow field has 1 velocity per pixel; 1 px = 1 unit → flow directly describes pixels/second displacements. (use `dt` = 1 to convert it in pixels/frame) |
 
 ### 4. Flow field parameters
 Describe which region of your flow field is captured, and its velocity bounds.
 
-| **Parameter**                    | **Description**                                         |
-| -------------------------------- | ------------------------------------------------------- |
-| `flow_field_size`                | Physical size of the entire flow field (e.g., in mm × mm). Units must match those in your flow files. |
-| `img_offset` | 2D offset (in physical units, matching `flow_field_size`) specifying the top-left corner of the region of interest to extract from the flow field. |
-| `min_speed_x/y`, `max_speed_x/y` | Range of allowed velocities in each direction,           |
+| **Parameter**                    | **Description**                                                                                                                                                                                                            |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flow_field_size`                | Physical size of the entire flow field (e.g., in mm × mm). Units must match those in your flow                                                                                                                             |
+| `img_offset`                     | Offset of the region of interest to extract from the flow field. Expressed as the region's top-left corner coordinates (in physical units, matching `flow_field_size`).                                                    |
+| `min_speed_x/y`, `max_speed_x/y` | Range of allowed velocities in each direction. If possible, this should match the flows' charachteristics,                                                                                                                 |
 | `output_units`                   | Units used in the returned flow field: `"pixels"` (converts physical velocities to displacements in pixels using `dt` and `resolution`), or `"measure units per second"` (same units as the input flow field, e.g., mm/s). |
-| `file_list`                | List of ground-truth flow field files (e.g. `.mat`)      |
-| `scheduler_class`                | Loader class for your flow files (usually by extension). See [tutorials](docs/tutorials.md) for detailed explanations. |
+
+### 5. Flow files
+| **Parameter**                    | **Description**                                                                                                       |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `file_list`                      | List of ground-truth flow field files (e.g. `.mat`)                                                                   |
+| `scheduler_class`                | Loader type for your flow files (usually by extension). See [tutorials](docs/tutorials.md) for detailed explanations. |
 
 Note: `min_speed_x/y` and `max_speed_x/y` are not absolute cutoffs, but define the full expected velocity range (positive and negative) along each axis.
 

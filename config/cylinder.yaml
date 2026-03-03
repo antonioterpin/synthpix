@@ -1,3 +1,7 @@
+# Synthpix Configuration YAML File
+# ================================
+# The documentation in this file is out-of-date. Please refer to the project's README.md.
+
 # Dataset parameters
 seed: 0 # Random seed for reproducibility
 batch_size: 1 # Number of (img1, img2, flow) tuples per batch
