@@ -89,7 +89,7 @@ Define the look and realism of your synthetic PIV images.
 | `noise_gaussian_std`           | Standard deviation of Gaussian noise added to the image.                                                                              |
 | `mask` (optional)              | Path to a `.npy` file containing a binary mask (0 and 1) with shape `image_shape`.                                                    |
 | `histogram` (optional)         | Path to a `.npy` file with a 1D array of shape `(256,)`, summing to the number of image pixels. Used to remap output intensities.     |
-| `identifiable_flow` (optional) | Whether synthpix randomization should expose a way to inspect which flow generated a datapoint.                                       |
+| `identifiable_flow` (optional) | Whether synthpix randomization should allow inspection which flow generated a datapoint for the downstream user.                      |
 
 For `diameter_ranges`, `intensity_ranges`, and `rho_ranges`, each parameter is a list of possible ranges. For every image pair generated, for every parameter, one range is uniformly sampled from each list, and then for every particle their associated parameter is uniformly sampled from the selected range.
 
