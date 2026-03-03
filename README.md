@@ -72,23 +72,24 @@ So, for example, if our configuration was `batch_size=16`, `flow_fields_per_batc
 ### 2. Image Rasterization Parameters
 Define the look and realism of your synthetic PIV images.
 
-| **Parameter**                 | **Description**                                                                                                                       |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `image_shape`                 | Output image size `[height, width]`. (pixels)                                                                                         |
-| `dt`                          | Time elapsed between frames. (seconds)                                                                                                |
-| `seeding_density_range`       | Range of particle densities. (particles per pixel)                                                                                    |
-| `diameter_ranges`             | List of ranges of particle sizes. (in pixels). (see below)                                                                            |
-| `diameter_var`                | Variance in the distribution of each particle size measured at `t+dt` when conditioned on their size measured at `t`.                 |
-| `intensity_ranges`            | List of ranges of intensity (brightness). (see below)                                                                                 |
-| `intensity_var`               | Variance in the distribution of each particle intensity measured at `t+dt` when conditioned on their intensity measured at `t`.       |
-| `p_hide_img1` [`p_hide_img2`] | Per-particle probability of being hidden in image 1 [2].                                                                              |
-| `rho_ranges`                  | List of ranges off shape skewness. (see below)                                                                                        |
-| `rho_var`                     | Variance in the shape skewness of each particle when measured at `t+dt` and conditioned on their skewness at `t`.                     |
-| `noise_uniform`               | Maximum amplitude of uniform noise added to the image.                                                                                |
-| `noise_gaussian_mean`         | Mean of Gaussian noise added to the image.                                                                                            |
-| `noise_gaussian_std`          | Standard deviation of Gaussian noise added to the image.                                                                              |
-| `mask` (optional)             |  Path to a `.npy` file containing a binary mask (0 and 1) with shape `image_shape`.                                                   |
-| `histogram` (optional)        |  Path to a `.npy` file with a 1D array of shape `(256,)`, summing to the number of image pixels. Used to remap output intensities.    |
+| **Parameter**                  | **Description**                                                                                                                       |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `image_shape`                  | Output image size `[height, width]`. (pixels)                                                                                         |
+| `dt`                           | Time elapsed between frames. (seconds)                                                                                                |
+| `seeding_density_range`        | Range of particle densities. (particles per pixel)                                                                                    |
+| `diameter_ranges`              | List of ranges of particle sizes. (in pixels). (see below)                                                                            |
+| `diameter_var`                 | Variance in the distribution of each particle size measured at `t+dt` when conditioned on their size measured at `t`.                 |
+| `intensity_ranges`             | List of ranges of intensity (brightness). (see below)                                                                                 |
+| `intensity_var`                | Variance in the distribution of each particle intensity measured at `t+dt` when conditioned on their intensity measured at `t`.       |
+| `p_hide_img1` [`p_hide_img2`]  | Per-particle probability of being hidden in image 1 [2].                                                                              |
+| `rho_ranges`                   | List of ranges off shape skewness. (see below)                                                                                        |
+| `rho_var`                      | Variance in the shape skewness of each particle when measured at `t+dt` and conditioned on their skewness at `t`.                     |
+| `noise_uniform`                | Maximum amplitude of uniform noise added to the image.                                                                                |
+| `noise_gaussian_mean`          | Mean of Gaussian noise added to the image.                                                                                            |
+| `noise_gaussian_std`           | Standard deviation of Gaussian noise added to the image.                                                                              |
+| `mask` (optional)              | Path to a `.npy` file containing a binary mask (0 and 1) with shape `image_shape`.                                                    |
+| `histogram` (optional)         | Path to a `.npy` file with a 1D array of shape `(256,)`, summing to the number of image pixels. Used to remap output intensities.     |
+| `identifiable_flow` (optional) | Whether synthpix randomization should expose a way to inspect which flow generated a datapoint.                                       |
 
 For `diameter_ranges`, `intensity_ranges`, and `rho_ranges`, each parameter is a list of possible ranges. For every image pair generated, for every parameter, one range is uniformly sampled from each list, and then for every particle their associated parameter is uniformly sampled from the selected range.
 
