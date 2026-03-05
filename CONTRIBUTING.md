@@ -35,6 +35,15 @@ To run the pytests:
 uv run pytest
 ```
 
+To run pytests that might take some time, use
+```sh
+uv run pytest -m run_explicitly
+```
+or for a specific test use
+```sh
+uv run pytest tests/test_benchmark/test_benchmark.py::test_identifiable_flow_throughput -m run_explicitly
+```
+
 ## Coding style
 The `Coding style validation` action will fail if the pre-commit checks do not pass. To make sure that these are checked automatically on push, run:
 ```sh
