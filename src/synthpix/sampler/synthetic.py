@@ -515,15 +515,19 @@ class SyntheticImageSampler(Sampler):
         """
         # Check if we need to initialize or switch to a new batch of flow fields
         if (
-            self._current_flows is None
-            or self._batches_generated >= self.batches_per_flow_batch
+            self._current_flows is None  # after reset
+            or self._batches_generated
+            >= self.batches_per_flow_batch  # if time to change flow fields' set
+            # based on setting
         ):
-            # Reset the batch counter
+            # Reset batch counter
             self._batches_generated = 0
 
             scheduler_batch = self.scheduler.get_batch(
                 self.flow_fields_per_batch
             )
+
+            # update Sampler members
             self._current_flows = scheduler_batch.flow_fields
             # Notice that self._mask refers to the current mask provided by the
             # scheduler denoting the valid flows of the current batch,
