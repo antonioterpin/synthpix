@@ -1,0 +1,47 @@
+# Synthpix Configuration YAML File
+# ================================
+# This is the configuration file for benchmark testing (testing throughput as images/s comparatively and absolutely).
+
+# Dataset parameters
+seed: 0
+batch_size: 64
+flow_fields_per_batch: 4
+batches_per_flow_batch: 1500
+randomize: false
+loop: true
+identifiable_flow: false
+device_ids: [0,1]
+
+# Image rasterization parameters
+image_shape: [256, 256]
+dt: 1
+seeding_density_range: [0.06, 0.06]
+p_hide_img1: .0
+p_hide_img2: .0
+diameter_ranges: [[0.8, 1.2]]
+diameter_var: 0.03
+intensity_ranges: [[150, 230]]
+intensity_var: 0.01
+rho_ranges: [[-0.1, 0.1]]
+rho_var: 0.1
+noise_uniform: 0.001
+noise_gaussian_mean: 0.01
+noise_gaussian_std: 0.001
+
+# Physical Sizing
+velocities_per_pixel: 1.0
+resolution: 1
+
+# Flow field parameters
+flow_field_size: [256, 256]
+img_offset: [0, 0]
+min_speed_x: 0
+max_speed_x: 0
+min_speed_y: 0
+max_speed_y: 0
+output_units: "pixels"
+
+# Flows files
+file_list:
+  - /shared/fluids/fluids-estimation/piv_dataset_class2_256/train/cylinder/Re400
+scheduler_class: ".mat"
