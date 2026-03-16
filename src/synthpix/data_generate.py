@@ -377,6 +377,78 @@ def generate_images_from_flow(
     )
 
 
+def generate_images_and_keys(
+    random_key: PRNGKey,
+    ndevices: int,
+    batch_size: int,
+    flow_field: jnp.ndarray,
+    parameters: ImageGenerationSpecification,
+    position_bounds: tuple[int, int] = (512, 512),
+    flow_field_res_x: float = 1.0,
+    flow_field_res_y: float = 1.0,
+    mask: jnp.ndarray | None = None,
+    histogram: jnp.ndarray | None = None,
+) -> tuple[
+    PRNGKey,
+    jnp.ndarray,
+    jnp.ndarray,
+    jnp.ndarray,
+    ImageGenerationParameters,
+]:
+    """Generates a randomized batch of grey scale image pairs from a batch of
+    flow fields.
+
+    Is as a wrapper to random generators' keys splitting logic
+    and data_generate.generate_images_from_flow function, handling the
+    generation of images from flow field batches.
+
+    Args:
+        random_key: Random key for reproducibility. Will be consumed and split.
+        ndevices: number of devices to which random_key must be split,
+        batch_size: number of batch elements to which random_key must be split,
+        flow_field: Array of shape (N, H, W, 2) containing N velocity fields
+            with velocities in length measure unit per second.
+        parameters: ImageGenerationSpecification dataclass containing all the
+            parameters for image generation.
+        position_bounds: (height, width) bounds on the positions of
+            the particles in pixels.
+        flow_field_res_x: Resolution of the flow field in the x direction
+            in grid steps per length measure unit.
+        flow_field_res_y: Resolution of the flow field in the y direction
+            in grid steps per length measure unit.
+        mask: Optional mask to apply to the generated images.
+        histogram: Optional histogram to match the images to.
+            NOTE: Histogram equalization is very slow!
+
+    Returns:
+        Tuple containing:
+        - random key: random key produced while consuming the input key.
+                should replace the input key.
+        - batch keys: reproducible identifiers for each generated batch element,
+                and therefore each output image pair.
+        - images1: Array of shape (num_images, image_height, image_width),
+                the first images in the pairs.
+        - images2: Array of shape (num_images, image_height, image_width),
+                the second images in the pairs.
+        - params: ImageGenerationParameters dataclass containing the
+            sampled parameters used for generation.
+    """
+    random_key, subkey = jax.random.split(random_key)
+    keys = jax.random.split(subkey, ndevices)
+    batch_keys = jax.random.split(subkey, batch_size)
+    imgs1, imgs2, params = generate_images_from_flow(
+        key=keys,
+        flow_field=flow_field,
+        parameters=parameters,
+        position_bounds=position_bounds,
+        flow_field_res_x=flow_field_res_x,
+        flow_field_res_y=flow_field_res_y,
+        mask=mask,
+        histogram=histogram,
+    )
+    return random_key, batch_keys, imgs1, imgs2, params
+
+
 def input_check_gen_img_from_flow(
     flow_field: jnp.ndarray,
     parameters: ImageGenerationSpecification,

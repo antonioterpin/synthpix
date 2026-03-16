@@ -12,6 +12,7 @@ from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from typing_extensions import Self
 
 from synthpix.data_generate import (
+    generate_images_and_keys,
     generate_images_from_flow,
     input_check_gen_img_from_flow,
 )
@@ -439,6 +440,21 @@ class SyntheticImageSampler(Sampler):
             histogram=self.histogram,
         )
 
+        self.img_gen_w_random_fn_jit = (
+            lambda key, flow: generate_images_and_keys(
+                random_key=key,
+                ndevices=self.ndevices,
+                batch_size=self.batch_size,
+                flow_field=flow,
+                parameters=generation_specification,
+                position_bounds=self.position_bounds,
+                flow_field_res_x=self.flow_field_res_x,
+                flow_field_res_y=self.flow_field_res_y,
+                mask=self.mask_images,
+                histogram=self.histogram,
+            )
+        )
+
         self.flow_field_adapter_jit = lambda flow: flow_field_adapter(
             flow,
             new_flow_field_shape=self.output_flow_field_shape,
@@ -470,6 +486,7 @@ class SyntheticImageSampler(Sampler):
                     ),
                 )
             )
+            self.img_gen_w_random_fn_jit = jax.jit(self.img_gen_w_random_fn_jit)
             self.flow_field_adapter_jit = jax.jit(
                 jax.shard_map(
                     self.flow_field_adapter_jit,
@@ -606,16 +623,24 @@ class SyntheticImageSampler(Sampler):
             # Now we need to shard/split these keys for the devices
             # img_gen_fn_jit expects (ndevices, 2) keys
             keys = batch_keys.reshape(self.ndevices, -1, 2)[:, 0]
+
+            # Generate a new batch of images using the current flow fields
+            imgs1, imgs2, params = self.img_gen_fn_jit(
+                keys, self._current_flows
+            )
+            if self.output_flow_fields is None:
+                raise RuntimeError("output_flow_fields is None.")
         else:
             # Legacy Path: Use internal _rng
-            self._rng, subkey = jax.random.split(self._rng)
-            keys = jax.random.split(subkey, self.ndevices)
-            batch_keys = jax.random.split(subkey, self.batch_size)
+            self._rng, batch_keys, imgs1, imgs2, params = (
+                self.img_gen_w_random_fn_jit(
+                    self._rng,
+                    self._current_flows,
+                )
+            )
 
-        # Generate a new batch of images using the current flow fields
-        imgs1, imgs2, params = self.img_gen_fn_jit(keys, self._current_flows)
-        if self.output_flow_fields is None:
-            raise RuntimeError("output_flow_fields is None.")
+            if self.output_flow_fields is None:
+                raise RuntimeError("output_flow_fields is None.")
 
         self._batches_generated += 1
         self._step += 1
