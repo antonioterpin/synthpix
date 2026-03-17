@@ -378,15 +378,9 @@ tests/test_data_sources/test_numpy.py
     DOC103: Function `test_numpy_load_file_bad_filename`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [tmp_path: ].
 --------------------
 tests/test_device_selection.py
-    DOC101: Function `_make_sampler`: Docstring contains fewer arguments than in function signature.
     DOC106: Function `_make_sampler`: The option `--arg-type-hints-in-signature` is `True` but there are no argument type hints in the signature
     DOC107: Function `_make_sampler`: The option `--arg-type-hints-in-signature` is `True` but not all args in the signature have type hints
-    DOC103: Function `_make_sampler`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [device_ids: ].
     DOC201: Function `_make_sampler` does not have a return section in docstring
-    DOC101: Function `test_sampler_uses_requested_subset`: Docstring contains fewer arguments than in function signature.
-    DOC106: Function `test_sampler_uses_requested_subset`: The option `--arg-type-hints-in-signature` is `True` but there are no argument type hints in the signature
-    DOC107: Function `test_sampler_uses_requested_subset`: The option `--arg-type-hints-in-signature` is `True` but not all args in the signature have type hints
-    DOC103: Function `test_sampler_uses_requested_subset`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [ids: ].
 --------------------
 tests/test_flow_apply.py
     DOC101: Function `test_flow_apply_to_image`: Docstring contains fewer arguments than in function signature.
