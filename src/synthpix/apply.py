@@ -213,14 +213,12 @@ def input_check_apply_flow(
 
     if particle_positions.shape[1] == 2 and flow_field.shape[2] != 2:
         raise ValueError(
-            "Particle positions are in 2D, \
-            but the flow field is in 3D."
+            "Particle positions are in 2D, but the flow field is in 3D."
         )
 
     if particle_positions.shape[1] == 3 and flow_field.shape[2] != 3:
         raise ValueError(
-            "Particle positions are in 3D, \
-            but the flow field is in 2D."
+            "Particle positions are in 3D, but the flow field is in 2D."
         )
 
     if not isinstance(dt, int | float) or dt <= 0:
