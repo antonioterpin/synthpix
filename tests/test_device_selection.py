@@ -124,8 +124,8 @@ def test_sampler_uses_requested_subset(ids):
     Verifies that only the requested indices are included in the
     sampler's sharding mesh, ignoring other available devices.
     """
-    if max(ids) >= len(jax.devices()):
-        pytest.skip("Not enough physical devices for this parametrisation.")
+    if not all(id in [d.id for d in jax.devices()] for id in ids):
+        pytest.skip("Devices not available.")
 
     sampler = _make_sampler(device_ids=ids)
 
@@ -143,6 +143,7 @@ def test_sampler_rejects_invalid_device_ids():
     Ensures that the sampler fails early if it cannot map any of the
     provided `device_ids` to actual physical hardware.
     """
-    invalid_id = len(jax.devices())  # one past the last valid index
+    # one past the last valid index
+    invalid_id = max(d.id for d in jax.devices()) + 1
     with pytest.raises(ValueError, match="No valid device IDs provided."):
         _make_sampler(device_ids=[invalid_id])
