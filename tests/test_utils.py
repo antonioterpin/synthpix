@@ -989,7 +989,7 @@ def run_batches(
 
 def benchmark_asymptotic_throughput(
     config_path: str,
-    batches: int = 10000, # empirically, enough to measure asymptotic performance
+    batches: int = 10000,
     use_grain: bool = True,
     use_identifiable_flow: bool | None = None,
 ) -> int:
@@ -1001,7 +1001,7 @@ def benchmark_asymptotic_throughput(
 
     Args:
         config_path: string path to the YAML configuration file used in the benchmark.
-        batches: Number of batches sampled whose generation time gets measured.
+        batches: Number of batches sampled whose generation time gets measured. Dafault is set to 10000, which empirically was enough to measure asymptotic performance on our setup.
         use_grain: Whether to use the Grain-based scheduler backend.
         use_identifiable_flow: overrides the config's ``identifiable_flow``.
 

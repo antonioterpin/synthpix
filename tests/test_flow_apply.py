@@ -324,6 +324,8 @@ def test_invalid_flow_field(flow_field):
     ):
         input_check_apply_flow(particle_positions, flow_field)
 
+#NOTE: issue #232 proposes solving this.
+# We make code operational while it hasn't beeen closed yet.
 @pytest.mark.to_fix
 @pytest.mark.parametrize(
     "flow_field, particle_positions, error_msg",

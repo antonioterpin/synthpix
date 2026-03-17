@@ -1,4 +1,4 @@
-# Synthpix Configuration YAML File
+# Synthpix configuration YAML file
 # ================================
 # This is the configuration file for benchmark testing (testing throughput as images/s comparatively and absolutely).
 
@@ -28,7 +28,7 @@ noise_uniform: 0.001
 noise_gaussian_mean: 0.01
 noise_gaussian_std: 0.001
 
-# Physical Sizing
+# Physical sizing
 velocities_per_pixel: 1.0
 resolution: 1
 
