@@ -14,12 +14,12 @@ import sys
 import timeit
 import types
 from pathlib import Path
-
+import contextlib
 import jax
 import jax.numpy as jnp
 import pytest
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
-
+from synthpix.sampler.base import Sampler
 import synthpix.utils as utils_module
 from synthpix.utils import (
     bilinear_interpolate,
@@ -34,6 +34,12 @@ from synthpix.utils import (
 from tests.example_flows import get_flow_function
 
 config = load_configuration("config/testing.yaml")
+
+
+ON_UNIX = os.name == "posix"
+
+if ON_UNIX:
+    import goggles as gg
 
 REPETITIONS = config["REPETITIONS"]
 NUMBER_OF_EXECUTIONS = config["EXECUTIONS_UTILS"]
@@ -952,3 +958,96 @@ def test_get_logger_windows_fallback(monkeypatch):
     assert logging.getLogger().handlers, (
         "Expected root logger to have handlers configured"
     )
+
+
+def run_batches(
+    sampler: Sampler,
+    num_batches: int,
+) -> int:
+    """Samples num_batches batches from sampler.
+
+    For each batch, it proceeds to the next one only when computations are completed (doesn't return lazy evaluations' objects). This simulates the algorithmic requirements of using a downstream algorithm.
+
+    Args:
+        sampler: the synthpix sampler to be used
+        num_batches: the number of batches to generate
+
+    Returns:
+        The total number of image pairs produced.
+    """
+    total_pairs = 0
+    for i, batch in enumerate(sampler):
+        # to avoid jax's lazy evaluations, we use jax.Array.block_until_ready() routine on each entry of the batch.
+        batch.images1.block_until_ready()
+        batch.images2.block_until_ready()
+        batch.flow_fields.block_until_ready()
+        total_pairs += batch.images1.shape[0]
+        # stopping criterion
+        if (i + 1) >= num_batches:
+            break
+    return total_pairs
+
+def benchmark_asymptotic_throughput(
+    config_path: str,
+    batches: int = 10000,
+    use_grain: bool = True,
+    use_identifiable_flow: bool | None = None,
+) -> int:
+    """Benchmark asymptotic (with respect to number of sampler batched) throughput of the Synthetic Sampler.
+
+    This utility instantiates a SynthPix sampler from a configuration file,
+    runs a warmup batch, and then iterates over a fixed number of batches
+    while synchronizing the JAX device computations.
+
+    Args:
+        config_path: string path to the YAML configuration file used in the benchmark.
+        batches: Number of batches sampled whose generation time gets measured. Dafault is set to 10000, which empirically was enough to measure asymptotic performance on our setup.
+        use_grain: Whether to use the Grain-based scheduler backend.
+        use_identifiable_flow: overrides the config's ``identifiable_flow``.
+
+    Returns:
+        Throughput measured as image pairs per second.
+    """
+
+    # load configuration file
+    config = load_configuration(config_path)
+
+    # force specified options
+    if use_identifiable_flow is not None:
+        config["identifiable_flow"] = use_identifiable_flow
+
+    # Instantiate sampler
+    # Import here to avoid circular dependency
+    from synthpix.make import make  # noqa: PLC0415
+    sampler = make(config, use_grain_scheduler=use_grain)
+
+    # Warmup batch
+    # Trigger jax.jit compilation and grain data pipeline.
+    warmup_batch = next(sampler)
+    warmup_batch.images1.block_until_ready()
+    warmup_batch.images2.block_until_ready()
+    warmup_batch.flow_fields.block_until_ready()
+
+    # timed loop
+    timer = timeit.default_timer
+    start = timer()
+    try:
+        total_pairs = run_batches(sampler, batches)
+    finally:
+        elapsed = timer() - start # defaults to seconds
+
+        # release resources in spite of iterations
+        with contextlib.suppress(Exception):
+            # release sampler resources
+            sampler.shutdown()
+            # release logging resources
+            try:
+                if ON_UNIX:
+                    gg.finish()
+            except Exception:
+                pass
+
+    if elapsed <= 0:
+        return 0
+
+    return int(total_pairs / elapsed)

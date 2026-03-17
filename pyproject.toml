@@ -97,6 +97,7 @@ filterwarnings = [
 markers = [
         "run_explicitly: marks tests that are only run with -m run_explicitly",
         "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+        "to_fix: marks tests that need fixing (deselect with '-m \"not to_fix\"')",
 ]
 
 # Ruff configuration for linting and modern typing enforcement

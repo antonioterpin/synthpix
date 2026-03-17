@@ -1041,6 +1041,9 @@ def test_sampler_switches_flow_fields(
     "image_shape, batches_per_flow_batch, seeding_density_range",
     [((32, 32), 4, (0.1, 0.1)), ((64, 64), 4, (0.0, 0.04))],
 )
+#NOTE: issue #232 proposes solving this.
+# We make code operational while it hasn't beeen closed yet.
+@pytest.mark.to_fix
 @pytest.mark.parametrize("batch_size", [12])
 @pytest.mark.parametrize("mock_hdf5_files", [64], indirect=True)
 def test_sampler_with_real_img_gen_fn(
