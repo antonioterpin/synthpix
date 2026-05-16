@@ -10,14 +10,10 @@ from pathlib import Path
 from synthpix.hf.card import DatasetCardMeta, make_dataset_card
 from synthpix.hf.layout import inspect_local_layout
 from synthpix.hf.pull import pull_dataset
+from synthpix.hf.push import push_dataset
 from synthpix.utils import SYNTHPIX_SCOPE, get_logger
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
-
-_NOT_IMPLEMENTED = (
-    "This subcommand is not yet implemented. "
-    "Stay tuned for the upcoming push rollout."
-)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -49,9 +45,53 @@ def _build_parser() -> argparse.ArgumentParser:
     card.add_argument("--output", type=Path, default=None)
     card.add_argument("--force", action="store_true")
 
-    push = sub.add_parser("push", help="(PR3) Push a dataset to the Hub.")
-    push.add_argument("local_dir", nargs="?", default=None)
-    push.add_argument("--repo-id", default=None)
+    push = sub.add_parser("push", help="Push a dataset to the Hub.")
+    push.add_argument("local_dir", type=Path)
+    push.add_argument("repo_id")
+    push.add_argument(
+        "--public",
+        action="store_true",
+        help="Create/keep the repo as public. Requires --allow-public.",
+    )
+    push.add_argument(
+        "--allow-public",
+        action="store_true",
+        help=(
+            "Safety gate companion for --public; explicit acknowledgment "
+            "that public redistribution is permitted for this dataset."
+        ),
+    )
+    push.add_argument("--token", default=None)
+    push.add_argument("--revision", default="main")
+    push.add_argument("--commit-message", default=None)
+    push.add_argument(
+        "--no-card",
+        action="store_true",
+        help="Skip dataset-card generation even if card flags are set.",
+    )
+    push.add_argument("--card-name", default=None)
+    push.add_argument("--card-source-url", default=None)
+    push.add_argument(
+        "--card-citation",
+        default=None,
+        help="Citation text, or path to a file containing the citation.",
+    )
+    push.add_argument(
+        "--include",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="Allow-list glob; may be repeated. Overrides the default set.",
+    )
+    push.add_argument(
+        "--ignore",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="Deny-list glob; may be repeated. Overrides the default set.",
+    )
+    push.add_argument("--max-workers", type=int, default=8)
+    push.add_argument("--dry-run", action="store_true")
 
     pull = sub.add_parser("pull", help="Pull a dataset from the Hub.")
     pull.add_argument("repo_id")
@@ -218,9 +258,87 @@ def _run_pull(args: argparse.Namespace) -> int:
     return 0
 
 
-def _run_stub(name: str) -> int:
-    print(f"`synthpix-hf {name}`: {_NOT_IMPLEMENTED}", file=sys.stderr)
-    return 2
+def _build_push_card_meta(args: argparse.Namespace) -> DatasetCardMeta | None:
+    # The CLI builds card metadata only when both the source URL and the
+    # citation are provided. Partial flag sets are surfaced as a parse error
+    # by the caller before reaching this helper.
+    if args.no_card:
+        return None
+    if args.card_source_url is None and args.card_citation is None:
+        return None
+    citation = _read_citation(args.card_citation)
+    name = args.card_name or args.repo_id.split("/", 1)[-1]
+    return DatasetCardMeta(
+        name=name,
+        source_url=args.card_source_url,
+        citation=citation,
+        pretty_name=args.card_name,
+    )
+
+
+def _confirm_public_on_tty() -> bool:
+    # ``--allow-public`` is the deliberate friction. On a TTY we additionally
+    # require the user to type ``yes`` so that copy/pasted commands don't
+    # silently flip a private dataset to public. Pipelines (non-TTY) are
+    # trusted to mean what they say.
+    if not sys.stdin.isatty():
+        return True
+    try:
+        answer = input("Refusing to push public unless you type 'yes': ")
+    except EOFError:
+        return False
+    return answer.strip() == "yes"
+
+
+def _run_push(args: argparse.Namespace) -> int:
+    if args.public and not args.allow_public:
+        print(
+            "--public requires --allow-public (this is a safety gate; "
+            "see push_dataset docstring)",
+            file=sys.stderr,
+        )
+        return 2
+
+    card_partial = (args.card_source_url is None) ^ (args.card_citation is None)
+    if card_partial and not args.no_card:
+        print(
+            "--card-source-url and --card-citation must be provided "
+            "together; pass --no-card to skip card generation.",
+            file=sys.stderr,
+        )
+        return 2
+
+    if args.public and not _confirm_public_on_tty():
+        print("Aborted: public push not confirmed.", file=sys.stderr)
+        return 1
+
+    card_meta = _build_push_card_meta(args)
+    kwargs: dict = {
+        "private": not args.public,
+        "allow_public": args.allow_public,
+        "token": args.token,
+        "revision": args.revision,
+        "commit_message": args.commit_message,
+        "card_meta": card_meta,
+        "max_workers": args.max_workers,
+        "dry_run": args.dry_run,
+    }
+    if args.include is not None:
+        kwargs["include_globs"] = tuple(args.include)
+    if args.ignore is not None:
+        kwargs["ignore_globs"] = tuple(args.ignore)
+
+    try:
+        sha = push_dataset(args.local_dir, args.repo_id, **kwargs)
+    except Exception as exc:
+        print(f"synthpix-hf push: {exc}", file=sys.stderr)
+        return 1
+
+    if args.dry_run:
+        print(f"DRY RUN: would push {args.local_dir} to {args.repo_id}")
+    else:
+        print(f"Pushed {args.repo_id}@{sha}")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -240,7 +358,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "pull":
         return _run_pull(args)
     if args.command == "push":
-        return _run_stub(args.command)
+        return _run_push(args)
 
     # ``add_subparsers(required=True)`` makes this unreachable; ``parser.error``
     # exits in any case but mypy/basedpyright need a concrete return.
