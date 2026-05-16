@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from synthpix.hf import cli
 
 
 def _populate(tmp_path: Path) -> None:
-    """Drop a single ``.mat`` file so ``inspect_local_layout`` succeeds."""
+    # Drop a single ``.mat`` file so ``inspect_local_layout`` succeeds.
     train = tmp_path / "train"
     train.mkdir()
     (train / "flow.mat").write_bytes(b"x" * 8)
@@ -188,12 +186,109 @@ def test_card_subcommand_respects_output(tmp_path: Path):
     assert not (tmp_path / "README.md").exists()
 
 
-@pytest.mark.parametrize("subcommand", ["push", "pull"])
-def test_stub_subcommands_report_not_implemented(
-    subcommand: str, capsys
-):
-    rc = cli.main([subcommand])
+def test_push_subcommand_reports_not_implemented(capsys):
+    rc = cli.main(["push"])
 
     captured = capsys.readouterr()
     assert rc != 0
     assert "not yet implemented" in (captured.out + captured.err).lower()
+
+
+def test_cli_pull_invokes_pull_dataset(monkeypatch, tmp_path: Path):
+    captured: dict = {}
+
+    def _fake(repo_id, local_dir, **kwargs):
+        captured["repo_id"] = repo_id
+        captured["local_dir"] = local_dir
+        captured.update(kwargs)
+        Path(local_dir).mkdir(parents=True, exist_ok=True)
+        return Path(local_dir)
+
+    monkeypatch.setattr(cli, "pull_dataset", _fake)
+
+    rc = cli.main(
+        [
+            "pull",
+            "user/repo",
+            str(tmp_path / "data"),
+            "--revision",
+            "v1",
+            "--splits",
+            "train,val",
+        ]
+    )
+
+    assert rc == 0
+    assert captured["repo_id"] == "user/repo"
+    assert captured["local_dir"] == tmp_path / "data"
+    assert captured["revision"] == "v1"
+    assert captured["splits"] == ("train", "val")
+    assert captured["token"] is None
+
+
+def test_cli_pull_multiple_include_flags(monkeypatch, tmp_path: Path):
+    captured: dict = {}
+
+    def _fake(repo_id, local_dir, **kwargs):
+        captured.update(kwargs)
+        Path(local_dir).mkdir(parents=True, exist_ok=True)
+        return Path(local_dir)
+
+    monkeypatch.setattr(cli, "pull_dataset", _fake)
+
+    rc = cli.main(
+        [
+            "pull",
+            "user/repo",
+            str(tmp_path / "data"),
+            "--include",
+            "train/**",
+            "--include",
+            "val/**",
+        ]
+    )
+
+    assert rc == 0
+    assert captured["include_globs"] == ("train/**", "val/**")
+
+
+def test_cli_pull_exit_nonzero_on_runtime_error(
+    monkeypatch, tmp_path: Path, capsys
+):
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("boom!")
+
+    monkeypatch.setattr(cli, "pull_dataset", _boom)
+
+    rc = cli.main(["pull", "user/repo", str(tmp_path / "data")])
+
+    captured = capsys.readouterr()
+    assert rc != 0
+    assert "boom!" in captured.err
+
+
+def test_cli_pull_token_not_logged(
+    monkeypatch, tmp_path: Path, capsys, caplog
+):
+    def _fake(repo_id, local_dir, **_kwargs):
+        Path(local_dir).mkdir(parents=True, exist_ok=True)
+        return Path(local_dir)
+
+    monkeypatch.setattr(cli, "pull_dataset", _fake)
+
+    rc = cli.main(
+        [
+            "pull",
+            "user/repo",
+            str(tmp_path / "data"),
+            "--token",
+            "hf_secret",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "hf_secret" not in captured.out
+    assert "hf_secret" not in captured.err
+    for record in caplog.records:
+        assert "hf_secret" not in record.getMessage()
