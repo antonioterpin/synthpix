@@ -213,6 +213,10 @@ Note: `min_speed_x/y` and `max_speed_x/y` are not absolute cutoffs, but define t
 
 These bounds are used to estimate the maximum particle displacement over time (`dt`). A larger intermediate image is generated accordingly, and the final image pair is cropped from this larger region. This ensures that particles entering the visible frame (image 2) have realistic origins — possibly outside the region of interest in image 1 — making particle "appearance" at the boundaries realistic.
 
+## Hugging Face Hub integration 🤗
+
+`SynthPix` ships an optional integration to push and pull built PIV datasets through a Hugging Face Hub dataset repository, with the on-disk layout preserved byte-for-byte. See the [Hugging Face Hub integration guide](docs/hf_integration.md) for installation, authentication, the CLI / Python / build-script workflows, and the license-aware safety gate that defaults to private hosting.
+
 ## Contributing 🤗
 Contributions are more than welcome! 🙏 Please check out our [how to contribute page](./CONTRIBUTING.md), and feel free to open an issue for problems and feature requests⚠️.
 
