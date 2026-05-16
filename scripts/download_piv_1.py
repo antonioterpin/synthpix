@@ -3,6 +3,12 @@
 This script provides a full end-to-end pipeline for preparing the
 PIV Dataset (Class 1) from the public Google Drive repositories.
 
+Optional flags ``--push-to``, ``--push-private`` (default),
+``--push-public``, ``--allow-public``, ``--push-token``, and
+``--no-push-card`` push the resulting tree to a Hugging Face Hub dataset
+repo via :func:`synthpix.hf.push_dataset` when ``--push-to`` is set.
+Public pushes require the explicit ``--allow-public`` safety gate.
+
 ==============================================================
  PIV Dataset Class 1 Builder
 ==============================================================
@@ -448,6 +454,75 @@ def perform_split(packed_root: Path, split_root: Path) -> None:
     print(f"Split datasets saved under: {split_root}")
 
 
+_PUSH_SOURCE_URL = "https://github.com/shengzesnail/PIV_dataset"
+_PUSH_CITATION = (
+    "Cai, S., Zhou, S., Xu, C., Gao, Q. (2019). "
+    "Dense motion estimation of particle images via a convolutional "
+    "neural network. Exp Fluids 60, 73.\n\n"
+    "@article{cai2019dense,\n"
+    "  title={Dense motion estimation of particle images via "
+    "a convolutional neural network},\n"
+    "  author={Cai, Shengze and Zhou, Shichao and Xu, Chuanqi "
+    "and Gao, Qi},\n"
+    "  journal={Experiments in Fluids},\n"
+    "  volume={60},\n"
+    "  number={4},\n"
+    "  pages={73},\n"
+    "  year={2019},\n"
+    "  publisher={Springer}\n"
+    "}"
+)
+
+
+def _default_card_meta(repo_id: str) -> "object":
+    """Return a default ``DatasetCardMeta`` for the class-1 dataset.
+
+    The import is deferred so the rest of this script keeps working
+    without the ``[hf]`` extra installed.
+
+    Args:
+        repo_id: ``<owner>/<name>`` identifier on the Hub; the trailing
+            name becomes the card's ``name`` field.
+
+    Returns:
+        DatasetCardMeta: A populated card metadata object.
+    """
+    from synthpix.hf import DatasetCardMeta  # noqa: PLC0415
+
+    name = repo_id.split("/", 1)[-1]
+    return DatasetCardMeta(
+        name=name,
+        source_url=_PUSH_SOURCE_URL,
+        citation=_PUSH_CITATION,
+        pretty_name=name,
+        tags=("PIV", "synthetic", "optical-flow", "class-1"),
+    )
+
+
+def _maybe_push(args: argparse.Namespace, out_dir_path: Path) -> None:
+    """Optionally push ``out_dir_path`` to the Hub based on CLI flags.
+
+    Args:
+        args: Parsed CLI namespace; ``args.push_to`` controls activation.
+        out_dir_path: Local directory uploaded to the Hub.
+    """
+    if not getattr(args, "push_to", None):
+        return
+
+    from synthpix.hf import push_dataset  # noqa: PLC0415
+
+    card_meta = None if args.no_push_card else _default_card_meta(args.push_to)
+    sha = push_dataset(
+        local_dir=out_dir_path,
+        repo_id=args.push_to,
+        private=not args.push_public,
+        allow_public=args.allow_public,
+        token=args.push_token,
+        card_meta=card_meta,
+    )
+    print(sha)
+
+
 def main(out_dir: str, target_shape: str) -> None:
     """Main function to orchestrate the dataset preparation workflow.
 
@@ -516,18 +591,70 @@ if __name__ == "__main__":
         default="256x256",
         help="Target shape (HxW) for resizing images and flow, e.g., '256x256'",
     )
+    parser.add_argument(
+        "--push-to",
+        type=str,
+        default=None,
+        help=(
+            "Optional Hugging Face Hub dataset repo id "
+            "(<owner>/<name>) to push the built dataset to."
+        ),
+    )
+    parser.add_argument(
+        "--push-private",
+        action="store_true",
+        default=True,
+        help="Push as a private repo (default).",
+    )
+    parser.add_argument(
+        "--push-public",
+        action="store_true",
+        default=False,
+        help=(
+            "Push as a public repo. Requires --allow-public. "
+            "Class-1 sources are research-only; do not redistribute "
+            "publicly without explicit permission."
+        ),
+    )
+    parser.add_argument(
+        "--allow-public",
+        action="store_true",
+        default=False,
+        help="Safety gate companion for --push-public.",
+    )
+    parser.add_argument(
+        "--push-token",
+        type=str,
+        default=None,
+        help="Explicit HF token; falls back to HF_TOKEN/cache.",
+    )
+    parser.add_argument(
+        "--no-push-card",
+        action="store_true",
+        default=False,
+        help="Skip dataset-card generation on push.",
+    )
     args = parser.parse_args()
+
+    if args.push_public and not args.allow_public:
+        print(
+            "--push-public requires --allow-public (safety gate).",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
     try:
         split_ratios = list(map(int, args.split_ratio.split("/")))
         if len(split_ratios) != 3 or sum(split_ratios) != 100:
             raise ValueError
-        out_path_split = Path(args.out_dir) / "splits"
-        fetch_splits(out_path_split, args.split_seed, split_ratios)
-        main(args.out_dir, args.target_shape)
     except Exception as e:
         print(
             f"Split ratio is in the wrong format: {args.split_ratio}. "
             f"Use '80/10/10' format summing to 100. Error: {e}"
         )
         sys.exit(1)
+
+    out_path_split = Path(args.out_dir) / "splits"
+    fetch_splits(out_path_split, args.split_seed, split_ratios)
+    main(args.out_dir, args.target_shape)
+    _maybe_push(args, Path(args.out_dir))
