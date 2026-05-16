@@ -72,6 +72,12 @@ download = [
     "scipy>=1.10.0",
     "tensorflow-cpu>=2.15.0",
 ]
+hf = [
+    "huggingface_hub[cli,hf_transfer]>=0.27",
+]
+
+[project.scripts]
+synthpix-hf = "synthpix.hf.cli:main"
 
 
 # Pytest configuration
