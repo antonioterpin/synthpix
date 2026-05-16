@@ -10,6 +10,8 @@ import grain.python as grain
 
 logger = logging.getLogger(__name__)
 
+_HF_SCHEME = "hf://"
+
 
 class FileDataSource(grain.RandomAccessDataSource, ABC):
     """Abstract base class for file-based datasources.
@@ -27,6 +29,8 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
 
         Raises:
             ValueError: If dataset_path is invalid or no files are found.
+            ImportError: If an ``hf://`` URI is passed but the ``[hf]`` extra
+                (and thus the resolver / ``huggingface_hub``) is missing.
         """
         self._file_list = []
 
@@ -44,7 +48,24 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
             )
 
         for file_path in dataset_path:
-            if os.path.isdir(file_path):
+            if file_path.startswith(_HF_SCHEME):
+                try:
+                    # Lazy import: only loaded when an hf:// URI is seen,
+                    # so the [hf] extra is not required for local datasets.
+                    from synthpix.data_sources import (  # noqa: PLC0415
+                        hf_resolver,
+                    )
+                except ImportError as exc:
+                    raise ImportError(
+                        "hf:// paths require the [hf] extra. "
+                        "Install with: pip install synthpix[hf]"
+                    ) from exc
+                resolved = hf_resolver.resolve(file_path)
+                logger.debug(
+                    f"Resolved hf:// URI {file_path} to {len(resolved)} files"
+                )
+                self._file_list.extend(resolved)
+            elif os.path.isdir(file_path):
                 logger.debug(f"Searching for files in {file_path}")
                 pattern = os.path.join(file_path, self._file_pattern)
                 # Recursive glob search
