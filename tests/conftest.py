@@ -217,6 +217,19 @@ def mock_mat_files(tmp_path, mat_test_dims, request):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# CLI options
+# ──────────────────────────────────────────────────────────────────────────────
+def pytest_addoption(parser):
+    # Register custom command-line options for the test suite.
+    parser.addoption(
+        "--run-hf-live",
+        action="store_true",
+        default=False,
+        help="Run the gated Hugging Face live tests (network access).",
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Collection modifier
 # ──────────────────────────────────────────────────────────────────────────────
 def pytest_collection_modifyitems(config, items):
