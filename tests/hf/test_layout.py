@@ -59,9 +59,9 @@ def test_inspect_counts_mat_files_per_split(synthetic_tree: Path):
 def test_inspect_maps_reynolds_subdirs(synthetic_tree: Path):
     summary = inspect_local_layout(synthetic_tree)
 
-    assert summary.reynolds_by_split["test"] == ["DNS_turbulence", "cylinder"]
+    assert summary.subdirs_by_split["test"] == ["DNS_turbulence", "cylinder"]
     # Splits without ``Re*``-style subdirs get an empty list.
-    assert summary.reynolds_by_split["train"] == []
+    assert summary.subdirs_by_split["train"] == []
 
 
 def test_inspect_counts_extras_and_skips_dotfiles(synthetic_tree: Path):
@@ -79,6 +79,22 @@ def test_inspect_tolerates_missing_split(tmp_path: Path):
 
     assert "tune" not in summary.splits
     assert summary.splits == {"train": 1}
+
+
+def test_inspect_skips_files_in_hidden_directories(tmp_path: Path):
+    # Files nested under any hidden ancestor must not be counted.
+    _make_mat(tmp_path / "train" / "real.mat")
+    _make_mat(tmp_path / "train" / ".cache" / "leaked.mat")
+    _make_mat(tmp_path / "train" / "scene" / ".tmp" / "still_leaked.mat")
+    (tmp_path / "train" / "scene" / ".tmp" / "junk.txt").write_text("nope")
+
+    summary = inspect_local_layout(tmp_path)
+
+    assert summary.splits["train"] == 1
+    assert summary.mat_files == 1
+    assert summary.extra_files == 0
+    # ``.cache`` (hidden dir) must not surface as a subdir name.
+    assert ".cache" not in summary.subdirs_by_split["train"]
 
 
 def test_layout_summary_is_frozen(synthetic_tree: Path):

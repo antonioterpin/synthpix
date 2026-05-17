@@ -21,9 +21,7 @@ _NOT_IMPLEMENTED = (
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="synthpix-hf",
-        description=(
-            "Tooling for synthpix-hosted Hugging Face PIV datasets."
-        ),
+        description=("Tooling for synthpix-hosted Hugging Face PIV datasets."),
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -32,7 +30,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     card.add_argument("local_dir", type=Path)
     card.add_argument("--source-url", required=True)
-    card.add_argument("--citation", required=True)
+    citation_group = card.add_mutually_exclusive_group(required=True)
+    citation_group.add_argument(
+        "--citation",
+        help="Literal citation text. Mutually exclusive with --citation-file.",
+    )
+    citation_group.add_argument(
+        "--citation-file",
+        type=Path,
+        help="Path to a file whose contents are used as the citation.",
+    )
     card.add_argument("--name", default=None)
     card.add_argument("--pretty-name", default=None)
     card.add_argument("--license", default="other")
@@ -51,12 +58,19 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _read_citation(value: str) -> str:
-    """Return the citation contents, reading from disk if ``value`` is a path."""
-    candidate = Path(value)
-    if candidate.is_file():
-        return candidate.read_text()
-    return value
+def _resolve_citation(args: argparse.Namespace) -> str:
+    """Return the citation contents from the chosen mutually exclusive flag.
+
+    Args:
+        args: Parsed ``argparse`` namespace from the ``card`` subparser.
+
+    Returns:
+        str: Either the literal ``--citation`` value or the contents of the
+            file pointed at by ``--citation-file``.
+    """
+    if args.citation_file is not None:
+        return args.citation_file.read_text()
+    return args.citation
 
 
 def _run_card(args: argparse.Namespace) -> int:
@@ -71,7 +85,7 @@ def _run_card(args: argparse.Namespace) -> int:
         return 1
 
     layout = inspect_local_layout(local_dir)
-    citation = _read_citation(args.citation)
+    citation = _resolve_citation(args)
     name = args.name or local_dir.name
     meta = DatasetCardMeta(
         name=name,
@@ -83,6 +97,7 @@ def _run_card(args: argparse.Namespace) -> int:
     )
 
     card = make_dataset_card(meta, layout)
+    output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(card)
     logger.info(f"Wrote dataset card to {output}")
     return 0
@@ -110,7 +125,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command in {"push", "pull"}:
         return _run_stub(args.command)
 
+    # ``add_subparsers(required=True)`` makes this unreachable; ``parser.error``
+    # exits in any case but mypy/basedpyright need a concrete return.
     parser.error(f"Unknown command: {args.command}")
+    return 2
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -15,7 +15,7 @@ from synthpix.hf.layout import LayoutSummary
 def _fake_layout() -> LayoutSummary:
     return LayoutSummary(
         splits={"train": 10, "val": 2, "test": 4},
-        reynolds_by_split={
+        subdirs_by_split={
             "train": [],
             "val": [],
             "test": ["DNS_turbulence", "cylinder"],
@@ -148,10 +148,49 @@ def test_card_meta_handles_commit_failure(monkeypatch):
     assert "Example PIV" in card
 
 
+def test_frontmatter_safely_encodes_special_characters():
+    # ``pretty_name`` with quotes/backslashes must produce parseable YAML.
+    meta = DatasetCardMeta(
+        name="example-piv",
+        source_url="https://example.org/data",
+        citation="cite",
+        pretty_name='dangerous: "value"\nwith \\ break',
+        tags=('with "quote"', "with\\backslash"),
+        synthpix_version="0.1.2",
+        synthpix_commit="abc1234",
+    )
+
+    card = make_dataset_card(meta, _fake_layout())
+    fm = _parse_frontmatter(card)
+
+    assert fm["pretty_name"] == 'dangerous: "value"\nwith \\ break'
+    assert 'with "quote"' in fm["tags"]
+    assert "with\\backslash" in fm["tags"]
+
+
+def test_citation_with_triple_backticks_uses_longer_fence():
+    # Citations that embed ``` must not close the surrounding fence.
+    embedded = "before\n```\ncode block inside citation\n```\nafter"
+    meta = DatasetCardMeta(
+        name="example-piv",
+        source_url="https://example.org/data",
+        citation=embedded,
+        pretty_name="Example PIV",
+        synthpix_version="0.1.2",
+        synthpix_commit="abc",
+    )
+
+    card = make_dataset_card(meta, _fake_layout())
+
+    # Whole citation appears verbatim and is bracketed by a >=4-tick fence.
+    assert embedded in card
+    assert "````" in card
+
+
 def test_card_handles_empty_reynolds_map():
     layout = LayoutSummary(
         splits={"train": 1},
-        reynolds_by_split={"train": []},
+        subdirs_by_split={"train": []},
         total_bytes=64,
         mat_files=1,
         extra_files=0,

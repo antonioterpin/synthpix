@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import io
+import re
 import subprocess  # nosec B404 - used for read-only `git rev-parse`
 from dataclasses import dataclass, field
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+
+from ruamel.yaml import YAML
 
 from synthpix.hf.layout import LayoutSummary
 
@@ -46,7 +51,12 @@ class DatasetCardMeta:
 
 
 def _lookup_synthpix_version() -> str | None:
-    """Look up the installed ``synthpix`` version, if any."""
+    """Look up the installed ``synthpix`` version, if any.
+
+    Returns:
+        str | None: The package version from ``importlib.metadata``, or
+            ``None`` when ``synthpix`` is not installed.
+    """
     try:
         return version("synthpix")
     except PackageNotFoundError:
@@ -54,10 +64,23 @@ def _lookup_synthpix_version() -> str | None:
 
 
 def _lookup_git_commit() -> str | None:
-    """Return the current git commit, or ``None`` if unavailable."""
+    """Return the current synthpix-source git commit, if available.
+
+    The commit is resolved relative to the installed ``synthpix`` package
+    location (``Path(__file__).parent``) rather than the process working
+    directory, so the recorded value always describes the synthpix tree the
+    card was generated against — never an unrelated user project that happens
+    to be the CWD at invocation time. When synthpix is installed from a wheel
+    (no surrounding ``.git``), this returns ``None``.
+
+    Returns:
+        str | None: The full commit SHA, or ``None`` when ``git`` is missing
+            or the synthpix package is not inside a git checkout.
+    """
     try:
         output = subprocess.check_output(  # nosec B603 B607
             ["git", "rev-parse", "HEAD"],
+            cwd=str(Path(__file__).resolve().parent),
             stderr=subprocess.DEVNULL,
         )
     except (subprocess.CalledProcessError, FileNotFoundError, OSError):
@@ -66,7 +89,15 @@ def _lookup_git_commit() -> str | None:
 
 
 def _resolved_meta(meta: DatasetCardMeta) -> DatasetCardMeta:
-    """Return a copy of ``meta`` with auto-fillable fields populated."""
+    """Return a copy of ``meta`` with auto-fillable fields populated.
+
+    Args:
+        meta: Caller-supplied metadata; ``synthpix_version`` /
+            ``synthpix_commit`` are filled in when left as ``None``.
+
+    Returns:
+        DatasetCardMeta: A new instance with provenance fields resolved.
+    """
     synthpix_version = meta.synthpix_version
     if synthpix_version is None:
         synthpix_version = _lookup_synthpix_version()
@@ -88,22 +119,32 @@ def _resolved_meta(meta: DatasetCardMeta) -> DatasetCardMeta:
     )
 
 
-def _format_tags(tags: tuple[str, ...]) -> str:
-    quoted = ", ".join(f"\"{tag}\"" for tag in tags)
-    return f"[{quoted}]"
-
-
 def _frontmatter(meta: DatasetCardMeta) -> str:
+    """Serialize the YAML frontmatter block via ``ruamel.yaml``.
+
+    Using a real YAML serializer (instead of string interpolation) means
+    embedded quotes, backslashes, colons or newlines in ``pretty_name`` or
+    ``tags`` cannot produce malformed frontmatter that fails to parse on the
+    Hub.
+
+    Args:
+        meta: Resolved card metadata to serialize.
+
+    Returns:
+        str: A ``---``-delimited YAML block, no trailing newline.
+    """
     pretty = meta.pretty_name or meta.name
-    lines = [
-        "---",
-        f"license: {meta.license}",
-        f"license_name: {meta.license_name}",
-        f"pretty_name: \"{pretty}\"",
-        f"tags: {_format_tags(meta.tags)}",
-        "---",
-    ]
-    return "\n".join(lines)
+    payload = {
+        "license": meta.license,
+        "license_name": meta.license_name,
+        "pretty_name": pretty,
+        "tags": list(meta.tags),
+    }
+    yaml = YAML(typ="safe", pure=True)
+    yaml.default_flow_style = False
+    buf = io.StringIO()
+    yaml.dump(payload, buf)
+    return "---\n" + buf.getvalue().rstrip("\n") + "\n---"
 
 
 def _split_table(layout: LayoutSummary) -> str:
@@ -119,7 +160,7 @@ def _split_table(layout: LayoutSummary) -> str:
 def _reynolds_section(layout: LayoutSummary) -> str:
     populated = {
         split: names
-        for split, names in layout.reynolds_by_split.items()
+        for split, names in layout.subdirs_by_split.items()
         if names
     }
     if not populated:
@@ -131,6 +172,26 @@ def _reynolds_section(layout: LayoutSummary) -> str:
     for split, names in populated.items():
         lines.append(f"| {split} | {', '.join(names)} |")
     return "\n".join(lines)
+
+
+def _fence_for(text: str) -> str:
+    """Return a backtick fence longer than the longest run inside ``text``.
+
+    Citation strings can legitimately contain triple-backtick code blocks; a
+    naive fixed ```` ``` ```` fence around the citation would terminate
+    prematurely. We scan for the longest run of backticks in the input and
+    pick a fence one longer (minimum length 3).
+
+    Args:
+        text: Content that will sit between the returned fence markers.
+
+    Returns:
+        str: A backtick string of length ``max(3, longest_run + 1)``.
+    """
+    longest = max(
+        (len(m.group(0)) for m in re.finditer(r"`+", text)), default=0
+    )
+    return "`" * max(3, longest + 1)
 
 
 def _provenance(meta: DatasetCardMeta) -> str:
@@ -145,9 +206,7 @@ def _provenance(meta: DatasetCardMeta) -> str:
     return f"\nGenerated with {joined}.\n"
 
 
-def make_dataset_card(
-    meta: DatasetCardMeta, layout: LayoutSummary
-) -> str:
+def make_dataset_card(meta: DatasetCardMeta, layout: LayoutSummary) -> str:
     """Render a Hugging Face dataset card README for ``meta`` and ``layout``.
 
     Args:
@@ -161,6 +220,7 @@ def make_dataset_card(
     """
     resolved = _resolved_meta(meta)
     pretty = resolved.pretty_name or resolved.name
+    fence = _fence_for(resolved.citation)
 
     sections = [
         _frontmatter(resolved),
@@ -171,9 +231,9 @@ def make_dataset_card(
         "",
         "## Citation",
         "",
-        "```",
+        fence,
         resolved.citation,
-        "```",
+        fence,
         "",
         "## License",
         "",

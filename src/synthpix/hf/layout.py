@@ -12,32 +12,58 @@ _SPLITS = ("train", "val", "test", "tune")
 class LayoutSummary:
     """Summary of a local dataset directory layout.
 
+    The dataclass is declared ``frozen=True``, which prevents attribute
+    reassignment, but the nested ``dict`` / ``list`` members are themselves
+    mutable in place. Callers that share a ``LayoutSummary`` instance across
+    threads or scopes must treat the inner containers as read-only.
+
     Attributes:
         splits: ``.mat`` file count per split that is present on disk.
-        reynolds_by_split: Sorted unique names of immediate subdirectories
-            grouped by split (typically Reynolds-number or scenario folders).
+        subdirs_by_split: Sorted unique names of immediate subdirectories
+            grouped by split (Reynolds-number folders for class-2, scenario
+            names like ``DNS_turbulence``/``cylinder`` for class-1).
         total_bytes: Sum of the size of every regular file under ``root``.
         mat_files: Number of ``.mat`` files across all splits.
-        extra_files: Number of non-``.mat`` regular files (dotfiles excluded).
+        extra_files: Number of non-``.mat`` regular files (excludes hidden).
     """
 
     splits: dict[str, int] = field(default_factory=dict)
-    reynolds_by_split: dict[str, list[str]] = field(default_factory=dict)
+    subdirs_by_split: dict[str, list[str]] = field(default_factory=dict)
     total_bytes: int = 0
     mat_files: int = 0
     extra_files: int = 0
 
 
-def _is_hidden(path: Path) -> bool:
-    return path.name.startswith(".")
+def _has_hidden_component(path: Path, root: Path) -> bool:
+    """Return whether ``path`` lies inside any hidden directory under ``root``.
 
-
-def _scan_split(split_dir: Path) -> tuple[int, list[str], int, int, int]:
-    """Walk a split directory and gather counts.
+    Args:
+        path: Candidate path to test.
+        root: Base path; only components below ``root`` are considered.
 
     Returns:
-        tuple: ``(mat_count, reynolds_subdirs, extra_count, total_bytes,
-            visited_files)``.
+        bool: ``True`` if any component of ``path`` (relative to ``root``)
+            starts with ``.``.
+    """
+    try:
+        rel = path.relative_to(root)
+    except ValueError:
+        rel = path
+    return any(part.startswith(".") for part in rel.parts)
+
+
+def _scan_split(split_dir: Path) -> tuple[int, list[str], int, int]:
+    """Walk a split directory and gather counts.
+
+    Hidden entries are skipped at every depth: a file like
+    ``train/scene/.cache/x.mat`` is treated as hidden because one of its
+    ancestors starts with ``.``, not just files whose own name is dotted.
+
+    Args:
+        split_dir: Directory for a single split (``train``/``val``/...).
+
+    Returns:
+        tuple: ``(mat_count, subdir_names, extra_count, total_bytes)``.
     """
     mat_count = 0
     extra_count = 0
@@ -45,12 +71,14 @@ def _scan_split(split_dir: Path) -> tuple[int, list[str], int, int, int]:
     subdir_names: set[str] = set()
 
     for entry in split_dir.iterdir():
-        if _is_hidden(entry):
+        if entry.name.startswith("."):
             continue
         if entry.is_dir():
             subdir_names.add(entry.name)
             for nested in entry.rglob("*"):
-                if _is_hidden(nested) or not nested.is_file():
+                if not nested.is_file():
+                    continue
+                if _has_hidden_component(nested, split_dir):
                     continue
                 total_bytes += nested.stat().st_size
                 if nested.suffix == ".mat":
@@ -64,8 +92,7 @@ def _scan_split(split_dir: Path) -> tuple[int, list[str], int, int, int]:
             else:
                 extra_count += 1
 
-    reynolds = sorted(subdir_names)
-    return mat_count, reynolds, extra_count, total_bytes, 0
+    return mat_count, sorted(subdir_names), extra_count, total_bytes
 
 
 def inspect_local_layout(root: Path) -> LayoutSummary:
@@ -89,7 +116,7 @@ def inspect_local_layout(root: Path) -> LayoutSummary:
         raise NotADirectoryError(f"Dataset root is not a directory: {root}")
 
     splits: dict[str, int] = {}
-    reynolds_by_split: dict[str, list[str]] = {}
+    subdirs_by_split: dict[str, list[str]] = {}
     total_bytes = 0
     mat_files = 0
     extra_files = 0
@@ -98,18 +125,16 @@ def inspect_local_layout(root: Path) -> LayoutSummary:
         split_dir = root / split
         if not split_dir.is_dir():
             continue
-        mat_count, reynolds, extra_count, split_bytes, _ = _scan_split(
-            split_dir
-        )
+        mat_count, subdirs, extra_count, split_bytes = _scan_split(split_dir)
         splits[split] = mat_count
-        reynolds_by_split[split] = reynolds
+        subdirs_by_split[split] = subdirs
         mat_files += mat_count
         extra_files += extra_count
         total_bytes += split_bytes
 
     return LayoutSummary(
         splits=splits,
-        reynolds_by_split=reynolds_by_split,
+        subdirs_by_split=subdirs_by_split,
         total_bytes=total_bytes,
         mat_files=mat_files,
         extra_files=extra_files,
