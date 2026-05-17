@@ -70,7 +70,7 @@ There are three ways in, ordered from "quickest" to "most flexible".
 ### From the CLI
 
 ```bash
-# Preview what would be uploaded; safe to run without a real token resolved.
+# Preview what would be uploaded.
 uv run synthpix-hf push ./piv_dataset_class1_256 user/piv-dataset-class1-256 \
     --dry-run
 
@@ -79,8 +79,11 @@ uv run synthpix-hf push ./piv_dataset_class1_256 user/piv-dataset-class1-256
 ```
 
 A dry run lists which files would be added and which already exist on the
-remote. The first dry-run against a repo that does not exist yet treats every
-local file as new — that is expected and not an error.
+remote. It still contacts the Hub (via `HfApi.list_repo_files`) to compute
+the diff, so you do need a resolved token whenever the repo is private; for
+a public repo or one that does not exist yet, no token is required. The
+first dry-run against a non-existent repo treats every local file as new —
+that is expected and not an error.
 
 To create a public repo you must opt in twice and confirm on the TTY:
 
@@ -365,10 +368,14 @@ permission to redistribute before flipping it.
 uv pip list | grep hf-transfer
 ```
 
-A missing wheel logs a one-line warning the first time `push_dataset` /
+A missing wheel logs a one-line warning *every time* `push_dataset` or
 `pull_dataset` runs; install the `[hf]` extra to pick it up. Network and
-remote shard layout also matter; both endpoints fan out across
-`max_workers` (default 8) which you can raise on a fast link.
+remote shard layout also matter. `max_workers` (default 8) controls the
+download fan-out on `pull_dataset` and the batched-commit fan-out on
+`push_dataset` when the tree is large enough to route through
+`upload_large_folder`; for a single-commit `upload_folder` push (smaller
+trees) `huggingface_hub` exposes no parallelism knob in the supported
+1.x releases, so `max_workers` is a no-op on that path.
 
 **Interrupted upload or download** — both `push_dataset` and `pull_dataset`
 are idempotent and resumable. Rerun the same command; nothing is wiped and
