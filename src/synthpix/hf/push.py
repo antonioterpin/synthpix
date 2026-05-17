@@ -303,6 +303,11 @@ def push_dataset(
         exist_ok=True,
     )
 
+    # ``HfApi.upload_folder`` has no parallelism knob in huggingface_hub
+    # 1.x (the old ``num_workers`` kwarg was removed and never existed on
+    # this API). ``max_workers`` is kept on the public signature for API
+    # stability but is a no-op here; passing it to ``upload_folder`` would
+    # raise ``TypeError`` against the real Hub.
     with enable_hf_transfer():
         commit_info = api.upload_folder(
             repo_id=repo_id,
@@ -312,13 +317,17 @@ def push_dataset(
             commit_message=commit_message or "Upload via synthpix-hf",
             allow_patterns=list(include_globs),
             ignore_patterns=list(ignore_globs),
-            num_workers=max_workers,
         )
 
-    if isinstance(commit_info, str):
-        commit_sha = commit_info
+    # In huggingface_hub 1.x ``CommitInfo`` subclasses ``str`` and its
+    # string value is the *commit URL*, not the sha. Prefer the explicit
+    # ``oid`` attribute; only fall back to the string form when it is a
+    # plain ``str`` with no ``oid``.
+    oid = getattr(commit_info, "oid", None)
+    if oid:
+        commit_sha = oid
     else:
-        commit_sha = getattr(commit_info, "oid", None) or str(commit_info)
+        commit_sha = str(commit_info)
 
     uploaded = _filter_local_files(local_path, include_globs, ignore_globs)
     logger.info(f"Pushed {repo_id}@{commit_sha} with {len(uploaded)} files")

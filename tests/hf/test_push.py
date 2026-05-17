@@ -8,7 +8,9 @@ replaced with a stand-in that records the kwargs passed to
 from __future__ import annotations
 
 import importlib
+import sys
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -54,15 +56,15 @@ class _FakeHfApi:
 class _FakeHfApiCollector:
     # Module-level shared list so tests can find the instance that
     # ``push_dataset`` constructed.
-    _INSTANCES: list[_FakeHfApi] = []
+    _INSTANCES: ClassVar[list[_FakeHfApi]] = []
 
 
-class _FakeRepoNotFound(Exception):
+class _FakeRepoNotFoundError(Exception):
     pass
 
 
 class _FakeErrorsModule:
-    RepositoryNotFoundError = _FakeRepoNotFound
+    RepositoryNotFoundError = _FakeRepoNotFoundError
 
 
 class _FakeHub:
@@ -102,6 +104,72 @@ def _populate(local_dir: Path) -> None:
     (train / "flow.mat").write_bytes(b"\x00" * 16)
 
 
+def _populate_piv_tree(root: Path) -> None:
+    """Build a tree mirroring scripts/download_piv_1.py's output layout.
+
+    Splits at ``{train,val,test,tune}/<scenario>/Re####/*.mat`` plus a
+    ``splits/`` dir, a top-level README.md, and the ``raw_class1/`` /
+    ``packed_class1/`` staging dirs that must NOT be uploaded.
+    """
+    (root / "train" / "backstep" / "Re1000").mkdir(parents=True)
+    (root / "train" / "backstep" / "Re1000" / "flow_0001.mat").write_bytes(
+        b"\x00" * 8
+    )
+    (root / "train" / "cylinder").mkdir(parents=True)
+    (root / "train" / "cylinder" / "flow_0002.mat").write_bytes(b"\x00" * 8)
+    (root / "val" / "uniform").mkdir(parents=True)
+    (root / "val" / "uniform" / "flow_0003.mat").write_bytes(b"\x00" * 8)
+    (root / "test" / "DNS" / "Re3900").mkdir(parents=True)
+    (root / "test" / "DNS" / "Re3900" / "flow_0004.mat").write_bytes(
+        b"\x00" * 8
+    )
+    (root / "tune").mkdir(parents=True)
+    (root / "tune" / "flow_0005.mat").write_bytes(b"\x00" * 8)
+    (root / "splits").mkdir(parents=True)
+    (root / "splits" / "train.txt").write_text("flow_0001.mat\n")
+    (root / "splits" / "val.txt").write_text("flow_0003.mat\n")
+    (root / "README.md").write_text("# card\n")
+    # Excluded staging dirs.
+    (root / "raw_class1" / "PIV_zips").mkdir(parents=True)
+    (root / "raw_class1" / "PIV_zips" / "a.zip").write_bytes(b"PK")
+    (root / "packed_class1" / "backstep").mkdir(parents=True)
+    (root / "packed_class1" / "backstep" / "flow_0001.mat").write_bytes(
+        b"\x00"
+    )
+    # Junk that must be ignored even though it sits under a split.
+    (root / "train" / ".DS_Store").write_bytes(b"junk")
+    (root / "train" / "backstep" / "__pycache__").mkdir(parents=True)
+    (root / "train" / "backstep" / "__pycache__" / "x.pyc").write_bytes(
+        b"\x00"
+    )
+
+
+def test_filter_local_files_matches_real_piv_layout(tmp_path):
+    _populate_piv_tree(tmp_path)
+
+    selected = push_mod._filter_local_files(
+        tmp_path, push_mod._DEFAULT_INCLUDE, push_mod._DEFAULT_IGNORE
+    )
+
+    assert selected == sorted(
+        [
+            "README.md",
+            "splits/train.txt",
+            "splits/val.txt",
+            "test/DNS/Re3900/flow_0004.mat",
+            "train/backstep/Re1000/flow_0001.mat",
+            "train/cylinder/flow_0002.mat",
+            "tune/flow_0005.mat",
+            "val/uniform/flow_0003.mat",
+        ]
+    )
+    # Staging dirs and junk must never be selected.
+    assert not any(s.startswith("raw_class1/") for s in selected)
+    assert not any(s.startswith("packed_class1/") for s in selected)
+    assert not any(".DS_Store" in s for s in selected)
+    assert not any("__pycache__" in s for s in selected)
+
+
 def test_push_basic_private(monkeypatch, tmp_path):
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
@@ -126,6 +194,9 @@ def test_push_basic_private(monkeypatch, tmp_path):
     assert up["allow_patterns"] == list(push_mod._DEFAULT_INCLUDE)
     assert up["ignore_patterns"] == list(push_mod._DEFAULT_IGNORE)
     assert up["commit_message"] == "Upload via synthpix-hf"
+    # hub 1.x: upload_folder has no parallelism kwarg.
+    assert "num_workers" not in up
+    assert "max_workers" not in up
 
     assert result == "deadbeef"
 
@@ -282,7 +353,7 @@ def test_push_dry_run_repo_not_found_treated_as_all_new(
 
     def _factory_token(token=None, **_kwargs):
         api = _FakeHfApi(token=token)
-        api.list_repo_files_raises = _FakeRepoNotFound("missing")
+        api.list_repo_files_raises = _FakeRepoNotFoundError("missing")
         return api
 
     monkeypatch.setattr(
@@ -328,17 +399,121 @@ def test_push_hf_not_installed(monkeypatch, tmp_path):
     _clear_env(monkeypatch)
     _populate(tmp_path)
 
+    real_import_module = importlib.import_module
+
     def _missing(name, package=None):
-        if name == "huggingface_hub":
+        if name == "huggingface_hub" or name.startswith("huggingface_hub."):
             raise ImportError("no module named huggingface_hub")
-        return importlib.import_module(name, package)
+        return real_import_module(name, package)
 
     monkeypatch.setattr(push_mod.importlib, "import_module", _missing)
+    # Also make the bare ``import huggingface_hub`` in auth._cached_token
+    # behave as if the library were absent, so token resolution degrades
+    # gracefully instead of finding the real (installed) hub.
+    monkeypatch.setitem(sys.modules, "huggingface_hub", None)
 
     with pytest.raises(ImportError) as excinfo:
         push_mod.push_dataset(tmp_path, "user/repo")
 
     assert "synthpix[hf]" in str(excinfo.value)
+
+
+class _StrictHfApi(_FakeHfApi):
+    """Like ``_FakeHfApi`` but ``upload_folder`` rejects unknown kwargs.
+
+    huggingface_hub >= 1.0's ``HfApi.upload_folder`` has NO ``num_workers``
+    parameter, so passing it raises ``TypeError`` against the real Hub.
+    This fake mirrors the real 1.x signature so the regression is caught
+    without a network call.
+    """
+
+    _ALLOWED: ClassVar[set[str]] = {
+        "repo_id",
+        "folder_path",
+        "path_in_repo",
+        "commit_message",
+        "commit_description",
+        "token",
+        "repo_type",
+        "revision",
+        "create_pr",
+        "parent_commit",
+        "allow_patterns",
+        "ignore_patterns",
+        "delete_patterns",
+        "run_as_future",
+    }
+
+    def upload_folder(self, **kwargs):
+        unexpected = set(kwargs) - self._ALLOWED
+        if unexpected:
+            raise TypeError(
+                "upload_folder() got an unexpected keyword argument "
+                f"{sorted(unexpected)[0]!r}"
+            )
+        return super().upload_folder(**kwargs)
+
+
+def _install_strict_hub(monkeypatch) -> _FakeHub:
+    fake = _install_fake_hub(monkeypatch)
+    fake.HfApi = _StrictHfApi
+    return fake
+
+
+def test_push_upload_folder_no_unsupported_kwargs(monkeypatch, tmp_path):
+    """Regression: ``num_workers`` is not a valid hub-1.x kwarg.
+
+    The old code passed ``num_workers=max_workers`` which raises
+    ``TypeError`` on the real Hub. This test uses a fake whose
+    ``upload_folder`` signature matches hub 1.x.
+    """
+    _clear_env(monkeypatch)
+    _install_strict_hub(monkeypatch)
+    _populate(tmp_path)
+
+    result = push_mod.push_dataset(tmp_path, "user/repo", max_workers=4)
+
+    [api] = _FakeHfApiCollector._INSTANCES
+    assert len(api.upload_folder_calls) == 1
+    up = api.upload_folder_calls[0]
+    assert "num_workers" not in up
+    assert "max_workers" not in up
+    assert result == "deadbeef"
+
+
+def test_push_returns_oid_not_commit_url(monkeypatch, tmp_path):
+    """Regression: hub-1.x ``CommitInfo`` is a ``str`` whose value is the
+    commit URL, not the oid.
+
+    Because ``CommitInfo`` subclasses ``str``, ``isinstance(ci, str)`` is
+    ``True``; the old branch order then returned the full commit URL
+    instead of the short commit sha.
+    """
+    _clear_env(monkeypatch)
+    fake = _install_fake_hub(monkeypatch)
+    _populate(tmp_path)
+
+    class _StrCommitInfo(str):
+        # Mirrors huggingface_hub.CommitInfo: a str whose value is the
+        # commit URL, with an ``oid`` attribute holding the sha.
+        def __new__(cls, url: str, oid: str):
+            obj = super().__new__(cls, url)
+            obj.oid = oid
+            return obj
+
+    commit_url = "https://huggingface.co/datasets/user/repo/commit/abc123sha"
+
+    def _factory(token=None, **_kwargs):
+        api = _FakeHfApi(token=token)
+        api.upload_folder_return = _StrCommitInfo(commit_url, "abc123sha")
+        return api
+
+    monkeypatch.setattr(fake, "HfApi", _factory)
+
+    result = push_mod.push_dataset(tmp_path, "user/repo")
+
+    assert result == "abc123sha"
+    assert result != commit_url
 
 
 def test_push_token_never_logged(monkeypatch, tmp_path, capsys, caplog):
