@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from synthpix.hf import auth as auth_mod
 from synthpix.hf import pull as pull_mod
 
 
@@ -51,6 +52,11 @@ def _install_fake_hub(monkeypatch) -> _FakeHub:
 def _clear_env(monkeypatch) -> None:
     monkeypatch.delenv("HF_TOKEN", raising=False)
     monkeypatch.delenv("HF_HUB_TOKEN", raising=False)
+    # Neutralize the on-disk cached token so token resolution is
+    # hermetic regardless of whether the dev machine has run
+    # ``hf auth login``. Env-var and explicit-token resolution paths
+    # are intentionally left intact.
+    monkeypatch.setattr(auth_mod, "_cached_token", lambda: None)
 
 
 def test_pull_dataset_basic(monkeypatch, tmp_path):
