@@ -73,7 +73,14 @@ download = [
     "tensorflow-cpu>=2.15.0",
 ]
 hf = [
-    "huggingface_hub[cli,hf_transfer]>=0.27",
+    "huggingface_hub>=0.27",
+    # huggingface_hub >= 1.0 dropped its ``[hf_transfer]`` extra (and
+    # ``[cli]`` is bundled into the core), so the accelerators must be
+    # declared directly to be installed reliably.
+    "hf_transfer>=0.1.6",
+    # ``hf-xet`` is hub 1.x's xet-backed transfer accelerator; activated
+    # automatically when importable.
+    "hf-xet>=0.1.0",
 ]
 
 [project.scripts]
