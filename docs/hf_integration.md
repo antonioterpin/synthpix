@@ -338,7 +338,10 @@ pulled tree is the same tree your `.mat` scheduler already globs over.
 For the case where you would rather not run a separate `synthpix-hf pull`
 step before training, the file-based data sources accept `hf://` URIs
 directly. The first time a URI is seen the dataset is pulled into a local
-cache; subsequent runs reuse the cache and skip the network round-trip.
+cache; subsequent runs reuse the cache and re-download only changed
+files. A metadata round-trip (etag / HEAD against the Hub) still happens
+on every call to confirm files are up to date — set `HF_HUB_OFFLINE=1`
+if you need a truly offline run.
 
 ### URI grammar
 
