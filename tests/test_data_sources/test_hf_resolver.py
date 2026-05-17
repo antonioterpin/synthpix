@@ -246,6 +246,116 @@ def test_resolve_token_passes_through(monkeypatch, tmp_path):
     assert calls[0]["token"] == "hf_xxx"
 
 
+@pytest.mark.parametrize(
+    "uri",
+    [
+        # owner/name path-traversal attempts caught by sanitization.
+        "hf://../bad/repo:train",
+        "hf://bad/../sneak",
+    ],
+)
+def test_resolve_rejects_path_traversal_in_repo_id(monkeypatch, tmp_path, uri):
+    _clear_cache_env(monkeypatch)
+    monkeypatch.setattr(hf_resolver, "pull_dataset", _fake_pull([]))
+
+    with pytest.raises(ValueError, match="invalid hf:// URI"):
+        hf_resolver.resolve(uri, cache_dir=tmp_path)
+
+
+def test_resolve_flattens_slash_in_revision(monkeypatch, tmp_path):
+    # ``refs/pr/123`` is a legal upstream revision but must not create
+    # nested directories under the cache root.
+    _clear_cache_env(monkeypatch)
+    calls: list[dict] = []
+    monkeypatch.setattr(hf_resolver, "pull_dataset", _fake_pull(calls))
+
+    hf_resolver.resolve(
+        "hf://user/repo@refs/pr/123", cache_dir=tmp_path
+    )
+
+    expected = (tmp_path / "user" / "repo@refs__pr__123").resolve()
+    assert calls[0]["local_dir"].resolve() == expected
+    # The original revision is still what we hand to pull_dataset.
+    assert calls[0]["revision"] == "refs/pr/123"
+
+
+def test_resolve_rejects_double_dot_revision(monkeypatch, tmp_path):
+    _clear_cache_env(monkeypatch)
+    monkeypatch.setattr(hf_resolver, "pull_dataset", _fake_pull([]))
+
+    with pytest.raises(ValueError, match="invalid hf:// URI"):
+        hf_resolver.resolve("hf://user/repo@..", cache_dir=tmp_path)
+
+
+def test_resolve_skips_files_in_hidden_directories(monkeypatch, tmp_path):
+    # _is_metadata_file must exclude *any* file inside a hidden directory,
+    # not just files whose own name begins with '.'.
+    _clear_cache_env(monkeypatch)
+
+    def _stub(repo_id, local_dir, *, revision="main", token=None, **kwargs):
+        root = Path(local_dir)
+        root.mkdir(parents=True, exist_ok=True)
+        (root / ".git").mkdir()
+        (root / ".git" / "config").write_text("[core]")
+        (root / "data.mat").touch()
+        return root.resolve()
+
+    monkeypatch.setattr(hf_resolver, "pull_dataset", _stub)
+
+    result = hf_resolver.resolve("hf://user/repo", cache_dir=tmp_path)
+
+    repo_root = (tmp_path / "user" / "repo@main").resolve()
+    assert str(repo_root / "data.mat") in result
+    # File under .git/ has a non-hidden basename but a hidden ancestor.
+    assert str(repo_root / ".git" / "config") not in result
+
+
+def test_resolve_to_directory_returns_path(monkeypatch, tmp_path):
+    _clear_cache_env(monkeypatch)
+    calls: list[dict] = []
+    monkeypatch.setattr(hf_resolver, "pull_dataset", _fake_pull(calls))
+
+    result = hf_resolver.resolve_to_directory(
+        "hf://user/repo", cache_dir=tmp_path
+    )
+
+    expected = (tmp_path / "user" / "repo@main").resolve()
+    assert result == expected
+
+
+def test_resolve_to_directory_applies_subpath(monkeypatch, tmp_path):
+    _clear_cache_env(monkeypatch)
+
+    def _stub(repo_id, local_dir, **kwargs):
+        root = Path(local_dir)
+        (root / "train").mkdir(parents=True, exist_ok=True)
+        return root.resolve()
+
+    monkeypatch.setattr(hf_resolver, "pull_dataset", _stub)
+
+    result = hf_resolver.resolve_to_directory(
+        "hf://user/repo:train", cache_dir=tmp_path
+    )
+
+    expected = (tmp_path / "user" / "repo@main" / "train").resolve()
+    assert result == expected
+
+
+def test_resolve_to_directory_missing_subpath_raises(monkeypatch, tmp_path):
+    _clear_cache_env(monkeypatch)
+
+    def _stub(repo_id, local_dir, **kwargs):
+        Path(local_dir).mkdir(parents=True, exist_ok=True)
+        return Path(local_dir).resolve()
+
+    monkeypatch.setattr(hf_resolver, "pull_dataset", _stub)
+
+    with pytest.raises(FileNotFoundError, match="subpath does not exist"):
+        hf_resolver.resolve_to_directory(
+            "hf://user/repo:missing", cache_dir=tmp_path
+        )
+
+
 def test_resolve_idempotent(monkeypatch, tmp_path):
     # Two calls invoke pull_dataset twice; idempotency lives in pull itself.
     _clear_cache_env(monkeypatch)

@@ -29,8 +29,6 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
 
         Raises:
             ValueError: If dataset_path is invalid or no files are found.
-            ImportError: If an ``hf://`` URI is passed but the ``[hf]`` extra
-                (and thus the resolver / ``huggingface_hub``) is missing.
         """
         self._file_list = []
 
@@ -47,33 +45,22 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
                 "dataset_path must be a list of file paths (or a string)."
             )
 
-        for file_path in dataset_path:
-            if file_path.startswith(_HF_SCHEME):
-                try:
-                    # Lazy import: only loaded when an hf:// URI is seen,
-                    # so the [hf] extra is not required for local datasets.
-                    from synthpix.data_sources import (  # noqa: PLC0415
-                        hf_resolver,
-                    )
-                except ImportError as exc:
-                    raise ImportError(
-                        "hf:// paths require the [hf] extra. "
-                        "Install with: pip install synthpix[hf]"
-                    ) from exc
-                resolved = hf_resolver.resolve(file_path)
-                logger.debug(
-                    f"Resolved hf:// URI {file_path} to {len(resolved)} files"
-                )
-                self._file_list.extend(resolved)
-            elif os.path.isdir(file_path):
-                logger.debug(f"Searching for files in {file_path}")
-                pattern = os.path.join(file_path, self._file_pattern)
+        for raw_path in dataset_path:
+            if raw_path.startswith(_HF_SCHEME):
+                resolved_path = self._resolve_hf_path(raw_path)
+            else:
+                resolved_path = raw_path
+            if os.path.isdir(resolved_path):
+                logger.debug(f"Searching for files in {resolved_path}")
+                pattern = os.path.join(resolved_path, self._file_pattern)
                 # Recursive glob search
                 found_files = sorted(glob.glob(pattern, recursive=True))
-                logger.debug(f"Found {len(found_files)} files in {file_path}")
+                logger.debug(
+                    f"Found {len(found_files)} files in {resolved_path}"
+                )
                 self._file_list.extend(found_files)
             else:
-                self._file_list.append(file_path)
+                self._file_list.append(resolved_path)
 
         if not self._file_list:
             raise ValueError(
@@ -82,6 +69,45 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
             )
 
         super().__init__()
+
+    @staticmethod
+    def _resolve_hf_path(spec: str) -> str:
+        """Resolve an ``hf://`` URI to a local directory string.
+
+        The resolver and ``huggingface_hub`` are both lazy-imported — the
+        ``[hf]`` extra is not required for local-only datasets. Either
+        import (the resolver module itself or ``huggingface_hub`` inside
+        ``pull_dataset``) can fail with ``ImportError`` when the extra is
+        missing, and both paths are surfaced with the same actionable
+        message while preserving the original cause.
+
+        Args:
+            spec: The full ``hf://...`` URI.
+
+        Returns:
+            str: Absolute path to the resolved cache directory the
+                surrounding glob logic can walk.
+
+        Raises:
+            ImportError: When either the resolver module or
+                ``huggingface_hub`` cannot be imported. The original
+                exception is attached as ``__cause__``.
+        """
+        try:
+            # Lazy import: only loaded when an hf:// URI is seen,
+            # so the [hf] extra is not required for local datasets.
+            from synthpix.data_sources import (  # noqa: PLC0415
+                hf_resolver,
+            )
+
+            resolved = hf_resolver.resolve_to_directory(spec)
+        except ImportError as exc:
+            raise ImportError(
+                "hf:// paths require the [hf] extra. "
+                "Install with: pip install synthpix[hf]"
+            ) from exc
+        logger.debug(f"Resolved hf:// URI {spec} to local dir {resolved}")
+        return str(resolved)
 
     def __repr__(self) -> str:
         """Returns a stable string representation for Grain checkpointing.

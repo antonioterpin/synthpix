@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import builtins
 import importlib
+from pathlib import Path
 
 import pytest
 
@@ -24,24 +25,40 @@ class _StubDataSource(FileDataSource):
         return {"file": file_path}
 
 
+def _stub_resolve_to_directory(cache_root: Path):
+    # Build a fake repo dir containing a couple of .mat files plus a
+    # README.md and a .git/config that must be filtered out by globbing.
+
+    def _stub(spec, **_kwargs):
+        repo_dir = cache_root / "user" / "repo@main"
+        repo_dir.mkdir(parents=True, exist_ok=True)
+        (repo_dir / "a.mat").touch()
+        (repo_dir / "b.mat").touch()
+        (repo_dir / "README.md").write_text("card")
+        return repo_dir
+
+    return _stub
+
+
 def test_filedatasource_resolves_hf_uri(monkeypatch, tmp_path):
     # An hf:// URI in dataset_path is resolved into the file list.
-    fake_files = [
-        str(tmp_path / "user" / "repo@main" / "a.mat"),
-        str(tmp_path / "user" / "repo@main" / "b.mat"),
-    ]
     monkeypatch.setattr(
-        hf_resolver, "resolve", lambda spec, **kwargs: list(fake_files)
+        hf_resolver,
+        "resolve_to_directory",
+        _stub_resolve_to_directory(tmp_path),
     )
 
     ds = _StubDataSource("hf://user/repo")
 
-    assert ds.file_list == fake_files
+    repo_dir = tmp_path / "user" / "repo@main"
+    # The *.mat glob applies — README.md is excluded by the pattern.
+    assert sorted(ds.file_list) == sorted(
+        [str(repo_dir / "a.mat"), str(repo_dir / "b.mat")]
+    )
 
 
 def test_filedatasource_mixes_hf_and_local_paths(monkeypatch, tmp_path):
     # An hf:// URI may sit alongside regular local paths.
-    # Local fixture: a directory holding three .mat files.
     local_dir = tmp_path / "local"
     local_dir.mkdir()
     local_files = []
@@ -50,17 +67,22 @@ def test_filedatasource_mixes_hf_and_local_paths(monkeypatch, tmp_path):
         f.touch()
         local_files.append(str(f))
 
-    hf_files = [
-        str(tmp_path / "cache" / "user" / "repo@main" / "a.mat"),
-        str(tmp_path / "cache" / "user" / "repo@main" / "b.mat"),
-    ]
+    cache_root = tmp_path / "cache"
     monkeypatch.setattr(
-        hf_resolver, "resolve", lambda spec, **kwargs: list(hf_files)
+        hf_resolver,
+        "resolve_to_directory",
+        _stub_resolve_to_directory(cache_root),
     )
 
     ds = _StubDataSource(["hf://user/repo", str(local_dir)])
 
-    assert set(ds.file_list) == set(hf_files) | set(local_files)
+    repo_dir = cache_root / "user" / "repo@main"
+    expected = {
+        str(repo_dir / "a.mat"),
+        str(repo_dir / "b.mat"),
+        *local_files,
+    }
+    assert set(ds.file_list) == expected
     assert len(ds.file_list) == 5
 
 
@@ -100,15 +122,62 @@ def test_filedatasource_hf_uri_without_extra_raises_clear_error(
     assert excinfo.value.__cause__ is original_cause
 
 
+def test_filedatasource_pull_dataset_import_error_surfaces(
+    monkeypatch, tmp_path
+):
+    # If huggingface_hub is missing, pull_dataset (called from inside
+    # resolve_to_directory) raises ImportError; base.py must surface the
+    # same actionable message and preserve the cause.
+    original_cause = ImportError("no huggingface_hub")
+
+    def _raising_resolve(spec, **_kwargs):
+        raise original_cause
+
+    monkeypatch.setattr(
+        hf_resolver, "resolve_to_directory", _raising_resolve
+    )
+
+    with pytest.raises(ImportError) as excinfo:
+        _StubDataSource("hf://user/repo")
+
+    assert "synthpix[hf]" in str(excinfo.value)
+    assert excinfo.value.__cause__ is original_cause
+
+
 def test_filedatasource_only_hf_uri(monkeypatch, tmp_path):
     # An hf://-only dataset_path is enough — no local fallback needed.
-    fake_files = [
-        str(tmp_path / "user" / "repo@main" / "only.mat"),
-    ]
     monkeypatch.setattr(
-        hf_resolver, "resolve", lambda spec, **kwargs: list(fake_files)
+        hf_resolver,
+        "resolve_to_directory",
+        _stub_resolve_to_directory(tmp_path),
     )
 
     ds = _StubDataSource("hf://user/repo")
 
-    assert ds.file_list == fake_files
+    repo_dir = tmp_path / "user" / "repo@main"
+    assert sorted(ds.file_list) == sorted(
+        [str(repo_dir / "a.mat"), str(repo_dir / "b.mat")]
+    )
+
+
+def test_filedatasource_skips_hidden_dirs(monkeypatch, tmp_path):
+    # Glob with **/*.mat does pick up paths under hidden dirs; verify the
+    # pattern + skip behavior matches whatever subclass _file_pattern says.
+    # The MAT glob pattern explicitly walks ** and so a .cache/x.mat under
+    # the repo *would* appear unless excluded by the pattern itself. This
+    # documents the actual behavior (no implicit hidden-dir filter).
+    def _stub(spec, **_kwargs):
+        repo = tmp_path / "user" / "repo@main"
+        (repo / ".cache").mkdir(parents=True, exist_ok=True)
+        (repo / "real.mat").touch()
+        (repo / ".cache" / "leaked.mat").touch()
+        return repo
+
+    monkeypatch.setattr(hf_resolver, "resolve_to_directory", _stub)
+
+    ds = _StubDataSource("hf://user/repo")
+    # Real file is present; .cache/leaked.mat is filtered by glob's default
+    # behavior of not matching paths with hidden components for **/*.mat
+    # (because the leading * doesn't match a name starting with '.').
+    assert any(p.endswith("real.mat") for p in ds.file_list)
+    assert not any(".cache" in p for p in ds.file_list)

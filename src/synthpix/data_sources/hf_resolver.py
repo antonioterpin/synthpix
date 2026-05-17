@@ -47,6 +47,51 @@ _URI_RE = re.compile(
 )
 
 
+def _sanitize_for_path(component: str, *, what: str, spec: str) -> str:
+    """Reject path-traversal payloads and produce a fs-safe directory name.
+
+    ``owner``/``name`` are already filtered by ``_URI_RE`` (no slashes,
+    ``@``, or ``:``), but we still defensively reject ``.``/``..`` so a URI
+    like ``hf://../bad`` (which the regex would let through as
+    ``owner="..", name="bad"``) cannot escape the cache root.
+
+    ``revision`` may legitimately contain slashes (``refs/pr/123``). We
+    rewrite slashes to ``__`` for the directory name only — the original
+    string is still passed verbatim to :func:`pull_dataset`.
+
+    Args:
+        component: The raw URI component (owner, name, or revision).
+        what: Human-readable name for the component, used in errors.
+        spec: Original URI, included verbatim in error messages.
+
+    Returns:
+        str: A version of ``component`` that is safe to splice into a
+            filesystem path under the cache root.
+
+    Raises:
+        ValueError: If ``component`` is empty, equal to ``.``/``..``, or
+            (for owner/name) contains a path separator.
+    """
+    if not component:
+        raise ValueError(f"invalid hf:// URI: empty {what} in {spec!r}")
+    # Block any ``..`` segment anywhere in the string, not just standalone.
+    normalized = component.replace("\\", "/")
+    segments = [seg for seg in normalized.split("/") if seg]
+    if any(seg in {".", ".."} for seg in segments) or not segments:
+        raise ValueError(
+            f"invalid hf:// URI: {what} cannot be '.' or '..' in {spec!r}"
+        )
+    if what == "revision":
+        # Refs like ``refs/pr/123`` are legal upstream — flatten for the
+        # cache dir but keep the original for the network call.
+        return normalized.replace("/", "__")
+    if "/" in normalized:
+        raise ValueError(
+            f"invalid hf:// URI: {what} must not contain '/' in {spec!r}"
+        )
+    return normalized
+
+
 @dataclass(frozen=True)
 class _ParsedURI:
     """Parsed components of an ``hf://`` URI.
@@ -176,9 +221,11 @@ def _resolve_cache_root(cache_dir: Path | None) -> Path:
 def _is_metadata_file(path: Path, repo_root: Path) -> bool:
     """Return True if ``path`` should be excluded from the result list.
 
-    Hidden files (anything starting with ``.``) are excluded at every depth.
-    ``README.md`` is excluded only at the repo root because the dataset card
-    is metadata, not data; nested ``README.md`` files inside a sub-folder
+    Files in any hidden directory (e.g. ``.git/config``, ``.cache/x``) are
+    excluded, not just files whose own name starts with ``.``: VCS / admin
+    payloads that the Hub sometimes mirrors must not leak into the consumer
+    file list. ``README.md`` is excluded only at the repo root because the
+    dataset card is metadata; nested ``README.md`` files inside a sub-folder
     are kept.
 
     Args:
@@ -188,9 +235,13 @@ def _is_metadata_file(path: Path, repo_root: Path) -> bool:
     Returns:
         bool: True when the file is metadata and should be skipped.
     """
-    name = path.name
-    if name.startswith("."):
+    try:
+        rel = path.resolve().relative_to(repo_root)
+    except ValueError:
+        rel = Path(path.name)
+    if any(part.startswith(".") for part in rel.parts):
         return True
+    name = path.name
     if name in _METADATA_FILES and path.parent.resolve() == repo_root:
         return True
     return False
@@ -230,6 +281,99 @@ def _enumerate_files(repo_root: Path, subpath: str | None) -> list[str]:
     return results
 
 
+def _pull_repo(
+    spec: str,
+    *,
+    cache_dir: Path | None,
+    token: str | None,
+) -> tuple[Path, _ParsedURI]:
+    """Pull the URI's repo into the cache and return (repo_root, parsed).
+
+    Args:
+        spec: The ``hf://`` URI to pull.
+        cache_dir: Optional explicit cache root.
+        token: Optional Hugging Face token forwarded to ``pull_dataset``.
+
+    Returns:
+        tuple[Path, _ParsedURI]: The absolute cache directory for this
+            repo+revision and the parsed URI components.
+    """
+    parsed = _parse_uri(spec)
+    cache_root = _resolve_cache_root(cache_dir)
+
+    # Sanitize owner/name/revision *for the filesystem path* — keep the
+    # original revision string for the network call so legitimate refs
+    # like ``refs/pr/123`` still work upstream.
+    safe_owner = _sanitize_for_path(parsed.owner, what="owner", spec=spec)
+    safe_name = _sanitize_for_path(parsed.name, what="name", spec=spec)
+    safe_revision = _sanitize_for_path(
+        parsed.revision, what="revision", spec=spec
+    )
+
+    local_dir = cache_root / safe_owner / f"{safe_name}@{safe_revision}"
+    logger.info(f"Resolving {spec} via cache {local_dir}")
+
+    pull_dataset(
+        parsed.repo_id,
+        local_dir,
+        revision=parsed.revision,
+        token=token,
+    )
+    return local_dir.resolve(), parsed
+
+
+def resolve_to_directory(
+    spec: str,
+    *,
+    cache_dir: Path | None = None,
+    token: str | None = None,
+) -> Path:
+    """Pull an ``hf://`` URI and return the directory to walk.
+
+    This is the entry point consumed by :class:`FileDataSource`: it pulls
+    the referenced dataset (idempotent, resumable) and returns the local
+    path the caller can then glob exactly as if it had been a regular
+    local directory. The ``:subpath`` qualifier — when present — is applied
+    here so the returned path is already narrowed.
+
+    Args:
+        spec: The ``hf://`` URI to resolve.
+        cache_dir: Optional explicit cache root. Falls back to
+            ``SYNTHPIX_HF_CACHE`` then ``~/.cache/synthpix/hf``.
+        token: Optional Hugging Face token, forwarded to
+            :func:`synthpix.hf.pull.pull_dataset`.
+
+    Returns:
+        Path: Absolute path to the resolved directory (cache root + repo
+            + revision, optionally narrowed by ``:subpath``).
+
+    Raises:
+        FileNotFoundError: If the URI specifies a ``:subpath`` that does
+            not exist in the pulled tree.
+        ValueError: If the resolved ``:subpath`` would escape the cache
+            root (defensive check after symlink resolution).
+    """
+    repo_root, parsed = _pull_repo(spec, cache_dir=cache_dir, token=token)
+
+    if parsed.subpath is None:
+        return repo_root
+
+    narrowed = (repo_root / parsed.subpath).resolve()
+    if not narrowed.exists():
+        raise FileNotFoundError(
+            f"hf:// subpath does not exist after pull: {narrowed} "
+            f"(repo root: {repo_root})"
+        )
+    # Defensive: ensure the resolved subpath did not escape the cache root.
+    try:
+        narrowed.relative_to(repo_root)
+    except ValueError as exc:
+        raise ValueError(
+            f"invalid hf:// URI: subpath escapes the cache root in {spec!r}"
+        ) from exc
+    return narrowed
+
+
 def resolve(
     spec: str,
     *,
@@ -239,17 +383,18 @@ def resolve(
     """Resolve an ``hf://`` dataset URI to a list of local file paths.
 
     Pulls the referenced HF Hub dataset (idempotent, resumable) into a
-    cache directory and returns the resolved list of file paths the caller
-    can glob as if they were a local directory.
+    cache directory and returns the resolved list of file paths.
+
+    :class:`FileDataSource` does *not* call this helper — it uses
+    :func:`resolve_to_directory` so the subclass-specific ``_file_pattern``
+    glob still applies. ``resolve`` stays for programmatic callers who want
+    the eagerly-enumerated file list (and the explicit metadata filter).
 
     Args:
         spec: The ``hf://`` URI to resolve. See the module docstring for
             the supported grammar.
-        cache_dir: Optional explicit cache root. Falls back to the
-            ``SYNTHPIX_HF_CACHE`` env var, then ``~/.cache/synthpix/hf``.
-        token: Optional Hugging Face token, forwarded to
-            :func:`synthpix.hf.pull.pull_dataset`. The standard token
-            resolution chain (env / cached) is used when ``None``.
+        cache_dir: Optional explicit cache root.
+        token: Optional Hugging Face token forwarded to ``pull_dataset``.
 
     Returns:
         list[str]: Sorted absolute paths of every data file under the
@@ -259,20 +404,7 @@ def resolve(
             :func:`_enumerate_files` if the requested subpath is missing
             after the pull.
     """
-    parsed = _parse_uri(spec)
-    cache_root = _resolve_cache_root(cache_dir)
-    local_dir = cache_root / parsed.owner / f"{parsed.name}@{parsed.revision}"
-
-    logger.info(f"Resolving {spec} via cache {local_dir}")
-
-    pull_dataset(
-        parsed.repo_id,
-        local_dir,
-        revision=parsed.revision,
-        token=token,
-    )
-
-    repo_root = local_dir.resolve()
+    repo_root, parsed = _pull_repo(spec, cache_dir=cache_dir, token=token)
     files = _enumerate_files(repo_root, parsed.subpath)
 
     logger.info(f"Resolved {spec} -> {len(files)} files")
