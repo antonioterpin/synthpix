@@ -22,22 +22,7 @@ _DEFAULT_TAGS: tuple[str, ...] = ("PIV", "synthetic", "optical-flow")
 
 @dataclass
 class DatasetCardMeta:
-    """User-facing metadata for a synthpix-hosted dataset card.
-
-    Attributes:
-        name: Repository-style short name of the dataset.
-        source_url: URL of the original dataset.
-        citation: BibTeX or free-form citation text.
-        license: SPDX-like license identifier exposed in the YAML frontmatter.
-        license_name: Optional license display name.
-        synthpix_version: Version of ``synthpix`` used to produce the card.
-            Auto-filled from ``importlib.metadata`` when left as ``None``.
-        synthpix_commit: Git commit of the working tree where the card was
-            generated. Auto-filled via ``git rev-parse HEAD`` when possible;
-            stays ``None`` outside a repository.
-        pretty_name: Display name used in the H1 heading and frontmatter.
-        tags: Hub tags exposed in the YAML frontmatter.
-    """
+    """User-facing metadata for a synthpix-hosted dataset card."""
 
     name: str
     source_url: str
