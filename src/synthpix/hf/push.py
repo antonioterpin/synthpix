@@ -60,6 +60,31 @@ _PUBLIC_GATE_MESSAGE = (
     "Pass allow_public=True (CLI: --allow-public) to override."
 )
 
+# Above this many selected files an ``upload_folder`` single-commit push
+# tends to fail with a Hub-side 500 on the commit endpoint. We then route
+# through ``upload_large_folder``, which commits in resumable batches.
+_DEFAULT_LARGE_FOLDER_THRESHOLD = 1000
+
+
+def _resolve_commit_sha(commit_info: object) -> str:
+    """Extract a commit sha from an ``upload_folder`` return value.
+
+    In huggingface_hub 1.x ``CommitInfo`` subclasses ``str`` and its
+    string value is the *commit URL*, not the sha. Prefer the explicit
+    ``oid`` attribute; only fall back to the string form when it is a
+    plain ``str`` with no ``oid``.
+
+    Args:
+        commit_info: The value returned by ``HfApi.upload_folder``.
+
+    Returns:
+        str: The resolved commit sha (or the stringified fallback).
+    """
+    oid = getattr(commit_info, "oid", None)
+    if oid:
+        return oid
+    return str(commit_info)
+
 
 def _validate_local_dir(local_dir: Path) -> None:
     if not local_dir.exists():
@@ -220,6 +245,8 @@ def push_dataset(
     include_globs: tuple[str, ...] = _DEFAULT_INCLUDE,
     ignore_globs: tuple[str, ...] = _DEFAULT_IGNORE,
     max_workers: int = 8,
+    large_folder: bool | None = None,
+    large_folder_threshold: int = _DEFAULT_LARGE_FOLDER_THRESHOLD,
     dry_run: bool = False,
 ) -> str:
     """Upload ``local_dir`` to an HF Hub dataset repository.
@@ -243,15 +270,27 @@ def push_dataset(
             ``"Upload via synthpix-hf"``.
         card_meta: Optional dataset-card metadata. When set, the README
             is (re)generated under ``local_dir`` right before the upload.
-        include_globs: ``allow_patterns`` for ``upload_folder``.
-        ignore_globs: ``ignore_patterns`` for ``upload_folder``.
-        max_workers: Parallel upload workers.
+        include_globs: ``allow_patterns`` for the upload.
+        ignore_globs: ``ignore_patterns`` for the upload.
+        max_workers: Parallel workers. A no-op for the single-commit
+            ``upload_folder`` path (hub 1.x has no knob there) but honored
+            by the ``upload_large_folder`` path.
+        large_folder: Tri-state selector for the upload transport.
+            ``None`` (default) auto-selects ``upload_large_folder`` when
+            the number of selected files exceeds
+            ``large_folder_threshold``; ``True``/``False`` force the large
+            or single-commit path respectively. The large path commits in
+            resumable batches and avoids the Hub-side 500 that a huge
+            single ``upload_folder`` commit triggers.
+        large_folder_threshold: Selected-file count above which the auto
+            mode switches to ``upload_large_folder``.
         dry_run: When ``True``, compare local and remote file lists, print
             the plan, and return ``"dry-run"`` without touching the Hub.
 
     Returns:
-        str: The commit sha returned by ``upload_folder``, or ``"dry-run"``
-            when ``dry_run`` is set.
+        str: The commit sha (resolved via ``dataset_info`` for the
+            ``upload_large_folder`` path, which returns no sha itself), or
+            ``"dry-run"`` when ``dry_run`` is set.
 
     Raises:
         PermissionError: When ``private=False`` is requested without
@@ -303,32 +342,52 @@ def push_dataset(
         exist_ok=True,
     )
 
-    # ``HfApi.upload_folder`` has no parallelism knob in huggingface_hub
-    # 1.x (the old ``num_workers`` kwarg was removed and never existed on
-    # this API). ``max_workers`` is kept on the public signature for API
-    # stability but is a no-op here; passing it to ``upload_folder`` would
-    # raise ``TypeError`` against the real Hub.
-    with enable_hf_transfer():
-        commit_info = api.upload_folder(
-            repo_id=repo_id,
-            repo_type="dataset",
-            folder_path=str(local_path),
-            revision=revision,
-            commit_message=commit_message or "Upload via synthpix-hf",
-            allow_patterns=list(include_globs),
-            ignore_patterns=list(ignore_globs),
-        )
-
-    # In huggingface_hub 1.x ``CommitInfo`` subclasses ``str`` and its
-    # string value is the *commit URL*, not the sha. Prefer the explicit
-    # ``oid`` attribute; only fall back to the string form when it is a
-    # plain ``str`` with no ``oid``.
-    oid = getattr(commit_info, "oid", None)
-    if oid:
-        commit_sha = oid
+    selected = _filter_local_files(local_path, include_globs, ignore_globs)
+    if large_folder is None:
+        use_large = len(selected) > large_folder_threshold
     else:
-        commit_sha = str(commit_info)
+        use_large = large_folder
 
-    uploaded = _filter_local_files(local_path, include_globs, ignore_globs)
-    logger.info(f"Pushed {repo_id}@{commit_sha} with {len(uploaded)} files")
+    if use_large:
+        # ``upload_large_folder`` commits in resumable batches (it does
+        # honor ``num_workers``) and returns ``None`` — a huge single
+        # ``upload_folder`` commit otherwise 500s on the Hub. The sha is
+        # resolved from the repo afterwards.
+        with enable_hf_transfer():
+            api.upload_large_folder(
+                repo_id=repo_id,
+                repo_type="dataset",
+                folder_path=str(local_path),
+                revision=revision,
+                private=private,
+                allow_patterns=list(include_globs),
+                ignore_patterns=list(ignore_globs),
+                num_workers=max_workers,
+                print_report=False,
+            )
+        info = api.dataset_info(repo_id, revision=revision)
+        commit_sha = getattr(info, "sha", None) or "uploaded"
+    else:
+        # ``HfApi.upload_folder`` has no parallelism knob in
+        # huggingface_hub 1.x (the old ``num_workers`` kwarg was removed
+        # and never existed on this API), so ``max_workers`` is not
+        # forwarded here; passing it would raise ``TypeError`` against
+        # the real Hub.
+        with enable_hf_transfer():
+            commit_info = api.upload_folder(
+                repo_id=repo_id,
+                repo_type="dataset",
+                folder_path=str(local_path),
+                revision=revision,
+                commit_message=commit_message or "Upload via synthpix-hf",
+                allow_patterns=list(include_globs),
+                ignore_patterns=list(ignore_globs),
+            )
+        commit_sha = _resolve_commit_sha(commit_info)
+
+    transport = "upload_large_folder" if use_large else "upload_folder"
+    logger.info(
+        f"Pushed {repo_id}@{commit_sha} with {len(selected)} files "
+        f"via {transport}"
+    )
     return commit_sha

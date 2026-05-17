@@ -91,6 +91,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Deny-list glob; may be repeated. Overrides the default set.",
     )
     push.add_argument("--max-workers", type=int, default=8)
+    push.add_argument(
+        "--large-folder",
+        choices=("auto", "yes", "no"),
+        default="auto",
+        help=(
+            "Upload transport: 'auto' (default) routes large trees "
+            "through upload_large_folder (resumable, batched commits); "
+            "'yes'/'no' force it on/off."
+        ),
+    )
     push.add_argument("--dry-run", action="store_true")
 
     pull = sub.add_parser("pull", help="Pull a dataset from the Hub.")
@@ -321,6 +331,9 @@ def _run_push(args: argparse.Namespace) -> int:
         "commit_message": args.commit_message,
         "card_meta": card_meta,
         "max_workers": args.max_workers,
+        "large_folder": {"auto": None, "yes": True, "no": False}[
+            args.large_folder
+        ],
         "dry_run": args.dry_run,
     }
     if args.include is not None:
