@@ -113,17 +113,22 @@ def pull_dataset(
             f"local_dir exists and is not a directory: {target}"
         )
 
-    try:
-        hub = importlib.import_module("huggingface_hub")
-    except ImportError as exc:
-        raise ImportError(
-            "huggingface_hub is required for synthpix.hf.pull_dataset; "
-            "install with `pip install synthpix[hf]`"
-        ) from exc
     resolved_token = resolve_token(token)
     allow_patterns = _resolve_allow_patterns(splits, include_globs)
 
+    # ``huggingface_hub`` reads ``HF_HUB_ENABLE_HF_TRANSFER`` into its module
+    # constants at *import* time, so we must enter ``enable_hf_transfer()``
+    # before the import — otherwise the accelerated path stays off even when
+    # the library is installed.
     with enable_hf_transfer():
+        try:
+            hub = importlib.import_module("huggingface_hub")
+        except ImportError as exc:
+            raise ImportError(
+                "huggingface_hub is required for synthpix.hf.pull_dataset; "
+                "install with `pip install synthpix[hf]`"
+            ) from exc
+
         hub.snapshot_download(
             repo_id=repo_id,
             repo_type="dataset",

@@ -267,6 +267,88 @@ def test_cli_pull_exit_nonzero_on_runtime_error(
     assert "boom!" in captured.err
 
 
+def test_cli_pull_splits_strips_whitespace(monkeypatch, tmp_path: Path):
+    captured: dict = {}
+
+    def _fake(repo_id, local_dir, **kwargs):
+        captured.update(kwargs)
+        Path(local_dir).mkdir(parents=True, exist_ok=True)
+        return Path(local_dir)
+
+    monkeypatch.setattr(cli, "pull_dataset", _fake)
+
+    rc = cli.main(
+        [
+            "pull",
+            "user/repo",
+            str(tmp_path / "data"),
+            "--splits",
+            "train, val ,  ,test",
+        ]
+    )
+
+    assert rc == 0
+    # Whitespace stripped, empty parts dropped.
+    assert captured["splits"] == ("train", "val", "test")
+
+
+def test_cli_pull_splits_all_empty_becomes_none(monkeypatch, tmp_path: Path):
+    captured: dict = {}
+
+    def _fake(repo_id, local_dir, **kwargs):
+        captured.update(kwargs)
+        Path(local_dir).mkdir(parents=True, exist_ok=True)
+        return Path(local_dir)
+
+    monkeypatch.setattr(cli, "pull_dataset", _fake)
+
+    rc = cli.main(
+        [
+            "pull",
+            "user/repo",
+            str(tmp_path / "data"),
+            "--splits",
+            " , , ",
+        ]
+    )
+
+    assert rc == 0
+    assert captured["splits"] is None
+
+
+def test_cli_pull_summary_counts_root_files(
+    monkeypatch, tmp_path: Path, capsys
+):
+    # The summary line must count root-level files (e.g. README.md) that
+    # ``pull_dataset(..., splits=...)`` brings along, not just files under
+    # the recognized split directories.
+    target = tmp_path / "data"
+
+    def _fake(repo_id, local_dir, **_kwargs):
+        local = Path(local_dir)
+        (local / "train").mkdir(parents=True, exist_ok=True)
+        (local / "train" / "a.mat").write_bytes(b"x" * 4)
+        (local / "README.md").write_text("# card")
+        return local
+
+    monkeypatch.setattr(cli, "pull_dataset", _fake)
+
+    rc = cli.main(
+        [
+            "pull",
+            "user/repo",
+            str(target),
+            "--splits",
+            "train",
+        ]
+    )
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    # 1 .mat + 1 README.md = 2 files
+    assert "2 files" in out
+
+
 def test_cli_pull_token_not_logged(
     monkeypatch, tmp_path: Path, capsys, caplog
 ):

@@ -57,7 +57,15 @@ def _build_parser() -> argparse.ArgumentParser:
     pull.add_argument("repo_id")
     pull.add_argument("local_dir", type=Path)
     pull.add_argument("--revision", default="main")
-    pull.add_argument("--token", default=None)
+    pull.add_argument(
+        "--token",
+        default=None,
+        help=(
+            "HF token. Prefer the HF_TOKEN / HF_HUB_TOKEN environment "
+            "variables or `hf auth login` — values passed on the command "
+            "line are visible in shell history and process listings."
+        ),
+    )
     pull.add_argument(
         "--splits",
         default=None,
@@ -128,9 +136,13 @@ def _run_card(args: argparse.Namespace) -> int:
 
 
 def _parse_splits(raw: str | None) -> tuple[str, ...] | None:
+    # Strip and reject empties so inputs like "train, val" or ",val," still
+    # map to the intended ("train", "val") filter instead of synthesizing
+    # bogus " val/**" patterns that silently skip the requested split.
     if raw is None:
         return None
-    return tuple(part for part in raw.split(",") if part)
+    parts = tuple(part.strip() for part in raw.split(",") if part.strip())
+    return parts if parts else None
 
 
 def _human_bytes(num: float) -> str:
@@ -143,16 +155,14 @@ def _human_bytes(num: float) -> str:
 
 
 def _summarize_target(target: Path) -> tuple[int, int]:
-    # Returns (file_count, total_bytes). Uses inspect_local_layout when the
-    # tree matches the train/val/test/tune convention; otherwise falls back
-    # to a plain os.walk so non-PIV repos still get a useful summary line.
-    try:
-        layout = inspect_local_layout(target)
-    except (FileNotFoundError, NotADirectoryError):
+    # Returns (file_count, total_bytes) for the actually-downloaded tree.
+    # Walks the directory directly instead of going through
+    # ``inspect_local_layout``: that helper only sees files inside the
+    # recognized split folders and would otherwise undercount root-level
+    # files like ``README.md`` that ``pull_dataset`` is expected to bring
+    # along when ``splits`` is set.
+    if not target.exists():
         return 0, 0
-
-    if layout.splits:
-        return (layout.mat_files + layout.extra_files, layout.total_bytes)
 
     files = 0
     total_bytes = 0

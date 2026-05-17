@@ -199,6 +199,43 @@ def test_pull_dataset_explicit_ignore_globs(monkeypatch, tmp_path):
     assert fake.calls[-1]["ignore_patterns"] == ["**/skip.me"]
 
 
+def test_pull_dataset_enables_hf_transfer_before_import(
+    monkeypatch, tmp_path
+):
+    # huggingface_hub reads HF_HUB_ENABLE_HF_TRANSFER at *import* time,
+    # so the env flag must be set BEFORE the lazy import. Capture the
+    # environment as the import call runs and verify the flag was already
+    # present.
+    import os as _os
+
+    from synthpix.hf import _transfer as transfer_mod
+
+    _clear_env(monkeypatch)
+    monkeypatch.delenv("HF_HUB_ENABLE_HF_TRANSFER", raising=False)
+    monkeypatch.setattr(transfer_mod, "_hf_transfer_available", lambda: True)
+
+    seen_flag: dict[str, bool] = {}
+    fake = _FakeHub()
+    real_import_module = importlib.import_module
+
+    def _import_module(name, package=None):
+        if name == "huggingface_hub":
+            seen_flag["set"] = (
+                _os.environ.get("HF_HUB_ENABLE_HF_TRANSFER") == "1"
+            )
+            return fake
+        return real_import_module(name, package)
+
+    monkeypatch.setattr(pull_mod.importlib, "import_module", _import_module)
+
+    pull_mod.pull_dataset("user/repo", tmp_path / "data")
+
+    assert seen_flag.get("set"), (
+        "HF_HUB_ENABLE_HF_TRANSFER must be set before huggingface_hub "
+        "is imported, otherwise the accelerated path stays off."
+    )
+
+
 # Sanity check: the helper does not pull huggingface_hub into the module
 # graph eagerly.
 def test_pull_module_does_not_eagerly_import_hub():

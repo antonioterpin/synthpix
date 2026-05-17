@@ -234,14 +234,21 @@ def pytest_addoption(parser):
 # ──────────────────────────────────────────────────────────────────────────────
 def pytest_collection_modifyitems(config, items):
     """Skip tests unless explicitly selected with -m run_explicitly."""
-    if config.getoption("-m") and "run_explicitly" in config.getoption("-m"):
-        return
-    skip = pytest.mark.skip(
+    explicit_marker = (
+        config.getoption("-m") and "run_explicitly" in config.getoption("-m")
+    )
+    run_hf_live = config.getoption("--run-hf-live", default=False)
+    skip_explicit = pytest.mark.skip(
         reason="Skipped unless explicitly selected with -m run_explicitly"
     )
+    skip_hf_live = pytest.mark.skip(
+        reason="Skipped unless --run-hf-live is passed on the CLI"
+    )
     for item in items:
-        if "run_explicitly" in item.keywords:
-            item.add_marker(skip)
+        if "run_explicitly" in item.keywords and not explicit_marker:
+            item.add_marker(skip_explicit)
+        if "hf_live" in item.keywords and not run_hf_live:
+            item.add_marker(skip_hf_live)
 
 
 @pytest.fixture(autouse=True)
