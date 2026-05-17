@@ -113,8 +113,11 @@ uv run python scripts/download_piv_1.py \
 Relevant push flags on those scripts:
 
 - `--push-to <owner>/<name>` — activate the push step.
-- `--push-private` — default; private repo.
 - `--push-public --allow-public` — opt-in public, same gate as the CLI.
+  In the absence of `--push-public` the push is private — that is the
+  default and there is no separate `--push-private` toggle (a previous
+  iteration had one, but it was a no-op; privacy is determined by the
+  *absence* of `--push-public`).
 - `--push-token <token>` — explicit token; falls back to `HF_TOKEN` / cache.
 - `--no-push-card` — skip auto-generated dataset-card metadata.
 
