@@ -130,24 +130,42 @@ def _iter_relative_files(local_dir: Path) -> list[str]:
     return files
 
 
-def _matches_any(rel_path: str, patterns: tuple[str, ...]) -> bool:
+def _hub_filter_repo_objects():
+    """Return ``huggingface_hub.utils.filter_repo_objects`` or ``None``.
+
+    Reuses the same matcher that ``upload_folder`` / ``upload_large_folder``
+    consult internally, so the dry-run preview and the large-folder
+    auto-routing threshold see exactly the same file set as the real
+    upload. Falling back to an in-tree matcher would re-introduce drift
+    (e.g. ``raw_*/**`` patterns that the homegrown prefix branch silently
+    failed to honor).
+
+    Returns:
+        Callable | None: The hub helper if it imports cleanly, otherwise
+            ``None`` (older hub releases that lack the public symbol).
+    """
+    try:
+        utils_mod = importlib.import_module("huggingface_hub.utils")
+        return getattr(utils_mod, "filter_repo_objects", None)
+    except ImportError:
+        return None
+
+
+def _fallback_matches_any(rel_path: str, patterns: tuple[str, ...]) -> bool:
+    # Used only when ``huggingface_hub.utils.filter_repo_objects`` is not
+    # importable (no [hf] extra, or a very old hub). Best-effort glob
+    # semantics; for real uploads the hub matcher above is authoritative.
     for pattern in patterns:
-        # Normalize ``**`` to ``*`` for ``fnmatch`` so directory-globs match.
-        # ``fnmatch`` does not understand ``**`` natively; for our purposes
-        # ``train/**`` should match ``train/anything/deep/file.mat``.
         if fnmatchcase(rel_path, pattern):
             return True
-        # Translate ``a/**`` -> match anything below ``a/``.
         if "**" in pattern:
             translated = pattern.replace("/**", "/*").replace("**", "*")
             if fnmatchcase(rel_path, translated):
                 return True
-            # Also match arbitrary nesting: turn ``a/**`` into prefix match.
-            prefix = pattern.split("/**", 1)[0]
-            if pattern.endswith("/**") and (
-                rel_path == prefix or rel_path.startswith(prefix + "/")
-            ):
-                return True
+            if pattern.endswith("/**"):
+                prefix = pattern.split("/**", 1)[0]
+                if rel_path == prefix or rel_path.startswith(prefix + "/"):
+                    return True
     return False
 
 
@@ -156,11 +174,26 @@ def _filter_local_files(
     include_globs: tuple[str, ...],
     ignore_globs: tuple[str, ...],
 ) -> list[str]:
+    # Prefer the hub matcher so the dry-run preview and the
+    # large-folder-threshold count match what the real upload uploads.
+    filter_fn = _hub_filter_repo_objects()
+    rel_paths = _iter_relative_files(local_dir)
+
+    if filter_fn is not None:
+        selected = list(
+            filter_fn(
+                rel_paths,
+                allow_patterns=list(include_globs) if include_globs else None,
+                ignore_patterns=list(ignore_globs) if ignore_globs else None,
+            )
+        )
+        return sorted(selected)
+
     selected: list[str] = []
-    for rel in _iter_relative_files(local_dir):
-        if not _matches_any(rel, include_globs):
+    for rel in rel_paths:
+        if include_globs and not _fallback_matches_any(rel, include_globs):
             continue
-        if _matches_any(rel, ignore_globs):
+        if ignore_globs and _fallback_matches_any(rel, ignore_globs):
             continue
         selected.append(rel)
     return sorted(selected)
@@ -300,7 +333,11 @@ def push_dataset(
             ``max_workers`` is below one.
         ImportError: If ``huggingface_hub`` is not installed.
     """
-    if private is False and allow_public is not True:
+    # Use truthiness rather than identity comparison so the safety gate
+    # cannot be bypassed by a falsy non-``False`` value like ``private=0``
+    # — for a guard whose entire purpose is preventing accidental public
+    # redistribution of research-only data, ``is False`` is too narrow.
+    if not private and not allow_public:
         raise PermissionError(_PUBLIC_GATE_MESSAGE)
 
     local_path = Path(local_dir).expanduser()
@@ -311,12 +348,13 @@ def push_dataset(
 
     resolved_token = resolve_token(token)
 
-    if card_meta is not None:
-        _maybe_write_card(local_path, card_meta)
-
     logger.info(f"Pushing {local_path} to {repo_id} (private={private})")
 
     if dry_run:
+        # Dry-run must not mutate the working tree. The README write
+        # happens *after* this gate so a previewing caller (programmatic
+        # or future script ``--dry-run``) doesn't see ``local_dir/README.md``
+        # rewritten as a side effect of the preview.
         return _dry_run_summary(
             local_path,
             repo_id,
@@ -325,6 +363,9 @@ def push_dataset(
             ignore_globs,
             resolved_token,
         )
+
+    if card_meta is not None:
+        _maybe_write_card(local_path, card_meta)
 
     try:
         hub = importlib.import_module("huggingface_hub")

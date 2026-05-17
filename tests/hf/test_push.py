@@ -228,6 +228,23 @@ def test_push_public_without_allow_public_raises(monkeypatch, tmp_path):
     assert _FakeHfApiCollector._INSTANCES == []
 
 
+@pytest.mark.parametrize("private_value", [0, "", None])
+def test_push_safety_gate_uses_truthiness_not_identity(
+    monkeypatch, tmp_path, private_value
+):
+    # Regression: the gate must not be bypassed by a falsy-but-not-False
+    # ``private`` value (0, "", None). Identity comparison
+    # (``private is False``) would let these through.
+    _clear_env(monkeypatch)
+    _install_fake_hub(monkeypatch)
+    _populate(tmp_path)
+
+    with pytest.raises(PermissionError):
+        push_mod.push_dataset(tmp_path, "user/repo", private=private_value)
+
+    assert _FakeHfApiCollector._INSTANCES == []
+
+
 def test_push_public_with_allow_public_succeeds(monkeypatch, tmp_path):
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
@@ -285,6 +302,29 @@ def test_push_writes_card_when_meta_provided(monkeypatch, tmp_path):
     readme = tmp_path / "README.md"
     assert readme.exists()
     assert "My citation" in readme.read_text()
+
+
+def test_push_dry_run_does_not_write_card(monkeypatch, tmp_path):
+    # Regression: dry-run must not mutate the working tree. Even when
+    # ``card_meta`` is provided, ``README.md`` must not be rewritten by
+    # a previewing call.
+    _clear_env(monkeypatch)
+    _install_fake_hub(monkeypatch)
+    _populate(tmp_path)
+    readme = tmp_path / "README.md"
+    readme.write_text("preserve-me")
+
+    meta = DatasetCardMeta(
+        name="example",
+        source_url="https://example.org/src",
+        citation="My citation",
+    )
+
+    push_mod.push_dataset(
+        tmp_path, "user/repo", card_meta=meta, dry_run=True
+    )
+
+    assert readme.read_text() == "preserve-me"
 
 
 def test_push_card_overwrite_logs_warning(monkeypatch, tmp_path):
@@ -460,6 +500,23 @@ class _StrictHfApi(_FakeHfApi):
         "run_as_future",
     }
 
+    # Verified against hub 1.15: signature is
+    #   (repo_id, folder_path, repo_type, revision, private,
+    #    allow_patterns, ignore_patterns, num_workers, print_report).
+    # Any future hub-side drift on this set will be caught without a
+    # network call.
+    _ALLOWED_LARGE: ClassVar[set[str]] = {
+        "repo_id",
+        "folder_path",
+        "repo_type",
+        "revision",
+        "private",
+        "allow_patterns",
+        "ignore_patterns",
+        "num_workers",
+        "print_report",
+    }
+
     def upload_folder(self, **kwargs):
         unexpected = set(kwargs) - self._ALLOWED
         if unexpected:
@@ -468,6 +525,15 @@ class _StrictHfApi(_FakeHfApi):
                 f"{sorted(unexpected)[0]!r}"
             )
         return super().upload_folder(**kwargs)
+
+    def upload_large_folder(self, **kwargs):
+        unexpected = set(kwargs) - self._ALLOWED_LARGE
+        if unexpected:
+            raise TypeError(
+                "upload_large_folder() got an unexpected keyword argument "
+                f"{sorted(unexpected)[0]!r}"
+            )
+        return super().upload_large_folder(**kwargs)
 
 
 def _install_strict_hub(monkeypatch) -> _FakeHub:
@@ -599,6 +665,20 @@ def test_push_force_large_uses_upload_large_folder(monkeypatch, tmp_path):
     assert api.dataset_info_calls[0]["repo_id"] == "user/repo"
     assert api.dataset_info_calls[0]["revision"] == "dev"
     assert result == "largesha0123"
+
+
+def test_push_upload_large_folder_no_unsupported_kwargs(
+    monkeypatch, tmp_path
+):
+    # Regression guard for the path a real PIV class-1 push (>1000 files)
+    # actually takes via auto-routing. ``_StrictHfApi.upload_large_folder``
+    # mirrors the hub-1.15 signature, so any future hub-side drift on this
+    # surface is caught without a network call.
+    _clear_env(monkeypatch)
+    _install_strict_hub(monkeypatch)
+    _populate(tmp_path)
+
+    push_mod.push_dataset(tmp_path, "user/repo", large_folder=True)
 
 
 def test_push_auto_routes_large_by_threshold(monkeypatch, tmp_path):
