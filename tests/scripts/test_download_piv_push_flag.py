@@ -54,7 +54,6 @@ def script() -> ModuleType:
 def _make_args(**overrides):
     base = dict(
         push_to=None,
-        push_private=True,
         push_public=False,
         allow_public=False,
         push_token=None,

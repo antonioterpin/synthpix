@@ -1,7 +1,7 @@
 """Download and process the PIV class 2 dataset from Zenodo.
 
-Optional flags ``--push-to``, ``--push-private`` (default),
-``--push-public``, ``--allow-public``, ``--push-token``, and
+Optional flags ``--push-to``, ``--push-public``,
+``--allow-public``, ``--push-token``, and
 ``--no-push-card`` push the resulting tree to a Hugging Face Hub dataset
 repo via :func:`synthpix.hf.push_dataset` when ``--push-to`` is set.
 Public pushes require the explicit ``--allow-public`` safety gate.
@@ -263,19 +263,13 @@ if __name__ == "__main__":
         ),
     )
     parser.add_argument(
-        "--push-private",
-        action="store_true",
-        default=True,
-        help="Push as a private repo (default).",
-    )
-    parser.add_argument(
         "--push-public",
         action="store_true",
         default=False,
         help=(
-            "Push as a public repo. Requires --allow-public. "
-            "Class-2 sources are research-only; do not redistribute "
-            "publicly without explicit permission."
+            "Push as a public repo (private by default). Requires "
+            "--allow-public. Class-2 sources are research-only; do not "
+            "redistribute publicly without explicit permission."
         ),
     )
     parser.add_argument(
