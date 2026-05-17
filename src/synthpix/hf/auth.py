@@ -23,14 +23,24 @@ def _cached_token() -> str | None:
             installed or no token is cached.
     """
     try:
-        from huggingface_hub import HfFolder
+        import huggingface_hub  # noqa: PLC0415
     except ImportError:
         logger.debug(
             "huggingface_hub is not installed; skipping cached token lookup."
         )
         return None
 
-    token: str | None = HfFolder.get_token()
+    # huggingface_hub >= 1.0 removed ``HfFolder``; the cached CLI token is
+    # now read via the top-level ``get_token`` helper. Guard for older
+    # releases (and partially-stubbed installs) without re-raising.
+    get_token = getattr(huggingface_hub, "get_token", None)
+    if get_token is None:
+        logger.debug(
+            "huggingface_hub has no get_token(); skipping cached token lookup."
+        )
+        return None
+
+    token: str | None = get_token()
     if token:
         return token
     return None
