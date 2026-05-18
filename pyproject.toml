@@ -72,6 +72,22 @@ download = [
     "scipy>=1.10.0",
     "tensorflow-cpu>=2.15.0",
 ]
+hf = [
+    # huggingface_hub 1.x dropped ``HfFolder`` in favor of the top-level
+    # ``get_token`` helper that ``auth._cached_token`` relies on, so the floor
+    # is pinned at 1.0 to keep cached-credential resolution working.
+    "huggingface_hub>=1.0",
+    # huggingface_hub >= 1.0 dropped its ``[hf_transfer]`` extra (and
+    # ``[cli]`` is bundled into the core), so the accelerators must be
+    # declared directly to be installed reliably.
+    "hf_transfer>=0.1.6",
+    # ``hf-xet`` is hub 1.x's xet-backed transfer accelerator; activated
+    # automatically when importable.
+    "hf-xet>=0.1.0",
+]
+
+[project.scripts]
+synthpix-hf = "synthpix.hf.cli:main"
 
 
 # Pytest configuration
