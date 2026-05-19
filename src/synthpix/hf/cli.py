@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 from synthpix.hf.card import DatasetCardMeta, make_dataset_card
 from synthpix.hf.layout import inspect_local_layout
+from synthpix.hf.pull import pull_dataset
 from synthpix.utils import SYNTHPIX_SCOPE, get_logger
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
 _NOT_IMPLEMENTED = (
-    "This subcommand is not yet implemented in PR1. "
-    "Stay tuned for the upcoming push/pull rollouts."
+    "This subcommand is not yet implemented. "
+    "Stay tuned for the upcoming push rollout."
 )
 
 
@@ -47,15 +49,60 @@ def _build_parser() -> argparse.ArgumentParser:
     card.add_argument("--output", type=Path, default=None)
     card.add_argument("--force", action="store_true")
 
-    push = sub.add_parser("push", help="(PR2) Push a dataset to the Hub.")
+    push = sub.add_parser("push", help="(PR3) Push a dataset to the Hub.")
     push.add_argument("local_dir", nargs="?", default=None)
     push.add_argument("--repo-id", default=None)
 
-    pull = sub.add_parser("pull", help="(PR3) Pull a dataset from the Hub.")
-    pull.add_argument("repo_id", nargs="?", default=None)
-    pull.add_argument("--local-dir", default=None)
+    pull = sub.add_parser("pull", help="Pull a dataset from the Hub.")
+    pull.add_argument("repo_id")
+    pull.add_argument("local_dir", type=Path)
+    pull.add_argument("--revision", default="main")
+    pull.add_argument(
+        "--token",
+        default=None,
+        help=(
+            "HF token. Prefer the HF_TOKEN / HF_HUB_TOKEN environment "
+            "variables or `hf auth login` — values passed on the command "
+            "line are visible in shell history and process listings."
+        ),
+    )
+    pull.add_argument(
+        "--splits",
+        default=None,
+        help="Comma-separated split names to download (e.g. train,val).",
+    )
+    pull.add_argument(
+        "--include",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="Allow-list glob; may be repeated. Wins over --splits.",
+    )
+    pull.add_argument(
+        "--ignore",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="Deny-list glob; may be repeated.",
+    )
+    pull.add_argument("--max-workers", type=int, default=8)
 
     return parser
+
+
+def _read_citation(value: str) -> str:
+    """Return the citation contents, reading from disk if ``value`` is a path.
+
+    Used by the ``push`` subcommand's single ``--card-citation`` flag,
+    where the value may be either a literal citation string or a path
+    to a file containing it. The ``card`` subcommand instead uses an
+    explicit mutually-exclusive ``--citation``/``--citation-file`` pair
+    via :func:`_resolve_citation` below.
+    """
+    candidate = Path(value)
+    if candidate.is_file():
+        return candidate.read_text()
+    return value
 
 
 def _resolve_citation(args: argparse.Namespace) -> str:
@@ -103,6 +150,74 @@ def _run_card(args: argparse.Namespace) -> int:
     return 0
 
 
+def _parse_splits(raw: str | None) -> tuple[str, ...] | None:
+    # Strip and reject empties so inputs like "train, val" or ",val," still
+    # map to the intended ("train", "val") filter instead of synthesizing
+    # bogus " val/**" patterns that silently skip the requested split.
+    if raw is None:
+        return None
+    parts = tuple(part.strip() for part in raw.split(",") if part.strip())
+    return parts if parts else None
+
+
+def _human_bytes(num: float) -> str:
+    # IEC suffixes (1 KiB == 1024 B). Falls through to PiB for >1024 TiB.
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if num < 1024.0:
+            return f"{num:.1f} {unit}"
+        num /= 1024.0
+    return f"{num:.1f} PiB"
+
+
+def _summarize_target(target: Path) -> tuple[int, int]:
+    # Returns (file_count, total_bytes) for the actually-downloaded tree.
+    # Walks the directory directly instead of going through
+    # ``inspect_local_layout``: that helper only sees files inside the
+    # recognized split folders and would otherwise undercount root-level
+    # files like ``README.md`` that ``pull_dataset`` is expected to bring
+    # along when ``splits`` is set.
+    if not target.exists():
+        return 0, 0
+
+    files = 0
+    total_bytes = 0
+    for dirpath, _, filenames in os.walk(target):
+        for name in filenames:
+            files += 1
+            try:
+                total_bytes += (Path(dirpath) / name).stat().st_size
+            except OSError:
+                continue
+    return files, total_bytes
+
+
+def _run_pull(args: argparse.Namespace) -> int:
+    splits = _parse_splits(args.splits)
+    include_globs = tuple(args.include) if args.include is not None else None
+    kwargs: dict = {
+        "revision": args.revision,
+        "token": args.token,
+        "splits": splits,
+        "include_globs": include_globs,
+        "max_workers": args.max_workers,
+    }
+    if args.ignore is not None:
+        kwargs["ignore_globs"] = tuple(args.ignore)
+
+    try:
+        target = pull_dataset(args.repo_id, args.local_dir, **kwargs)
+    except Exception as exc:
+        print(f"synthpix-hf pull: {exc}", file=sys.stderr)
+        return 1
+
+    files, total_bytes = _summarize_target(target)
+    print(
+        f"Pulled {args.repo_id}@{args.revision} -> {target} "
+        f"({files} files, {_human_bytes(total_bytes)})"
+    )
+    return 0
+
+
 def _run_stub(name: str) -> int:
     print(f"`synthpix-hf {name}`: {_NOT_IMPLEMENTED}", file=sys.stderr)
     return 2
@@ -122,7 +237,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "card":
         return _run_card(args)
-    if args.command in {"push", "pull"}:
+    if args.command == "pull":
+        return _run_pull(args)
+    if args.command == "push":
         return _run_stub(args.command)
 
     # ``add_subparsers(required=True)`` makes this unreachable; ``parser.error``
