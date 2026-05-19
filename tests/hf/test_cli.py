@@ -188,12 +188,206 @@ def test_card_subcommand_respects_output(tmp_path: Path):
     assert not (tmp_path / "README.md").exists()
 
 
-def test_push_subcommand_reports_not_implemented(capsys):
-    rc = cli.main(["push"])
+def test_cli_push_requires_allow_public_when_public(
+    monkeypatch, tmp_path: Path, capsys
+):
+    monkeypatch.setattr(
+        cli, "push_dataset", lambda *a, **kw: "should-not-call"
+    )
+
+    rc = cli.main(["push", str(tmp_path), "user/repo", "--public"])
 
     captured = capsys.readouterr()
     assert rc != 0
-    assert "not yet implemented" in (captured.out + captured.err).lower()
+    assert "--allow-public" in captured.err
+
+
+def test_cli_push_public_with_allow_public_skips_tty_prompt_when_not_tty(
+    monkeypatch, tmp_path: Path
+):
+    captured: dict = {}
+
+    def _fake(local_dir, repo_id, **kwargs):
+        captured["local_dir"] = local_dir
+        captured["repo_id"] = repo_id
+        captured.update(kwargs)
+        return "sha-abc"
+
+    monkeypatch.setattr(cli, "push_dataset", _fake)
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
+
+    rc = cli.main(
+        [
+            "push",
+            str(tmp_path),
+            "user/repo",
+            "--public",
+            "--allow-public",
+        ]
+    )
+
+    assert rc == 0
+    assert captured["private"] is False
+    assert captured["allow_public"] is True
+
+
+def test_cli_push_public_prompts_on_tty(monkeypatch, tmp_path: Path):
+    calls: list[dict] = []
+
+    def _fake(local_dir, repo_id, **kwargs):
+        calls.append({"local_dir": local_dir, "repo_id": repo_id, **kwargs})
+        return "sha-abc"
+
+    monkeypatch.setattr(cli, "push_dataset", _fake)
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda *a, **kw: "yes")
+
+    rc = cli.main(
+        [
+            "push",
+            str(tmp_path),
+            "user/repo",
+            "--public",
+            "--allow-public",
+        ]
+    )
+    assert rc == 0
+    assert len(calls) == 1
+
+    monkeypatch.setattr("builtins.input", lambda *a, **kw: "no")
+    rc = cli.main(
+        [
+            "push",
+            str(tmp_path),
+            "user/repo",
+            "--public",
+            "--allow-public",
+        ]
+    )
+    assert rc != 0
+    assert len(calls) == 1
+
+
+def test_cli_push_card_partial_args_errors(
+    monkeypatch, tmp_path: Path, capsys
+):
+    monkeypatch.setattr(
+        cli, "push_dataset", lambda *a, **kw: "should-not-call"
+    )
+
+    rc = cli.main(
+        [
+            "push",
+            str(tmp_path),
+            "user/repo",
+            "--card-source-url",
+            "https://example.org",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert rc != 0
+    assert "card" in captured.err.lower()
+
+
+def test_cli_push_card_full_args_builds_meta(monkeypatch, tmp_path: Path):
+    captured: dict = {}
+
+    def _fake(local_dir, repo_id, **kwargs):
+        captured.update(kwargs)
+        return "sha-1"
+
+    monkeypatch.setattr(cli, "push_dataset", _fake)
+
+    rc = cli.main(
+        [
+            "push",
+            str(tmp_path),
+            "user/repo",
+            "--card-source-url",
+            "https://example.org/src",
+            "--card-citation",
+            "free-form citation",
+            "--card-name",
+            "Pretty Name",
+        ]
+    )
+
+    assert rc == 0
+    meta = captured["card_meta"]
+    assert meta is not None
+    assert meta.source_url == "https://example.org/src"
+    assert meta.citation == "free-form citation"
+    assert meta.pretty_name == "Pretty Name"
+
+
+def test_cli_push_no_card_passes_none(monkeypatch, tmp_path: Path):
+    captured: dict = {}
+
+    def _fake(local_dir, repo_id, **kwargs):
+        captured.update(kwargs)
+        return "sha-1"
+
+    monkeypatch.setattr(cli, "push_dataset", _fake)
+
+    rc = cli.main(
+        [
+            "push",
+            str(tmp_path),
+            "user/repo",
+            "--no-card",
+            "--card-source-url",
+            "https://example.org/src",
+            "--card-citation",
+            "ignored",
+        ]
+    )
+
+    assert rc == 0
+    assert captured["card_meta"] is None
+
+
+def test_cli_push_dry_run_propagates(monkeypatch, tmp_path: Path):
+    captured: dict = {}
+
+    def _fake(local_dir, repo_id, **kwargs):
+        captured.update(kwargs)
+        return "dry-run"
+
+    monkeypatch.setattr(cli, "push_dataset", _fake)
+
+    rc = cli.main(
+        ["push", str(tmp_path), "user/repo", "--dry-run"]
+    )
+
+    assert rc == 0
+    assert captured["dry_run"] is True
+
+
+def test_cli_push_token_not_logged(
+    monkeypatch, tmp_path: Path, capsys, caplog
+):
+    def _fake(local_dir, repo_id, **kwargs):
+        return "sha-secret-free"
+
+    monkeypatch.setattr(cli, "push_dataset", _fake)
+
+    rc = cli.main(
+        [
+            "push",
+            str(tmp_path),
+            "user/repo",
+            "--token",
+            "hf_secret",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "hf_secret" not in captured.out
+    assert "hf_secret" not in captured.err
+    for record in caplog.records:
+        assert "hf_secret" not in record.getMessage()
 
 
 def test_cli_pull_invokes_pull_dataset(monkeypatch, tmp_path: Path):
