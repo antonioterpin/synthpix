@@ -90,6 +90,21 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _read_citation(value: str) -> str:
+    """Return the citation contents, reading from disk if ``value`` is a path.
+
+    Used by the ``push`` subcommand's single ``--card-citation`` flag,
+    where the value may be either a literal citation string or a path
+    to a file containing it. The ``card`` subcommand instead uses an
+    explicit mutually-exclusive ``--citation``/``--citation-file`` pair
+    via :func:`_resolve_citation` below.
+    """
+    candidate = Path(value)
+    if candidate.is_file():
+        return candidate.read_text()
+    return value
+
+
 def _resolve_citation(args: argparse.Namespace) -> str:
     """Return the citation contents from the chosen mutually exclusive flag.
 
