@@ -86,14 +86,24 @@ def test_filedatasource_mixes_hf_and_local_paths(monkeypatch, tmp_path):
     assert len(ds.file_list) == 5
 
 
-def test_filedatasource_hf_uri_without_extra_raises_clear_error(
+def test_filedatasource_hf_resolver_module_import_failure_surfaces_clear_error(
     monkeypatch, tmp_path
 ):
-    # A failing resolver import surfaces an actionable message with cause.
+    # Defensive coverage: if `from synthpix.data_sources import hf_resolver`
+    # itself raises ImportError, the guard in base.py still surfaces the
+    # actionable `synthpix[hf]` hint and preserves __cause__.
+    #
+    # NOTE: this is NOT the realistic missing-`[hf]`-extra path. Today the
+    # hf_resolver module loads fine without huggingface_hub — the real
+    # ImportError fires inside pull_dataset's lazy import on the call arm,
+    # which is covered by test_filedatasource_pull_dataset_import_error_surfaces.
+    # This test pins the defensive arm against a future refactor that adds
+    # an eager huggingface_hub (or other optional) import anywhere in the
+    # hf_resolver module-load chain.
     import synthpix.data_sources as ds_pkg
 
     real_import = builtins.__import__
-    original_cause = ImportError("install with synthpix[hf]")
+    original_cause = ImportError("simulated resolver-module import failure")
 
     # Force the `from synthpix.data_sources import hf_resolver` statement in
     # base.py to re-run by dropping the cached submodule and the attribute.

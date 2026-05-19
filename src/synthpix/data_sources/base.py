@@ -75,11 +75,17 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
         """Resolve an ``hf://`` URI to a local directory string.
 
         The resolver and ``huggingface_hub`` are both lazy-imported — the
-        ``[hf]`` extra is not required for local-only datasets. Either
-        import (the resolver module itself or ``huggingface_hub`` inside
-        ``pull_dataset``) can fail with ``ImportError`` when the extra is
-        missing, and both paths are surfaced with the same actionable
-        message while preserving the original cause.
+        ``[hf]`` extra is not required for local-only datasets. The
+        realistic missing-``[hf]``-extra failure surfaces from the
+        resolver *call*: ``hf_resolver.resolve_to_directory`` invokes
+        ``pull_dataset``, which lazy-imports ``huggingface_hub`` and
+        raises ``ImportError`` if the extra is absent. The surrounding
+        ``try/except ImportError`` also defensively covers the resolver
+        *module* import itself, so a future refactor that adds an eager
+        ``huggingface_hub`` (or other optional) import into the
+        ``hf_resolver`` chain would still surface the same actionable
+        message rather than a non-actionable traceback. Both paths
+        preserve the original exception as ``__cause__``.
 
         Args:
             spec: The full ``hf://...`` URI.
@@ -89,8 +95,9 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
                 surrounding glob logic can walk.
 
         Raises:
-            ImportError: When either the resolver module or
-                ``huggingface_hub`` cannot be imported. The original
+            ImportError: When the resolver call raises (realistic
+                missing-``[hf]`` path) or when the resolver module
+                import itself fails (defensive). The original
                 exception is attached as ``__cause__``.
         """
         try:
