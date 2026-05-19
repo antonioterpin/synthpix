@@ -333,6 +333,101 @@ pulled tree is the same tree your `.mat` scheduler already globs over.
 > The YAML snippet above is paraphrased; check your actual flowgym
 > experiment YAML for the exact key names and any project-specific overrides.
 
+## `hf://` data sources
+
+For the case where you would rather not run a separate `synthpix-hf pull`
+step before training, the file-based data sources accept `hf://` URIs
+directly. The first time a URI is seen the dataset is pulled into a local
+cache; subsequent runs reuse the cache and re-download only changed
+files. A metadata round-trip (etag / HEAD against the Hub) still happens
+on every call to confirm files are up to date — set `HF_HUB_OFFLINE=1`
+if you need a truly offline run.
+
+### URI grammar
+
+```
+hf://<owner>/<name>                       # pull main, return all files
+hf://<owner>/<name>@<revision>            # pin to a branch, tag, or commit sha
+hf://<owner>/<name>:<subpath>             # restrict to files under <subpath>
+hf://<owner>/<name>@<revision>:<subpath>  # both
+```
+
+Concrete examples:
+
+```
+hf://user/piv-dataset-class1-256
+hf://user/piv-dataset-class1-256@v1.2.0
+hf://user/piv-dataset-class1-256:train
+hf://user/piv-dataset-class1-256@v1.2.0:train
+```
+
+The resolver always pulls the full repository so that transfers stay
+resumable; `subpath` only narrows the returned file list.
+
+### Cache location
+
+The cache root is selected in this order:
+
+1. The `cache_dir` argument to `synthpix.data_sources.resolve(...)`, if any.
+2. The `SYNTHPIX_HF_CACHE` environment variable.
+3. The default: `~/.cache/synthpix/hf`.
+
+Each `(owner, name, revision)` triple gets its own subdirectory:
+`<cache_root>/<owner>/<name>@<revision>/`. Different revisions of the same
+repo coexist without colliding.
+
+### Use from flowgym (or any synthpix-using project)
+
+```yaml
+file_list: ["hf://user/piv-dataset-class1-256:train"]
+scheduler_class: ".mat"
+```
+
+That is the entire change. `MATDataSource` (and `HDF5DataSource`,
+`NumpyDataSource`) detects the `hf://` prefix in `dataset_path`,
+pulls the repo into the cache, and recursively globs the resolved
+local directory exactly as if you had passed a regular file path.
+`hf://` URIs and local paths can be mixed in the same list:
+
+```yaml
+file_list:
+  - "hf://user/piv-dataset-class1-256:train"
+  - "/scratch/local_extras"
+scheduler_class: ".mat"
+```
+
+The first call pulls; subsequent calls hit the cache. Resumption is
+inherited from `pull_dataset` / `snapshot_download`, so an interrupted
+first run is picked up where it left off on the next attempt.
+
+### Current limitation
+
+`FileDataSource.__init__` does not currently expose `token` or `cache_dir`
+arguments. The defaults from the environment are used: `HF_TOKEN` /
+`HF_HUB_TOKEN` (or the `huggingface-cli login` cache) for the token, and
+`SYNTHPIX_HF_CACHE` (or `~/.cache/synthpix/hf`) for the cache.
+
+When you need fine-grained control over the token, custom `cache_dir`,
+split filtering, or anything else `pull_dataset` exposes, the explicit
+workflow is still the right path:
+
+```bash
+uv run synthpix-hf pull user/piv-dataset-class1-256 ~/data/piv \
+    --splits train,val
+```
+
+```python
+from synthpix.hf import pull_dataset
+pull_dataset(
+    "user/piv-dataset-class1-256",
+    "~/data/piv",
+    splits=("train", "val"),
+    token="hf_xxxxxxxx",
+)
+```
+
+Then point `file_list` at the pulled directory as in the previous section.
+
 ## Live tests
 
 The repo ships one live, network-touching round-trip test for `push_dataset`.
