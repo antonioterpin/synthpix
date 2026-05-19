@@ -18,6 +18,8 @@ import os
 
 import pytest
 
+# TODO(synthpix#259): swap to a synthpix-owned mirror once one is published
+# so the live smoke test no longer pins on an upstream-owned repo.
 _DEFAULT_LIVE_REPO = "lhoestq/demo1"
 
 
