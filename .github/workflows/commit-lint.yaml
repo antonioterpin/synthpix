@@ -2,9 +2,11 @@ name: Commit style validation
 
 on:
     workflow_dispatch:
-    push:
-        branches:
-            - '**'
+    # Validate commit messages on pull requests (wagoid lints the base..head
+    # range). Running on `push` instead made merges to main fail, because a
+    # merge's push range re-lints already-merged history rather than just the
+    # new commits.
+    pull_request:
 
 jobs:
   commit-lint:
