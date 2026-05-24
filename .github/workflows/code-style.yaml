@@ -33,9 +33,11 @@ jobs:
               uses: astral-sh/setup-uv@v5
 
             # Step 4: Install project dev deps via uv so ``uv run pydoclint``
-            # and ``uv run basedpyright`` resolve to the pinned versions.
+            # and ``uv run basedpyright`` resolve to the pinned versions. The
+            # ``hf`` extra is included so basedpyright can resolve
+            # ``huggingface_hub`` when type-checking ``src/synthpix/hf``.
             - name: Install dev dependencies
-              run: uv sync --extra dev
+              run: uv sync --extra dev --extra hf
 
             # Step 5: Run pre-commit hooks via ``uv run`` so we get the
             # version pinned in the lock file (4.0.1). A system

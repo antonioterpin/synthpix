@@ -4,6 +4,15 @@ src/synthpix/data_sources/episodic.py
     DOC503: Method `EpisodicDataSource._calculate_starts` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
     DOC201: Method `EpisodicDataSource.__len__` does not have a return section in docstring
 --------------------
+src/synthpix/hf/card.py
+    DOC601: Class `DatasetCardMeta`: Class docstring contains fewer class attributes than actual class attributes.  (Please read https://jsh9.github.io/pydoclint/checking_class_attributes.html on how to correctly document class attributes.)
+    DOC603: Class `DatasetCardMeta`: Class docstring attributes are different from actual class attributes. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Attributes in the class definition but not in the docstring: [citation: str, license: str, license_name: str, name: str, pretty_name: str | None, source_url: str, synthpix_commit: str | None, synthpix_version: str | None, tags: tuple[str, ...]]. (Please read https://jsh9.github.io/pydoclint/checking_class_attributes.html on how to correctly document class attributes.)
+--------------------
+src/synthpix/hf/cli.py
+    DOC101: Function `_read_citation`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `_read_citation`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [value: str].
+    DOC201: Function `_read_citation` does not have a return section in docstring
+--------------------
 src/synthpix/make.py
     DOC501: Function `make_grain_scheduler` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Function `make_grain_scheduler` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
@@ -13,7 +22,12 @@ tests/conftest.py
     DOC106: Function `generate_hdf5_file`: The option `--arg-type-hints-in-signature` is `True` but there are no argument type hints in the signature
     DOC107: Function `generate_hdf5_file`: The option `--arg-type-hints-in-signature` is `True` but not all args in the signature have type hints
     DOC103: Function `generate_hdf5_file`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [tmp_path_factory: ].
-    DOC201: Function `generate_hdf5_file` does not have a return section in docstring
+    DOC402: Function `generate_hdf5_file` has "yield" statements, but the docstring does not have a "Yields" section
+    DOC404: Function `generate_hdf5_file` yield type(s) in docstring not consistent with the return annotation. Return annotation exists, but docstring "yields" section does not exist or has 0 type(s).
+    DOC101: Function `hdf5_test_dims`: Docstring contains fewer arguments than in function signature.
+    DOC106: Function `hdf5_test_dims`: The option `--arg-type-hints-in-signature` is `True` but there are no argument type hints in the signature
+    DOC107: Function `hdf5_test_dims`: The option `--arg-type-hints-in-signature` is `True` but not all args in the signature have type hints
+    DOC103: Function `hdf5_test_dims`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [request: ].
     DOC201: Function `hdf5_test_dims` does not have a return section in docstring
     DOC101: Function `temp_file`: Docstring contains fewer arguments than in function signature.
     DOC106: Function `temp_file`: The option `--arg-type-hints-in-signature` is `True` but there are no argument type hints in the signature
@@ -72,6 +86,39 @@ tests/example_flows.py
     DOC111: Function `vortex_flow`: The option `--arg-type-hints-in-docstring` is `False` but there are type hints in the docstring arg list
     DOC501: Function `get_flow_function` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Function `get_flow_function` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
+--------------------
+tests/hf/test_auth.py
+    DOC101: Function `_clear_env`: Docstring contains fewer arguments than in function signature.
+    DOC106: Function `_clear_env`: The option `--arg-type-hints-in-signature` is `True` but there are no argument type hints in the signature
+    DOC107: Function `_clear_env`: The option `--arg-type-hints-in-signature` is `True` but not all args in the signature have type hints
+    DOC103: Function `_clear_env`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [monkeypatch: ].
+    DOC101: Function `test_resolve_token_uses_modern_get_token_without_hffolder`: Docstring contains fewer arguments than in function signature.
+    DOC106: Function `test_resolve_token_uses_modern_get_token_without_hffolder`: The option `--arg-type-hints-in-signature` is `True` but there are no argument type hints in the signature
+    DOC107: Function `test_resolve_token_uses_modern_get_token_without_hffolder`: The option `--arg-type-hints-in-signature` is `True` but not all args in the signature have type hints
+    DOC103: Function `test_resolve_token_uses_modern_get_token_without_hffolder`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [monkeypatch: ].
+    DOC101: Function `test_resolve_token_cached_empty_string_is_ignored`: Docstring contains fewer arguments than in function signature.
+    DOC106: Function `test_resolve_token_cached_empty_string_is_ignored`: The option `--arg-type-hints-in-signature` is `True` but there are no argument type hints in the signature
+    DOC107: Function `test_resolve_token_cached_empty_string_is_ignored`: The option `--arg-type-hints-in-signature` is `True` but not all args in the signature have type hints
+    DOC103: Function `test_resolve_token_cached_empty_string_is_ignored`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [monkeypatch: ].
+--------------------
+tests/hf/test_layout.py
+    DOC101: Function `_make_mat`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `_make_mat`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [path: Path, payload: bytes].
+    DOC101: Function `synthetic_tree`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `synthetic_tree`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [tmp_path: Path].
+    DOC201: Function `synthetic_tree` does not have a return section in docstring
+--------------------
+tests/hf/test_push.py
+    DOC101: Function `_populate_piv_tree`: Docstring contains fewer arguments than in function signature.
+    DOC103: Function `_populate_piv_tree`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [root: Path].
+    DOC101: Function `test_push_upload_folder_no_unsupported_kwargs`: Docstring contains fewer arguments than in function signature.
+    DOC106: Function `test_push_upload_folder_no_unsupported_kwargs`: The option `--arg-type-hints-in-signature` is `True` but there are no argument type hints in the signature
+    DOC107: Function `test_push_upload_folder_no_unsupported_kwargs`: The option `--arg-type-hints-in-signature` is `True` but not all args in the signature have type hints
+    DOC103: Function `test_push_upload_folder_no_unsupported_kwargs`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [monkeypatch: , tmp_path: ].
+    DOC101: Function `test_push_returns_oid_not_commit_url`: Docstring contains fewer arguments than in function signature.
+    DOC106: Function `test_push_returns_oid_not_commit_url`: The option `--arg-type-hints-in-signature` is `True` but there are no argument type hints in the signature
+    DOC107: Function `test_push_returns_oid_not_commit_url`: The option `--arg-type-hints-in-signature` is `True` but not all args in the signature have type hints
+    DOC103: Function `test_push_returns_oid_not_commit_url`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [monkeypatch: , tmp_path: ].
 --------------------
 tests/test_comparisons/test_correctness.py
     DOC101: Function `test_legacy_vs_grain_equality_simple`: Docstring contains fewer arguments than in function signature.

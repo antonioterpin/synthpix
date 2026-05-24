@@ -276,6 +276,9 @@ def _build_push_card_meta(args: argparse.Namespace) -> DatasetCardMeta | None:
         return None
     if args.card_source_url is None and args.card_citation is None:
         return None
+    # Partial flag sets (exactly one of the two) are rejected by the caller
+    # (`_run_push`), so reaching here with one non-None guarantees both are.
+    assert args.card_source_url is not None
     citation = _read_citation(args.card_citation)
     name = args.card_name or args.repo_id.split("/", 1)[-1]
     return DatasetCardMeta(

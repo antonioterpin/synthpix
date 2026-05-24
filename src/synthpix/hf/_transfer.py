@@ -65,7 +65,9 @@ def enable_hf_transfer() -> Iterator[None]:
     Yields:
         None: The context payload; callers do not need the value.
     """
-    global _active_count, _saved_value, _saved_present
+    # Module-level state is intentional: the saved env value must survive
+    # across nested context entries/exits in the same process.
+    global _active_count, _saved_value, _saved_present  # noqa: PLW0603
 
     if not _hf_transfer_available():
         logger.warning(
