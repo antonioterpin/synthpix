@@ -99,7 +99,7 @@ addopts = [
         "-ra",
         "--strict-markers",
         "--strict-config",
-        "--cov=goggles",
+        "--cov=synthpix",
         "--cov-branch",
         "--cov-report=term-missing",
         "--cov-report=html",
