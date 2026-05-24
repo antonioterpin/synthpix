@@ -3,6 +3,12 @@
 This script provides a full end-to-end pipeline for preparing the
 PIV Dataset (Class 1) from the public Google Drive repositories.
 
+Optional flags ``--push-to``, ``--push-public``, ``--allow-public``,
+``--push-token``, and ``--no-push-card`` push the resulting tree to a
+Hugging Face Hub dataset repo via :func:`synthpix.hf.push_dataset` when
+``--push-to`` is set. The push defaults to private; public pushes
+require the explicit ``--allow-public`` safety gate.
+
 ==============================================================
  PIV Dataset Class 1 Builder
 ==============================================================
@@ -57,12 +63,14 @@ import random
 import re
 import shutil
 import struct
+import sys
 import zipfile
 from pathlib import Path
 
 import gdown
 import h5py
 import numpy as np
+import scipy.io
 from PIL import Image
 from utils import download_file, read_list, write_list
 
@@ -118,14 +126,15 @@ def fetch_splits(
         n_train = total - n_val - n_tune
 
         new_train = full_train[:n_train]
-        val_split = full_train[n_train: n_train + n_val]
-        tune_split = full_train[n_train + n_val:]
+        val_split = full_train[n_train : n_train + n_val]
+        tune_split = full_train[n_train + n_val :]
 
         print(
-            f"Splitting into:\n  Train: {
-                len(new_train)}\n  Val:   {
-                len(val_split)}\n  Tune:  {
-                len(tune_split)}")
+            f"Splitting into:\n"
+            f"  Train: {len(new_train)}\n"
+            f"  Val:   {len(val_split)}\n"
+            f"  Tune:  {len(tune_split)}"
+        )
 
         # Write out the new splits
         write_list(train_dest, new_train)
@@ -146,6 +155,10 @@ def read_flow(path: str) -> np.ndarray:
 
     Returns:
         Numpy array of the optical flow.
+
+    Raises:
+        Exception: If the file format is invalid or unsupported.
+        ValueError: If the .mat file does not contain recognizable flow data.
     """
     if path.endswith(".flo"):
         with open(path, "rb") as f:
@@ -158,8 +171,6 @@ def read_flow(path: str) -> np.ndarray:
             flow = np.reshape(data, (height, width, 2))
         return flow
     elif path.endswith(".mat"):
-        import scipy.io
-
         mat = scipy.io.loadmat(path)
         for k in ["V", "flow", "u", "uv", "F"]:
             if k in mat:
@@ -329,7 +340,8 @@ def download_from_gdrive(raw_dir_path: Path) -> None:
         print(f"  Extracting {zip_path}")
         try:
             with zipfile.ZipFile(zip_path, "r") as z:
-                # Extract into the main raw directory to avoid gdrive_folder_X nesting
+                # Extract into the main raw directory to avoid
+                # gdrive_folder_X nesting
                 # This flattens the structure so 'backstep' ends up in
                 # raw_dir_path/backstep
                 z.extractall(raw_dir_path)
@@ -355,12 +367,12 @@ def load_split_file(path: Path) -> set[str]:
     out = []
     with open(path) as f:
         for line in f:
-            line = line.strip()
-            if not line:
+            line_stripped = line.strip()
+            if not line_stripped:
                 continue
             # The split file might contain multiple columns (img1 img2 flow)
             # We want to canonicalize to the expected .mat filename
-            parts = line.split()
+            parts = line_stripped.split()
             base_token = parts[0]
 
             p = Path(base_token)
@@ -386,6 +398,9 @@ def perform_split(packed_root: Path, split_root: Path) -> None:
     Args:
         packed_root: Directory containing packed .mat files.
         split_root: Directory to save split datasets.
+
+    Raises:
+        FileNotFoundError: If any of the split files are missing.
     """
     split_root.mkdir(parents=True, exist_ok=True)
     split_files_dir = packed_root.parent / "splits"
@@ -439,19 +454,91 @@ def perform_split(packed_root: Path, split_root: Path) -> None:
     print(f"Split datasets saved under: {split_root}")
 
 
+_PUSH_SOURCE_URL = "https://github.com/shengzesnail/PIV_dataset"
+_PUSH_CITATION = (
+    "Cai, S., Zhou, S., Xu, C., Gao, Q. (2019). "
+    "Dense motion estimation of particle images via a convolutional "
+    "neural network. Exp Fluids 60, 73.\n\n"
+    "@article{cai2019dense,\n"
+    "  title={Dense motion estimation of particle images via "
+    "a convolutional neural network},\n"
+    "  author={Cai, Shengze and Zhou, Shichao and Xu, Chuanqi "
+    "and Gao, Qi},\n"
+    "  journal={Experiments in Fluids},\n"
+    "  volume={60},\n"
+    "  number={4},\n"
+    "  pages={73},\n"
+    "  year={2019},\n"
+    "  publisher={Springer}\n"
+    "}"
+)
+
+
+def _default_card_meta(repo_id: str) -> "object":
+    """Return a default ``DatasetCardMeta`` for the class-1 dataset.
+
+    The import is deferred so the rest of this script keeps working
+    without the ``[hf]`` extra installed.
+
+    Args:
+        repo_id: ``<owner>/<name>`` identifier on the Hub; the trailing
+            name becomes the card's ``name`` field.
+
+    Returns:
+        DatasetCardMeta: A populated card metadata object.
+    """
+    from synthpix.hf import DatasetCardMeta  # noqa: PLC0415
+
+    name = repo_id.split("/", 1)[-1]
+    return DatasetCardMeta(
+        name=name,
+        source_url=_PUSH_SOURCE_URL,
+        citation=_PUSH_CITATION,
+        pretty_name=name,
+        tags=("PIV", "synthetic", "optical-flow", "class-1"),
+    )
+
+
+def _maybe_push(args: argparse.Namespace, out_dir_path: Path) -> None:
+    """Optionally push ``out_dir_path`` to the Hub based on CLI flags.
+
+    Args:
+        args: Parsed CLI namespace; ``args.push_to`` controls activation.
+        out_dir_path: Local directory uploaded to the Hub.
+    """
+    if not getattr(args, "push_to", None):
+        return
+
+    from synthpix.hf import push_dataset  # noqa: PLC0415
+
+    card_meta = None if args.no_push_card else _default_card_meta(args.push_to)
+    sha = push_dataset(
+        local_dir=out_dir_path,
+        repo_id=args.push_to,
+        private=not args.push_public,
+        allow_public=args.allow_public,
+        token=args.push_token,
+        card_meta=card_meta,
+    )
+    print(sha)
+
+
 def main(out_dir: str, target_shape: str) -> None:
     """Main function to orchestrate the dataset preparation workflow.
 
     Args:
         out_dir: Directory to save raw, packed, and split datasets.
-        target_shape: Target shape (HxW) for resizing images and flow, e.g., '256x256'.
+        target_shape:
+            Target shape (HxW) for resizing images and flow, e.g., '256x256'.
     """
     out_dir_path = Path(out_dir)
     try:
         target_shape_tuple = tuple(map(int, target_shape.split("x")))
     except Exception as e:
-        print(f"Target shape is in the wrong format: {
-            target_shape}. Use HxW, e.g., '256x256'. Error: {e}")
+        print(
+            f"Target shape is in the wrong format: {target_shape}. "
+            f"Use HxW, e.g., '256x256'. Error: {e}"
+        )
         return
 
     raw_dir_path = out_dir_path / "raw_class1"
@@ -504,16 +591,64 @@ if __name__ == "__main__":
         default="256x256",
         help="Target shape (HxW) for resizing images and flow, e.g., '256x256'",
     )
+    parser.add_argument(
+        "--push-to",
+        type=str,
+        default=None,
+        help=(
+            "Optional Hugging Face Hub dataset repo id "
+            "(<owner>/<name>) to push the built dataset to."
+        ),
+    )
+    parser.add_argument(
+        "--push-public",
+        action="store_true",
+        default=False,
+        help=(
+            "Push as a public repo (private by default). Requires "
+            "--allow-public. Class-1 sources are research-only; do not "
+            "redistribute publicly without explicit permission."
+        ),
+    )
+    parser.add_argument(
+        "--allow-public",
+        action="store_true",
+        default=False,
+        help="Safety gate companion for --push-public.",
+    )
+    parser.add_argument(
+        "--push-token",
+        type=str,
+        default=None,
+        help="Explicit HF token; falls back to HF_TOKEN/cache.",
+    )
+    parser.add_argument(
+        "--no-push-card",
+        action="store_true",
+        default=False,
+        help="Skip dataset-card generation on push.",
+    )
     args = parser.parse_args()
+
+    if args.push_public and not args.allow_public:
+        print(
+            "--push-public requires --allow-public (safety gate).",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
     try:
         split_ratios = list(map(int, args.split_ratio.split("/")))
         if len(split_ratios) != 3 or sum(split_ratios) != 100:
             raise ValueError
-        out_path_split = Path(args.out_dir) / "splits"
-        fetch_splits(out_path_split, args.split_seed, split_ratios)
-        main(args.out_dir, args.target_shape)
     except Exception as e:
-        print(f"Split ratio is in the wrong format: {
-            args.split_ratio}. Use '80/10/10' format summing to 100. Error: {e}")
-        exit(1)
+        print(
+            f"Split ratio is in the wrong format: {args.split_ratio}. "
+            f"Use '80/10/10' format summing to 100. Error: {e}"
+        )
+        sys.exit(1)
+
+    out_path_split = Path(args.out_dir) / "splits"
+    fetch_splits(out_path_split, args.split_seed, split_ratios)
+    main(args.out_dir, args.target_shape)
+    _maybe_push(args, Path(args.out_dir))

@@ -103,7 +103,7 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
             A string representation of the EpisodicDataSource.
         """
         return (
-            f"EpisodicDataSource(source={repr(self.source)}, "
+            f"EpisodicDataSource(source={self.source!r}, "
             f"batch_size={self.batch_size}, "
             f"episode_length={self.episode_length})"
         )
@@ -182,7 +182,7 @@ class EpisodicDataSource(grain.RandomAccessDataSource):
 
                 # Fetch file paths for this episode
                 # Slice: [s : s + L]
-                files = self.dir2files[d][s: s + self.episode_length]
+                files = self.dir2files[d][s : s + self.episode_length]
                 chunk_episodes.append((files, is_padding))
 
             # 3. Interleave in Time-Major order

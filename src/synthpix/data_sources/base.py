@@ -10,6 +10,8 @@ import grain.python as grain
 
 logger = logging.getLogger(__name__)
 
+_HF_SCHEME = "hf://"
+
 
 class FileDataSource(grain.RandomAccessDataSource, ABC):
     """Abstract base class for file-based datasources.
@@ -40,20 +42,25 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
             or not all(isinstance(f, str) for f in dataset_path)
         ):
             raise ValueError(
-                "dataset_path must be a list of file paths (or a single "
-                "string)."
+                "dataset_path must be a list of file paths (or a string)."
             )
 
-        for file_path in dataset_path:
-            if os.path.isdir(file_path):
-                logger.debug(f"Searching for files in {file_path}")
-                pattern = os.path.join(file_path, self._file_pattern)
+        for raw_path in dataset_path:
+            if raw_path.startswith(_HF_SCHEME):
+                resolved_path = self._resolve_hf_path(raw_path)
+            else:
+                resolved_path = raw_path
+            if os.path.isdir(resolved_path):
+                logger.debug(f"Searching for files in {resolved_path}")
+                pattern = os.path.join(resolved_path, self._file_pattern)
                 # Recursive glob search
                 found_files = sorted(glob.glob(pattern, recursive=True))
-                logger.debug(f"Found {len(found_files)} files in {file_path}")
+                logger.debug(
+                    f"Found {len(found_files)} files in {resolved_path}"
+                )
                 self._file_list.extend(found_files)
             else:
-                self._file_list.append(file_path)
+                self._file_list.append(resolved_path)
 
         if not self._file_list:
             raise ValueError(
@@ -62,6 +69,52 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
             )
 
         super().__init__()
+
+    @staticmethod
+    def _resolve_hf_path(spec: str) -> str:
+        """Resolve an ``hf://`` URI to a local directory string.
+
+        The resolver and ``huggingface_hub`` are both lazy-imported — the
+        ``[hf]`` extra is not required for local-only datasets. The
+        realistic missing-``[hf]``-extra failure surfaces from the
+        resolver *call*: ``hf_resolver.resolve_to_directory`` invokes
+        ``pull_dataset``, which lazy-imports ``huggingface_hub`` and
+        raises ``ImportError`` if the extra is absent. The surrounding
+        ``try/except ImportError`` also defensively covers the resolver
+        *module* import itself, so a future refactor that adds an eager
+        ``huggingface_hub`` (or other optional) import into the
+        ``hf_resolver`` chain would still surface the same actionable
+        message rather than a non-actionable traceback. Both paths
+        preserve the original exception as ``__cause__``.
+
+        Args:
+            spec: The full ``hf://...`` URI.
+
+        Returns:
+            str: Absolute path to the resolved cache directory the
+                surrounding glob logic can walk.
+
+        Raises:
+            ImportError: When the resolver call raises (realistic
+                missing-``[hf]`` path) or when the resolver module
+                import itself fails (defensive). The original
+                exception is attached as ``__cause__``.
+        """
+        try:
+            # Lazy import: only loaded when an hf:// URI is seen,
+            # so the [hf] extra is not required for local datasets.
+            from synthpix.data_sources import (  # noqa: PLC0415
+                hf_resolver,
+            )
+
+            resolved = hf_resolver.resolve_to_directory(spec)
+        except ImportError as exc:
+            raise ImportError(
+                "hf:// paths require the [hf] extra. "
+                "Install with: pip install synthpix[hf]"
+            ) from exc
+        logger.debug(f"Resolved hf:// URI {spec} to local dir {resolved}")
+        return str(resolved)
 
     def __repr__(self) -> str:
         """Returns a stable string representation for Grain checkpointing.
@@ -82,7 +135,11 @@ class FileDataSource(grain.RandomAccessDataSource, ABC):
         return False
 
     def __len__(self) -> int:
-        """Returns the number of files in the dataset."""
+        """Returns the number of files in the dataset.
+
+        Returns:
+            The number of files in the dataset.
+        """
         return len(self._file_list)
 
     def __getitem__(self, record_key: int) -> dict[str, Any]:

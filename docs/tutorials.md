@@ -2,6 +2,7 @@
 
 ## Core Features
 - [Checkpointing and Reproducibility](checkpointing.md)
+- [Hugging Face Hub integration](hf_integration.md)
 
 ## Generating image pairs from custom flow data
 

@@ -1,10 +1,11 @@
 """Tests for the episodic scheduling wrapper.
 
-These tests verify that `EpisodicFlowFieldScheduler` correctly groups 
-consecutive frames into episodes, validates batch and episode lengths, 
-and reports the correct remaining steps during iteration over 
+These tests verify that `EpisodicFlowFieldScheduler` correctly groups
+consecutive frames into episodes, validates batch and episode lengths,
+and reports the correct remaining steps during iteration over
 high-level data sources.
 """
+
 import pytest
 
 from synthpix.scheduler import EpisodicFlowFieldScheduler, MATFlowFieldScheduler
@@ -71,7 +72,7 @@ def test_invalid_batch_size_in_get_batch(invalid_batch_size, mock_mat_files):
 def test_steps_remaining(episode_length, mock_mat_files):
     """Test that `steps_remaining` correctly tracks the current position in the episode.
 
-    Verifies that it starts at `episode_length` and decrements to zero 
+    Verifies that it starts at `episode_length` and decrements to zero
     as batches are retrieved.
     """
     files, dims = mock_mat_files

@@ -1,9 +1,10 @@
 """Tests for the MATLAB (.mat) file flow field scheduler.
 
-These tests verify the loading of flow fields and images from .mat files (both 
-v5 and v7.3/HDF5 formats), including resizing, scaling, and handling of 
+These tests verify the loading of flow fields and images from .mat files (both
+v5 and v7.3/HDF5 formats), including resizing, scaling, and handling of
 various interleaved data layouts.
 """
+
 import os
 
 import h5py
@@ -78,7 +79,7 @@ def test_mat_scheduler_invalid_output_shape_values(
 def test_mat_scheduler_iteration(mock_mat_files):
     """Verify that `MATFlowFieldScheduler` correctly iterates through multiple .mat files.
 
-    Confirms that `get_batch` yields the expected number of batches with 
+    Confirms that `get_batch` yields the expected number of batches with
     accurate flow field shapes.
     """
     files, _ = mock_mat_files
@@ -94,8 +95,17 @@ def test_mat_scheduler_iteration(mock_mat_files):
     while True:
         try:
             data = scheduler.get_batch(batch_size=1)
-            assert isinstance(data, SchedulerData), f"Expected SchedulerData, got {type(data)}"
-            assert data.flow_fields.shape == (1, 256, 256, 2), f"Expected flow field shape (1, 256, 256, 2), got {data.flow_fields.shape}"
+            assert isinstance(data, SchedulerData), (
+                f"Expected SchedulerData, got {type(data)}"
+            )
+            assert data.flow_fields.shape == (
+                1,
+                256,
+                256,
+                2,
+            ), (
+                f"Expected flow field shape (1, 256, 256, 2), got {data.flow_fields.shape}"
+            )
             count += 1
         except StopIteration:
             break
@@ -112,7 +122,11 @@ def test_mat_scheduler_shape(mock_mat_files):
         }
     )
     shape = scheduler.get_flow_fields_shape()
-    assert shape == (256, 256, 2), f"Expected flow field shape (256, 256, 2), got {shape}"
+    assert shape == (
+        256,
+        256,
+        2,
+    ), f"Expected flow field shape (256, 256, 2), got {shape}"
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
@@ -128,7 +142,9 @@ def test_mat_scheduler_init_flags(mock_mat_files):
 
     assert scheduler.randomize is True, "Expected randomize flag to be True"
     assert scheduler.loop is True, "Expected loop flag to be True"
-    assert scheduler.index == 0, f"Expected initial index to be 0, got {scheduler.index}"
+    assert scheduler.index == 0, (
+        f"Expected initial index to be 0, got {scheduler.index}"
+    )
 
 
 def test_mat_scheduler_invalid_ext(tmp_path):
@@ -155,7 +171,9 @@ def test_mat_scheduler_file_dir(tmp_path):
         mat_files.append(str(mat_file))
 
     scheduler = MATFlowFieldScheduler(mat_files)
-    assert scheduler.file_list == mat_files, "File list in scheduler does not match input files"
+    assert scheduler.file_list == mat_files, (
+        "File list in scheduler does not match input files"
+    )
 
 
 @pytest.mark.parametrize("mock_mat_files", [1], indirect=True)
@@ -165,15 +183,24 @@ def test_mat_scheduler_get_batch(mock_mat_files):
 
     batch_size = len(files)
     batch = scheduler.get_batch(batch_size)
-    assert isinstance(batch, SchedulerData), f"Expected SchedulerData, got {type(batch)}"
-    assert batch.flow_fields.shape == (batch_size, 256, 256, 2), f"Expected flow field shape {(batch_size, 256, 256, 2)}, got {batch.flow_fields.shape}"
+    assert isinstance(batch, SchedulerData), (
+        f"Expected SchedulerData, got {type(batch)}"
+    )
+    assert batch.flow_fields.shape == (
+        batch_size,
+        256,
+        256,
+        2,
+    ), (
+        f"Expected flow field shape {(batch_size, 256, 256, 2)}, got {batch.flow_fields.shape}"
+    )
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
 def test_mat_scheduler_with_images(mock_mat_files):
     """Verify that the scheduler correctly loads both flow fields and images.
 
-    Checks that images are present in the output and match the expected 
+    Checks that images are present in the output and match the expected
     dimensions when `include_images=True`.
     """
     files, _ = mock_mat_files
@@ -187,12 +214,33 @@ def test_mat_scheduler_with_images(mock_mat_files):
         except StopIteration:
             break
 
-        assert isinstance(batch, SchedulerData), f"Expected SchedulerData, got {type(batch)}"
-        assert batch.flow_fields.shape == (1, 256, 256, 2), f"Expected flow field shape (1, 256, 256, 2), got {batch.flow_fields.shape}"
-        assert batch.images1 is not None, "Expected images1 to be present in batch"
-        assert batch.images2 is not None, "Expected images2 to be present in batch"
-        assert batch.images1.shape == (1, 256, 256), f"Expected image1 shape (1, 256, 256), got {batch.images1.shape}"
-        assert batch.images2.shape == (1, 256, 256), f"Expected image2 shape (1, 256, 256), got {batch.images2.shape}"
+        assert isinstance(batch, SchedulerData), (
+            f"Expected SchedulerData, got {type(batch)}"
+        )
+        assert batch.flow_fields.shape == (
+            1,
+            256,
+            256,
+            2,
+        ), (
+            f"Expected flow field shape (1, 256, 256, 2), got {batch.flow_fields.shape}"
+        )
+        assert batch.images1 is not None, (
+            "Expected images1 to be present in batch"
+        )
+        assert batch.images2 is not None, (
+            "Expected images2 to be present in batch"
+        )
+        assert batch.images1.shape == (
+            1,
+            256,
+            256,
+        ), f"Expected image1 shape (1, 256, 256), got {batch.images1.shape}"
+        assert batch.images2.shape == (
+            1,
+            256,
+            256,
+        ), f"Expected image2 shape (1, 256, 256), got {batch.images2.shape}"
 
 
 # ============================
@@ -204,7 +252,7 @@ def test_mat_scheduler_with_images(mock_mat_files):
 def test_episode_iteration(mock_mat_files):
     """Verify that `EpisodicFlowFieldScheduler` correctly groups frames into episodes.
 
-    Tests full iteration through an episode and confirms that 
+    Tests full iteration through an episode and confirms that
     `get_batch` yields consistent flow field shapes.
     """
     files, dims = mock_mat_files
@@ -228,22 +276,35 @@ def test_episode_iteration(mock_mat_files):
         except StopIteration:
             break
         # every batch is (batch_size, H, W, 2)
-        assert isinstance(batch, SchedulerData), f"Expected SchedulerData, got {type(batch)}"
-        assert batch.flow_fields.shape == (batch_size, H, W, 2), f"Expected flow field shape {(batch_size, H, W, 2)}, got {batch.flow_fields.shape}"
+        assert isinstance(batch, SchedulerData), (
+            f"Expected SchedulerData, got {type(batch)}"
+        )
+        assert batch.flow_fields.shape == (
+            batch_size,
+            H,
+            W,
+            2,
+        ), (
+            f"Expected flow field shape {(batch_size, H, W, 2)}, got {batch.flow_fields.shape}"
+        )
 
         steps.append(t)
         t += 1
         if t >= episode_length:
             break  # will check below steps_remaining() == 0
-    assert steps == list(range(8)), f"Expected steps {list(range(8))}, but got {steps}"
-    assert epi.steps_remaining() == 0, f"Expected 0 steps remaining, but got {epi.steps_remaining()}"
+    assert steps == list(range(8)), (
+        f"Expected steps {list(range(8))}, but got {steps}"
+    )
+    assert epi.steps_remaining() == 0, (
+        f"Expected 0 steps remaining, but got {epi.steps_remaining()}"
+    )
 
 
 @pytest.mark.parametrize("mock_mat_files", [16], indirect=True)
 def test_reset_episode_resamples(mock_mat_files):
     """Verify that `reset_episode` correctly reshuffles data for a new episode.
 
-    Ensures that calling `reset_episode` leads to a different sequence of 
+    Ensures that calling `reset_episode` leads to a different sequence of
     frames, confirming that the internal base scheduler is reset.
     """
     files, dims = mock_mat_files
@@ -265,21 +326,29 @@ def test_reset_episode_resamples(mock_mat_files):
     epi.reset_episode()
     post_reset_files = base.file_list
     second0 = epi.get_batch(batch_size)  # new t = 0
-    assert epi.steps_remaining() == episode_length - 1, f"Expected {episode_length - 1} steps remaining, but got {epi.steps_remaining()}"
+    assert epi.steps_remaining() == episode_length - 1, (
+        f"Expected {episode_length - 1} steps remaining, but got {epi.steps_remaining()}"
+    )
     # ensure we didn’t get the exact same files twice
-    assert not np.array_equal(first0.flow_fields, second0.flow_fields), "Flow fields before and after reset should be different"
+    assert not np.array_equal(first0.flow_fields, second0.flow_fields), (
+        "Flow fields before and after reset should be different"
+    )
 
     # Check which files were used by opening the files
     # with a regular scheduler
     base.file_list = reordered_files[:batch_size]
     base.reset()
     rightfirst0 = base.get_batch(batch_size)
-    assert np.array_equal(first0.flow_fields, rightfirst0.flow_fields), "Flow fields do not match expected reordered values"
+    assert np.array_equal(first0.flow_fields, rightfirst0.flow_fields), (
+        "Flow fields do not match expected reordered values"
+    )
 
     base.file_list = post_reset_files[:batch_size]
     base.reset()
     rightsecond0 = base.get_batch(batch_size)
-    assert np.array_equal(second0.flow_fields, rightsecond0.flow_fields), "Flow fields do not match expected reordered values after reset"
+    assert np.array_equal(second0.flow_fields, rightsecond0.flow_fields), (
+        "Flow fields do not match expected reordered values after reset"
+    )
 
 
 @pytest.mark.parametrize("mock_mat_files", [64], indirect=True)  # 64 frames
@@ -298,10 +367,14 @@ def test_steps_remaining(mock_mat_files):
         key=jax.random.PRNGKey(42),
     )
 
-    assert epi.steps_remaining() == episode_length, f"Expected {episode_length} steps remaining, got {epi.steps_remaining()}"
+    assert epi.steps_remaining() == episode_length, (
+        f"Expected {episode_length} steps remaining, got {epi.steps_remaining()}"
+    )
     _ = epi.get_batch(batch_size)
     _ = epi.get_batch(batch_size)
-    assert epi.steps_remaining() == episode_length - 2, f"Expected {episode_length - 2} steps remaining after 2 batches, got {epi.steps_remaining()}"
+    assert epi.steps_remaining() == episode_length - 2, (
+        f"Expected {episode_length - 2} steps remaining after 2 batches, got {epi.steps_remaining()}"
+    )
 
 
 def test_path_is_hdf5_nonexistent():
@@ -354,15 +427,17 @@ def test_mat_v5_basic(tmp_path):
     )
 
     data = loader.load_file(fpath)
-    assert isinstance(data, SchedulerData), f"Expected SchedulerData, got {type(data)}"
+    assert isinstance(data, SchedulerData), (
+        f"Expected SchedulerData, got {type(data)}"
+    )
     np.testing.assert_array_equal(data.flow_fields, V)
 
 
 def test_mat_with_images_resize(tmp_path):
     """Test automatic resizing and scaling of images and flow fields.
 
-    Verifies that when the input dimensions differ from the target 
-    `output_shape`, both images and flow vectors are correctly 
+    Verifies that when the input dimensions differ from the target
+    `output_shape`, both images and flow vectors are correctly
     interpolated and scaled (in the case of flow).
     """
     I0 = _rand_image((2, 2))
@@ -378,17 +453,27 @@ def test_mat_with_images_resize(tmp_path):
     # images resized to 4×4
     assert data.images1 is not None, "Expected images1 to be present"
     assert data.images2 is not None, "Expected images2 to be present"
-    assert data.images1.shape == data.images2.shape == (4, 4), f"Expected 4x4 images, got {data.images1.shape} and {data.images2.shape}"
+    assert data.images1.shape == data.images2.shape == (4, 4), (
+        f"Expected 4x4 images, got {data.images1.shape} and {data.images2.shape}"
+    )
     # flow resized and *scaled* by factor 2 on both axes
-    assert data.flow_fields.shape == (4, 4, 2), f"Expected (4, 4, 2) flow field, got {data.flow_fields.shape}"
-    assert np.allclose(data.flow_fields[..., 0], 2.0), "Flow fields X component should be scaled to 2.0"
-    assert np.allclose(data.flow_fields[..., 1], 2.0), "Flow fields Y component should be scaled to 2.0"
+    assert data.flow_fields.shape == (
+        4,
+        4,
+        2,
+    ), f"Expected (4, 4, 2) flow field, got {data.flow_fields.shape}"
+    assert np.allclose(data.flow_fields[..., 0], 2.0), (
+        "Flow fields X component should be scaled to 2.0"
+    )
+    assert np.allclose(data.flow_fields[..., 1], 2.0), (
+        "Flow fields Y component should be scaled to 2.0"
+    )
 
 
 def test_flow_transposed(tmp_path):
     """Test handling of transposed flow layouts (2, H, W).
 
-    Verifies that the loader correctly permutes the axes to the 
+    Verifies that the loader correctly permutes the axes to the
     standard (H, W, 2) format.
     """
     V = _rand_flow((2, 4, 4))
@@ -397,10 +482,18 @@ def test_flow_transposed(tmp_path):
     loader = MATFlowFieldScheduler([fpath], output_shape=(4, 4))
     data = loader.load_file(fpath)
 
-    assert data.flow_fields.shape == (4, 4, 2), f"Expected (4, 4, 2) flow field, got {data.flow_fields.shape}"
+    assert data.flow_fields.shape == (
+        4,
+        4,
+        2,
+    ), f"Expected (4, 4, 2) flow field, got {data.flow_fields.shape}"
     # spot-check one value to prove correct permutation
-    assert np.isclose(data.flow_fields[1, 2, 0], V[0, 1, 2]), f"Flow X component at [1, 2] does not match V[0, 1, 2]"
-    assert np.isclose(data.flow_fields[1, 2, 1], V[1, 1, 2]), f"Flow Y component at [1, 2] does not match V[1, 1, 2]"
+    assert np.isclose(data.flow_fields[1, 2, 0], V[0, 1, 2]), (
+        "Flow X component at [1, 2] does not match V[0, 1, 2]"
+    )
+    assert np.isclose(data.flow_fields[1, 2, 1], V[1, 1, 2]), (
+        "Flow Y component at [1, 2] does not match V[1, 1, 2]"
+    )
 
 
 def test_hdf5_fallback(monkeypatch, tmp_path):
@@ -417,7 +510,11 @@ def test_hdf5_fallback(monkeypatch, tmp_path):
     loader = MATFlowFieldScheduler([fpath], output_shape=(4, 4))
     data = loader.load_file(fpath)
 
-    assert data.flow_fields.shape == (4, 4, 2), f"Expected (4, 4, 2) flow field, got {data.flow_fields.shape}"
+    assert data.flow_fields.shape == (
+        4,
+        4,
+        2,
+    ), f"Expected (4, 4, 2) flow field, got {data.flow_fields.shape}"
     np.testing.assert_array_equal(data.flow_fields, V)
 
 
@@ -479,10 +576,25 @@ def test_mat_scheduler_get_batch_with_images(mock_mat_files):
     assert img_prevs is not None, "Expected images1 to be present in batch"
     assert img_nexts is not None, "Expected images2 to be present in batch"
 
-    assert img_prevs.shape == (batch_size, 256, 256), f"Expected images1 shape {(batch_size, 256, 256)}, got {img_prevs.shape}"
-    assert img_nexts.shape == (batch_size, 256, 256), f"Expected images2 shape {(batch_size, 256, 256)}, got {img_nexts.shape}"
-    assert flows.shape == (batch_size, 256, 256, 2), f"Expected flows shape {(batch_size, 256, 256, 2)}, got {flows.shape}"
-    assert flows.dtype == np.float32, f"Expected flows dtype float32, got {flows.dtype}"
+    assert img_prevs.shape == (
+        batch_size,
+        256,
+        256,
+    ), f"Expected images1 shape {(batch_size, 256, 256)}, got {img_prevs.shape}"
+    assert img_nexts.shape == (
+        batch_size,
+        256,
+        256,
+    ), f"Expected images2 shape {(batch_size, 256, 256)}, got {img_nexts.shape}"
+    assert flows.shape == (
+        batch_size,
+        256,
+        256,
+        2,
+    ), f"Expected flows shape {(batch_size, 256, 256, 2)}, got {flows.shape}"
+    assert flows.dtype == np.float32, (
+        f"Expected flows dtype float32, got {flows.dtype}"
+    )
 
 
 def test_next_loop_reset(tmp_path):
@@ -504,8 +616,12 @@ def test_next_loop_reset(tmp_path):
     np.testing.assert_array_equal(second.flow_fields[0, ...], flow)
 
     # After two successful returns we are back at "end of list"
-    assert sched.index == 0, f"Expected index 0 after loop reset, got {sched.index}"
-    assert sched._slice_idx == 1, f"Expected _slice_idx 1, got {sched._slice_idx}"
+    assert sched.index == 0, (
+        f"Expected index 0 after loop reset, got {sched.index}"
+    )
+    assert sched._slice_idx == 1, (
+        f"Expected _slice_idx 1, got {sched._slice_idx}"
+    )
     assert sched.loop is True, "Sanity check: expected loop=True"
 
 
@@ -527,11 +643,15 @@ def test_next_skip_on_error(tmp_path):
     sample = sched.get_batch(1)  # bad file skipped, good file returned
 
     # The scheduler must now point to the good file it cached
-    assert sched._cached_file == good_path, f"Expected cached file to be {good_path}, got {sched._cached_file}"
+    assert sched._cached_file == good_path, (
+        f"Expected cached file to be {good_path}, got {sched._cached_file}"
+    )
     np.testing.assert_array_equal(sample.flow_fields[0, ...], good_flow)
 
     # Both list entries have been consumed (bad skipped, good returned)
-    assert sched.index == 1, f"Expected index 1 after skipping bad file and returning good file, got {sched.index}"
+    assert sched.index == 1, (
+        f"Expected index 1 after skipping bad file and returning good file, got {sched.index}"
+    )
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
@@ -554,15 +674,36 @@ def test_mat_scheduler_get_batch_too_large_pads_correctly(
 
     batch = scheduler.get_batch(batch_size)
     assert batch.mask is not None, "Expected mask to be present in padded batch"
-    assert np.sum(batch.mask) == len(files), f"Expected mask sum {len(files)}, got {np.sum(batch.mask)}"
-    assert batch.flow_fields.shape == (batch_size, 256, 256, 2), f"Expected flow field shape {(batch_size, 256, 256, 2)}, got {batch.flow_fields.shape}"
+    assert np.sum(batch.mask) == len(files), (
+        f"Expected mask sum {len(files)}, got {np.sum(batch.mask)}"
+    )
+    assert batch.flow_fields.shape == (
+        batch_size,
+        256,
+        256,
+        2,
+    ), (
+        f"Expected flow field shape {(batch_size, 256, 256, 2)}, got {batch.flow_fields.shape}"
+    )
     assert batch.images1 is not None, "Expected images1 to be present"
     assert batch.images2 is not None, "Expected images2 to be present"
-    assert batch.images1.shape == (batch_size, 256, 256), f"Expected images1 shape {(batch_size, 256, 256)}, got {batch.images1.shape}"
-    assert batch.images2.shape == (batch_size, 256, 256), f"Expected images2 shape {(batch_size, 256, 256)}, got {batch.images2.shape}"
-    assert (
-        batch.flow_fields[len(files):, ...].sum() == 0.0
-    ), "Padded entries in flow fields should be zeroed out"
+    assert batch.images1.shape == (
+        batch_size,
+        256,
+        256,
+    ), (
+        f"Expected images1 shape {(batch_size, 256, 256)}, got {batch.images1.shape}"
+    )
+    assert batch.images2.shape == (
+        batch_size,
+        256,
+        256,
+    ), (
+        f"Expected images2 shape {(batch_size, 256, 256)}, got {batch.images2.shape}"
+    )
+    assert batch.flow_fields[len(files) :, ...].sum() == 0.0, (
+        "Padded entries in flow fields should be zeroed out"
+    )
 
 
 def test_hdf5_recursive_group(monkeypatch, tmp_path):
@@ -608,11 +749,19 @@ def test_mat_scheduler_outputs_files(mock_mat_files):
             output = scheduler.get_batch(batch_size)
         except StopIteration:
             break
-        assert isinstance(output, SchedulerData), f"Expected SchedulerData, got {type(output)}"
-        assert output.files is not None, "Expected file paths to be present in output"
-        assert len(output.files) == batch_size, f"Expected {batch_size} files, got {len(output.files)}"
+        assert isinstance(output, SchedulerData), (
+            f"Expected SchedulerData, got {type(output)}"
+        )
+        assert output.files is not None, (
+            "Expected file paths to be present in output"
+        )
+        assert len(output.files) == batch_size, (
+            f"Expected {batch_size} files, got {len(output.files)}"
+        )
 
         for file_path in output.files:
             assert os.path.basename(file_path) in [
                 os.path.basename(f) for f in files
-            ], f"File {os.path.basename(file_path)} does not match any of the input files"
+            ], (
+                f"File {os.path.basename(file_path)} does not match any of the input files"
+            )

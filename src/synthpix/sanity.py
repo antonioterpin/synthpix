@@ -138,7 +138,9 @@ def calculate_min_and_max_speeds(file_list: list[str]) -> dict[str, float]:
     }
 
 
-def missing_speeds_panel(config_path: str) -> tuple[float, float, float, float]:  # noqa: PLR0912
+def missing_speeds_panel(
+    config_path: str,
+) -> tuple[float, float, float, float]:
     """Check for missing speeds in the configuration file.
 
     Args:

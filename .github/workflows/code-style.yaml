@@ -2,28 +2,54 @@ name: Coding style validation
 
 on:
     workflow_dispatch:
+    push:
+        branches:
+            - '**'
 
 jobs:
-  pre-commit-check:
-    runs-on: ubuntu-latest
+    code-style-check:
+        runs-on: ubuntu-latest
 
-    steps:
-      # Step 1: Check out the code
-      - name: Check out code
-        uses: actions/checkout@v3
+        steps:
+            # Step 1: Check out the code
+            - name: Check out code
+              uses: actions/checkout@v3
 
-      # Step 2: Set up Python
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+            # Step 2: Set up Python
+            #
+            # The style check is pinned to 3.13 (the version contributors run
+            # locally) so basedpyright resolves stubs the same way on CI.
+            # The test workflow still runs the library's declared minimum
+            # Python separately.
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: '3.13'
 
-      # Step 3: Install dependencies
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pre-commit
+            # Step 3: Install uv so pre-commit hooks that shell out to
+            # ``uv run <tool>`` (pydoclint, basedpyright) can find the
+            # executable.
+            - name: Install uv
+              uses: astral-sh/setup-uv@v5
 
-      # Step 4: Run pre-commit hooks
-      - name: Run pre-commit
-        run: pre-commit run --all-files
+            # Step 4: Install project dev deps via uv so ``uv run pydoclint``
+            # and ``uv run basedpyright`` resolve to the pinned versions. The
+            # ``hf`` extra is included so basedpyright can resolve
+            # ``huggingface_hub`` when type-checking ``src/synthpix/hf``.
+            - name: Install dev dependencies
+              run: uv sync --extra dev --extra hf
+
+            # Step 5: Run pre-commit hooks via ``uv run`` so we get the
+            # version pinned in the lock file (4.0.1). A system
+            # ``pip install pre-commit`` pulls the latest, which parses hook
+            # ``entry`` strings differently and silently drops flags.
+            #
+            # ``env -u GITHUB_ACTIONS`` unsets the runner-injected variable
+            # for the duration of the command. basedpyright otherwise detects
+            # CI and switches into workflow-annotation mode, which ignores
+            # ``--level error`` when computing the exit code.
+            - name: Run pre-commit (commit stage)
+              run: env -u GITHUB_ACTIONS uv run pre-commit run --all-files
+
+            - name: Run pre-commit (push stage)
+              run: env -u GITHUB_ACTIONS uv run pre-commit run --hook-stage push --all-files

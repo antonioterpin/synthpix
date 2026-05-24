@@ -1,7 +1,7 @@
 """Example flow functions for testing purposes.
 
-This module provides various analytical flow field functions (horizontal, 
-vertical, diagonal, pipe, vortex) used as ground truth for verifying 
+This module provides various analytical flow field functions (horizontal,
+vertical, diagonal, pipe, vortex) used as ground truth for verifying
 particle advection and image generation logic.
 """
 

@@ -1,9 +1,10 @@
 """Tests for histogram equalization and matching.
 
-These tests verify that `match_histogram` correctly transforms image 
-intensities to follow a target distribution, and that the integration 
+These tests verify that `match_histogram` correctly transforms image
+intensities to follow a target distribution, and that the integration
 of histogram equalization in the image generation pipeline is robust.
 """
+
 import re
 
 import jax
@@ -12,8 +13,10 @@ import numpy as np
 import pytest
 from jax import jit
 
-from synthpix.data_generate import (generate_images_from_flow,
-                                    input_check_gen_img_from_flow)
+from synthpix.data_generate import (
+    generate_images_from_flow,
+    input_check_gen_img_from_flow,
+)
 from synthpix.sampler import SyntheticImageSampler
 from synthpix.types import ImageGenerationSpecification
 from synthpix.utils import load_configuration, match_histogram
@@ -67,25 +70,37 @@ def test_identity_mapping(random_image_uint8):
     template_hist, _ = jnp.histogram(
         src, bins=jnp.arange(257, dtype=jnp.float32)
     )
-    assert template_hist.shape[0] == 256, f"Expected 256 histogram bins, got {template_hist.shape[0]}"
-    assert jnp.isclose(jnp.sum(template_hist), src.size), f"Histogram sum mismatch. Expected {src.size}, got {jnp.sum(template_hist)}"
+    assert template_hist.shape[0] == 256, (
+        f"Expected 256 histogram bins, got {template_hist.shape[0]}"
+    )
+    assert jnp.isclose(jnp.sum(template_hist), src.size), (
+        f"Histogram sum mismatch. Expected {src.size}, got {jnp.sum(template_hist)}"
+    )
 
     matched = match_histogram(src, template_hist)
 
     # Output dtype equals input dtype
-    assert matched.dtype == src.dtype, f"Dtype mismatch. Expected {src.dtype}, got {matched.dtype}"
+    assert matched.dtype == src.dtype, (
+        f"Dtype mismatch. Expected {src.dtype}, got {matched.dtype}"
+    )
     # Should be identical
-    assert jnp.allclose(matched, src), "Matched image should be identical to source for identity histogram"
+    assert jnp.allclose(matched, src), (
+        "Matched image should be identical to source for identity histogram"
+    )
 
 
 def test_uniform_histogram_ramp():
     """A linear ramp covering 0..255 in a 16x16 image remains unchanged"""
     src = jnp.arange(256, dtype=jnp.float32).reshape((16, 16))
     template_hist = jnp.full(256, src.size / 256, dtype=jnp.float32)
-    assert jnp.isclose(jnp.sum(template_hist), src.size), f"Histogram sum mismatch. Expected {src.size}, got {jnp.sum(template_hist)}"
+    assert jnp.isclose(jnp.sum(template_hist), src.size), (
+        f"Histogram sum mismatch. Expected {src.size}, got {jnp.sum(template_hist)}"
+    )
 
     matched = match_histogram(src, template_hist)
-    assert jnp.allclose(matched, src), "Linear ramp with uniform histogram should remain unchanged"
+    assert jnp.allclose(matched, src), (
+        "Linear ramp with uniform histogram should remain unchanged"
+    )
 
 
 def test_constant_source():
@@ -94,12 +109,18 @@ def test_constant_source():
     # Create an increasing histogram and scale to sum to number of pixels
     raw = jnp.arange(1, 257, dtype=jnp.float32)
     template_hist = raw / jnp.sum(raw) * src.size
-    assert template_hist.shape[0] == 256, f"Expected 256 histogram bins, got {template_hist.shape[0]}"
-    assert jnp.isclose(jnp.sum(template_hist), src.size), f"Histogram sum mismatch. Expected {src.size}, got {jnp.sum(template_hist)}"
+    assert template_hist.shape[0] == 256, (
+        f"Expected 256 histogram bins, got {template_hist.shape[0]}"
+    )
+    assert jnp.isclose(jnp.sum(template_hist), src.size), (
+        f"Histogram sum mismatch. Expected {src.size}, got {jnp.sum(template_hist)}"
+    )
 
     matched = match_histogram(src, template_hist)
     expected = 255.0
-    assert jnp.allclose(matched.astype(jnp.float32), expected), f"Constant source should map to highest intensity {expected}, but got values like {matched.flatten()[0]}"
+    assert jnp.allclose(matched.astype(jnp.float32), expected), (
+        f"Constant source should map to highest intensity {expected}, but got values like {matched.flatten()[0]}"
+    )
 
 
 def test_jit_compatibility(random_image_uint8):
@@ -108,13 +129,19 @@ def test_jit_compatibility(random_image_uint8):
     template_hist, _ = jnp.histogram(
         src, bins=jnp.arange(257, dtype=jnp.float32)
     )
-    assert template_hist.shape[0] == 256, f"Expected 256 histogram bins, got {template_hist.shape[0]}"
-    assert jnp.isclose(jnp.sum(template_hist), src.size), f"Histogram sum mismatch. Expected {src.size}, got {jnp.sum(template_hist)}"
+    assert template_hist.shape[0] == 256, (
+        f"Expected 256 histogram bins, got {template_hist.shape[0]}"
+    )
+    assert jnp.isclose(jnp.sum(template_hist), src.size), (
+        f"Histogram sum mismatch. Expected {src.size}, got {jnp.sum(template_hist)}"
+    )
 
     jit_fn = jit(match_histogram)
     out1 = match_histogram(src, template_hist)
     out2 = jit_fn(src, template_hist)
-    assert jnp.allclose(out1, out2), "JIT and non-JIT match_histogram results mismatch"
+    assert jnp.allclose(out1, out2), (
+        "JIT and non-JIT match_histogram results mismatch"
+    )
 
 
 def test_input_check_gen_img_from_flow_logs_histogram(monkeypatch):
@@ -167,7 +194,7 @@ def test_input_check_gen_img_from_flow_logs_histogram(monkeypatch):
 def test_invalid_histogram_in_generate(histogram, error):
     """Test that `input_check_gen_img_from_flow` rejects invalid histograms.
 
-    Verifies the validation of histogram shapes, types, and bin sums 
+    Verifies the validation of histogram shapes, types, and bin sums
     relative to the total pixel count.
     """
     flow_field = jnp.zeros((1, 64, 64, 2))
@@ -186,7 +213,7 @@ def test_invalid_histogram_in_generate(histogram, error):
 def test_histogram_applies():
     """Verify that `generate_images_from_flow` correctly applies histogram equalization.
 
-    Generates images and checks that their resulting pixel distributions 
+    Generates images and checks that their resulting pixel distributions
     exactly match the requested histogram.
     """
     flow_field = jnp.zeros((1, 32, 32, 2))
@@ -210,8 +237,12 @@ def test_histogram_applies():
     # Check if the histogram is applied correctly
     hist1, _ = jnp.histogram(images1, bins=jnp.arange(257, dtype=jnp.float32))
     hist2, _ = jnp.histogram(images2, bins=jnp.arange(257, dtype=jnp.float32))
-    assert jnp.allclose(hist1, histogram), f"Histogram mismatch for images1. Expected sum {jnp.sum(histogram)}, got {jnp.sum(hist1)}"
-    assert jnp.allclose(hist2, histogram), f"Histogram mismatch for images2. Expected sum {jnp.sum(histogram)}, got {jnp.sum(hist2)}"
+    assert jnp.allclose(hist1, histogram), (
+        f"Histogram mismatch for images1. Expected sum {jnp.sum(histogram)}, got {jnp.sum(hist1)}"
+    )
+    assert jnp.allclose(hist2, histogram), (
+        f"Histogram mismatch for images2. Expected sum {jnp.sum(histogram)}, got {jnp.sum(hist2)}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -257,7 +288,7 @@ def test_invalid_histogram_sampler(histogram, error, scheduler):
 def test_invalid_histogram_values(scheduler, mock_histogram_invalid_file):
     """Test that histograms with incorrect shapes or sums raise a ValueError.
 
-    Ensures that even if a file exists, its content must strictly follow 
+    Ensures that even if a file exists, its content must strictly follow
     the expected histogram format.
     """
     # Create a dummy histogram with an invalid shape
@@ -282,7 +313,7 @@ def test_invalid_histogram_values(scheduler, mock_histogram_invalid_file):
 def test_histogram_is_correct(scheduler, mock_histogram_file):
     """Test that a valid histogram is correctly loaded from a file.
 
-    Verifies that the `SyntheticImageSampler` internal state matches 
+    Verifies that the `SyntheticImageSampler` internal state matches
     the loaded numpy array.
     """
     # Create a dummy histogram with a valid shape
@@ -300,8 +331,12 @@ def test_histogram_is_correct(scheduler, mock_histogram_file):
         config=config,
     )
 
-    assert isinstance(sampler.histogram, jnp.ndarray), f"Expected sampler.histogram to be jnp.ndarray, got {type(sampler.histogram)}"
-    assert sampler.histogram.shape == histogram.shape, f"Histogram shape mismatch. Expected {histogram.shape}, got {sampler.histogram.shape}"
+    assert isinstance(sampler.histogram, jnp.ndarray), (
+        f"Expected sampler.histogram to be jnp.ndarray, got {type(sampler.histogram)}"
+    )
+    assert sampler.histogram.shape == histogram.shape, (
+        f"Histogram shape mismatch. Expected {histogram.shape}, got {sampler.histogram.shape}"
+    )
     assert jnp.array_equal(sampler.histogram, histogram), (
         "Histogram loaded from file does not match the expected histogram."
     )

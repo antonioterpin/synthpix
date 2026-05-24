@@ -11,14 +11,23 @@ from jax import Array
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from typing_extensions import Self
 
-from synthpix.data_generate import (generate_images_from_flow,
-                                    input_check_gen_img_from_flow)
+from synthpix.data_generate import (
+    generate_images_and_keys,
+    generate_images_from_flow,
+    input_check_gen_img_from_flow,
+)
 from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
 from synthpix.scheduler.protocol import SchedulerProtocol
 from synthpix.types import ImageGenerationSpecification, PRNGKey, SynthpixBatch
-from synthpix.utils import (DEBUG_JIT, SYNTHPIX_SCOPE, decode_from_uint8,
-                            encode_to_uint8, flow_field_adapter, get_logger,
-                            input_check_flow_field_adapter)
+from synthpix.utils import (
+    DEBUG_JIT,
+    SYNTHPIX_SCOPE,
+    decode_from_uint8,
+    encode_to_uint8,
+    flow_field_adapter,
+    get_logger,
+    input_check_flow_field_adapter,
+)
 
 from .base import Sampler
 
@@ -44,7 +53,7 @@ class SyntheticImageSampler(Sampler):
     outputs also a done flag to indicate the end of an episode.
     """
 
-    def __init__(  # noqa: PLR0912, PLR0915
+    def __init__(
         self,
         scheduler: SchedulerProtocol,
         batches_per_flow_batch: int,
@@ -431,6 +440,21 @@ class SyntheticImageSampler(Sampler):
             histogram=self.histogram,
         )
 
+        self.img_gen_w_random_fn_jit = (
+            lambda key, flow: generate_images_and_keys(
+                random_key=key,
+                ndevices=self.ndevices,
+                batch_size=self.batch_size,
+                flow_field=flow,
+                parameters=generation_specification,
+                position_bounds=self.position_bounds,
+                flow_field_res_x=self.flow_field_res_x,
+                flow_field_res_y=self.flow_field_res_y,
+                mask=self.mask_images,
+                histogram=self.histogram,
+            )
+        )
+
         self.flow_field_adapter_jit = lambda flow: flow_field_adapter(
             flow,
             new_flow_field_shape=self.output_flow_field_shape,
@@ -462,6 +486,7 @@ class SyntheticImageSampler(Sampler):
                     ),
                 )
             )
+            self.img_gen_w_random_fn_jit = jax.jit(self.img_gen_w_random_fn_jit)
             self.flow_field_adapter_jit = jax.jit(
                 jax.shard_map(
                     self.flow_field_adapter_jit,
@@ -520,7 +545,21 @@ class SyntheticImageSampler(Sampler):
             self._scheduler_epoch = scheduler_batch.epoch
 
             # Expand metadata to match self.batch_size
-            n_flows = self.flow_fields_per_batch
+            # Use actual batch size from scheduler (may be smaller on last
+            # batch)
+            n_flows = (
+                len(self._jax_seeds)
+                if self._jax_seeds is not None
+                else (
+                    len(self._files_scheduler)
+                    if self._files_scheduler is not None
+                    else (
+                        len(self._current_flows)
+                        if self._current_flows is not None
+                        else self.flow_fields_per_batch
+                    )
+                )
+            )
             if n_flows < self.batch_size:
                 repeats = (self.batch_size + n_flows - 1) // n_flows
 
@@ -529,7 +568,7 @@ class SyntheticImageSampler(Sampler):
                         return None
                     arr = jnp.array(arr)
                     tiled = jnp.tile(arr, (repeats,) + (1,) * (arr.ndim - 1))
-                    return tiled[:self.batch_size]
+                    return tiled[: self.batch_size]
 
                 self._mask_scheduler = expand_arr(self._mask_scheduler)
                 self._scheduler_epoch = expand_arr(self._scheduler_epoch)
@@ -538,7 +577,7 @@ class SyntheticImageSampler(Sampler):
                 if self._files_scheduler is not None:
                     # Repeat tuple
                     expanded_files = self._files_scheduler * repeats
-                    self._files_scheduler = expanded_files[:self.batch_size]
+                    self._files_scheduler = expanded_files[: self.batch_size]
 
             # Shard the flow fields across devices
             current_flows_array = jnp.array(
@@ -584,15 +623,24 @@ class SyntheticImageSampler(Sampler):
             # Now we need to shard/split these keys for the devices
             # img_gen_fn_jit expects (ndevices, 2) keys
             keys = batch_keys.reshape(self.ndevices, -1, 2)[:, 0]
+
+            # Generate a new batch of images using the current flow fields
+            imgs1, imgs2, params = self.img_gen_fn_jit(
+                keys, self._current_flows
+            )
+            if self.output_flow_fields is None:
+                raise RuntimeError("output_flow_fields is None.")
         else:
             # Legacy Path: Use internal _rng
-            self._rng, subkey = jax.random.split(self._rng)
-            keys = jax.random.split(subkey, self.ndevices)
+            self._rng, batch_keys, imgs1, imgs2, params = (
+                self.img_gen_w_random_fn_jit(
+                    self._rng,
+                    self._current_flows,
+                )
+            )
 
-        # Generate a new batch of images using the current flow fields
-        imgs1, imgs2, params = self.img_gen_fn_jit(keys, self._current_flows)
-        if self.output_flow_fields is None:
-            raise RuntimeError("output_flow_fields is None.")
+            if self.output_flow_fields is None:
+                raise RuntimeError("output_flow_fields is None.")
 
         self._batches_generated += 1
         self._step += 1
@@ -609,12 +657,15 @@ class SyntheticImageSampler(Sampler):
                 else None
             ),
             files=self._files_scheduler,
-            epoch=jnp.array(self._scheduler_epoch)
-            if self._scheduler_epoch is not None
-            else None,
+            epoch=(
+                jnp.array(self._scheduler_epoch)
+                if self._scheduler_epoch is not None
+                else None
+            ),
             seeds=jnp.array(self._jax_seeds)
             if self._jax_seeds is not None
             else None,
+            keys=batch_keys,
         )
 
     @property
@@ -628,15 +679,17 @@ class SyntheticImageSampler(Sampler):
 
         state_dict["files_scheduler"] = encode_to_uint8(self._files_scheduler)
 
-        state_dict.update({
-            "step": self._step,
-            "rng": self._rng,
-            "batches_generated": self._batches_generated,
-            "current_flows": self._current_flows,
-            "mask_scheduler": self._mask_scheduler,
-            "scheduler_epoch": self._scheduler_epoch,
-            "jax_seeds": self._jax_seeds,
-        })
+        state_dict.update(
+            {
+                "step": self._step,
+                "rng": self._rng,
+                "batches_generated": self._batches_generated,
+                "current_flows": self._current_flows,
+                "mask_scheduler": self._mask_scheduler,
+                "scheduler_epoch": self._scheduler_epoch,
+                "jax_seeds": self._jax_seeds,
+            }
+        )
         return state_dict
 
     @property
@@ -649,10 +702,16 @@ class SyntheticImageSampler(Sampler):
         state_dict = self.state
         if state_dict["current_flows"] is None:
             # Calculate expected shape based on utils.flow_field_adapter logic
-            h_bounds_raw = self.position_bounds[0] / \
-                self.resolution * self.flow_field_res_y
-            w_bounds_raw = self.position_bounds[1] / \
-                self.resolution * self.flow_field_res_x
+            h_bounds_raw = (
+                self.position_bounds[0]
+                / self.resolution
+                * self.flow_field_res_y
+            )
+            w_bounds_raw = (
+                self.position_bounds[1]
+                / self.resolution
+                * self.flow_field_res_x
+            )
 
             h_bounds = max(1, int(h_bounds_raw))
             w_bounds = max(1, int(w_bounds_raw))
@@ -660,24 +719,28 @@ class SyntheticImageSampler(Sampler):
             shape = (self.batch_size, h_bounds, w_bounds, 2)
 
             state_dict["current_flows"] = jax.ShapeDtypeStruct(
-                shape, jnp.float32)
+                shape, jnp.float32
+            )
 
         if state_dict["mask_scheduler"] is None:
             # mask_scheduler is expanded to batch_size in _get_next
             state_dict["mask_scheduler"] = jax.ShapeDtypeStruct(
-                (self.batch_size,), jnp.bool_)
+                (self.batch_size,), jnp.bool_
+            )
 
         if state_dict["scheduler_epoch"] is None:
             # scheduler_epoch is expanded to batch_size in _get_next
             # Assuming int32 or int64 for epoch
             state_dict["scheduler_epoch"] = jax.ShapeDtypeStruct(
-                (self.batch_size,), jnp.int32)
+                (self.batch_size,), jnp.int32
+            )
 
         if state_dict["files_scheduler"] is None:
             # files_scheduler is encoded as uint8 array of variable length
             # Use np.nan to indicate unknown dimension size for restoration
             state_dict["files_scheduler"] = jax.ShapeDtypeStruct(
-                (np.nan,), jnp.uint8)
+                (np.nan,), jnp.uint8
+            )
 
         return state_dict
 
@@ -692,7 +755,7 @@ class SyntheticImageSampler(Sampler):
             KeyError: If required keys are missing from the state dict.
         """
         # Call base class for common validation and scheduler restoration
-        Sampler.state.fset(self, value)
+        Sampler.state.fset(self, value)  # pyright: ignore[reportOptionalCall]
 
         required_keys = {
             "step",
@@ -720,13 +783,17 @@ class SyntheticImageSampler(Sampler):
         val = value["files_scheduler"]
         decoded = decode_from_uint8(val)
         if decoded is not None and not isinstance(
-                decoded, (np.ndarray, jnp.ndarray)):
+            decoded, (np.ndarray, jnp.ndarray)
+        ):
             self._files_scheduler = tuple(decoded)
         else:
-            self._files_scheduler = decoded
+            self._files_scheduler = decoded  # pyright: ignore[reportAttributeAccessIssue]
 
-        self.output_flow_fields = cast(
-            jnp.ndarray, self._current_flows) if self._current_flows is not None else None
+        self.output_flow_fields = (
+            cast(jnp.ndarray, self._current_flows)
+            if self._current_flows is not None
+            else None
+        )
 
     @classmethod
     def from_config(cls, scheduler: SchedulerProtocol, config: dict) -> Self:

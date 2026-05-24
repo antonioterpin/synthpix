@@ -11,17 +11,26 @@ import orbax.checkpoint as ocp
 from rich.console import Console
 from rich.text import Text
 
-from synthpix.data_sources import (EpisodicDataSource, FileDataSource,
-                                   HDF5DataSource, MATDataSource,
-                                   NumpyDataSource)
-from synthpix.data_sources.adapter import (GrainEpisodicAdapter,
-                                           GrainSchedulerAdapter)
+from synthpix.data_sources import (
+    EpisodicDataSource,
+    FileDataSource,
+    HDF5DataSource,
+    MATDataSource,
+    NumpyDataSource,
+)
+from synthpix.data_sources.adapter import (
+    GrainEpisodicAdapter,
+    GrainSchedulerAdapter,
+)
 from synthpix.sampler import RealImageSampler, Sampler, SyntheticImageSampler
-from synthpix.scheduler import (BaseFlowFieldScheduler,
-                                EpisodicFlowFieldScheduler,
-                                HDF5FlowFieldScheduler, MATFlowFieldScheduler,
-                                NumpyFlowFieldScheduler,
-                                PrefetchingFlowFieldScheduler)
+from synthpix.scheduler import (
+    BaseFlowFieldScheduler,
+    EpisodicFlowFieldScheduler,
+    HDF5FlowFieldScheduler,
+    MATFlowFieldScheduler,
+    NumpyFlowFieldScheduler,
+    PrefetchingFlowFieldScheduler,
+)
 
 from .utils import SYNTHPIX_SCOPE, get_logger, load_configuration
 
@@ -148,9 +157,7 @@ def make_grain_scheduler(
     # Grain Options from Config
     worker_count = dataset_config.get("worker_count", 0)
     num_threads = dataset_config.get("num_threads", 16)
-    buffer_size = dataset_config.get(
-        "buffer_size", 500
-    )  # Default grain prefetch
+    buffer_size = dataset_config.get("buffer_size", 500)  # Default grain
 
     # Enforce worker_count constraints for Grain
     if is_episodic and worker_count > 0:
@@ -174,7 +181,7 @@ def make_grain_scheduler(
         sampler=sampler_grain,
         operations=[
             AddJAXSeed(),
-            grain.Batch(batch_size=batch_size, drop_remainder=False)
+            grain.Batch(batch_size=batch_size, drop_remainder=False),
         ],
         worker_count=worker_count,
         read_options=grain.ReadOptions(
@@ -244,11 +251,7 @@ def make_legacy_scheduler(
 class AddJAXSeed(grain.RandomMapTransform):
     """Grain transform that adds a deterministic seed to every record."""
 
-    def random_map(
-        self,
-        record: dict,
-        rng: np.random.Generator
-    ) -> dict:
+    def random_map(self, record: dict, rng: np.random.Generator) -> dict:
         """Add a random seed to the record.
 
         Args:
@@ -264,8 +267,7 @@ class AddJAXSeed(grain.RandomMapTransform):
 
 
 def checkpoint_args(
-    sampler: Sampler,
-    is_restore: bool = False
+    sampler: Sampler, is_restore: bool = False
 ) -> ocp.args.Composite:
     """Consolidates Save/Restore args for the SynthPix pipeline.
 
@@ -283,15 +285,17 @@ def checkpoint_args(
     if grain_iter is None:
         raise ValueError("Sampler does not provide access to Grain iterator")
 
+    # ocp.args.Composite is not correctly typed to recognize the specific
+    # Save/RestoreArgs classes, so we ignore type issues here
     if is_restore:
         return ocp.args.Composite(
-            sampler=ocp.args.StandardRestore(sampler.restore_state),
-            grain=grain.PyGrainCheckpointRestore(grain_iter),
+            sampler=ocp.args.StandardRestore(sampler.restore_state),  # pyright: ignore[reportCallIssue]
+            grain=grain.PyGrainCheckpointRestore(grain_iter),  # pyright: ignore[reportCallIssue]
         )
     else:
         return ocp.args.Composite(
-            sampler=ocp.args.StandardSave(sampler.state),
-            grain=grain.PyGrainCheckpointSave(grain_iter),
+            sampler=ocp.args.StandardSave(sampler.state),  # pyright: ignore[reportCallIssue]
+            grain=grain.PyGrainCheckpointSave(grain_iter),  # pyright: ignore[reportCallIssue]
         )
 
 
@@ -508,12 +512,15 @@ def make(
     if load_from:
         if not isinstance(sampler, Sampler):
             raise ValueError(
-                "Sampler must inherit from synthpix.sampler.Sampler to support restoration")
+                "Sampler must inherit from synthpix.sampler.Sampler \
+                    to support restoration"
+            )
 
         load_from = Path(load_from)
         if not load_from.exists():
             raise FileNotFoundError(
-                f"Checkpoint directory {load_from} not found.")
+                f"Checkpoint directory {load_from} not found."
+            )
 
         mngr = ocp.CheckpointManager(load_from)
         latest_step = mngr.latest_step()
@@ -521,7 +528,8 @@ def make(
             raise ValueError(f"No checkpoints found in {load_from}")
 
         logger.info(
-            f"Restoring from checkpoint at step {latest_step} in {load_from}")
+            f"Restoring from checkpoint at step {latest_step} in {load_from}"
+        )
 
         restore_args = checkpoint_args(sampler, is_restore=True)
 
@@ -530,7 +538,8 @@ def make(
         logger.info("Sampler and Loader state restored successfully.")
 
     logger.info(
-        f"--- SynthPix sampler and scheduler initialized ---\n{dataset_config}"
+        f"--- SynthPix sampler and scheduler initialized --- \
+        \n{dataset_config}"
     )
 
     return sampler
@@ -540,7 +549,7 @@ def save_checkpoint(
     checkpoint_dir: str | Path,
     sampler: Sampler,
     step: int,
-    max_to_keep: int = 1
+    max_to_keep: int = 1,
 ) -> None:
     """Saves the pipeline state (Sampler + Grain) to a checkpoint.
 
@@ -564,8 +573,9 @@ def save_checkpoint(
     mngr = ocp.CheckpointManager(
         checkpoint_dir,
         options=ocp.CheckpointManagerOptions(
-            max_to_keep=max_to_keep,
-            create=True))
+            max_to_keep=max_to_keep, create=True
+        ),
+    )
 
     # Create Save Args
     save_args = checkpoint_args(sampler, is_restore=False)

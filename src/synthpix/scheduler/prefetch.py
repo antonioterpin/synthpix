@@ -6,10 +6,12 @@ import time
 from contextlib import suppress
 from typing import Any
 
-from synthpix.scheduler.protocol import (EpisodeEndError,
-                                         EpisodicSchedulerProtocol,
-                                         PrefetchedSchedulerProtocol,
-                                         SchedulerProtocol)
+from synthpix.scheduler.protocol import (
+    EpisodeEndError,
+    EpisodicSchedulerProtocol,
+    PrefetchedSchedulerProtocol,
+    SchedulerProtocol,
+)
 from synthpix.types import SchedulerData
 from synthpix.utils import SYNTHPIX_SCOPE, get_logger
 
@@ -154,6 +156,9 @@ class PrefetchingFlowFieldScheduler(PrefetchedSchedulerProtocol):
         Args:
             eos_timeout: Timeout in seconds for putting the end-of-stream
                 signal in the queue.
+
+        Raises:
+            EpisodeEndError: If the episode has ended while fetching batches.
         """
         while not self._stop_event.is_set():
             try:

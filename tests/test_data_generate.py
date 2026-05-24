@@ -1,11 +1,12 @@
 """Tests for the high-level image generation functions and their input validation.
 
-This module contains tests for `generate_images_from_flow`, verifying that 
-particle-based synthetic images are correctly rendered across various 
-parameter spaces (densities, diameters, intensities, noise, etc.). It also 
-includes exhaustive input validation checks and performance benchmarks for 
+This module contains tests for `generate_images_from_flow`, verifying that
+particle-based synthetic images are correctly rendered across various
+parameter spaces (densities, diameters, intensities, noise, etc.). It also
+includes exhaustive input validation checks and performance benchmarks for
 the rendering pipeline.
 """
+
 import re
 import timeit
 
@@ -14,8 +15,10 @@ import jax.numpy as jnp
 import pytest
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
-from synthpix.data_generate import (generate_images_from_flow,
-                                    input_check_gen_img_from_flow)
+from synthpix.data_generate import (
+    generate_images_from_flow,
+    input_check_gen_img_from_flow,
+)
 from synthpix.types import ImageGenerationSpecification
 
 # Import existing modules
@@ -32,7 +35,7 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_DATA_GEN"]
 def test_invalid_flow_field(flow_field):
     """Test that provide non-array flow_field objects raise a ValueError.
 
-    Validates that the input is a jnp.ndarray, which is required for JAX 
+    Validates that the input is a jnp.ndarray, which is required for JAX
     accelerated generation.
     """
     with pytest.raises(
@@ -50,7 +53,7 @@ def test_invalid_flow_field(flow_field):
 def test_invalid_flow_field_shape(flow_field):
     """Test that flow fields with incorrect rank or dimensions raise a ValueError.
 
-    Expects a 4D array (N, H, W, 2) where N is batch, H/W are spatial 
+    Expects a 4D array (N, H, W, 2) where N is batch, H/W are spatial
     dimensions, and 2 represents (u, v) components.
     """
     expected_message = (
@@ -69,7 +72,7 @@ def test_invalid_flow_field_shape(flow_field):
 def test_invalid_image_shape(image_shape):
     """Test that non-positive or non-integer image shapes raise a ValueError.
 
-    Validation ensures that the output image dimensions are physically 
+    Validation ensures that the output image dimensions are physically
     valid positive integers.
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -90,7 +93,7 @@ def test_invalid_image_shape(image_shape):
 def test_invalid_position_bounds(position_bounds):
     """Test that invalid position_bounds raises a ValueError.
 
-    Position bounds define the absolute spatial domain of the flow field and 
+    Position bounds define the absolute spatial domain of the flow field and
     must be positive integers.
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -112,32 +115,33 @@ def test_invalid_position_bounds(position_bounds):
 
 @pytest.mark.parametrize(
     "seeding_density_range, expected_message",
-    [((-1.0,
-       1.0),
-      "seeding_density_range must be a tuple of two non-negative numbers.",
-      ),
-     ((0.0,
-       -1.0),
-      "seeding_density_range must be a tuple of two non-negative numbers.",
-      ),
-     ((-0.5,
-       -0.5),
-      "seeding_density_range must be a tuple of two non-negative numbers.",
-      ),
-     ((1.0,
-       0.5),
-      "seeding_density_range must be in the form \\(min, max\\).",
-      ),
-     ((0.5,
-       0.1),
-      "seeding_density_range must be in the form \\(min, max\\).",
-      ),
-     ],
+    [
+        (
+            (-1.0, 1.0),
+            "seeding_density_range must be a tuple of two non-negative numbers.",
+        ),
+        (
+            (0.0, -1.0),
+            "seeding_density_range must be a tuple of two non-negative numbers.",
+        ),
+        (
+            (-0.5, -0.5),
+            "seeding_density_range must be a tuple of two non-negative numbers.",
+        ),
+        (
+            (1.0, 0.5),
+            "seeding_density_range must be in the form \\(min, max\\).",
+        ),
+        (
+            (0.5, 0.1),
+            "seeding_density_range must be in the form \\(min, max\\).",
+        ),
+    ],
 )
 def test_invalid_seeding_density_range(seeding_density_range, expected_message):
     """Test various invalid seeding_density_range configurations.
 
-    Verifies that ranges are non-negative, correctly ordered (min <= max), 
+    Verifies that ranges are non-negative, correctly ordered (min <= max),
     and raise descriptive errors when these conditions are violated.
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -156,7 +160,7 @@ def test_invalid_seeding_density_range(seeding_density_range, expected_message):
 def test_invalid_num_images(num_images):
     """Test that non-positive or non-integer batch sizes raise a ValueError.
 
-    Validates that the requested number of images to generate is a 
+    Validates that the requested number of images to generate is a
     positive integer.
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -200,7 +204,7 @@ def test_invalid_img_offset(img_offset):
 def test_invalid_p_hide_img1(p_hide_img1):
     """Test that p_hide_img1 values outside [0, 1] raise a ValueError.
 
-    Ensures that the probability of hiding the first frame is a valid 
+    Ensures that the probability of hiding the first frame is a valid
     scalar between 0 and 1.
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -220,7 +224,7 @@ def test_invalid_p_hide_img1(p_hide_img1):
 def test_invalid_p_hide_img2(p_hide_img2):
     """Test that p_hide_img2 values outside [0, 1] raise a ValueError.
 
-    Ensures that the probability of hiding the second frame is a valid 
+    Ensures that the probability of hiding the second frame is a valid
     scalar between 0 and 1.
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -253,7 +257,7 @@ def test_invalid_p_hide_img2(p_hide_img2):
 def test_invalid_diameter_range(diameter_ranges, expected_message):
     """Test that invalid particle diameter ranges raise a ValueError.
 
-    Ensures that diameters are positive, ranges are correctly ordered, 
+    Ensures that diameters are positive, ranges are correctly ordered,
     and the input format is a list of tuples.
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -285,7 +289,7 @@ def test_invalid_diameter_range(diameter_ranges, expected_message):
 def test_invalid_intensity_range(intensity_ranges, expected_message):
     """Test that invalid particle intensity ranges raise a ValueError.
 
-    Intensity values must be positive and ranges must be correctly ordered 
+    Intensity values must be positive and ranges must be correctly ordered
     min <= max.
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -322,7 +326,7 @@ def test_invalid_intensity_range(intensity_ranges, expected_message):
 def test_invalid_rho_range(rho_ranges, expected_message):
     """Test that invalid rho ranges (particle correlations) raise a ValueError.
 
-    Rho must satisfy -1 < min <= max < 1 to be physically valid for 
+    Rho must satisfy -1 < min <= max < 1 to be physically valid for
     Gaussian particle distributions.
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -344,7 +348,7 @@ def test_invalid_rho_range(rho_ranges, expected_message):
 def test_invalid_dt(dt):
     """Test that invalid timestep values raise a ValueError.
 
-    The dt parameter must be a positive number to define the temporal 
+    The dt parameter must be a positive number to define the temporal
     separation between frames.
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -366,7 +370,7 @@ def test_invalid_dt(dt):
 def test_invalid_flow_field_res_x(flow_field_res_x):
     """Test that invalid spatial resolution in X raises a ValueError.
 
-    Spatial resolution must be a positive scalar to correctly map 
+    Spatial resolution must be a positive scalar to correctly map
     flow field units to pixels.
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -563,7 +567,7 @@ def test_incoherent_image_shape_and_position_bounds(
 ):
     """Test that the image cannot exceed the flow field spatial bounds.
 
-    The requested image size plus its offset must fit within the total 
+    The requested image size plus its offset must fit within the total
     defined `position_bounds` of the flow field.
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
@@ -585,8 +589,8 @@ def test_incoherent_image_shape_and_position_bounds(
 def test_generate_images_from_flow(monkeypatch, debug_flag):
     """Test end-to-end synthetic image generation from a given flow field.
 
-    Verifies that the generated images match the requested shape and that 
-    the parameter specification is respected. Supports testing both the 
+    Verifies that the generated images match the requested shape and that
+    the parameter specification is respected. Supports testing both the
     JIT-compiled and debug paths.
     """
     import synthpix.data_generate as dg
@@ -652,8 +656,12 @@ def test_generate_images_from_flow(monkeypatch, debug_flag):
     img_warped = jnp.squeeze(img_warped)
 
     # 5. check the shape of the images
-    assert img.shape == image_shape, f"Image shape mismatch. Expected {image_shape}, got {img.shape}"
-    assert img_warped.shape == image_shape, f"Warped image shape mismatch. Expected {image_shape}, got {img_warped.shape}"
+    assert img.shape == image_shape, (
+        f"Image shape mismatch. Expected {image_shape}, got {img.shape}"
+    )
+    assert img_warped.shape == image_shape, (
+        f"Warped image shape mismatch. Expected {image_shape}, got {img_warped.shape}"
+    )
 
     # an invalid argument should raise a ValueError (the check is in the
     # function)
@@ -688,7 +696,7 @@ def test_generate_images_from_flow(monkeypatch, debug_flag):
 # skipif is used to skip the test if the user is not connected to the server
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="user not connected to the server.",
 )
 @pytest.mark.parametrize("selected_flow", ["horizontal"])
 @pytest.mark.parametrize("seeding_density_range", [(0.01, 0.1)])
@@ -710,8 +718,8 @@ def test_speed_generate_images_from_flow(
 ):
     """Benchmark performance of GPU-accelerated image generation using `shard_map`.
 
-    Tests generation speed on available NVIDIA devices, ensuring that 
-    parallelizing flow fields across GPUs yields performance within safe 
+    Tests generation speed on available NVIDIA devices, ensuring that
+    parallelizing flow fields across GPUs yields performance within safe
     timing limits.
     """
 
@@ -877,8 +885,8 @@ def test_img_parameter_combinations(
 ):
     """Test various combinations of parameters by generating and saving images.
 
-    This test is intended to be run explicitly (e.g., during visual debugging) 
-    to verify that specific configurations produce visually sane results. 
+    This test is intended to be run explicitly (e.g., during visual debugging)
+    to verify that specific configurations produce visually sane results.
     It saves the generated frames to the `results/` directory.
     """
 
@@ -959,13 +967,17 @@ def test_img_parameter_combinations(
         )
 
     # 5. check the shape of the images
-    assert img.shape == image_shape, f"Image shape mismatch. Expected {image_shape}, got {img.shape}"
-    assert img_warped.shape == image_shape, f"Warped image shape mismatch. Expected {image_shape}, got {img_warped.shape}"
+    assert img.shape == image_shape, (
+        f"Image shape mismatch. Expected {image_shape}, got {img.shape}"
+    )
+    assert img_warped.shape == image_shape, (
+        f"Warped image shape mismatch. Expected {image_shape}, got {img_warped.shape}"
+    )
 
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="user not connected to the server.",
 )
 @pytest.mark.run_explicitly
 @pytest.mark.parametrize("selected_flow", ["horizontal"])
@@ -995,8 +1007,8 @@ def test_speed_parameter_combinations(
 ):
     """Deep benchmark of generation speed across wide parameter ranges.
 
-    Systematically measures throughput for various image sizes and batch sizes. 
-    Intended for profiling and hardware comparison; contains a hard `assert False` 
+    Systematically measures throughput for various image sizes and batch sizes.
+    Intended for profiling and hardware comparison; contains a hard `assert False`
     to output timing results during test execution.
     """
 

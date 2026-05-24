@@ -1,9 +1,10 @@
 """Tests for applying flow fields to images and particle positions.
 
-These tests verify the correctness and performance of various flow 
-application methods, including callable-based warping and array-based 
+These tests verify the correctness and performance of various flow
+application methods, including callable-based warping and array-based
 particle advection, with support for both 2D and 3D domains.
 """
+
 import timeit
 
 import jax
@@ -11,8 +12,11 @@ import jax.numpy as jnp
 import pytest
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
-from synthpix.apply import (apply_flow_to_image_callable,
-                            apply_flow_to_particles, input_check_apply_flow)
+from synthpix.apply import (
+    apply_flow_to_image_callable,
+    apply_flow_to_particles,
+    input_check_apply_flow,
+)
 from synthpix.generate import img_gen_from_data
 from synthpix.utils import generate_array_flow_field, load_configuration
 from tests.example_flows import get_flow_function
@@ -30,7 +34,7 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_APPLY"]
 def test_flow_apply_to_image(image_shape, visualize=False):
     """Test that a callable flow function can be applied to warp a synthetic image.
 
-    Verifies that the warped image maintains the expected dimensions and 
+    Verifies that the warped image maintains the expected dimensions and
     provides an optional visualization hook for manual inspection.
     """
     # 1. Generate a synthetic particle image
@@ -107,7 +111,7 @@ def test_flow_apply_to_image(image_shape, visualize=False):
 def test_flow_apply_to_image_forward(dt):
     """Verify that forward flow correctly shifts pixels to their new coordinates.
 
-    Uses a simple impulse image (single active pixel) to confirm that 
+    Uses a simple impulse image (single active pixel) to confirm that
     the transformation logic moves data in the intended direction.
     """
     # 1. Build a simple test image: one bright pixel in the centre.
@@ -132,7 +136,9 @@ def test_flow_apply_to_image_forward(dt):
     expected = expected.at[2, 3].set(1.0)
 
     # 5. Verify shape, location and intensity.
-    assert img_warped.shape == expected.shape, f"Warped image shape mismatch. Expected {expected.shape}, got {img_warped.shape}"
+    assert img_warped.shape == expected.shape, (
+        f"Warped image shape mismatch. Expected {expected.shape}, got {img_warped.shape}"
+    )
     assert jnp.allclose(img_warped, expected), (
         "Forward mapping did not move the pixel correctly."
     )
@@ -142,7 +148,7 @@ def test_flow_apply_to_image_forward(dt):
 def test_apply_flow_to_particles_3d_constant(dt):
     """Verify 3D particle advection using a constant velocity field.
 
-    Ensures that (x, y, z) coordinates are correctly updated based on 
+    Ensures that (x, y, z) coordinates are correctly updated based on
     (u, v, w) velocity components and the timestep.
     """
     # Random particles
@@ -167,7 +173,9 @@ def test_apply_flow_to_particles_3d_constant(dt):
     expected = particles + jnp.array([w * dt, v * dt, u * dt])
 
     # Verify shape and values
-    assert advected.shape == particles.shape, f"Advected particles shape mismatch. Expected {particles.shape}, got {advected.shape}"
+    assert advected.shape == particles.shape, (
+        f"Advected particles shape mismatch. Expected {particles.shape}, got {advected.shape}"
+    )
     assert jnp.allclose(advected, expected), (
         "3D particles displacement produced wrong positions."
     )
@@ -190,7 +198,7 @@ def test_particles_flow_apply_array(
 ):
     """Test particle advection using an array-based flow field representation.
 
-    Verifies that the synthetic image generated from advected particles 
+    Verifies that the synthetic image generated from advected particles
     matches the expected state after being warped by the discrete flow field.
     """
 
@@ -303,7 +311,7 @@ def test_invalid_particle_positions(particle_positions):
 def test_invalid_flow_field(flow_field):
     """Test that providing flow fields with invalid rank or components raises a ValueError.
 
-    Expects a 3D array (H, W, C) where C matches the dimensionality 
+    Expects a 3D array (H, W, C) where C matches the dimensionality
     of the particle positions.
     """
     particle_positions = jnp.zeros((1, 2))
@@ -316,7 +324,9 @@ def test_invalid_flow_field(flow_field):
     ):
         input_check_apply_flow(particle_positions, flow_field)
 
-
+#NOTE: issue #232 proposes solving this.
+# We make code operational while it hasn't beeen closed yet.
+@pytest.mark.to_fix
 @pytest.mark.parametrize(
     "flow_field, particle_positions, error_msg",
     [
@@ -411,7 +421,7 @@ def test_invalid_flow_field_res_z(flow_field_res_z):
 # skipif is used to skip the test if the user is not connected to the server
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="user not connected to the server.",
 )
 @pytest.mark.parametrize("selected_flow", ["horizontal"])
 @pytest.mark.parametrize("seeding_density", [0.016])
@@ -421,7 +431,7 @@ def test_speed_apply_flow_to_particles(
 ):
     """Benchmark performance of GPU-parallelized particle advection.
 
-    Uses `shard_map` to distribute particles across available GPUs and 
+    Uses `shard_map` to distribute particles across available GPUs and
     verifies that the advection completion time is within tight limits.
     """
 

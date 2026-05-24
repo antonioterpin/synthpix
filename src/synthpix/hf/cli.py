@@ -1,0 +1,386 @@
+"""Argparse entry point for the ``synthpix-hf`` console script."""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+from pathlib import Path
+
+from synthpix.hf.card import DatasetCardMeta, make_dataset_card
+from synthpix.hf.layout import inspect_local_layout
+from synthpix.hf.pull import pull_dataset
+from synthpix.hf.push import push_dataset
+from synthpix.utils import SYNTHPIX_SCOPE, get_logger
+
+logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="synthpix-hf",
+        description=("Tooling for synthpix-hosted Hugging Face PIV datasets."),
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    card = sub.add_parser(
+        "card", help="Generate a dataset card README from a local layout."
+    )
+    card.add_argument("local_dir", type=Path)
+    card.add_argument("--source-url", required=True)
+    citation_group = card.add_mutually_exclusive_group(required=True)
+    citation_group.add_argument(
+        "--citation",
+        help="Literal citation text. Mutually exclusive with --citation-file.",
+    )
+    citation_group.add_argument(
+        "--citation-file",
+        type=Path,
+        help="Path to a file whose contents are used as the citation.",
+    )
+    card.add_argument("--name", default=None)
+    card.add_argument("--pretty-name", default=None)
+    card.add_argument("--license", default="other")
+    card.add_argument("--license-name", default="research-only-arr")
+    card.add_argument("--output", type=Path, default=None)
+    card.add_argument("--force", action="store_true")
+
+    push = sub.add_parser("push", help="Push a dataset to the Hub.")
+    push.add_argument("local_dir", type=Path)
+    push.add_argument("repo_id")
+    push.add_argument(
+        "--public",
+        action="store_true",
+        help="Create/keep the repo as public. Requires --allow-public.",
+    )
+    push.add_argument(
+        "--allow-public",
+        action="store_true",
+        help=(
+            "Safety gate companion for --public; explicit acknowledgment "
+            "that public redistribution is permitted for this dataset."
+        ),
+    )
+    push.add_argument("--token", default=None)
+    push.add_argument("--revision", default="main")
+    push.add_argument("--commit-message", default=None)
+    push.add_argument(
+        "--no-card",
+        action="store_true",
+        help="Skip dataset-card generation even if card flags are set.",
+    )
+    push.add_argument("--card-name", default=None)
+    push.add_argument("--card-source-url", default=None)
+    push.add_argument(
+        "--card-citation",
+        default=None,
+        help="Citation text, or path to a file containing the citation.",
+    )
+    push.add_argument(
+        "--include",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="Allow-list glob; may be repeated. Overrides the default set.",
+    )
+    push.add_argument(
+        "--ignore",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="Deny-list glob; may be repeated. Overrides the default set.",
+    )
+    push.add_argument("--max-workers", type=int, default=8)
+    push.add_argument(
+        "--large-folder",
+        choices=("auto", "yes", "no"),
+        default="auto",
+        help=(
+            "Upload transport: 'auto' (default) routes large trees "
+            "through upload_large_folder (resumable, batched commits); "
+            "'yes'/'no' force it on/off."
+        ),
+    )
+    push.add_argument("--dry-run", action="store_true")
+
+    pull = sub.add_parser("pull", help="Pull a dataset from the Hub.")
+    pull.add_argument("repo_id")
+    pull.add_argument("local_dir", type=Path)
+    pull.add_argument("--revision", default="main")
+    pull.add_argument(
+        "--token",
+        default=None,
+        help=(
+            "HF token. Prefer the HF_TOKEN / HF_HUB_TOKEN environment "
+            "variables or `hf auth login` — values passed on the command "
+            "line are visible in shell history and process listings."
+        ),
+    )
+    pull.add_argument(
+        "--splits",
+        default=None,
+        help="Comma-separated split names to download (e.g. train,val).",
+    )
+    pull.add_argument(
+        "--include",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="Allow-list glob; may be repeated. Wins over --splits.",
+    )
+    pull.add_argument(
+        "--ignore",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="Deny-list glob; may be repeated.",
+    )
+    pull.add_argument("--max-workers", type=int, default=8)
+
+    return parser
+
+
+def _read_citation(value: str) -> str:
+    """Return the citation contents, reading from disk if ``value`` is a path.
+
+    Used by the ``push`` subcommand's single ``--card-citation`` flag,
+    where the value may be either a literal citation string or a path
+    to a file containing it. The ``card`` subcommand instead uses an
+    explicit mutually-exclusive ``--citation``/``--citation-file`` pair
+    via :func:`_resolve_citation` below.
+    """
+    candidate = Path(value)
+    if candidate.is_file():
+        return candidate.read_text()
+    return value
+
+
+def _resolve_citation(args: argparse.Namespace) -> str:
+    """Return the citation contents from the chosen mutually exclusive flag.
+
+    Args:
+        args: Parsed ``argparse`` namespace from the ``card`` subparser.
+
+    Returns:
+        str: Either the literal ``--citation`` value or the contents of the
+            file pointed at by ``--citation-file``.
+    """
+    if args.citation_file is not None:
+        return args.citation_file.read_text()
+    return args.citation
+
+
+def _run_card(args: argparse.Namespace) -> int:
+    local_dir = args.local_dir
+    if not local_dir.is_dir():
+        logger.error(f"Local directory does not exist: {local_dir}")
+        return 2
+
+    output = args.output if args.output is not None else local_dir / "README.md"
+    if output.exists() and not args.force:
+        logger.error(f"Refusing to overwrite {output} without --force.")
+        return 1
+
+    layout = inspect_local_layout(local_dir)
+    citation = _resolve_citation(args)
+    name = args.name or local_dir.name
+    meta = DatasetCardMeta(
+        name=name,
+        source_url=args.source_url,
+        citation=citation,
+        license=args.license,
+        license_name=args.license_name,
+        pretty_name=args.pretty_name,
+    )
+
+    card = make_dataset_card(meta, layout)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(card)
+    logger.info(f"Wrote dataset card to {output}")
+    return 0
+
+
+def _parse_splits(raw: str | None) -> tuple[str, ...] | None:
+    # Strip and reject empties so inputs like "train, val" or ",val," still
+    # map to the intended ("train", "val") filter instead of synthesizing
+    # bogus " val/**" patterns that silently skip the requested split.
+    if raw is None:
+        return None
+    parts = tuple(part.strip() for part in raw.split(",") if part.strip())
+    return parts if parts else None
+
+
+def _human_bytes(num: float) -> str:
+    # IEC suffixes (1 KiB == 1024 B). Falls through to PiB for >1024 TiB.
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if num < 1024.0:
+            return f"{num:.1f} {unit}"
+        num /= 1024.0
+    return f"{num:.1f} PiB"
+
+
+def _summarize_target(target: Path) -> tuple[int, int]:
+    # Returns (file_count, total_bytes) for the actually-downloaded tree.
+    # Walks the directory directly instead of going through
+    # ``inspect_local_layout``: that helper only sees files inside the
+    # recognized split folders and would otherwise undercount root-level
+    # files like ``README.md`` that ``pull_dataset`` is expected to bring
+    # along when ``splits`` is set.
+    if not target.exists():
+        return 0, 0
+
+    files = 0
+    total_bytes = 0
+    for dirpath, _, filenames in os.walk(target):
+        for name in filenames:
+            files += 1
+            try:
+                total_bytes += (Path(dirpath) / name).stat().st_size
+            except OSError:
+                continue
+    return files, total_bytes
+
+
+def _run_pull(args: argparse.Namespace) -> int:
+    splits = _parse_splits(args.splits)
+    include_globs = tuple(args.include) if args.include is not None else None
+    kwargs: dict = {
+        "revision": args.revision,
+        "token": args.token,
+        "splits": splits,
+        "include_globs": include_globs,
+        "max_workers": args.max_workers,
+    }
+    if args.ignore is not None:
+        kwargs["ignore_globs"] = tuple(args.ignore)
+
+    try:
+        target = pull_dataset(args.repo_id, args.local_dir, **kwargs)
+    except Exception as exc:
+        print(f"synthpix-hf pull: {exc}", file=sys.stderr)
+        return 1
+
+    files, total_bytes = _summarize_target(target)
+    print(
+        f"Pulled {args.repo_id}@{args.revision} -> {target} "
+        f"({files} files, {_human_bytes(total_bytes)})"
+    )
+    return 0
+
+
+def _build_push_card_meta(args: argparse.Namespace) -> DatasetCardMeta | None:
+    # The CLI builds card metadata only when both the source URL and the
+    # citation are provided. Partial flag sets are surfaced as a parse error
+    # by the caller before reaching this helper.
+    if args.no_card:
+        return None
+    if args.card_source_url is None and args.card_citation is None:
+        return None
+    # Partial flag sets (exactly one of the two) are rejected by the caller
+    # (`_run_push`), so reaching here with one non-None guarantees both are.
+    assert args.card_source_url is not None
+    citation = _read_citation(args.card_citation)
+    name = args.card_name or args.repo_id.split("/", 1)[-1]
+    return DatasetCardMeta(
+        name=name,
+        source_url=args.card_source_url,
+        citation=citation,
+        pretty_name=args.card_name,
+    )
+
+
+def _confirm_public_on_tty() -> bool:
+    # ``--allow-public`` is the deliberate friction. On a TTY we additionally
+    # require the user to type ``yes`` so that copy/pasted commands don't
+    # silently flip a private dataset to public. Pipelines (non-TTY) are
+    # trusted to mean what they say.
+    if not sys.stdin.isatty():
+        return True
+    try:
+        answer = input("Refusing to push public unless you type 'yes': ")
+    except EOFError:
+        return False
+    return answer.strip() == "yes"
+
+
+def _run_push(args: argparse.Namespace) -> int:
+    if args.public and not args.allow_public:
+        print(
+            "--public requires --allow-public (this is a safety gate; "
+            "see push_dataset docstring)",
+            file=sys.stderr,
+        )
+        return 2
+
+    card_partial = (args.card_source_url is None) ^ (args.card_citation is None)
+    if card_partial and not args.no_card:
+        print(
+            "--card-source-url and --card-citation must be provided "
+            "together; pass --no-card to skip card generation.",
+            file=sys.stderr,
+        )
+        return 2
+
+    if args.public and not _confirm_public_on_tty():
+        print("Aborted: public push not confirmed.", file=sys.stderr)
+        return 1
+
+    card_meta = _build_push_card_meta(args)
+    kwargs: dict = {
+        "private": not args.public,
+        "allow_public": args.allow_public,
+        "token": args.token,
+        "revision": args.revision,
+        "commit_message": args.commit_message,
+        "card_meta": card_meta,
+        "max_workers": args.max_workers,
+        "large_folder": {"auto": None, "yes": True, "no": False}[
+            args.large_folder
+        ],
+        "dry_run": args.dry_run,
+    }
+    if args.include is not None:
+        kwargs["include_globs"] = tuple(args.include)
+    if args.ignore is not None:
+        kwargs["ignore_globs"] = tuple(args.ignore)
+
+    try:
+        sha = push_dataset(args.local_dir, args.repo_id, **kwargs)
+    except Exception as exc:
+        print(f"synthpix-hf push: {exc}", file=sys.stderr)
+        return 1
+
+    if args.dry_run:
+        print(f"DRY RUN: would push {args.local_dir} to {args.repo_id}")
+    else:
+        print(f"Pushed {args.repo_id}@{sha}")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Entry point for ``synthpix-hf``.
+
+    Args:
+        argv: Optional explicit argument list; defaults to ``sys.argv[1:]``.
+
+    Returns:
+        int: A POSIX-style exit code.
+    """
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    if args.command == "card":
+        return _run_card(args)
+    if args.command == "pull":
+        return _run_pull(args)
+    if args.command == "push":
+        return _run_push(args)
+
+    # ``add_subparsers(required=True)`` makes this unreachable; ``parser.error``
+    # exits in any case but mypy/basedpyright need a concrete return.
+    parser.error(f"Unknown command: {args.command}")
+    return 2
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

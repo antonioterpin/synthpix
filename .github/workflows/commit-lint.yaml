@@ -2,6 +2,9 @@ name: Commit style validation
 
 on:
     workflow_dispatch:
+    push:
+        branches:
+            - '**'
 
 jobs:
   commit-lint:
@@ -12,4 +15,4 @@ jobs:
       - name: Run Commitlint
         uses: wagoid/commitlint-github-action@v5
         with:
-          configFile: commitlint.config.js
+          configFile: commitlint.config.mjs

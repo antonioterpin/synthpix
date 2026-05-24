@@ -15,7 +15,18 @@ PRNGKey: TypeAlias = jnp.ndarray
 @tree_util.register_pytree_node_class
 @dataclass(frozen=False)
 class ImageGenerationParameters:
-    """Dataclass representing image generation parameters."""
+    """Dataclass representing image generation parameters.
+
+    Attributes:
+        seeding_densities: Array of shape (B,) containing the seeding density
+            for each image pair.
+        diameter_ranges: Array of shape (B, N, 2) containing the minimum and
+            maximum particle diameter in pixels for each image pair.
+        intensity_ranges: Array of shape (B, N, 2) containing the minimum and
+            maximum peak intensity (I0) for each image pair.
+        rho_ranges: Array of shape (B, N, 2) containing the minimum and
+            maximum correlation coefficient (rho) for each image pair.
+    """
 
     seeding_densities: jnp.ndarray
     diameter_ranges: jnp.ndarray
@@ -65,7 +76,26 @@ class ImageGenerationParameters:
 @tree_util.register_pytree_node_class
 @dataclass(frozen=False)
 class SynthpixBatch:
-    """Dataclass representing a batch of SynthPix data."""
+    """Dataclass representing a batch of SynthPix data.
+
+    NOTE: seeds are unique per-flow-field-file, keys are unique per-image-pair.
+    This is because each flow-field-file can be used to generate multiple
+    image pairs. In the case of 'RealImageSampler', the flow-field-file
+    contains the image pair and the flow field itself, so seeds and keys are
+    unique per flow-field-file.
+
+    Attributes:
+        images1: First image in the pair. (B, H, W)
+        images2: Second image in the pair. (B, H, W)
+        flow_fields: Flow field between the two images. (B, H, W, 2)
+        params: Parameters used to generate the images. (B,)
+        done: Whether the flow field is valid. (B,)
+        mask: Mask indicating the valid images in the batch. (B,)
+        files: File paths of the images. (B,)
+        epoch: Epoch of the images. (B,)
+        seeds: Seeds used to generate the images. (B,)
+        keys: PRNG keys used to generate the images. (B, 2)
+    """
 
     images1: jnp.ndarray  # (B, H, W)
     images2: jnp.ndarray  # (B, H, W)
@@ -76,6 +106,7 @@ class SynthpixBatch:
     files: tuple[str, ...] | None = None
     epoch: jnp.ndarray | None = None  # (B,)
     seeds: jnp.ndarray | None = None  # (B,)
+    keys: PRNGKey | None = None  # (B, 2)
 
     def update(self, **kwargs: Any) -> Self:
         """Return a new SynthpixBatch with updated fields.
@@ -96,13 +127,18 @@ class SynthpixBatch:
             files=kwargs.get("files", self.files),
             epoch=kwargs.get("epoch", self.epoch),
             seeds=kwargs.get("seeds", self.seeds),
+            keys=kwargs.get("keys", self.keys),
         )
 
     def tree_flatten(
         self,
     ) -> tuple[
         tuple[
-            jnp.ndarray | ImageGenerationParameters | tuple[str, ...] | int | None,
+            jnp.ndarray
+            | ImageGenerationParameters
+            | tuple[str, ...]
+            | int
+            | None,
             ...,
         ],
         None,
@@ -122,6 +158,7 @@ class SynthpixBatch:
             self.files,
             self.epoch,
             self.seeds,
+            self.keys,
         )
         aux_data = None
         return (children, aux_data)
@@ -143,7 +180,17 @@ class SynthpixBatch:
 
 @dataclass(frozen=True)
 class SchedulerData:
-    """Dataclass representing a batch returned by a scheduler."""
+    """Dataclass representing a batch returned by a scheduler.
+
+    Attributes:
+        flow_fields: Array of shape (B, H, W, 2) containing the flow fields.
+        images1: Array of shape (B, H, W) containing the first set of images.
+        images2: Array of shape (B, H, W) containing the second set of images.
+        mask: Mask indicating the valid images in the batch. (B,)
+        files: File paths of the images. (B,)
+        epoch: Epoch of the images. (B,)
+        jax_seed: JAX PRNG key used to generate the images. (B, 2)
+    """
 
     flow_fields: np.ndarray
     images1: np.ndarray | None = None
@@ -177,7 +224,7 @@ class SchedulerData:
 class ImageGenerationSpecification:
     """Dataclass representing parameters for image generation.
 
-    Details:
+    Attributes:
         batch_size: Number of image pairs to generate.
         image_shape: (height, width) of the output image in pixels.
         img_offset: (y, x) offset to apply to the generated images in pixels.
@@ -224,8 +271,12 @@ class ImageGenerationSpecification:
     noise_gaussian_mean: float = 0.0
     noise_gaussian_std: float = 0.0
 
-    def __post_init__(self) -> None:  # noqa: PLR0912
-        """Validate the fields of the dataclass."""
+    def __post_init__(self) -> None:
+        """Validate the fields of the dataclass.
+
+        Raises:
+            ValueError: If any of the fields have invalid values.
+        """
         if not isinstance(self.batch_size, int) or self.batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
         if (

@@ -1,7 +1,7 @@
 """Tests for the FileDataSource base class.
 
-FileDataSource provides common functionality for data sources that load data 
-from a list of files, including file discovery, initialization validation, 
+FileDataSource provides common functionality for data sources that load data
+from a list of files, including file discovery, initialization validation,
 and basic indexing.
 """
 
@@ -23,14 +23,16 @@ class ConcreteDataSource(FileDataSource):
 def test_base_init_str(tmp_path):
     """Test that FileDataSource correctly handles a single string path as input.
 
-    It should automatically wrap the string in a list and proceed with 
+    It should automatically wrap the string in a list and proceed with
     file discovery.
     """
     f = tmp_path / "test.txt"
     f.touch()
     ds = ConcreteDataSource(str(f))
     assert len(ds) == 1, f"Expected 1 file, got {len(ds)}"
-    assert ds.file_list == [str(f)], f"Expected file_list {[str(f)]}, got {ds.file_list}"
+    assert ds.file_list == [str(f)], (
+        f"Expected file_list {[str(f)]}, got {ds.file_list}"
+    )
 
 
 def test_base_init_invalid_type():
@@ -48,7 +50,7 @@ def test_base_init_invalid_type():
 def test_base_no_files_found(tmp_path):
     """Test that ValueError is raised during initialization if no files are found.
 
-    This ensures that the data source doesn't enter an invalid state with an 
+    This ensures that the data source doesn't enter an invalid state with an
     empty file list.
     """
     # Pattern defaults to "*"
@@ -62,7 +64,9 @@ def test_base_direct_file_path(tmp_path):
     f = tmp_path / "test.txt"
     f.touch()
     ds = ConcreteDataSource([str(f)])
-    assert len(ds) == 1, f"Expected 1 file when passing direct path, got {len(ds)}"
+    assert len(ds) == 1, (
+        f"Expected 1 file when passing direct path, got {len(ds)}"
+    )
 
 
 def test_base_include_images_default():
@@ -77,4 +81,6 @@ def test_base_getitem(tmp_path):
     f.touch()
     ds = ConcreteDataSource(str(f))
     item = ds[0]
-    assert item["file"] == str(f), f"Expected 'file' to be {str(f)}, got {item['file']}"
+    assert item["file"] == str(f), (
+        f"Expected 'file' to be {f!s}, got {item['file']}"
+    )

@@ -197,8 +197,8 @@ def input_check_apply_flow(
         or particle_positions.shape[1] not in (2, 3)
     ):
         raise ValueError(
-            "Particle_positions must be a 2D jnp.ndarray with shape "
-            "(N, 2) or (N, 3)"
+            "Particle_positions must be a 2D jnp.ndarray "
+            "with shape (N, 2) or (N, 3)"
         )
 
     if (

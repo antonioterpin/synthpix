@@ -1,30 +1,45 @@
 """Tests for low-level utility functions and data manipulation helpers.
 
-These tests cover interpolation logic (bilinear, trilinear), flow field 
-adaptation, configuration loading, and directory discovery for dataset 
+These tests cover interpolation logic (bilinear, trilinear), flow field
+adaptation, configuration loading, and directory discovery for dataset
 preprocessing.
 """
+
+from goggles import TextLogger
+import logging
+from logging import Logger
 import os
 import re
 import sys
 import timeit
-from pathlib import Path
-import logging
 import types
-
+from pathlib import Path
+import contextlib
 import jax
 import jax.numpy as jnp
 import pytest
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
-
-from synthpix.utils import (bilinear_interpolate, discover_leaf_dirs,
-                            flow_field_adapter, generate_array_flow_field,
-                            input_check_flow_field_adapter, load_configuration,
-                            trilinear_interpolate, get_logger)
+from synthpix.sampler.base import Sampler
 import synthpix.utils as utils_module
+from synthpix.utils import (
+    bilinear_interpolate,
+    discover_leaf_dirs,
+    flow_field_adapter,
+    generate_array_flow_field,
+    get_logger,
+    input_check_flow_field_adapter,
+    load_configuration,
+    trilinear_interpolate,
+)
 from tests.example_flows import get_flow_function
 
 config = load_configuration("config/testing.yaml")
+
+
+ON_UNIX = os.name == "posix"
+
+if ON_UNIX:
+    import goggles as gg
 
 REPETITIONS = config["REPETITIONS"]
 NUMBER_OF_EXECUTIONS = config["EXECUTIONS_UTILS"]
@@ -90,7 +105,9 @@ def test_trilinear_interpolate(
         z: The z-coordinates for interpolation.
         expected: The expected interpolated values.
     """
-    assert trilinear_interpolate(image, x, y, z) == expected, f"Trilinear interpolation mismatch. Expected {expected}, got {trilinear_interpolate(image, x, y, z)}"
+    assert trilinear_interpolate(image, x, y, z) == expected, (
+        f"Trilinear interpolation mismatch. Expected {expected}, got {trilinear_interpolate(image, x, y, z)}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -115,17 +132,29 @@ def test_generate_array_flow_field(
 ):
     """Test generating a discretized flow field array from a functional description.
 
-    Verifies that the resulting array matches the expected shape, dtype, 
+    Verifies that the resulting array matches the expected shape, dtype,
     and values for standard flow types (horizontal, vertical).
     """
     # Generate the flow field using the specified type
     flow_field = get_flow_function(flow_field_type)
     generated_flow_field = generate_array_flow_field(flow_field, shape)
 
-    assert generated_flow_field.shape == (shape[0], shape[1], 2), f"Generated flow field shape mismatch. Expected {(shape[0], shape[1], 2)}, got {generated_flow_field.shape}"
-    assert generated_flow_field.shape == expected.shape, f"Generated flow field shape {generated_flow_field.shape} does not match expected shape {expected.shape}"
-    assert jnp.allclose(generated_flow_field, expected, atol=1e-5), "Generated flow field values do not match expected values"
-    assert generated_flow_field.dtype == jnp.float32, f"Expected dtype jnp.float32, got {generated_flow_field.dtype}"
+    assert generated_flow_field.shape == (
+        shape[0],
+        shape[1],
+        2,
+    ), (
+        f"Generated flow field shape mismatch. Expected {(shape[0], shape[1], 2)}, got {generated_flow_field.shape}"
+    )
+    assert generated_flow_field.shape == expected.shape, (
+        f"Generated flow field shape {generated_flow_field.shape} does not match expected shape {expected.shape}"
+    )
+    assert jnp.allclose(generated_flow_field, expected, atol=1e-5), (
+        "Generated flow field values do not match expected values"
+    )
+    assert generated_flow_field.dtype == jnp.float32, (
+        f"Expected dtype jnp.float32, got {generated_flow_field.dtype}"
+    )
 
 
 # Mock valid inputs
@@ -608,10 +637,14 @@ def test_flow_field_adapter_shape(
     )
 
     # Check the shape of the adapted flow field
-    assert new_flow_field[0][0].shape == expected_shape, f"Adapted flow field shape mismatch. Expected {expected_shape}, got {new_flow_field[0][0].shape}"
+    assert new_flow_field[0][0].shape == expected_shape, (
+        f"Adapted flow field shape mismatch. Expected {expected_shape}, got {new_flow_field[0][0].shape}"
+    )
 
     # Check the first vector of the adapted flow field
-    assert jnp.allclose(new_flow_field[0][0], expected_first_vector), "Adapted flow field values do not match expected first vector"
+    assert jnp.allclose(new_flow_field[0][0], expected_first_vector), (
+        "Adapted flow field values do not match expected first vector"
+    )
 
 
 @pytest.mark.parametrize(
@@ -649,12 +682,14 @@ def test_flow_field_adapter(flow_field, new_flow_field_shape, expected):
     )
 
     # Check the flow field
-    assert jnp.allclose(new_flow_field[0][0][1, 1], expected), f"Central vector mismatch. Expected {expected}, got {new_flow_field[0][0][1, 1]}"
+    assert jnp.allclose(new_flow_field[0][0][1, 1], expected), (
+        f"Central vector mismatch. Expected {expected}, got {new_flow_field[0][0][1, 1]}"
+    )
 
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="user not connected to the server.",
 )
 @pytest.mark.parametrize("selected_flow", ["horizontal"])
 @pytest.mark.parametrize("flow_field_shape", [(1536, 1024)])
@@ -665,8 +700,8 @@ def test_speed_flow_fields_adapter(
 ):
     """Benchmark performance of GPU-parallelized flow field adaptation.
 
-    Uses `shard_map` to distribute interpolation tasks across GPUs and 
-    verifies that the latency stays within acceptable limits for 
+    Uses `shard_map` to distribute interpolation tasks across GPUs and
+    verifies that the latency stays within acceptable limits for
     real-time or batch processing.
     """
 
@@ -749,8 +784,8 @@ def _abspath(p):  # small helper to compare reliably
 def test_discover_leaf_dirs(tmp_path):
     """Test the automatic discovery of leaf directories containing `.mat` files.
 
-    Verifies that the function correctly identifies directories at the end 
-    of the hierarchy that actually contain relevant data files, 
+    Verifies that the function correctly identifies directories at the end
+    of the hierarchy that actually contain relevant data files,
     ignoring parent or empty branches.
     """
     """
@@ -811,8 +846,12 @@ def test_discover_leaf_dirs_skips_missing_dirs(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "scandir", fake_scandir)
 
     leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
-    assert _abspath(keep) in leaves, f"Expected {_abspath(keep)} to be in leaves: {leaves}"
-    assert _abspath(gone) not in leaves, f"Expected {_abspath(gone)} to be excluded from leaves"
+    assert _abspath(keep) in leaves, (
+        f"Expected {_abspath(keep)} to be in leaves: {leaves}"
+    )
+    assert _abspath(gone) not in leaves, (
+        f"Expected {_abspath(gone)} to be excluded from leaves"
+    )
 
 
 def test_discover_leaf_dirs_skips_not_a_directory(tmp_path, monkeypatch):
@@ -837,8 +876,12 @@ def test_discover_leaf_dirs_skips_not_a_directory(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "scandir", fake_scandir)
 
     leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
-    assert _abspath(ok) in leaves, f"Expected {_abspath(ok)} to be in leaves, got {leaves}"
-    assert _abspath(will_be_file) not in leaves, f"Expected {_abspath(will_be_file)} (not a directory) to be excluded from leaves"
+    assert _abspath(ok) in leaves, (
+        f"Expected {_abspath(ok)} to be in leaves, got {leaves}"
+    )
+    assert _abspath(will_be_file) not in leaves, (
+        f"Expected {_abspath(will_be_file)} (not a directory) to be excluded from leaves"
+    )
 
 
 @pytest.mark.skipif(
@@ -867,8 +910,12 @@ def test_discover_leaf_dirs_skips_permission_denied(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "scandir", fake_scandir)
 
     leaves = set(map(os.path.abspath, discover_leaf_dirs(paths)))
-    assert _abspath(ok) in leaves, f"Expected {_abspath(ok)} to be in leaves, got {leaves}"
-    assert _abspath(denied) not in leaves, f"Expected {_abspath(denied)} (permission denied) to be excluded from leaves"
+    assert _abspath(ok) in leaves, (
+        f"Expected {_abspath(ok)} to be in leaves, got {leaves}"
+    )
+    assert _abspath(denied) not in leaves, (
+        f"Expected {_abspath(denied)} (permission denied) to be excluded from leaves"
+    )
 
 
 def test_get_logger_unix_uses_goggles(monkeypatch):
@@ -883,9 +930,9 @@ def test_get_logger_unix_uses_goggles(monkeypatch):
         get_logger=lambda name, scope=None: fake_logger
     )
 
-    monkeypatch.setitem(__import__("sys").modules, "goggles", fake_goggles)
+    monkeypatch.setattr(utils_module, "gg", fake_goggles, raising=True)
 
-    logger = get_logger("test.logger", scope="synthpix")
+    logger: Logger | TextLogger = get_logger("test.logger", scope="synthpix")
 
     assert logger is fake_logger, "Expected to receive the fake goggles logger"
 
@@ -902,6 +949,105 @@ def test_get_logger_windows_fallback(monkeypatch):
 
     logger = get_logger("test.logger", scope="synthpix")
 
-    assert isinstance(logger, logging.Logger), "Expected a standard Logger instance"
-    assert logger.name == "test.logger", f"Expected logger name 'test.logger', got '{logger.name}'"
-    assert logging.getLogger().handlers, "Expected root logger to have handlers configured"
+    assert isinstance(logger, logging.Logger), (
+        "Expected a standard Logger instance"
+    )
+    assert logger.name == "test.logger", (
+        f"Expected logger name 'test.logger', got '{logger.name}'"
+    )
+    assert logging.getLogger().handlers, (
+        "Expected root logger to have handlers configured"
+    )
+
+
+def run_batches(
+    sampler: Sampler,
+    num_batches: int,
+) -> int:
+    """Samples num_batches batches from sampler.
+
+    For each batch, it proceeds to the next one only when computations are completed (doesn't return lazy evaluations' objects). This simulates the algorithmic requirements of using a downstream algorithm.
+
+    Args:
+        sampler: the synthpix sampler to be used
+        num_batches: the number of batches to generate
+
+    Returns:
+        The total number of image pairs produced.
+    """
+    total_pairs = 0
+    for i, batch in enumerate(sampler):
+        # to avoid jax's lazy evaluations, we use jax.Array.block_until_ready() routine on each entry of the batch.
+        batch.images1.block_until_ready()
+        batch.images2.block_until_ready()
+        batch.flow_fields.block_until_ready()
+        total_pairs += batch.images1.shape[0]
+        # stopping criterion
+        if (i + 1) >= num_batches:
+            break
+    return total_pairs
+
+def benchmark_asymptotic_throughput(
+    config_path: str,
+    batches: int = 10000,
+    use_grain: bool = True,
+    use_identifiable_flow: bool | None = None,
+) -> int:
+    """Benchmark asymptotic (with respect to number of sampler batched) throughput of the Synthetic Sampler.
+
+    This utility instantiates a SynthPix sampler from a configuration file,
+    runs a warmup batch, and then iterates over a fixed number of batches
+    while synchronizing the JAX device computations.
+
+    Args:
+        config_path: string path to the YAML configuration file used in the benchmark.
+        batches: Number of batches sampled whose generation time gets measured. Dafault is set to 10000, which empirically was enough to measure asymptotic performance on our setup.
+        use_grain: Whether to use the Grain-based scheduler backend.
+        use_identifiable_flow: overrides the config's ``identifiable_flow``.
+
+    Returns:
+        Throughput measured as image pairs per second.
+    """
+
+    # load configuration file
+    config = load_configuration(config_path)
+
+    # force specified options
+    if use_identifiable_flow is not None:
+        config["identifiable_flow"] = use_identifiable_flow
+
+    # Instantiate sampler
+    # Import here to avoid circular dependency
+    from synthpix.make import make  # noqa: PLC0415
+    sampler = make(config, use_grain_scheduler=use_grain)
+
+    # Warmup batch
+    # Trigger jax.jit compilation and grain data pipeline.
+    warmup_batch = next(sampler)
+    warmup_batch.images1.block_until_ready()
+    warmup_batch.images2.block_until_ready()
+    warmup_batch.flow_fields.block_until_ready()
+
+    # timed loop
+    timer = timeit.default_timer
+    start = timer()
+    try:
+        total_pairs = run_batches(sampler, batches)
+    finally:
+        elapsed = timer() - start # defaults to seconds
+
+        # release resources in spite of iterations
+        with contextlib.suppress(Exception):
+            # release sampler resources
+            sampler.shutdown()
+            # release logging resources
+            try:
+                if ON_UNIX:
+                    gg.finish()
+            except Exception:
+                pass
+
+    if elapsed <= 0:
+        return 0
+
+    return int(total_pairs / elapsed)

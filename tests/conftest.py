@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gc
 import os
+import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -30,7 +31,16 @@ WORKER_ROOT.mkdir(exist_ok=True)
 # ──────────────────────────────────────────────────────────────────────────────
 @pytest.fixture(scope="session")
 def generate_hdf5_file(tmp_path_factory):
-    """Return a callable that writes an HDF5 file and yields its Path."""
+    """Return a callable that writes an HDF5 file and yields its Path.
+
+    Every file created through the factory is registered for removal, so the
+    session-scoped teardown sweeps any folder a consuming fixture did not
+    already delete (e.g. after a hard interrupt). Combined with the eager
+    per-test cleanup in the consumer fixtures, this keeps the (potentially
+    multi-GB with ``--large-hdf5``) fixtures from accumulating on disk even
+    when tests fail.
+    """
+    created: list[Path] = []
 
     def _generate(stem: str, dims: dict[str, int]) -> Path:
         folder = tmp_path_factory.mktemp("hdf5")
@@ -41,24 +51,30 @@ def generate_hdf5_file(tmp_path_factory):
                 dims["x_dim"], dims["y_dim"], dims["z_dim"], dims["features"]
             ).astype(np.float32)
             f.create_dataset("flow", data=data)
+        created.append(folder)
         return str(path)
 
-    return _generate
+    yield _generate
+
+    for folder in created:
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Default dimensions
 # ──────────────────────────────────────────────────────────────────────────────
 @pytest.fixture(scope="session")
-def hdf5_test_dims() -> dict[str, int]:
-    """Return default dimensions for HDF5 test files."""
-    CI = os.getenv("CI") == "true"
-    return {
-        "x_dim": 128 if CI else 1536,
-        "y_dim": 10 if CI else 100,
-        "z_dim": 128 if CI else 2048,
-        "features": 2,
-    }
+def hdf5_test_dims(request) -> dict[str, int]:
+    """Return default dimensions for HDF5 test files.
+
+    Small by default (~1.3 MB per file) so the suite stays fast and does not
+    flood the (often tmpfs-backed) temp directory. Pass ``--large-hdf5`` to
+    generate the full-size ~2.4 GB arrays for heavier, explicitly-requested
+    runs.
+    """
+    if request.config.getoption("--large-hdf5", default=False):
+        return {"x_dim": 1536, "y_dim": 100, "z_dim": 2048, "features": 2}
+    return {"x_dim": 128, "y_dim": 10, "z_dim": 128, "features": 2}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -68,7 +84,10 @@ def hdf5_test_dims() -> dict[str, int]:
 def temp_file(request, hdf5_test_dims, generate_hdf5_file):
     """Create a temporary HDF5 file with specified dimensions."""
     dims = getattr(request, "param", hdf5_test_dims)
-    yield generate_hdf5_file(stem="flow_data", dims=dims)
+    path = generate_hdf5_file(stem="flow_data", dims=dims)
+    yield path
+    # Runs even when the test fails, so multi-GB fixtures never accumulate.
+    shutil.rmtree(Path(path).parent, ignore_errors=True)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -83,6 +102,9 @@ def mock_hdf5_files(request, hdf5_test_dims, generate_hdf5_file):
         for i in range(num_files)
     ]
     yield paths, hdf5_test_dims
+    # Runs even when the test fails, so multi-GB fixtures never accumulate.
+    for p in paths:
+        shutil.rmtree(Path(p).parent, ignore_errors=True)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -92,7 +114,10 @@ def mock_hdf5_files(request, hdf5_test_dims, generate_hdf5_file):
 def temp_file_module(request, hdf5_test_dims, generate_hdf5_file):
     """Create a temporary HDF5 file for module scope tests."""
     dims = getattr(request, "param", hdf5_test_dims)
-    yield generate_hdf5_file(stem="flow_data_module", dims=dims)
+    path = generate_hdf5_file(stem="flow_data_module", dims=dims)
+    yield path
+    # Runs even when the module's tests fail, so fixtures never accumulate.
+    shutil.rmtree(Path(path).parent, ignore_errors=True)
 
 
 @pytest.fixture
@@ -134,7 +159,7 @@ def numpy_test_dims():
 def mock_numpy_files(tmp_path, numpy_test_dims, request):
     """Create multiple temporary Numpy files with random data."""
     param = getattr(request, "param", 2)
-    
+
     if isinstance(param, dict):
         num_files = param.get("num_files", 2)
         dims = param.get("dims", numpy_test_dims)
@@ -172,7 +197,7 @@ def mat_test_dims():
 def mock_mat_files(tmp_path, mat_test_dims, request):
     """Create multiple temporary .mat files with random data."""
     param = getattr(request, "param", 2)
-    
+
     if isinstance(param, dict):
         num_files = param.get("num_files", 2)
         dims = param.get("dims", mat_test_dims)
@@ -217,18 +242,47 @@ def mock_mat_files(tmp_path, mat_test_dims, request):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# CLI options
+# ──────────────────────────────────────────────────────────────────────────────
+def pytest_addoption(parser):
+    # Register custom command-line options for the test suite.
+    parser.addoption(
+        "--run-hf-live",
+        action="store_true",
+        default=False,
+        help="Run the gated Hugging Face live tests (network access).",
+    )
+    parser.addoption(
+        "--large-hdf5",
+        action="store_true",
+        default=False,
+        help=(
+            "Generate full-size (~2.4 GB) HDF5 fixtures instead of the small "
+            "default (~1.3 MB). Opt-in; heavy on disk."
+        ),
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Collection modifier
 # ──────────────────────────────────────────────────────────────────────────────
 def pytest_collection_modifyitems(config, items):
     """Skip tests unless explicitly selected with -m run_explicitly."""
-    if config.getoption("-m") and "run_explicitly" in config.getoption("-m"):
-        return
-    skip = pytest.mark.skip(
+    explicit_marker = (
+        config.getoption("-m") and "run_explicitly" in config.getoption("-m")
+    )
+    run_hf_live = config.getoption("--run-hf-live", default=False)
+    skip_explicit = pytest.mark.skip(
         reason="Skipped unless explicitly selected with -m run_explicitly"
     )
+    skip_hf_live = pytest.mark.skip(
+        reason="Skipped unless --run-hf-live is passed on the CLI"
+    )
     for item in items:
-        if "run_explicitly" in item.keywords:
-            item.add_marker(skip)
+        if "run_explicitly" in item.keywords and not explicit_marker:
+            item.add_marker(skip_explicit)
+        if "hf_live" in item.keywords and not run_hf_live:
+            item.add_marker(skip_hf_live)
 
 
 @pytest.fixture(autouse=True)

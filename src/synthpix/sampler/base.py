@@ -7,9 +7,11 @@ import grain.python as grain
 import jax.numpy as jnp
 from typing_extensions import Self
 
-from synthpix.scheduler.protocol import (EpisodeEndError,
-                                         EpisodicSchedulerProtocol,
-                                         SchedulerProtocol)
+from synthpix.scheduler.protocol import (
+    EpisodeEndError,
+    EpisodicSchedulerProtocol,
+    SchedulerProtocol,
+)
 from synthpix.types import SynthpixBatch
 from synthpix.utils import SYNTHPIX_SCOPE, get_logger
 
@@ -71,7 +73,11 @@ class Sampler(ABC):
         logger.info(f"{self.__class__.__name__} shutdown complete.")
 
     def __iter__(self) -> Self:
-        """Returns the iterator instance itself."""
+        """Returns the iterator instance itself.
+
+        Returns:
+            The sampler instance itself as an iterator.
+        """
         return self
 
     def __next__(self) -> SynthpixBatch:
@@ -182,7 +188,7 @@ class Sampler(ABC):
         """Sets the state of the sampler from a checkpoint.
 
         Args:
-            value: A dictionary containing the state of the sampler and scheduler.
+            value: A dictionary containing the state of sampler and scheduler.
 
         Raises:
             TypeError: If state is not a dictionary.

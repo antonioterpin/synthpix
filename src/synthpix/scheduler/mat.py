@@ -110,17 +110,26 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
             ValueError: If required keys are missing or data has invalid shape.
         """
 
-        def recursively_load_hdf5_group(
+        def _recursively_load_hdf5_group(
             group: h5py.Group | h5py.File, prefix: str = ""
         ) -> dict[str, np.ndarray]:
-            """Flatten all datasets in an HDF5 tree into a dict."""
+            """Flatten all datasets in an HDF5 tree into a dict.
+
+            Args:
+                group: The HDF5 group or file to traverse.
+                prefix: The prefix to prepend to dataset names
+                        (used for recursion).
+
+            Returns:
+                A dictionary mapping dataset paths to their loaded numpy arrays.
+            """
             out = {}
             for name, item in group.items():
                 path = f"{prefix}/{name}" if prefix else name
                 if isinstance(item, h5py.Dataset):
                     out[path] = item[()]
                 elif isinstance(item, h5py.Group):
-                    out.update(recursively_load_hdf5_group(item, path))
+                    out.update(_recursively_load_hdf5_group(item, path))
             return out
 
         # Guarantee data is always defined
@@ -140,7 +149,7 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
                 # MATLAB v7.3 ⇒ fall back to h5py
                 logger.debug(f"Falling back to HDF5 for {file_path}")
                 with h5py.File(file_path, "r") as f:
-                    data = recursively_load_hdf5_group(f)
+                    data = _recursively_load_hdf5_group(f)
 
         if data is None:
             raise ValueError(
@@ -170,8 +179,10 @@ class MATFlowFieldScheduler(BaseFlowFieldScheduler):
         flow = data["V"]
         if not (flow.shape[2] == 2 or flow.shape[0] == 2):
             raise ValueError(
-                f"Flow field shape {flow.shape} is not valid. "
-                "Expected shape to have 2 channels (e.g., (H, W, 2) or (2, H, W)).")
+                f"Flow field shape {flow.shape} is not valid. \
+                Expected shape to have 2 channels \
+                    (e.g., (H, W, 2) or (2, H, W))."
+            )
         if flow.shape[2] != 2:
             if flow.shape[0] == 2:
                 flow = np.transpose(flow, (1, 2, 0))

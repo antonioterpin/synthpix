@@ -1,9 +1,10 @@
 """Tests for image masking during synthetic data generation.
 
-These tests verify that binary masks are correctly loaded and applied to 
-generated images, ensuring that masked regions are strictly zeroed out 
+These tests verify that binary masks are correctly loaded and applied to
+generated images, ensuring that masked regions are strictly zeroed out
 while unmasked regions retain their rendered content.
 """
+
 import re
 
 import jax
@@ -11,8 +12,10 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from synthpix.data_generate import (generate_images_from_flow,
-                                    input_check_gen_img_from_flow)
+from synthpix.data_generate import (
+    generate_images_from_flow,
+    input_check_gen_img_from_flow,
+)
 from synthpix.sampler import SyntheticImageSampler
 from synthpix.types import ImageGenerationSpecification
 
@@ -177,8 +180,12 @@ def test_mask_is_correct(scheduler, mock_mask_file):
         config=config,
     )
 
-    assert isinstance(sampler.mask_images, jnp.ndarray), f"Expected mask_images to be jnp.ndarray, got {type(sampler.mask_images)}"
-    assert sampler.mask_images.shape == mask.shape, f"Mask shape mismatch. Expected {mask.shape}, got {sampler.mask_images.shape}"
+    assert isinstance(sampler.mask_images, jnp.ndarray), (
+        f"Expected mask_images to be jnp.ndarray, got {type(sampler.mask_images)}"
+    )
+    assert sampler.mask_images.shape == mask.shape, (
+        f"Mask shape mismatch. Expected {mask.shape}, got {sampler.mask_images.shape}"
+    )
     assert jnp.array_equal(sampler.mask_images, mask), (
         "Mask loaded from file does not match the expected mask."
     )
@@ -271,7 +278,7 @@ def test_invalid_mask_shape_in_generate(mask):
 def test_mask_applies_zeros(mask):
     """Verify that the mask correctly zeros out specific regions in the output images.
 
-    Tests multiple mask geometries (identity, horizontal, eye, full) and 
+    Tests multiple mask geometries (identity, horizontal, eye, full) and
     confirms that pixels are zeroed exactly where indicated.
     """
     key = jax.random.PRNGKey(1)

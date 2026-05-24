@@ -6,7 +6,10 @@ import json
 import logging
 import os
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any, overload
+
+if TYPE_CHECKING:
+    import goggles as gg
 
 import jax
 import jax.numpy as jnp
@@ -17,6 +20,9 @@ DEBUG_JIT = False
 SYNTHPIX_SCOPE = "synthpix"
 ON_UNIX = os.name == "posix"
 
+if ON_UNIX:
+    import goggles as gg
+
 load_configuration = gg_config.load_configuration
 
 
@@ -25,7 +31,7 @@ def get_logger(
     *,
     scope: str | None = None,
     level: int = logging.INFO,
-) -> logging.Logger:
+) -> logging.Logger | gg.TextLogger:
     """Return a module-level logger with platform-specific behavior.
 
     On Unix systems, this uses `goggles`.
@@ -40,11 +46,11 @@ def get_logger(
         A configured logger.
     """
     if ON_UNIX:
-        import goggles as gg
         if scope is None:
-            return gg.get_logger(name)  # type: ignore[no-any-return]
-        return gg.get_logger(name, scope=scope)  # type: ignore[no-any-return]
+            return gg.get_logger(name)
+        return gg.get_logger(name, scope=scope)
 
+    print("Not on Unix, using standard logging.")
     logger = logging.getLogger(name)
 
     # Configure root logger only once
@@ -108,10 +114,27 @@ def match_histogram(
     return matched.reshape(source.shape)
 
 
+@overload
 def bilinear_interpolate(
     image: jnp.ndarray, x_f: jnp.ndarray, y_f: jnp.ndarray
-) -> jnp.ndarray:
+) -> jnp.ndarray: ...
+
+
+@overload
+def bilinear_interpolate(
+    image: np.ndarray, x_f: np.ndarray, y_f: np.ndarray
+) -> np.ndarray: ...
+
+
+def bilinear_interpolate(
+    image: jnp.ndarray | np.ndarray,
+    x_f: jnp.ndarray | np.ndarray,
+    y_f: jnp.ndarray | np.ndarray,
+) -> jnp.ndarray | np.ndarray:
     """Perform bilinear interpolation at floating-point pixel coordinates.
+
+    The function detects if the inputs are jnp.ndarray or np.ndarray
+    and processes them accordingly.
 
     Args:
         image: 2D image to sample from, of shape (H, W).
@@ -120,18 +143,34 @@ def bilinear_interpolate(
 
     Returns:
         Interpolated intensities at each (y, x) location, of shape (H, W).
+
+    Raises:
+        TypeError: If the inputs mix jnp.ndarray and np.ndarray types.
     """
+    has_np = any(isinstance(a, np.ndarray) for a in (image, x_f, y_f))
+    has_jnp = any(isinstance(a, jnp.ndarray) for a in (image, x_f, y_f))
+
+    if has_np and has_jnp:
+        raise TypeError("image, x_f, and y_f must not mix NumPy and JAX arrays")
+
+    if isinstance(image, jnp.ndarray):
+        xp = jnp
+        int_dtype = jnp.int32
+    elif isinstance(image, np.ndarray):
+        xp = np
+        int_dtype = np.int32
+
     H, W = image.shape
 
     # Clamp x_f and y_f to be within the image bounds
-    x_f_clamped = jnp.clip(x_f, 0.0, W - 1.0)
-    y_f_clamped = jnp.clip(y_f, 0.0, H - 1.0)
+    x_f_clamped = xp.clip(x_f, 0.0, W - 1.0)
+    y_f_clamped = xp.clip(y_f, 0.0, H - 1.0)
 
     # Integer neighbors & clamping
-    x0 = jnp.clip(jnp.floor(x_f).astype(jnp.int32), 0, W - 1)
-    x1 = jnp.clip(x0 + 1, 0, W - 1)
-    y0 = jnp.clip(jnp.floor(y_f).astype(jnp.int32), 0, H - 1)
-    y1 = jnp.clip(y0 + 1, 0, H - 1)
+    x0 = xp.clip(xp.floor(x_f).astype(int_dtype), 0, W - 1)
+    x1 = xp.clip(x0 + 1, 0, W - 1)
+    y0 = xp.clip(xp.floor(y_f).astype(int_dtype), 0, H - 1)
+    y1 = xp.clip(y0 + 1, 0, H - 1)
 
     # Fractional weights
     wx = x_f_clamped - x0
@@ -395,7 +434,7 @@ def flow_field_adapter(
     return tiled_flows[:batch_size, ...], flow_bounds
 
 
-def input_check_flow_field_adapter(  # noqa: PLR0912
+def input_check_flow_field_adapter(
     flow_field: jnp.ndarray,
     new_flow_field_shape: tuple[int, int],
     image_shape: tuple[int, int],

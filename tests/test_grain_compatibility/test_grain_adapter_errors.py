@@ -1,24 +1,27 @@
 """Tests for error handling in the Grain-to-Scheduler adapters.
 
-These tests verify that `GrainSchedulerAdapter` and `GrainEpisodicAdapter` 
-correctly raise exceptions for empty loaders, missing images, and 
+These tests verify that `GrainSchedulerAdapter` and `GrainEpisodicAdapter`
+correctly raise exceptions for empty loaders, missing images, and
 malformed metadata (like missing timesteps).
 """
+
 from unittest.mock import MagicMock
 
 import grain.python as grain
 import numpy as np
 import pytest
 
-from synthpix.data_sources.adapter import (GrainEpisodicAdapter,
-                                           GrainSchedulerAdapter)
+from synthpix.data_sources.adapter import (
+    GrainEpisodicAdapter,
+    GrainSchedulerAdapter,
+)
 from synthpix.data_sources.episodic import EpisodicDataSource
 
 
 def test_grain_adapter_empty_loader_error():
     """Test that the adapter raises `StopIteration` if the loader has no data.
 
-    Checks the behavior during initial shape inference when the 
+    Checks the behavior during initial shape inference when the
     iterator is empty.
     """
     loader = MagicMock(spec=grain.DataLoader)
@@ -33,7 +36,7 @@ def test_grain_adapter_empty_loader_error():
 def test_grain_adapter_missing_images_error(tmp_path):
     """Test that a `KeyError` is raised if images are requested but missing from the batch.
 
-    Verifies strict validation of batch content against the data source 
+    Verifies strict validation of batch content against the data source
     configuration.
     """
     batch = {"flow_fields": np.zeros((1, 64, 64, 2))}
@@ -55,7 +58,7 @@ def test_grain_adapter_missing_images_error(tmp_path):
 def test_grain_episodic_missing_metadata_error():
     """Test that missing `_timestep` metadata raises a `KeyError`.
 
-    Episodic adapters rely on metadata to manage sequence boundaries; 
+    Episodic adapters rely on metadata to manage sequence boundaries;
     its absence is treated as a critical failure.
     """
     batch = {"flow_fields": np.zeros((1, 64, 64, 2))}

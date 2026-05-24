@@ -47,7 +47,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
         """
         self._file_list = value
 
-    def __init__(  # noqa: PLR0912
+    def __init__(
         self,
         file_list: list[str],
         randomize: bool = False,
@@ -189,9 +189,6 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
 
         Args:
             value: Dictionary containing the scheduler state.
-
-        Raises:
-            KeyError: If state is missing required keys.
         """
         self.index = value["index"]
         self._slice_idx = value["slice_idx"]
@@ -258,7 +255,7 @@ class BaseFlowFieldScheduler(ABC, SchedulerProtocol):
 
         raise StopIteration
 
-    def get_batch(self, batch_size: int) -> SchedulerData:  # noqa: PLR0912
+    def get_batch(self, batch_size: int) -> SchedulerData:
         """Retrieves a batch of flow fields using the current scheduler state.
 
         This method repeatedly calls `__next__()` to store a batch

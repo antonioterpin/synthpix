@@ -56,7 +56,11 @@ class MATDataSource(FileDataSource):
         super().__init__(dataset_path)
 
     def __repr__(self) -> str:
-        """Returns a stable string representation for Grain checkpointing."""
+        """Returns a stable string representation for Grain checkpointing.
+
+        Returns:
+            A string representation of the MATDataSource.
+        """
         return (
             f"MATDataSource(file_list={self._file_list}, "
             f"include_images={self._include_images}, "

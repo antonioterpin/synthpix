@@ -2,9 +2,10 @@
 
 from unittest.mock import MagicMock
 
-import pytest
 import grain.python as grain
 import orbax.checkpoint as ocp
+import pytest
+
 from synthpix.make import checkpoint_args
 from synthpix.sampler import Sampler
 
@@ -50,5 +51,7 @@ def test_checkpoint_args_no_iterator():
     sampler = MagicMock(spec=Sampler)
     sampler.grain_iterator = None
 
-    with pytest.raises(ValueError, match="Sampler does not provide access to Grain iterator"):
+    with pytest.raises(
+        ValueError, match="Sampler does not provide access to Grain iterator"
+    ):
         checkpoint_args(sampler)
