@@ -72,8 +72,12 @@ def test_seed_changes_output():
 
 
 @pytest.mark.parametrize("index", range(8))
-def test_peak_displacement_within_range(index):
-    """Each field's peak magnitude lies within the requested range."""
+def test_peak_displacement_within_range(index: int) -> None:
+    """Each field's peak magnitude lies within the requested range.
+
+    Args:
+        index: The dataset index to test.
+    """
     low, high = 3.0, 9.0
     ds = KinematicDataSource(
         num_examples=8,
@@ -195,7 +199,11 @@ def test_from_config_uses_defaults():
         {"max_displacement_range": (5.0, 1.0)},
     ],
 )
-def test_invalid_arguments_raise(kwargs):
-    """Malformed generator settings raise ValueError."""
+def test_invalid_arguments_raise(kwargs: dict) -> None:
+    """Malformed generator settings raise ValueError.
+
+    Args:
+        kwargs: A dictionary of invalid arguments to pass to KinematicDataSource.
+    """
     with pytest.raises(ValueError):
         KinematicDataSource(**kwargs)

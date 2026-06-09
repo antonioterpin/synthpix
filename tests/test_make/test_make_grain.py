@@ -7,6 +7,7 @@ isolate the factory logic from actual Grain or JAX execution.
 """
 
 import importlib
+from typing import Any
 from types import SimpleNamespace
 
 import pytest
@@ -226,12 +227,15 @@ def test_make_grain_include_images(patch_grain):
     ), f"Expected output_shape (128, 128), got {ds.kwargs['output_shape']}"
 
 
-def test_make_grain_kinematic(patch_grain):
+def test_make_grain_kinematic(patch_grain: Any) -> None:
     """Test the Grain path for the in-memory kinematic source.
 
     With `scheduler_class: "kinematic"` the factory should build a
     `KinematicDataSource` (mocked) from the config, wrap it in a Grain
     `DataLoader`, and drive a `SyntheticImageSampler` (mocked).
+
+    Args:
+        patch_grain: Pytest fixture that patches Grain and DataSource symbols.
     """
     cfg = {
         "scheduler_class": "kinematic",
@@ -257,8 +261,12 @@ def test_make_grain_kinematic(patch_grain):
     )
 
 
-def test_make_grain_kinematic_include_images_raises(patch_grain):
-    """The kinematic source rejects `include_images: true`."""
+def test_make_grain_kinematic_include_images_raises(patch_grain: Any) -> None:
+    """The kinematic source rejects `include_images: true`.
+
+    Args:
+        patch_grain: Pytest fixture that patches Grain and DataSource symbols.
+    """
     cfg = {
         "scheduler_class": "kinematic",
         "batch_size": 4,
@@ -269,8 +277,12 @@ def test_make_grain_kinematic_include_images_raises(patch_grain):
         make(cfg, use_grain_scheduler=True)
 
 
-def test_make_kinematic_episodic_raises(patch_grain):
-    """The kinematic source rejects episodic iteration."""
+def test_make_kinematic_episodic_raises(patch_grain: Any) -> None:
+    """The kinematic source rejects episodic iteration.
+
+    Args:
+        patch_grain: Pytest fixture that patches Grain and DataSource symbols.
+    """
     cfg = {
         "scheduler_class": "kinematic",
         "batch_size": 4,
@@ -281,8 +293,12 @@ def test_make_kinematic_episodic_raises(patch_grain):
         make(cfg, use_grain_scheduler=True)
 
 
-def test_make_kinematic_requires_grain(patch_grain):
-    """The kinematic source is only available on the Grain path."""
+def test_make_kinematic_requires_grain(patch_grain: Any) -> None:
+    """The kinematic source is only available on the Grain path.
+
+    Args:
+        patch_grain: Pytest fixture that patches Grain and DataSource symbols.
+    """
     cfg = {
         "scheduler_class": "kinematic",
         "batch_size": 4,
