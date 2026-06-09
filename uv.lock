@@ -2533,6 +2533,7 @@ dependencies = [
     { name = "pillow" },
     { name = "robo-goggles" },
     { name = "ruamel-yaml" },
+    { name = "scipy" },
     { name = "tqdm" },
 ]
 
@@ -2587,6 +2588,7 @@ requires-dist = [
     { name = "robo-goggles", specifier = ">=0.1.7" },
     { name = "ruamel-yaml", specifier = ">=0.18.10" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.0" },
+    { name = "scipy", specifier = ">=1.10.0" },
     { name = "scipy", marker = "extra == 'download'", specifier = ">=1.10.0" },
     { name = "tensorflow-cpu", marker = "extra == 'download'", specifier = ">=2.15.0" },
     { name = "tqdm", specifier = ">=4.67.1" },
