@@ -3,12 +3,16 @@
 This data source implements the random flow-field generator (RFG) of the
 *kinematic training* strategy (Manickathan, Mucignat & Lunati, "Kinematic
 training of convolutional neural networks for particle image velocimetry",
-Meas. Sci. Technol. 33, 124006, 2022). Instead of reading displacement
-fields from disk, it synthesises a fresh smooth random field for every
-record, which the synthetic image pipeline then renders into a particle
-image pair. It is selected with ``scheduler_class: "kinematic"`` and only
-makes sense with ``include_images: false`` (the images are generated, not
-read).
+Meas. Sci. Technol. 33, 124006, 2022). It generates smooth random
+displacement fields according to the paper's equation:
+
+    ds_ref = a * G_sigma * xi
+
+where ``xi`` is independent U(-1, 1) noise, ``G_sigma`` is a Gaussian filter
+of width ``sigma``, and ``a`` is a linear scale factor. The synthetic image
+pipeline then renders particle images from the generated fields on the fly.
+It is selected with ``scheduler_class: "kinematic"`` and only makes sense
+with ``include_images: false`` (the images are generated, not read).
 
 The per-field algorithm (Manickathan et al. 2022, section 2.2):
 
@@ -16,12 +20,13 @@ The per-field algorithm (Manickathan et al. 2022, section 2.2):
    image grid.
 2. Low-pass filter each component with a Gaussian of width ``sigma`` to
    give the field a finite correlation length.
-3. Scale the field so that its peak displacement magnitude equals ``a``.
+3. Scale the field linearly by a sampled scale factor ``a``.
 
 ``sigma`` and ``a`` are drawn uniformly per field from the configured
 ranges (defaults follow the paper's Table 3: ``sigma`` in 5-100 px and
 ``a`` in 0-16 px). Generation is deterministic in the record index so the
-Grain pipeline can checkpoint and replay it exactly.
+Grain pipeline can checkpoint and replay it exactly. The dataset is finite
+and deterministic: the same index always produces the same field.
 """
 
 from typing import Any
@@ -33,15 +38,19 @@ from scipy.ndimage import gaussian_filter
 DEFAULT_NUM_EXAMPLES = 18278
 DEFAULT_IMAGE_SHAPE = (256, 256)
 DEFAULT_FILTER_SIGMA_RANGE = (5.0, 100.0)
-DEFAULT_MAX_DISPLACEMENT_RANGE = (0.0, 16.0)
+DEFAULT_SCALE_FACTOR_RANGE = (0.0, 16.0)
 
 
 class KinematicDataSource(grain.RandomAccessDataSource):
-    """Random-flow data source for kinematic training.
+    """Deterministic finite random-access dataset of kinematic flow fields.
 
-    Generates smooth random displacement fields on the fly rather than
-    loading them from files. See the module docstring for the generation
-    algorithm and references.
+    Generates smooth random displacement fields on the fly according to the
+    Manickathan et al. 2022 random-flow-field algorithm, without reading from
+    files. The dataset is finite (size ``num_examples``) and deterministic by
+    record index, making it checkpoint-replayable with Grain. Each epoch
+    cycles through the same ``num_examples`` fields in deterministic or
+    shuffled order, depending on Grain's sampler configuration. See the
+    module docstring for the generation algorithm and references.
     """
 
     def __init__(
@@ -49,30 +58,36 @@ class KinematicDataSource(grain.RandomAccessDataSource):
         num_examples: int = DEFAULT_NUM_EXAMPLES,
         image_shape: tuple[int, int] = DEFAULT_IMAGE_SHAPE,
         filter_sigma_range: tuple[float, float] = DEFAULT_FILTER_SIGMA_RANGE,
-        max_displacement_range: tuple[
-            float, float
-        ] = DEFAULT_MAX_DISPLACEMENT_RANGE,
+        scale_factor_range: tuple[float, float] = DEFAULT_SCALE_FACTOR_RANGE,
         seed: int = 0,
     ) -> None:
         """Initialize the KinematicDataSource.
 
+        A finite, deterministic random-access dataset that generates smooth
+        random displacement fields according to Manickathan et al. 2022,
+        section 2.2: ds_ref = a * G_sigma * xi.
+
         Args:
-            num_examples: Number of distinct flow fields in the (virtual)
-                dataset. Acts as the epoch length; with ``loop: true`` the
-                Grain sampler reshuffles and re-renders these fields
-                indefinitely. Larger values give more flow-field variety.
+            num_examples: Number of distinct flow fields in the finite
+                (virtual) dataset. Defines the epoch length; with ``loop: true``
+                the Grain sampler cycles through these same ``num_examples``
+                fields indefinitely in reshuffled order. Larger values give
+                more flow-field variety per epoch.
             image_shape: ``(height, width)`` of the generated flow field in
                 pixels.
             filter_sigma_range: ``(min, max)`` of the Gaussian filter width
                 ``sigma`` (px), sampled uniformly per field.
-            max_displacement_range: ``(min, max)`` of the peak displacement
-                magnitude ``a`` (px), sampled uniformly per field.
+            scale_factor_range: ``(min, max)`` of the linear scale factor
+                ``a``, sampled uniformly per field. The scale factor is
+                multiplied directly with the filtered noise; it is not a target
+                peak displacement bound.
             seed: Base seed; field ``i`` is generated from ``(seed, i)`` so
                 generation is deterministic and checkpoint-replayable.
 
         Raises:
             ValueError: If any argument is out of range or malformed.
         """
+
         if not isinstance(num_examples, int) or num_examples <= 0:
             raise ValueError("num_examples must be a positive integer.")
         if len(image_shape) != 2 or not all(
@@ -83,7 +98,7 @@ class KinematicDataSource(grain.RandomAccessDataSource):
             )
         for name, rng in (
             ("filter_sigma_range", filter_sigma_range),
-            ("max_displacement_range", max_displacement_range),
+            ("scale_factor_range", scale_factor_range),
         ):
             if len(rng) != 2 or rng[0] > rng[1] or rng[0] < 0:
                 raise ValueError(
@@ -96,9 +111,9 @@ class KinematicDataSource(grain.RandomAccessDataSource):
             float(filter_sigma_range[0]),
             float(filter_sigma_range[1]),
         )
-        self._max_displacement_range = (
-            float(max_displacement_range[0]),
-            float(max_displacement_range[1]),
+        self._scale_factor_range = (
+            float(scale_factor_range[0]),
+            float(scale_factor_range[1]),
         )
         self._seed = int(seed)
         super().__init__()
@@ -121,7 +136,7 @@ class KinematicDataSource(grain.RandomAccessDataSource):
             f"KinematicDataSource(num_examples={self._num_examples}, "
             f"image_shape={self._image_shape}, "
             f"filter_sigma_range={self._filter_sigma_range}, "
-            f"max_displacement_range={self._max_displacement_range}, "
+            f"scale_factor_range={self._scale_factor_range}, "
             f"seed={self._seed})"
         )
 
@@ -153,6 +168,9 @@ class KinematicDataSource(grain.RandomAccessDataSource):
     def _generate_flow_field(self, record_key: int) -> np.ndarray:
         """Generate one smooth random displacement field.
 
+        Implements ds_ref = a * G_sigma * xi, where xi is U(-1,1) noise,
+        G_sigma is a Gaussian filter, and a is a linear scale factor.
+
         Args:
             record_key: Index seeding the deterministic generation.
 
@@ -162,32 +180,14 @@ class KinematicDataSource(grain.RandomAccessDataSource):
         """
         rng = np.random.default_rng((self._seed, record_key))
         sigma = rng.uniform(*self._filter_sigma_range)
-        max_displacement = rng.uniform(*self._max_displacement_range)
+        scale_factor = rng.uniform(*self._scale_factor_range)
 
         noise = rng.uniform(-1.0, 1.0, size=(*self._image_shape, 2))
         # Filter the two spatial axes only; leave the component axis intact.
         smoothed = gaussian_filter(noise, sigma=(sigma, sigma, 0.0))
-        flow = self._scale_to_max_displacement(smoothed, max_displacement)
+        # Apply linear scaling factor directly (not peak normalization).
+        flow = smoothed * scale_factor
         return flow.astype(np.float32)
-
-    @staticmethod
-    def _scale_to_max_displacement(
-        field: np.ndarray, max_displacement: float
-    ) -> np.ndarray:
-        """Scale a vector field to a target peak displacement magnitude.
-
-        Args:
-            field: Vector field of shape ``(H, W, 2)``.
-            max_displacement: Desired peak displacement magnitude (px).
-
-        Returns:
-            The field scaled so that its largest displacement magnitude
-            equals ``max_displacement`` (zero when the field is uniform).
-        """
-        magnitude = np.sqrt(field[..., 0] ** 2 + field[..., 1] ** 2)
-        peak = float(magnitude.max())
-        scale = max_displacement / peak if peak > 0.0 else 0.0
-        return field * scale
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> "KinematicDataSource":
@@ -196,7 +196,7 @@ class KinematicDataSource(grain.RandomAccessDataSource):
         Args:
             config: Dataset configuration dictionary. Recognised keys are
                 ``num_examples``, ``image_shape``, ``filter_sigma_range``,
-                ``max_displacement_range`` and ``seed``; all are optional.
+                ``scale_factor_range`` and ``seed``; all are optional.
 
         Returns:
             A configured KinematicDataSource instance.
@@ -205,13 +205,14 @@ class KinematicDataSource(grain.RandomAccessDataSource):
         sigma_range = tuple(
             config.get("filter_sigma_range", DEFAULT_FILTER_SIGMA_RANGE)
         )
-        displacement_range = tuple(
-            config.get("max_displacement_range", DEFAULT_MAX_DISPLACEMENT_RANGE)
+        scale_factor_range = tuple(
+            config.get("scale_factor_range", DEFAULT_SCALE_FACTOR_RANGE)
         )
+
         return cls(
             num_examples=config.get("num_examples", DEFAULT_NUM_EXAMPLES),
             image_shape=image_shape,
             filter_sigma_range=sigma_range,
-            max_displacement_range=displacement_range,
+            scale_factor_range=scale_factor_range,
             seed=config.get("seed", 0),
         )
