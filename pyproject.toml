@@ -115,6 +115,7 @@ filterwarnings = [
 markers = [
         "run_explicitly: marks tests that are only run with -m run_explicitly",
         "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+        "benchmark: marks throughput/timing benchmarks (skipped in CI with '-m \"not benchmark\"')",
         "to_fix: marks tests that need fixing (deselect with '-m \"not to_fix\"')",
         "hf_live: marks tests that exercise the live Hugging Face Hub (deselect by default; opt in with --run-hf-live)",
 ]

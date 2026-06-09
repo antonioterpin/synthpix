@@ -35,8 +35,12 @@ jobs:
               run: uv sync --extra dev
 
             # Step 5: Run tests
+            #
+            # Skip the throughput/timing benchmarks (`-m "not benchmark"`):
+            # they are slow and their pass/fail depends on the shared CI
+            # runner's performance. Run them locally with a plain `pytest`.
             - name: Run tests with coverage
-              run: uv run pytest
+              run: uv run pytest -m "not benchmark"
 
             # Upload the XML as a build artifact so we
             # (and Codecov) can inspect it

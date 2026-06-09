@@ -22,6 +22,12 @@ from synthpix.data_sources.numpy import NumpyDataSource
 from synthpix.scheduler.episodic import EpisodicFlowFieldScheduler
 from synthpix.scheduler.mat import MATFlowFieldScheduler
 
+# Everything in this module is a throughput/timing benchmark. These are
+# slow and their pass/fail depends on host performance (e.g. the threading
+# speedup assertion), so they are skipped in CI via `-m "not benchmark"`.
+# Run them locally with a plain `pytest`.
+pytestmark = pytest.mark.benchmark
+
 
 @pytest.mark.parametrize(
     "mock_mat_files",
