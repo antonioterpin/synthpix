@@ -1,0 +1,49 @@
+# Kinematic training preset: synthpix generates random smooth displacement
+# fields in-memory (no files) and renders a fresh particle-image pair on top
+# of each, following the kinematic-training strategy of Manickathan, Mucignat
+# & Lunati, Meas. Sci. Technol. 33, 124006 (2022).
+
+# Dataset parameters
+seed: 0 # Random seed for reproducibility
+batch_size: 10 # Number of (img1, img2, flow) tuples per batch
+flow_fields_per_batch: 10 # Number of flow fields used for each batch
+batches_per_flow_batch: 1 # Number of batches per flow batch
+buffer_size: 150 # Prefetch buffer (amortises the per-field generation cost)
+loop: true # Iterate indefinitely
+randomize: true # Reshuffle the generated fields every epoch
+include_images: false # Render images from the generated flow (required)
+episode_length: 0 # Non-episodic: with loop:true iterate forever
+worker_count: 0
+
+# -- Kinematic flow generator (KinematicDataSource) --
+scheduler_class: "kinematic" # Generate flows instead of reading files
+num_examples: 18278 # Size of the (virtual) flow-field pool; larger = more variety
+filter_sigma_range: [5.0, 100.0] # Gaussian filter width sigma (px), per field
+max_displacement_range: [0.0, 16.0] # Peak displacement magnitude a (px), per field
+
+# Image generation parameters (re-randomised per batch -> data augmentation)
+image_shape: [256, 256] # Shape of the images / generated flow fields
+dt: 1 # Time step between images
+seeding_density_range: [0.03, 0.04] # Range of particle density (ppp)
+p_hide_img1: 0.0001 # Probability of hiding particles in the first image
+p_hide_img2: 0.0001 # Probability of hiding particles in the second image
+diameter_ranges: [[1.5, 2.5]] # Diameter of particles in pixels
+diameter_var: 0.03 # Variance of the diameter of particles
+intensity_ranges: [[150, 230]] # Range of intensity values for the particles
+intensity_var: 0.01 # Variance of the intensity of particles
+rho_ranges: [[-0.1, 0.1]] # Correlation coefficients for the particles
+rho_var: 0.1 # Variance of the correlation coefficients
+noise_uniform: 0.001 # Maximum amplitude of the uniform noise to add
+noise_gaussian_mean: 0.0 # Mean of the Gaussian noise to add
+noise_gaussian_std: 0.001 # Standard deviation of the Gaussian noise to add
+
+# -- Flow adapter (identity: generated flow is already pixel displacement) --
+velocities_per_pixel: 1.0 # Velocities are already pixel displacements
+resolution: 1 # Pixels per unit length
+flow_field_size: [256, 256] # Match image_shape so the adapter is a pass-through
+img_offset: [0, 0] # Offset of the captured area
+min_speed_x: 0 # Minimum speed in the x direction
+max_speed_x: 0 # Maximum speed in the x direction
+min_speed_y: 0 # Minimum speed in the y direction
+max_speed_y: 0 # Maximum speed in the y direction
+output_units: "pixels" # Output flow units
