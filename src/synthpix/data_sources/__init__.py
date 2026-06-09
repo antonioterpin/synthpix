@@ -14,6 +14,7 @@ from __future__ import annotations
 from .base import FileDataSource
 from .episodic import EpisodicDataSource
 from .hdf5 import HDF5DataSource
+from .kinematic import KinematicDataSource
 from .mat import MATDataSource
 from .numpy import NumpyDataSource
 
@@ -47,6 +48,7 @@ __all__ = [
     "EpisodicDataSource",
     "FileDataSource",
     "HDF5DataSource",
+    "KinematicDataSource",
     "MATDataSource",
     "NumpyDataSource",
     "resolve",
