@@ -15,6 +15,7 @@ from synthpix.data_sources import (
     EpisodicDataSource,
     FileDataSource,
     HDF5DataSource,
+    KinematicDataSource,
     MATDataSource,
     NumpyDataSource,
 )
@@ -47,6 +48,10 @@ DATA_SOURCES: dict[str, type[FileDataSource]] = {
     ".mat": MATDataSource,
     ".npy": NumpyDataSource,
 }
+
+# Sentinel scheduler_class for the in-memory kinematic flow generator.
+# It is selected like a file extension but reads no files.
+KINEMATIC_SCHEDULER_CLASS = "kinematic"
 
 
 def get_base_scheduler(name: str) -> type[BaseFlowFieldScheduler]:
@@ -116,32 +121,43 @@ def make_grain_scheduler(
     Returns:
         A Grain-based scheduler.
     """
-    # 1. Instantiate Data Source
-    data_source_cls = get_data_source_class(scheduler_class_name)
-
-    # Extract args relevant for DataSource
-    ds_kwargs = {}
-    if dataset_config.get("file_list"):
-        ds_kwargs["dataset_path"] = dataset_config["file_list"]
-    else:
-        ds_kwargs["dataset_path"] = []
-
-    if include_images:
-        ds_kwargs["include_images"] = True
-        ds_kwargs["output_shape"] = tuple(
-            dataset_config.get("image_shape", (256, 256))
-        )
-
-    data_source = data_source_cls(**ds_kwargs)
-
-    # 2. Episodic Wrapping
+    # 1. Instantiate the data source. Kinematic generators are non-episodic;
+    # only file-backed sources support episodic wrapping (EpisodicDataSource
+    # builds episodes from the source's file_list/load_file).
     is_episodic = episode_length > 0
-    if is_episodic:
-        data_source = EpisodicDataSource(
-            source=data_source,
-            batch_size=batch_size,
-            episode_length=episode_length,
-            seed=dataset_config.get("seed", 0),
+    data_source: grain.RandomAccessDataSource
+    if scheduler_class_name == KINEMATIC_SCHEDULER_CLASS:
+        # The kinematic source generates random displacement fields
+        # in-memory; it reads no files and never provides real images.
+        data_source = KinematicDataSource.from_config(dataset_config)
+    else:
+        data_source_cls = get_data_source_class(scheduler_class_name)
+
+        # Extract args relevant for DataSource
+        ds_kwargs = {}
+        if dataset_config.get("file_list"):
+            ds_kwargs["dataset_path"] = dataset_config["file_list"]
+        else:
+            ds_kwargs["dataset_path"] = []
+
+        if include_images:
+            ds_kwargs["include_images"] = True
+            ds_kwargs["output_shape"] = tuple(
+                dataset_config.get("image_shape", (256, 256))
+            )
+
+        file_source = data_source_cls(**ds_kwargs)
+
+        # 2. Episodic Wrapping
+        data_source = (
+            EpisodicDataSource(
+                source=file_source,
+                batch_size=batch_size,
+                episode_length=episode_length,
+                seed=dataset_config.get("seed", 0),
+            )
+            if is_episodic
+            else file_source
         )
 
     # 3. Grain Sampler & Loader
@@ -311,7 +327,8 @@ def make(
 
     Required configuration keys:
     - scheduler_class: The file extension of the scheduler to use
-      (".h5", ".mat", or ".npy").
+      (".h5", ".mat", or ".npy"), or "kinematic" to generate random
+      displacement fields in-memory instead of reading them from files.
     - batch_size: The batch size for training (positive integer).
     - flow_fields_per_batch: Number of flow fields to use per batch.
     - batches_per_flow_batch: Required when generating synthetic images
@@ -319,7 +336,10 @@ def make(
 
     Optional configuration keys:
     - include_images: Whether to extract real images from files (bool,
-      default False).
+      default False). Must be False for the "kinematic" source.
+    - num_examples, filter_sigma_range, scale_factor_range: kinematic
+      generator settings (see KinematicDataSource); used only when
+      scheduler_class == "kinematic".
     - buffer_size: Size of prefetching buffer (non-negative int, default 0).
     - episode_length: Length of episodes for episodic scheduler (non-negative
       int, default 0).
@@ -406,13 +426,19 @@ def make(
         raise ValueError("batch_size must be a positive integer.")
 
     scheduler_class_name = dataset_config["scheduler_class"]
+    is_kinematic = scheduler_class_name == KINEMATIC_SCHEDULER_CLASS
     if use_grain_scheduler:
         # Just validate existence here, retrieved later
-        if scheduler_class_name not in DATA_SOURCES:
+        if not is_kinematic and scheduler_class_name not in DATA_SOURCES:
             raise ValueError(
                 f"DataSource class {scheduler_class_name} not found. Should be "
-                f"one of {list(DATA_SOURCES.keys())}."
+                f"one of {[*DATA_SOURCES, KINEMATIC_SCHEDULER_CLASS]}."
             )
+    elif is_kinematic:
+        raise ValueError(
+            "The 'kinematic' data source requires the Grain scheduler; "
+            "set use_grain_scheduler=True."
+        )
     else:
         scheduler_class = get_base_scheduler(scheduler_class_name)
 
@@ -420,12 +446,22 @@ def make(
     include_images = dataset_config.get("include_images", False)
     if not isinstance(include_images, bool):
         raise TypeError("include_images must be a boolean.")
+    if is_kinematic and include_images:
+        raise ValueError(
+            "The 'kinematic' data source generates synthetic images from "
+            "generated flow fields; set include_images: false."
+        )
     buffer_size = dataset_config.get("buffer_size", 0)
     if not isinstance(buffer_size, int) or buffer_size < 0:
         raise ValueError("buffer_size must be a non-negative integer.")
     episode_length = dataset_config.get("episode_length", 0)
     if not isinstance(episode_length, int) or episode_length < 0:
         raise ValueError("episode_length must be a non-negative integer.")
+    if is_kinematic and episode_length > 0:
+        raise ValueError(
+            "The 'kinematic' data source is non-episodic; "
+            "set episode_length: 0."
+        )
     if "flow_fields_per_batch" not in dataset_config:
         raise ValueError("config must contain 'flow_fields_per_batch' key.")
 

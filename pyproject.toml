@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synthpix"
-version = "0.2.0"
+version = "0.3.0"
 authors = [
     { name = "Antonio Terpin", email = "aterpin@ethz.ch" },
     { name = "Alan Bonomi", email = "abonomi@ethz.ch" },
@@ -37,6 +37,10 @@ dependencies = [
     "gdown>=5.2.0",
     "grain>=0.2.13",
     "orbax-checkpoint>=0.11.31",
+    # Imported directly by data_sources.kinematic (scipy.ndimage) and
+    # data_sources.mat (scipy.io), both eagerly loaded on `import synthpix`,
+    # so scipy must be a core runtime dependency, not just a `download` extra.
+    "scipy>=1.10.0",
 ]
 
 [project.urls]
@@ -115,6 +119,7 @@ filterwarnings = [
 markers = [
         "run_explicitly: marks tests that are only run with -m run_explicitly",
         "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+        "benchmark: marks throughput/timing benchmarks (skipped in CI with '-m \"not benchmark\"')",
         "to_fix: marks tests that need fixing (deselect with '-m \"not to_fix\"')",
         "hf_live: marks tests that exercise the live Hugging Face Hub (deselect by default; opt in with --run-hf-live)",
 ]

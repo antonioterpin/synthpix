@@ -7,6 +7,7 @@ isolate the factory logic from actual Grain or JAX execution.
 """
 
 import importlib
+from typing import Any
 from types import SimpleNamespace
 
 import pytest
@@ -34,6 +35,18 @@ class DummyEpisodicDataSource:
 
     def __len__(self):
         return 100
+
+
+class DummyKinematicDataSource:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+    def __len__(self):
+        return 50
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(config=config)
 
 
 class DummyGrainAdapter:
@@ -94,6 +107,9 @@ def patch_grain(monkeypatch):
     monkeypatch.setitem(make_mod.DATA_SOURCES, ".mat", DummyDataSource)
     monkeypatch.setitem(make_mod.DATA_SOURCES, ".npy", DummyDataSource)
     monkeypatch.setattr(make_mod, "EpisodicDataSource", DummyEpisodicDataSource)
+    monkeypatch.setattr(
+        make_mod, "KinematicDataSource", DummyKinematicDataSource
+    )
 
     # Mock Adapters
     monkeypatch.setattr(make_mod, "GrainEpisodicAdapter", DummyGrainAdapter)
@@ -209,6 +225,86 @@ def test_make_grain_include_images(patch_grain):
         128,
         128,
     ), f"Expected output_shape (128, 128), got {ds.kwargs['output_shape']}"
+
+
+def test_make_grain_kinematic(patch_grain: Any) -> None:
+    """Test the Grain path for the in-memory kinematic source.
+
+    With `scheduler_class: "kinematic"` the factory should build a
+    `KinematicDataSource` (mocked) from the config, wrap it in a Grain
+    `DataLoader`, and drive a `SyntheticImageSampler` (mocked).
+
+    Args:
+        patch_grain: Pytest fixture that patches Grain and DataSource symbols.
+    """
+    cfg = {
+        "scheduler_class": "kinematic",
+        "batch_size": 4,
+        "flow_fields_per_batch": 4,
+        "batches_per_flow_batch": 1,
+        "include_images": False,
+        "num_examples": 50,
+        "image_shape": (64, 64),
+    }
+
+    sampler = make(cfg, use_grain_scheduler=True)
+
+    assert isinstance(sampler, DummySampler), (
+        f"Expected DummySampler, got {type(sampler)}"
+    )
+    loader = sampler.scheduler.loader
+    assert isinstance(loader.data_source, DummyKinematicDataSource), (
+        f"Expected DummyKinematicDataSource, got {type(loader.data_source)}"
+    )
+    assert loader.data_source.kwargs["config"] is cfg, (
+        "KinematicDataSource.from_config did not receive the dataset config"
+    )
+
+
+def test_make_grain_kinematic_include_images_raises(patch_grain: Any) -> None:
+    """The kinematic source rejects `include_images: true`.
+
+    Args:
+        patch_grain: Pytest fixture that patches Grain and DataSource symbols.
+    """
+    cfg = {
+        "scheduler_class": "kinematic",
+        "batch_size": 4,
+        "flow_fields_per_batch": 4,
+        "include_images": True,
+    }
+    with pytest.raises(ValueError, match="generates synthetic images"):
+        make(cfg, use_grain_scheduler=True)
+
+
+def test_make_kinematic_episodic_raises(patch_grain: Any) -> None:
+    """The kinematic source rejects episodic iteration.
+
+    Args:
+        patch_grain: Pytest fixture that patches Grain and DataSource symbols.
+    """
+    cfg = {
+        "scheduler_class": "kinematic",
+        "batch_size": 4,
+        "flow_fields_per_batch": 4,
+        "episode_length": 5,
+    }
+    with pytest.raises(ValueError, match="non-episodic"):
+        make(cfg, use_grain_scheduler=True)
+
+
+def test_make_kinematic_requires_grain(patch_grain: Any) -> None:
+    """The kinematic source is only available on the Grain path.
+
+    Args:
+        patch_grain: Pytest fixture that patches Grain and DataSource symbols.
+    """
+    cfg = {
+        "scheduler_class": "kinematic",
+        "batch_size": 4,
+    }
+    with pytest.raises(ValueError, match="requires the Grain scheduler"):
+        make(cfg, use_grain_scheduler=False)
 
 
 def test_make_grain_invalid_datasource(patch_grain):
