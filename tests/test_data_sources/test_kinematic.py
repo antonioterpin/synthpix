@@ -1,11 +1,11 @@
 """Tests for KinematicDataSource.
 
 KinematicDataSource generates smooth random displacement fields in-memory
-(the kinematic-training RFG of Manickathan et al. 2022) instead of reading
-them from disk. Generation must be deterministic in the record index so the
-Grain pipeline can checkpoint and replay it, the peak displacement must
-honour the configured range, and a larger Gaussian filter width must yield a
-smoother field.
+(the kinematic-training RFG of Manickathan et al. 2022) according to the
+equation ds_ref = a * G_sigma * xi, where xi is independent U(-1, 1) noise,
+G_sigma is a Gaussian filter, and a is a linear scale factor. Generation must
+be deterministic in the record index so the Grain pipeline can checkpoint and
+replay it, and a larger Gaussian filter width must yield a smoother field.
 """
 
 import numpy as np
@@ -71,47 +71,41 @@ def test_seed_changes_output():
     ), "Different seeds produced identical fields"
 
 
-@pytest.mark.parametrize("index", range(8))
-def test_peak_displacement_within_range(index: int) -> None:
-    """Each field's peak magnitude lies within the requested range.
-
-    Args:
-        index: The dataset index to test.
-    """
-    low, high = 3.0, 9.0
-    ds = KinematicDataSource(
-        num_examples=8,
-        image_shape=(64, 64),
-        max_displacement_range=(low, high),
-    )
-
-    flow = ds[index]["flow_fields"]
-    peak = float(np.sqrt(flow[..., 0] ** 2 + flow[..., 1] ** 2).max())
-
-    assert low - 1e-3 <= peak <= high + 1e-3, (
-        f"Peak displacement {peak} outside [{low}, {high}]"
-    )
-
-
-def test_zero_max_displacement_yields_zero_field():
-    """A zero displacement range produces a zero field."""
+def test_zero_scale_factor_yields_zero_field():
+    """A zero scale factor range produces a zero field."""
     ds = KinematicDataSource(
         num_examples=4,
         image_shape=(32, 32),
-        max_displacement_range=(0.0, 0.0),
+        scale_factor_range=(0.0, 0.0),
     )
 
     assert np.all(ds[0]["flow_fields"] == 0.0), (
-        "Zero max-displacement range did not yield a zero field"
+        "Zero scale_factor_range did not yield a zero field"
     )
 
 
-def test_scale_to_max_displacement_uniform_field_is_zero():
-    """A uniform (zero-peak) field scales to zero without dividing by zero."""
-    out = KinematicDataSource._scale_to_max_displacement(
-        np.zeros((4, 4, 2)), 5.0
+def test_scale_factor_produces_proportional_scaling():
+    """Larger scale factors produce proportionally larger fields with same seed/sigma/index."""
+    ds_small = KinematicDataSource(
+        num_examples=1,
+        image_shape=(32, 32),
+        filter_sigma_range=(5.0, 5.0),
+        scale_factor_range=(2.0, 2.0),
+        seed=42,
     )
-    assert np.all(out == 0.0), "Uniform field should scale to a zero field"
+    ds_large = KinematicDataSource(
+        num_examples=1,
+        image_shape=(32, 32),
+        filter_sigma_range=(5.0, 5.0),
+        scale_factor_range=(4.0, 4.0),
+        seed=42,
+    )
+
+    flow_small = ds_small[0]["flow_fields"]
+    flow_large = ds_large[0]["flow_fields"]
+
+    # flow_large should be approximately 2x flow_small (scale factor ratio is 4/2=2)
+    assert np.allclose(flow_large, 2.0 * flow_small, rtol=1e-5, atol=1e-7)
 
 
 def test_larger_sigma_is_smoother():
@@ -122,7 +116,7 @@ def test_larger_sigma_is_smoother():
             num_examples=1,
             image_shape=(96, 96),
             filter_sigma_range=(sigma, sigma),
-            max_displacement_range=(8.0, 8.0),
+            scale_factor_range=(8.0, 8.0),
             seed=0,
         )
         flow = ds[0]["flow_fields"]
@@ -149,6 +143,7 @@ def test_repr_is_stable_and_descriptive():
         num_examples=5,
         image_shape=(32, 32),
         filter_sigma_range=(5.0, 10.0),
+        scale_factor_range=(2.0, 8.0),
         seed=3,
     )
 
@@ -157,6 +152,9 @@ def test_repr_is_stable_and_descriptive():
     assert text == repr(ds), "repr is not stable"
     assert "num_examples=5" in text, f"repr missing num_examples: {text}"
     assert "seed=3" in text, f"repr missing seed: {text}"
+    assert "scale_factor_range=(2.0, 8.0)" in text, (
+        f"repr missing scale_factor_range: {text}"
+    )
 
 
 def test_from_config_reads_keys():
@@ -165,7 +163,7 @@ def test_from_config_reads_keys():
         "num_examples": 12,
         "image_shape": [40, 50],
         "filter_sigma_range": [2.0, 6.0],
-        "max_displacement_range": [1.0, 4.0],
+        "scale_factor_range": [1.0, 4.0],
         "seed": 9,
     }
 
@@ -196,7 +194,8 @@ def test_from_config_uses_defaults():
         {"image_shape": (0, 32)},
         {"filter_sigma_range": (10.0, 1.0)},
         {"filter_sigma_range": (-1.0, 10.0)},
-        {"max_displacement_range": (5.0, 1.0)},
+        {"scale_factor_range": (5.0, 1.0)},
+        {"scale_factor_range": (-1.0, 10.0)},
     ],
 )
 def test_invalid_arguments_raise(kwargs: dict) -> None:

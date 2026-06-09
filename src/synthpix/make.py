@@ -337,7 +337,7 @@ def make(
     Optional configuration keys:
     - include_images: Whether to extract real images from files (bool,
       default False). Must be False for the "kinematic" source.
-    - num_examples, filter_sigma_range, max_displacement_range: kinematic
+    - num_examples, filter_sigma_range, scale_factor_range: kinematic
       generator settings (see KinematicDataSource); used only when
       scheduler_class == "kinematic".
     - buffer_size: Size of prefetching buffer (non-negative int, default 0).
