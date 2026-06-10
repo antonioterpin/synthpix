@@ -9,10 +9,11 @@ displacement fields according to the paper's equation:
     ds_ref = a * G_sigma * xi
 
 where ``xi`` is independent U(-1, 1) noise, ``G_sigma`` is a Gaussian filter
-of width ``sigma``, and ``a`` is a linear scale factor. The synthetic image
-pipeline then renders particle images from the generated fields on the fly.
-It is selected with ``scheduler_class: "kinematic"`` and only makes sense
-with ``include_images: false`` (the images are generated, not read).
+of width ``sigma``, and ``a`` is the per-field scale sampled uniformly from a
+configured range. The synthetic image pipeline then renders particle images
+from the generated fields on the fly. It is selected with
+``scheduler_class: "kinematic"`` and only makes sense with
+``include_images: false`` (the images are generated, not read).
 
 The per-field algorithm (Manickathan et al. 2022, section 2.2):
 
@@ -20,13 +21,28 @@ The per-field algorithm (Manickathan et al. 2022, section 2.2):
    image grid.
 2. Low-pass filter each component with a Gaussian of width ``sigma`` to
    give the field a finite correlation length.
-3. Scale the field linearly by a sampled scale factor ``a``.
+3. Scale the field by the sampled factor ``a`` according to ``scale_mode``.
 
-``sigma`` and ``a`` are drawn uniformly per field from the configured
-ranges (defaults follow the paper's Table 3: ``sigma`` in 5-100 px and
-``a`` in 0-16 px). Generation is deterministic in the record index so the
-Grain pipeline can checkpoint and replay it exactly. The dataset is finite
-and deterministic: the same index always produces the same field.
+``scale_mode`` selects how ``a`` is interpreted:
+
+* ``"peak"`` (default, paper-faithful): normalize each field so its peak
+  displacement magnitude equals ``a`` pixels. The follow-up paper
+  parameterizes this same dataset by exactly this quantity -- Manickathan,
+  Mucignat & Lunati, Exp. Fluids 64, 161 (2023), Table 1 lists the field
+  scale as "Maximum displacement, max(ds_ref) (px): 0-16". Gaussian filtering
+  attenuates the noise amplitude by a strongly ``sigma``-dependent factor
+  (~1/sigma), so normalizing to a target peak is what keeps ``a`` physically
+  meaningful in pixels across the whole ``sigma`` range.
+* ``"linear"``: apply ``a`` as a raw multiplier, ds_ref = a * G_sigma * xi,
+  the literal form of the equation above. The realized displacement then
+  depends strongly on ``sigma`` (large ``sigma`` collapses the motion toward
+  zero), so ``a`` is a dimensionless gain, not a pixel target.
+
+``sigma`` and ``a`` are drawn uniformly per field from the configured ranges
+(defaults follow the papers' tables: ``sigma`` in 5-100 px and ``a`` in
+0-16 px). Generation is deterministic in the record index so the Grain
+pipeline can checkpoint and replay it exactly. The dataset is finite and
+deterministic: the same index always produces the same field.
 """
 
 from typing import Any
@@ -39,6 +55,8 @@ DEFAULT_NUM_EXAMPLES = 18278
 DEFAULT_IMAGE_SHAPE = (256, 256)
 DEFAULT_FILTER_SIGMA_RANGE = (5.0, 100.0)
 DEFAULT_SCALE_FACTOR_RANGE = (0.0, 16.0)
+DEFAULT_SCALE_MODE = "peak"
+SCALE_MODES = ("peak", "linear")
 
 
 class KinematicDataSource(grain.RandomAccessDataSource):
@@ -59,6 +77,7 @@ class KinematicDataSource(grain.RandomAccessDataSource):
         image_shape: tuple[int, int] = DEFAULT_IMAGE_SHAPE,
         filter_sigma_range: tuple[float, float] = DEFAULT_FILTER_SIGMA_RANGE,
         scale_factor_range: tuple[float, float] = DEFAULT_SCALE_FACTOR_RANGE,
+        scale_mode: str = DEFAULT_SCALE_MODE,
         seed: int = 0,
     ) -> None:
         """Initialize the KinematicDataSource.
@@ -77,10 +96,17 @@ class KinematicDataSource(grain.RandomAccessDataSource):
                 pixels.
             filter_sigma_range: ``(min, max)`` of the Gaussian filter width
                 ``sigma`` (px), sampled uniformly per field.
-            scale_factor_range: ``(min, max)`` of the linear scale factor
-                ``a``, sampled uniformly per field. The scale factor is
-                multiplied directly with the filtered noise; it is not a target
-                peak displacement bound.
+            scale_factor_range: ``(min, max)`` of the per-field scale ``a``,
+                sampled uniformly per field. Its meaning depends on
+                ``scale_mode``: in ``"peak"`` mode it is the target peak
+                displacement magnitude (px); in ``"linear"`` mode it is the
+                dimensionless multiplier applied directly to the filtered noise.
+            scale_mode: How ``a`` is applied. ``"peak"`` (default) normalizes
+                each field so its peak displacement magnitude equals ``a`` px
+                (paper-faithful, Manickathan et al. 2023 Table 1). ``"linear"``
+                multiplies the filtered noise by ``a`` directly
+                (ds_ref = a * G_sigma * xi), so the realized displacement is
+                ``sigma``-dependent.
             seed: Base seed; field ``i`` is generated from ``(seed, i)`` so
                 generation is deterministic and checkpoint-replayable.
 
@@ -104,6 +130,10 @@ class KinematicDataSource(grain.RandomAccessDataSource):
                 raise ValueError(
                     f"{name} must be a (min, max) pair with 0 <= min <= max."
                 )
+        if scale_mode not in SCALE_MODES:
+            raise ValueError(
+                f"scale_mode must be one of {SCALE_MODES}, got {scale_mode!r}."
+            )
 
         self._num_examples = num_examples
         self._image_shape = (int(image_shape[0]), int(image_shape[1]))
@@ -115,6 +145,7 @@ class KinematicDataSource(grain.RandomAccessDataSource):
             float(scale_factor_range[0]),
             float(scale_factor_range[1]),
         )
+        self._scale_mode = scale_mode
         self._seed = int(seed)
         super().__init__()
 
@@ -137,6 +168,7 @@ class KinematicDataSource(grain.RandomAccessDataSource):
             f"image_shape={self._image_shape}, "
             f"filter_sigma_range={self._filter_sigma_range}, "
             f"scale_factor_range={self._scale_factor_range}, "
+            f"scale_mode={self._scale_mode!r}, "
             f"seed={self._seed})"
         )
 
@@ -169,7 +201,10 @@ class KinematicDataSource(grain.RandomAccessDataSource):
         """Generate one smooth random displacement field.
 
         Implements ds_ref = a * G_sigma * xi, where xi is U(-1,1) noise,
-        G_sigma is a Gaussian filter, and a is a linear scale factor.
+        G_sigma is a Gaussian filter, and a is the per-field scale. In
+        ``"peak"`` mode the field is normalized so its peak displacement
+        magnitude equals ``a`` (px); in ``"linear"`` mode ``a`` multiplies the
+        filtered noise directly.
 
         Args:
             record_key: Index seeding the deterministic generation.
@@ -185,9 +220,33 @@ class KinematicDataSource(grain.RandomAccessDataSource):
         noise = rng.uniform(-1.0, 1.0, size=(*self._image_shape, 2))
         # Filter the two spatial axes only; leave the component axis intact.
         smoothed = gaussian_filter(noise, sigma=(sigma, sigma, 0.0))
-        # Apply linear scaling factor directly (not peak normalization).
-        flow = smoothed * scale_factor
+        if self._scale_mode == "peak":
+            # Normalize so the peak displacement magnitude equals scale_factor
+            # (px); sigma-independent (Manickathan et al. 2023, Table 1).
+            flow = self._scale_to_max_displacement(smoothed, scale_factor)
+        else:
+            # Apply the scale factor as a raw multiplier (sigma-dependent).
+            flow = smoothed * scale_factor
         return flow.astype(np.float32)
+
+    @staticmethod
+    def _scale_to_max_displacement(
+        field: np.ndarray, max_displacement: float
+    ) -> np.ndarray:
+        """Scale a vector field to a target peak displacement magnitude.
+
+        Args:
+            field: Vector field of shape ``(H, W, 2)``.
+            max_displacement: Desired peak displacement magnitude (px).
+
+        Returns:
+            The field scaled so that its largest displacement magnitude
+            equals ``max_displacement`` (zero when the field is uniform).
+        """
+        magnitude = np.sqrt(field[..., 0] ** 2 + field[..., 1] ** 2)
+        peak = float(magnitude.max())
+        scale = max_displacement / peak if peak > 0.0 else 0.0
+        return field * scale
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> "KinematicDataSource":
@@ -196,7 +255,8 @@ class KinematicDataSource(grain.RandomAccessDataSource):
         Args:
             config: Dataset configuration dictionary. Recognised keys are
                 ``num_examples``, ``image_shape``, ``filter_sigma_range``,
-                ``scale_factor_range`` and ``seed``; all are optional.
+                ``scale_factor_range``, ``scale_mode`` and ``seed``; all are
+                optional.
 
         Returns:
             A configured KinematicDataSource instance.
@@ -214,5 +274,6 @@ class KinematicDataSource(grain.RandomAccessDataSource):
             image_shape=image_shape,
             filter_sigma_range=sigma_range,
             scale_factor_range=scale_factor_range,
+            scale_mode=config.get("scale_mode", DEFAULT_SCALE_MODE),
             seed=config.get("seed", 0),
         )

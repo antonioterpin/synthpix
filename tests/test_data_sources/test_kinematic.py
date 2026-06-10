@@ -3,9 +3,13 @@
 KinematicDataSource generates smooth random displacement fields in-memory
 (the kinematic-training RFG of Manickathan et al. 2022) according to the
 equation ds_ref = a * G_sigma * xi, where xi is independent U(-1, 1) noise,
-G_sigma is a Gaussian filter, and a is a linear scale factor. Generation must
-be deterministic in the record index so the Grain pipeline can checkpoint and
-replay it, and a larger Gaussian filter width must yield a smoother field.
+G_sigma is a Gaussian filter, and a is the per-field scale. ``scale_mode``
+selects how a is applied: ``"peak"`` (default) normalizes each field so its
+peak displacement magnitude equals a px (paper-faithful, Manickathan et al.
+2023 Table 1; sigma-independent), while ``"linear"`` multiplies the filtered
+noise by a directly (sigma-dependent). Generation must be deterministic in the
+record index so the Grain pipeline can checkpoint and replay it, and a larger
+Gaussian filter width must yield a smoother field.
 """
 
 import numpy as np
@@ -131,6 +135,121 @@ def test_larger_sigma_is_smoother():
     )
 
 
+def _peak_magnitude(flow: np.ndarray) -> float:
+    """Return the largest displacement magnitude in a flow field.
+
+    Args:
+        flow: Flow field of shape ``(H, W, 2)``.
+
+    Returns:
+        The maximum of ``sqrt(u**2 + v**2)`` over the field.
+    """
+    return float(np.sqrt(flow[..., 0] ** 2 + flow[..., 1] ** 2).max())
+
+
+def test_peak_mode_is_the_default():
+    """Without an explicit mode, fields are peak-normalized in pixels."""
+    a = 8.0
+    ds = KinematicDataSource(
+        num_examples=1,
+        image_shape=(64, 64),
+        filter_sigma_range=(40.0, 40.0),
+        scale_factor_range=(a, a),
+        seed=1,
+    )
+
+    assert _peak_magnitude(ds[0]["flow_fields"]) == pytest.approx(a, rel=1e-4)
+
+
+@pytest.mark.parametrize("sigma", [5.0, 30.0, 100.0])
+def test_peak_mode_hits_target_regardless_of_sigma(sigma: float):
+    """Peak mode sets max|ds_ref| == a independent of the filter width.
+
+    Args:
+        sigma: Gaussian filter width (px) to test the normalization against.
+    """
+    a = 6.5
+    ds = KinematicDataSource(
+        num_examples=1,
+        image_shape=(96, 96),
+        filter_sigma_range=(sigma, sigma),
+        scale_factor_range=(a, a),
+        scale_mode="peak",
+        seed=2,
+    )
+
+    assert _peak_magnitude(ds[0]["flow_fields"]) == pytest.approx(a, rel=1e-4)
+
+
+def test_linear_mode_amplitude_collapses_with_sigma():
+    """Linear mode applies a raw multiplier, so larger sigma shrinks motion.
+
+    This is the sigma-dependent attenuation that motivates the peak-normalizing
+    default: with the bare scale range a wide filter drives the displacement
+    far below the nominal ``a``.
+    """
+    a = 8.0
+    sharp = KinematicDataSource(
+        num_examples=1,
+        image_shape=(96, 96),
+        filter_sigma_range=(5.0, 5.0),
+        scale_factor_range=(a, a),
+        scale_mode="linear",
+        seed=2,
+    )
+    wide = KinematicDataSource(
+        num_examples=1,
+        image_shape=(96, 96),
+        filter_sigma_range=(100.0, 100.0),
+        scale_factor_range=(a, a),
+        scale_mode="linear",
+        seed=2,
+    )
+
+    sharp_peak = _peak_magnitude(sharp[0]["flow_fields"])
+    wide_peak = _peak_magnitude(wide[0]["flow_fields"])
+
+    assert wide_peak < sharp_peak < a, (
+        f"Linear amplitude not sigma-attenuated: a={a}, "
+        f"sharp_peak={sharp_peak}, wide_peak={wide_peak}"
+    )
+
+
+def test_peak_and_linear_modes_differ():
+    """The two modes yield different fields for an identical random draw."""
+    peak = KinematicDataSource(
+        num_examples=1,
+        image_shape=(48, 48),
+        filter_sigma_range=(20.0, 20.0),
+        scale_factor_range=(8.0, 8.0),
+        scale_mode="peak",
+        seed=3,
+    )
+    linear = KinematicDataSource(
+        num_examples=1,
+        image_shape=(48, 48),
+        filter_sigma_range=(20.0, 20.0),
+        scale_factor_range=(8.0, 8.0),
+        scale_mode="linear",
+        seed=3,
+    )
+
+    assert not np.allclose(
+        peak[0]["flow_fields"], linear[0]["flow_fields"]
+    ), "peak and linear modes produced identical fields"
+
+
+def test_from_config_reads_scale_mode():
+    """`from_config` honors an explicit scale_mode and defaults to peak."""
+    linear = KinematicDataSource.from_config(
+        {"image_shape": [48, 48], "scale_mode": "linear"}
+    )
+    assert "scale_mode='linear'" in repr(linear)
+
+    default = KinematicDataSource.from_config({"image_shape": [48, 48]})
+    assert "scale_mode='peak'" in repr(default)
+
+
 def test_include_images_is_false():
     """The kinematic source never advertises real images."""
     ds = KinematicDataSource(num_examples=1)
@@ -155,6 +274,7 @@ def test_repr_is_stable_and_descriptive():
     assert "scale_factor_range=(2.0, 8.0)" in text, (
         f"repr missing scale_factor_range: {text}"
     )
+    assert "scale_mode='peak'" in text, f"repr missing scale_mode: {text}"
 
 
 def test_from_config_reads_keys():
@@ -196,6 +316,8 @@ def test_from_config_uses_defaults():
         {"filter_sigma_range": (-1.0, 10.0)},
         {"scale_factor_range": (5.0, 1.0)},
         {"scale_factor_range": (-1.0, 10.0)},
+        {"scale_mode": "bogus"},
+        {"scale_mode": "Peak"},
     ],
 )
 def test_invalid_arguments_raise(kwargs: dict) -> None:
