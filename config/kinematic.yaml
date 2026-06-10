@@ -19,7 +19,12 @@ worker_count: 0
 scheduler_class: "kinematic" # Generate flows instead of reading files
 num_examples: 18278 # Size of the (virtual) flow-field pool; larger = more variety
 filter_sigma_range: [5.0, 100.0] # Gaussian filter width sigma (px), per field
-scale_factor_range: [0.0, 16.0] # Linear scale factor a (px), per field
+# scale_mode "peak": each field is normalised so its peak displacement equals a
+# (px) -- the paper-faithful "max(ds_ref)" of Manickathan et al. 2023, Table 1,
+# and sigma-independent. Use "linear" for the raw ds_ref = a * G_sigma * xi
+# multiplier (sigma-dependent; the bare 0-16 range then yields ~0.1 px fields).
+scale_mode: "peak"
+scale_factor_range: [0.0, 16.0] # Peak displacement target max(ds_ref) a (px), per field
 
 # Image generation parameters (re-randomised per batch -> data augmentation)
 image_shape: [256, 256] # Shape of the images / generated flow fields
