@@ -692,59 +692,6 @@ class SyntheticImageSampler(Sampler):
         )
         return state_dict
 
-    @property
-    def restore_state(self) -> dict[str, Any]:
-        """Returns the state schema of the sampler for restoration.
-
-        Returns:
-            A dictionary containing the sampler state schema.
-        """
-        state_dict = self.state
-        if state_dict["current_flows"] is None:
-            # Calculate expected shape based on utils.flow_field_adapter logic
-            h_bounds_raw = (
-                self.position_bounds[0]
-                / self.resolution
-                * self.flow_field_res_y
-            )
-            w_bounds_raw = (
-                self.position_bounds[1]
-                / self.resolution
-                * self.flow_field_res_x
-            )
-
-            h_bounds = max(1, int(h_bounds_raw))
-            w_bounds = max(1, int(w_bounds_raw))
-
-            shape = (self.batch_size, h_bounds, w_bounds, 2)
-
-            state_dict["current_flows"] = jax.ShapeDtypeStruct(
-                shape, jnp.float32
-            )
-
-        if state_dict["mask_scheduler"] is None:
-            # mask_scheduler is expanded to batch_size in _get_next
-            state_dict["mask_scheduler"] = jax.ShapeDtypeStruct(
-                (self.batch_size,), jnp.bool_
-            )
-
-        if state_dict["scheduler_epoch"] is None:
-            # scheduler_epoch is expanded to batch_size in _get_next
-            # Assuming int32 or int64 for epoch
-            state_dict["scheduler_epoch"] = jax.ShapeDtypeStruct(
-                (self.batch_size,), jnp.int32
-            )
-
-        if state_dict["files_scheduler"] is None:
-            # files_scheduler is encoded as uint8 array of variable length.
-            # np.nan marks the dimension as unknown; synthpix.make replaces
-            # every placeholder with the saved shape before restoring.
-            state_dict["files_scheduler"] = jax.ShapeDtypeStruct(
-                (np.nan,), jnp.uint8
-            )
-
-        return state_dict
-
     @state.setter
     def state(self, value: dict[str, Any]) -> None:
         """Sets the state of the sampler from a checkpoint.
