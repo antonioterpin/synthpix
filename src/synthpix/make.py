@@ -3,6 +3,7 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import grain.python as grain
 import jax
@@ -282,14 +283,80 @@ class AddJAXSeed(grain.RandomMapTransform):
         return record
 
 
+def _resolve_placeholders(
+    template: dict[str, Any], saved_metadata: Any
+) -> dict[str, Any]:
+    """Replace placeholder template leaves with the saved shape and dtype.
+
+    ``Sampler.restore_state`` returns ``jax.ShapeDtypeStruct`` placeholders
+    for fields that are still ``None`` on a fresh sampler, with shapes that
+    are guessed (e.g. ``current_flows``) or unknown (``files_scheduler``).
+    Orbax >= 0.11.33 enforces the template shape, so a wrong guess or an
+    ``np.nan`` dimension makes the restore fail, while a ``None`` leaf makes
+    Orbax silently drop the saved value. The checkpoint metadata holds the
+    real shapes, so use them.
+
+    Args:
+        template: Restore template returned by ``Sampler.restore_state``.
+        saved_metadata: Tree metadata of the saved ``sampler`` item.
+
+    Returns:
+        A copy of ``template`` whose placeholder leaves carry the saved shape
+        and dtype, or are ``None`` where ``None`` was saved.
+    """
+    resolved = dict(template)
+    for key, leaf in template.items():
+        if (
+            not isinstance(leaf, jax.ShapeDtypeStruct)
+            or key not in saved_metadata
+        ):
+            continue
+        saved = saved_metadata[key]
+        resolved[key] = (
+            None
+            if saved is None
+            else jax.ShapeDtypeStruct(tuple(saved.shape), saved.dtype)
+        )
+    return resolved
+
+
+def _read_sampler_metadata(load_from: Path, step: int) -> Any | None:
+    """Read the tree metadata of the saved ``sampler`` item, if available.
+
+    Args:
+        load_from: Checkpoint directory.
+        step: Checkpoint step to inspect.
+
+    Returns:
+        The ``sampler`` item metadata, or ``None`` if it cannot be read.
+    """
+    # A separate manager: registering a handler for "sampler" on the
+    # restoring manager would stop it from resolving the "grain" item.
+    try:
+        mngr = ocp.CheckpointManager(
+            load_from,
+            item_handlers={"sampler": ocp.StandardCheckpointHandler()},
+        )
+        # item_metadata is typed as CheckpointArgs but returns a Composite.
+        return mngr.item_metadata(step)["sampler"]  # pyright: ignore[reportIndexIssue]
+    except Exception as e:
+        logger.warning(f"Could not read sampler checkpoint metadata: {e}")
+        return None
+
+
 def checkpoint_args(
-    sampler: Sampler, is_restore: bool = False
+    sampler: Sampler,
+    is_restore: bool = False,
+    saved_metadata: Any | None = None,
 ) -> ocp.args.Composite:
     """Consolidates Save/Restore args for the SynthPix pipeline.
 
     Args:
         sampler: The sampler instance.
         is_restore: Whether to return RestoreArgs instead of SaveArgs.
+        saved_metadata: Tree metadata of the saved ``sampler`` item, used
+            on restore to give placeholder fields (those still ``None`` on
+            the fresh sampler) their saved shape and dtype.
 
     Returns:
         A Composite Orbax argument object.
@@ -304,8 +371,11 @@ def checkpoint_args(
     # ocp.args.Composite is not correctly typed to recognize the specific
     # Save/RestoreArgs classes, so we ignore type issues here
     if is_restore:
+        template = sampler.restore_state
+        if saved_metadata is not None:
+            template = _resolve_placeholders(template, saved_metadata)
         return ocp.args.Composite(
-            sampler=ocp.args.StandardRestore(sampler.restore_state),  # pyright: ignore[reportCallIssue]
+            sampler=ocp.args.StandardRestore(template),  # pyright: ignore[reportCallIssue]
             grain=grain.PyGrainCheckpointRestore(grain_iter),  # pyright: ignore[reportCallIssue]
         )
     else:
@@ -569,7 +639,11 @@ def make(
             f"Restoring from checkpoint at step {latest_step} in {load_from}"
         )
 
-        restore_args = checkpoint_args(sampler, is_restore=True)
+        restore_args = checkpoint_args(
+            sampler,
+            is_restore=True,
+            saved_metadata=_read_sampler_metadata(load_from, latest_step),
+        )
 
         restored = mngr.restore(step=latest_step, args=restore_args)
         sampler.state = restored["sampler"]
