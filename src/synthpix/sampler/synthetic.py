@@ -736,8 +736,9 @@ class SyntheticImageSampler(Sampler):
             )
 
         if state_dict["files_scheduler"] is None:
-            # files_scheduler is encoded as uint8 array of variable length
-            # Use np.nan to indicate unknown dimension size for restoration
+            # files_scheduler is encoded as uint8 array of variable length.
+            # np.nan marks the dimension as unknown; synthpix.make replaces
+            # every placeholder with the saved shape before restoring.
             state_dict["files_scheduler"] = jax.ShapeDtypeStruct(
                 (np.nan,), jnp.uint8
             )
