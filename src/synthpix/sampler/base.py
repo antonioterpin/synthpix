@@ -173,16 +173,6 @@ class Sampler(ABC):
         """
         return {"scheduler_state": self.scheduler.state}
 
-    @property
-    def restore_state(self) -> dict[str, Any]:
-        """Returns the state schema of the sampler for restoration.
-
-        Returns:
-            A dictionary containing the state of the sampler and scheduler
-            to be used as a schema for restoration.
-        """
-        return self.state
-
     @state.setter
     def state(self, value: dict[str, Any]) -> None:
         """Sets the state of the sampler from a checkpoint.
