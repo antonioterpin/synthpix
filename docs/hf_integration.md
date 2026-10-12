@@ -469,11 +469,8 @@ uv pip list | grep hf-transfer
 A missing wheel logs a one-line warning *every time* `push_dataset` or
 `pull_dataset` runs; install the `[hf]` extra to pick it up. Network and
 remote shard layout also matter. `max_workers` (default 8) controls the
-download fan-out on `pull_dataset` and the batched-commit fan-out on
-`push_dataset` when the tree is large enough to route through
-`upload_large_folder`; for a single-commit `upload_folder` push (smaller
-trees) `huggingface_hub` exposes no parallelism knob in the supported
-1.x releases, so `max_workers` is a no-op on that path.
+download fan-out on `pull_dataset`; `push_dataset` uploads through
+`upload_folder`, which batches large trees into resumable commits itself.
 
 **Interrupted upload or download** — both `push_dataset` and `pull_dataset`
 are idempotent and resumable. Rerun the same command; nothing is wiped and
