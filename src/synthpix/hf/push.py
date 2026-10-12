@@ -388,6 +388,9 @@ def push_dataset(
         use_large = len(selected) > large_folder_threshold
     else:
         use_large = large_folder
+    # huggingface_hub >= 2.0 drops ``upload_large_folder``; its
+    # ``upload_folder`` commits large folders in resumable batches itself.
+    use_large = use_large and hasattr(api, "upload_large_folder")
 
     if use_large:
         # ``upload_large_folder`` commits in resumable batches (it does

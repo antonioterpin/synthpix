@@ -681,6 +681,29 @@ def test_push_upload_large_folder_no_unsupported_kwargs(
     push_mod.push_dataset(tmp_path, "user/repo", large_folder=True)
 
 
+class _Hub2HfApi(_FakeHfApi):
+    """huggingface_hub >= 2.0: no ``upload_large_folder``."""
+
+    @property
+    def upload_large_folder(self):
+        raise AttributeError("upload_large_folder")
+
+
+def test_push_large_falls_back_to_upload_folder_on_hub2(
+    monkeypatch, tmp_path
+):
+    _clear_env(monkeypatch)
+    fake = _install_fake_hub(monkeypatch)
+    fake.HfApi = _Hub2HfApi
+    _populate(tmp_path)
+
+    result = push_mod.push_dataset(tmp_path, "user/repo", large_folder=True)
+
+    [api] = _FakeHfApiCollector._INSTANCES
+    assert len(api.upload_folder_calls) == 1
+    assert result == "deadbeef"
+
+
 def test_push_auto_routes_large_by_threshold(monkeypatch, tmp_path):
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
