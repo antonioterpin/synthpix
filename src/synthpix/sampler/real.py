@@ -13,6 +13,13 @@ from synthpix.utils import SYNTHPIX_SCOPE, get_logger
 
 logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 
+_make_keys = jax.jit(jax.vmap(jax.random.PRNGKey))
+
+
+@jax.jit
+def _as_float32(*arrays: jax.Array) -> tuple[jax.Array, ...]:
+    return tuple(a.astype(jnp.float32) for a in arrays)
+
 
 class RealImageSampler(Sampler):
     """Sampler for real data."""
@@ -52,14 +59,19 @@ class RealImageSampler(Sampler):
         # Get the next batch of flow fields from the scheduler
         batch = self.scheduler.get_batch(batch_size=self.batch_size)
         keys = (
-            jax.vmap(jax.random.PRNGKey)(batch.jax_seed)
+            _make_keys(jnp.asarray(batch.jax_seed))
             if batch.jax_seed is not None
             else None
         )
+        # Copy in the stored dtypes (images are often uint8, 4x smaller)
+        # and cast on the device: the host-to-device copy dominates.
+        images1, images2, flow_fields = _as_float32(
+            *jax.device_put((batch.images1, batch.images2, batch.flow_fields))
+        )
         batch = SynthpixBatch(
-            images1=jnp.array(batch.images1, dtype=jnp.float32),
-            images2=jnp.array(batch.images2, dtype=jnp.float32),
-            flow_fields=jnp.array(batch.flow_fields, dtype=jnp.float32),
+            images1=images1,
+            images2=images2,
+            flow_fields=flow_fields,
             params=None,
             done=None,
             mask=jnp.array(batch.mask) if batch.mask is not None else None,
