@@ -35,6 +35,7 @@ logger = get_logger(__name__, scope=SYNTHPIX_SCOPE)
 _HF_SCHEME = "hf://"
 _DEFAULT_REVISION = "main"
 _METADATA_FILES: frozenset[str] = frozenset({"README.md"})
+_COMMIT_RE = re.compile(r"[0-9a-f]{40}")
 
 # Strict URI shape:
 #   owner/name (no slashes, no @ or : inside)
@@ -313,12 +314,19 @@ def _pull_repo(
     local_dir = cache_root / safe_owner / f"{safe_name}@{safe_revision}"
     logger.info(f"Resolving {spec} via cache {local_dir}")
 
-    pull_dataset(
-        parsed.repo_id,
-        local_dir,
-        revision=parsed.revision,
-        token=token,
-    )
+    # A commit hash never changes, so once its pull finished there is
+    # nothing to check against the Hub (hidden marker, not listed as data).
+    done_marker = local_dir / ".synthpix-pull-complete"
+    pinned = _COMMIT_RE.fullmatch(parsed.revision) is not None
+    if not (pinned and done_marker.exists()):
+        pull_dataset(
+            parsed.repo_id,
+            local_dir,
+            revision=parsed.revision,
+            token=token,
+        )
+        if pinned:
+            done_marker.touch()
     return local_dir.resolve(), parsed
 
 

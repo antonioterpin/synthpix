@@ -367,3 +367,17 @@ def test_resolve_idempotent(monkeypatch, tmp_path):
 
     assert len(calls) == 2
     assert calls[0]["local_dir"].resolve() == calls[1]["local_dir"].resolve()
+
+
+def test_resolve_pinned_commit_pulls_once(monkeypatch, tmp_path):
+    # A commit-hash revision is pulled once; a branch is pulled every time.
+    _clear_cache_env(monkeypatch)
+    calls: list[dict] = []
+    monkeypatch.setattr(hf_resolver, "pull_dataset", _fake_pull(calls))
+    sha = "a" * 40
+
+    for _ in range(2):
+        hf_resolver.resolve_to_directory(f"hf://o/n@{sha}", cache_dir=tmp_path)
+        hf_resolver.resolve_to_directory("hf://o/n@main", cache_dir=tmp_path)
+
+    assert [c["revision"] for c in calls] == [sha, "main", "main"]
