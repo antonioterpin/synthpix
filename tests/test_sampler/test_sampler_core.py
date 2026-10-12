@@ -2180,3 +2180,28 @@ def test_partial_batch_no_metadata():
     assert batch.files is None, f"Files should be None, got {type(batch.files)}"
     assert batch.mask is None, f"Mask should be None, got {type(batch.mask)}"
     assert batch.epoch is None, f"Epoch should be None, got {type(batch.epoch)}"
+
+
+def test_real_sampler_casts_uint8_images_on_device():
+    """uint8 images come out as float32 with unchanged values."""
+    rng = np.random.default_rng(0)
+    data = SchedulerData(
+        flow_fields=rng.standard_normal((2, 8, 8, 2), dtype=np.float32),
+        images1=rng.integers(0, 255, (2, 8, 8), dtype=np.uint8),
+        images2=rng.integers(0, 255, (2, 8, 8), dtype=np.uint8),
+        jax_seed=np.array([3, 7], dtype=np.uint32),
+    )
+
+    class _Stub(_BaseDummy):
+        def get_batch(self, batch_size):
+            return data
+
+    batch = RealImageSampler(scheduler=_Stub(), batch_size=2)._get_next()
+
+    assert batch.images1.dtype == jnp.float32
+    np.testing.assert_array_equal(batch.images1, data.images1)
+    np.testing.assert_array_equal(batch.images2, data.images2)
+    np.testing.assert_array_equal(batch.flow_fields, data.flow_fields)
+    np.testing.assert_array_equal(
+        batch.keys, jax.vmap(jax.random.PRNGKey)(jnp.array([3, 7]))
+    )
