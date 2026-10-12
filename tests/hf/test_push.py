@@ -23,11 +23,6 @@ class _FakeCommitInfo:
         self.oid = oid
 
 
-class _FakeDatasetInfo:
-    def __init__(self, sha: str = "largesha0123") -> None:
-        self.sha = sha
-
-
 class _FakeHfApi:
     def __init__(self, token=None, **_: object) -> None:
         self.token = token
@@ -40,9 +35,6 @@ class _FakeHfApi:
         self.list_repo_files_return: list[str] = []
         self.list_repo_files_raises: BaseException | None = None
         self.upload_folder_return: object = _FakeCommitInfo()
-        self.upload_large_folder_calls: list[dict] = []
-        self.dataset_info_calls: list[dict] = []
-        self.dataset_info_return: object = _FakeDatasetInfo()
 
     def create_repo(self, **kwargs):
         self.create_repo_calls.append(kwargs)
@@ -51,14 +43,6 @@ class _FakeHfApi:
     def upload_folder(self, **kwargs):
         self.upload_folder_calls.append(kwargs)
         return self.upload_folder_return
-
-    def upload_large_folder(self, **kwargs):
-        self.upload_large_folder_calls.append(kwargs)
-        return None
-
-    def dataset_info(self, repo_id, **kwargs):
-        self.dataset_info_calls.append({"repo_id": repo_id, **kwargs})
-        return self.dataset_info_return
 
     def list_repo_files(self, repo_id, **kwargs):
         self.list_repo_files_calls.append(
@@ -477,10 +461,9 @@ def test_push_hf_not_installed(monkeypatch, tmp_path):
 class _StrictHfApi(_FakeHfApi):
     """Like ``_FakeHfApi`` but ``upload_folder`` rejects unknown kwargs.
 
-    huggingface_hub >= 1.0's ``HfApi.upload_folder`` has NO ``num_workers``
-    parameter, so passing it raises ``TypeError`` against the real Hub.
-    This fake mirrors the real 1.x signature so the regression is caught
-    without a network call.
+    Mirrors the real hub 2.0 ``HfApi.upload_folder`` signature, so passing
+    an unsupported kwarg (e.g. ``num_workers``) is caught without a
+    network call.
     """
 
     _ALLOWED: ClassVar[set[str]] = {
@@ -500,23 +483,6 @@ class _StrictHfApi(_FakeHfApi):
         "run_as_future",
     }
 
-    # Verified against hub 1.15: signature is
-    #   (repo_id, folder_path, repo_type, revision, private,
-    #    allow_patterns, ignore_patterns, num_workers, print_report).
-    # Any future hub-side drift on this set will be caught without a
-    # network call.
-    _ALLOWED_LARGE: ClassVar[set[str]] = {
-        "repo_id",
-        "folder_path",
-        "repo_type",
-        "revision",
-        "private",
-        "allow_patterns",
-        "ignore_patterns",
-        "num_workers",
-        "print_report",
-    }
-
     def upload_folder(self, **kwargs):
         unexpected = set(kwargs) - self._ALLOWED
         if unexpected:
@@ -526,16 +492,6 @@ class _StrictHfApi(_FakeHfApi):
             )
         return super().upload_folder(**kwargs)
 
-    def upload_large_folder(self, **kwargs):
-        unexpected = set(kwargs) - self._ALLOWED_LARGE
-        if unexpected:
-            raise TypeError(
-                "upload_large_folder() got an unexpected keyword argument "
-                f"{sorted(unexpected)[0]!r}"
-            )
-        return super().upload_large_folder(**kwargs)
-
-
 def _install_strict_hub(monkeypatch) -> _FakeHub:
     fake = _install_fake_hub(monkeypatch)
     fake.HfApi = _StrictHfApi
@@ -543,17 +499,12 @@ def _install_strict_hub(monkeypatch) -> _FakeHub:
 
 
 def test_push_upload_folder_no_unsupported_kwargs(monkeypatch, tmp_path):
-    """Regression: ``num_workers`` is not a valid hub-1.x kwarg.
-
-    The old code passed ``num_workers=max_workers`` which raises
-    ``TypeError`` on the real Hub. This test uses a fake whose
-    ``upload_folder`` signature matches hub 1.x.
-    """
+    """``upload_folder`` only gets kwargs the real hub 2.0 accepts."""
     _clear_env(monkeypatch)
     _install_strict_hub(monkeypatch)
     _populate(tmp_path)
 
-    result = push_mod.push_dataset(tmp_path, "user/repo", max_workers=4)
+    result = push_mod.push_dataset(tmp_path, "user/repo")
 
     [api] = _FakeHfApiCollector._INSTANCES
     assert len(api.upload_folder_calls) == 1
@@ -622,129 +573,3 @@ def test_push_token_never_logged(monkeypatch, tmp_path, capsys, caplog):
         assert "hf_secret" not in msg
     for record in caplog.records:
         assert "hf_secret" not in record.getMessage()
-
-
-# --- large-folder transport routing -------------------------------------
-
-
-def test_push_small_uses_upload_folder(monkeypatch, tmp_path):
-    _clear_env(monkeypatch)
-    _install_fake_hub(monkeypatch)
-    _populate(tmp_path)  # single file, well under the threshold
-
-    result = push_mod.push_dataset(tmp_path, "user/repo")
-
-    [api] = _FakeHfApiCollector._INSTANCES
-    assert len(api.upload_folder_calls) == 1
-    assert api.upload_large_folder_calls == []
-    assert result == "deadbeef"  # oid from _FakeCommitInfo
-
-
-def test_push_force_large_uses_upload_large_folder(monkeypatch, tmp_path):
-    _clear_env(monkeypatch)
-    _install_fake_hub(monkeypatch)
-    _populate(tmp_path)
-
-    result = push_mod.push_dataset(
-        tmp_path, "user/repo", revision="dev", large_folder=True
-    )
-
-    [api] = _FakeHfApiCollector._INSTANCES
-    assert api.upload_folder_calls == []
-    assert len(api.upload_large_folder_calls) == 1
-    call = api.upload_large_folder_calls[0]
-    # upload_large_folder has no commit_message; it does take num_workers.
-    assert "commit_message" not in call
-    assert call["num_workers"] == 8
-    assert call["repo_type"] == "dataset"
-    assert call["revision"] == "dev"
-    assert call["print_report"] is False
-    assert isinstance(call["allow_patterns"], list)
-    assert isinstance(call["ignore_patterns"], list)
-    # upload_large_folder returns None -> sha resolved via dataset_info.
-    assert api.dataset_info_calls[0]["repo_id"] == "user/repo"
-    assert api.dataset_info_calls[0]["revision"] == "dev"
-    assert result == "largesha0123"
-
-
-def test_push_upload_large_folder_no_unsupported_kwargs(
-    monkeypatch, tmp_path
-):
-    # Regression guard for the path a real PIV class-1 push (>1000 files)
-    # actually takes via auto-routing. ``_StrictHfApi.upload_large_folder``
-    # mirrors the hub-1.15 signature, so any future hub-side drift on this
-    # surface is caught without a network call.
-    _clear_env(monkeypatch)
-    _install_strict_hub(monkeypatch)
-    _populate(tmp_path)
-
-    push_mod.push_dataset(tmp_path, "user/repo", large_folder=True)
-
-
-class _Hub2HfApi(_FakeHfApi):
-    """huggingface_hub >= 2.0: no ``upload_large_folder``."""
-
-    @property
-    def upload_large_folder(self):
-        raise AttributeError("upload_large_folder")
-
-
-def test_push_large_falls_back_to_upload_folder_on_hub2(
-    monkeypatch, tmp_path
-):
-    _clear_env(monkeypatch)
-    fake = _install_fake_hub(monkeypatch)
-    fake.HfApi = _Hub2HfApi
-    _populate(tmp_path)
-
-    result = push_mod.push_dataset(tmp_path, "user/repo", large_folder=True)
-
-    [api] = _FakeHfApiCollector._INSTANCES
-    assert len(api.upload_folder_calls) == 1
-    assert result == "deadbeef"
-
-
-def test_push_auto_routes_large_by_threshold(monkeypatch, tmp_path):
-    _clear_env(monkeypatch)
-    _install_fake_hub(monkeypatch)
-    _populate_piv_tree(tmp_path)  # 8 selected files
-
-    push_mod.push_dataset(
-        tmp_path, "user/repo", large_folder_threshold=2
-    )
-
-    [api] = _FakeHfApiCollector._INSTANCES
-    assert api.upload_folder_calls == []
-    assert len(api.upload_large_folder_calls) == 1
-
-
-def test_push_force_small_overrides_threshold(monkeypatch, tmp_path):
-    _clear_env(monkeypatch)
-    _install_fake_hub(monkeypatch)
-    _populate_piv_tree(tmp_path)
-
-    push_mod.push_dataset(
-        tmp_path,
-        "user/repo",
-        large_folder=False,
-        large_folder_threshold=0,
-    )
-
-    [api] = _FakeHfApiCollector._INSTANCES
-    assert len(api.upload_folder_calls) == 1
-    assert api.upload_large_folder_calls == []
-
-
-def test_push_dry_run_unaffected_by_large_folder(monkeypatch, tmp_path):
-    _clear_env(monkeypatch)
-    _install_fake_hub(monkeypatch)
-    _populate(tmp_path)
-
-    result = push_mod.push_dataset(
-        tmp_path, "user/repo", large_folder=True, dry_run=True
-    )
-
-    [api] = _FakeHfApiCollector._INSTANCES
-    assert result == "dry-run"
-    assert api.upload_folder_calls == []
-    assert api.upload_large_folder_calls == []

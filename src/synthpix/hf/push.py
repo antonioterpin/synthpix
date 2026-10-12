@@ -60,11 +60,6 @@ _PUBLIC_GATE_MESSAGE = (
     "Pass allow_public=True (CLI: --allow-public) to override."
 )
 
-# Above this many selected files an ``upload_folder`` single-commit push
-# tends to fail with a Hub-side 500 on the commit endpoint. We then route
-# through ``upload_large_folder``, which commits in resumable batches.
-_DEFAULT_LARGE_FOLDER_THRESHOLD = 1000
-
 
 def _resolve_commit_sha(commit_info: object) -> str:
     """Extract a commit sha from an ``upload_folder`` return value.
@@ -133,9 +128,8 @@ def _iter_relative_files(local_dir: Path) -> list[str]:
 def _hub_filter_repo_objects():
     """Return ``huggingface_hub.utils.filter_repo_objects`` or ``None``.
 
-    Reuses the same matcher that ``upload_folder`` / ``upload_large_folder``
-    consult internally, so the dry-run preview and the large-folder
-    auto-routing threshold see exactly the same file set as the real
+    Reuses the same matcher that ``upload_folder`` consults internally,
+    so the dry-run preview sees exactly the same file set as the real
     upload. Falling back to an in-tree matcher would re-introduce drift
     (e.g. ``raw_*/**`` patterns that the homegrown prefix branch silently
     failed to honor).
@@ -174,8 +168,8 @@ def _filter_local_files(
     include_globs: tuple[str, ...],
     ignore_globs: tuple[str, ...],
 ) -> list[str]:
-    # Prefer the hub matcher so the dry-run preview and the
-    # large-folder-threshold count match what the real upload uploads.
+    # Prefer the hub matcher so the dry-run preview and the logged file
+    # count match what the real upload uploads.
     filter_fn = _hub_filter_repo_objects()
     rel_paths = _iter_relative_files(local_dir)
 
@@ -277,9 +271,6 @@ def push_dataset(
     card_meta: DatasetCardMeta | None = None,
     include_globs: tuple[str, ...] = _DEFAULT_INCLUDE,
     ignore_globs: tuple[str, ...] = _DEFAULT_IGNORE,
-    max_workers: int = 8,
-    large_folder: bool | None = None,
-    large_folder_threshold: int = _DEFAULT_LARGE_FOLDER_THRESHOLD,
     dry_run: bool = False,
 ) -> str:
     """Upload ``local_dir`` to an HF Hub dataset repository.
@@ -305,32 +296,15 @@ def push_dataset(
             is (re)generated under ``local_dir`` right before the upload.
         include_globs: ``allow_patterns`` for the upload.
         ignore_globs: ``ignore_patterns`` for the upload.
-        max_workers: Parallel workers. A no-op for the single-commit
-            ``upload_folder`` path (hub 1.x has no knob there) but honored
-            by the ``upload_large_folder`` path.
-        large_folder: Tri-state selector for the upload transport.
-            ``None`` (default) auto-selects ``upload_large_folder`` when
-            the number of selected files exceeds
-            ``large_folder_threshold``; ``True``/``False`` force the large
-            or single-commit path respectively. The large path commits in
-            resumable batches and avoids the Hub-side 500 that a huge
-            single ``upload_folder`` commit triggers.
-        large_folder_threshold: Selected-file count above which the auto
-            mode switches to ``upload_large_folder``.
         dry_run: When ``True``, compare local and remote file lists, print
             the plan, and return ``"dry-run"`` without touching the Hub.
 
     Returns:
-        str: The commit sha (resolved via ``dataset_info`` for the
-            ``upload_large_folder`` path, which returns no sha itself), or
-            ``"dry-run"`` when ``dry_run`` is set.
+        str: The commit sha, or ``"dry-run"`` when ``dry_run`` is set.
 
     Raises:
         PermissionError: When ``private=False`` is requested without
             ``allow_public=True``.
-        ValueError: When ``local_dir`` is missing/not a directory,
-            ``repo_id`` does not match the ``owner/name`` shape, or
-            ``max_workers`` is below one.
         ImportError: If ``huggingface_hub`` is not installed.
     """
     # Use truthiness rather than identity comparison so the safety gate
@@ -343,8 +317,6 @@ def push_dataset(
     local_path = Path(local_dir).expanduser()
     _validate_local_dir(local_path)
     _validate_repo_id(repo_id)
-    if max_workers < 1:
-        raise ValueError(f"max_workers must be >= 1, got: {max_workers}")
 
     resolved_token = resolve_token(token)
 
@@ -384,54 +356,18 @@ def push_dataset(
     )
 
     selected = _filter_local_files(local_path, include_globs, ignore_globs)
-    if large_folder is None:
-        use_large = len(selected) > large_folder_threshold
-    else:
-        use_large = large_folder
-    # huggingface_hub >= 2.0 drops ``upload_large_folder``; its
-    # ``upload_folder`` commits large folders in resumable batches itself.
-    use_large = use_large and hasattr(api, "upload_large_folder")
+    # huggingface_hub >= 2.0 commits large folders in resumable batches.
+    with enable_hf_transfer():
+        commit_info = api.upload_folder(
+            repo_id=repo_id,
+            repo_type="dataset",
+            folder_path=str(local_path),
+            revision=revision,
+            commit_message=commit_message or "Upload via synthpix-hf",
+            allow_patterns=list(include_globs),
+            ignore_patterns=list(ignore_globs),
+        )
+    commit_sha = _resolve_commit_sha(commit_info)
 
-    if use_large:
-        # ``upload_large_folder`` commits in resumable batches (it does
-        # honor ``num_workers``) and returns ``None`` — a huge single
-        # ``upload_folder`` commit otherwise 500s on the Hub. The sha is
-        # resolved from the repo afterwards.
-        with enable_hf_transfer():
-            api.upload_large_folder(
-                repo_id=repo_id,
-                repo_type="dataset",
-                folder_path=str(local_path),
-                revision=revision,
-                private=private,
-                allow_patterns=list(include_globs),
-                ignore_patterns=list(ignore_globs),
-                num_workers=max_workers,
-                print_report=False,
-            )
-        info = api.dataset_info(repo_id, revision=revision)
-        commit_sha = getattr(info, "sha", None) or "uploaded"
-    else:
-        # ``HfApi.upload_folder`` has no parallelism knob in
-        # huggingface_hub 1.x (the old ``num_workers`` kwarg was removed
-        # and never existed on this API), so ``max_workers`` is not
-        # forwarded here; passing it would raise ``TypeError`` against
-        # the real Hub.
-        with enable_hf_transfer():
-            commit_info = api.upload_folder(
-                repo_id=repo_id,
-                repo_type="dataset",
-                folder_path=str(local_path),
-                revision=revision,
-                commit_message=commit_message or "Upload via synthpix-hf",
-                allow_patterns=list(include_globs),
-                ignore_patterns=list(ignore_globs),
-            )
-        commit_sha = _resolve_commit_sha(commit_info)
-
-    transport = "upload_large_folder" if use_large else "upload_folder"
-    logger.info(
-        f"Pushed {repo_id}@{commit_sha} with {len(selected)} files "
-        f"via {transport}"
-    )
+    logger.info(f"Pushed {repo_id}@{commit_sha} with {len(selected)} files")
     return commit_sha
