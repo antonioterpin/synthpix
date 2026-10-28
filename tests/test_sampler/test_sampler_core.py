@@ -2178,7 +2178,10 @@ def test_partial_batch_no_metadata():
     # Metadata should be None in output if None in input
     assert batch.seeds is None, f"Seeds should be None, got {type(batch.seeds)}"
     assert batch.files is None, f"Files should be None, got {type(batch.files)}"
-    assert batch.mask is None, f"Mask should be None, got {type(batch.mask)}"
+    assert batch.mask is not None
+    assert batch.mask.dtype == jnp.bool_
+    np.testing.assert_array_equal(batch.mask, np.ones(batch_size, dtype=bool))
+    assert batch.images1[batch.mask].shape[0] == batch_size
     assert batch.epoch is None, f"Epoch should be None, got {type(batch.epoch)}"
 
 

@@ -652,9 +652,9 @@ class SyntheticImageSampler(Sampler):
             params=params,
             done=None,
             mask=(
-                jnp.array(self._mask_scheduler)
+                jnp.asarray(self._mask_scheduler, dtype=jnp.bool_)
                 if self._mask_scheduler is not None
-                else None
+                else jnp.ones(self.batch_size, dtype=jnp.bool_)
             ),
             files=self._files_scheduler,
             epoch=(
