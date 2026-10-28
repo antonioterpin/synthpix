@@ -917,6 +917,7 @@ def test_scheduler_iteration_with_multiple_files(
     )
 
 
+@pytest.mark.benchmark
 @pytest.mark.parametrize("randomize", [True, False])
 @pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
 def test_scheduler_time(

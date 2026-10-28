@@ -833,6 +833,7 @@ def test_flow_field_adapter(
 @pytest.mark.parametrize("flow_field_shape", [(1536, 1024)])
 @pytest.mark.parametrize("new_flow_field_shape", [(1216, 1936)])
 @pytest.mark.parametrize("batch_size", [128])
+@pytest.mark.benchmark
 def test_speed_flow_fields_adapter(
     selected_flow: str,
     flow_field_shape: tuple[int, int],

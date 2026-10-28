@@ -69,6 +69,7 @@ def write_speed_stats_to_csv(filename: str, all_rows: Any) -> None:
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connected to the server.",
 )
+@pytest.mark.benchmark
 def test_speed_generate_images_sweep_all() -> None:
     """Verify speed generate images sweep all."""
     output_csv = "new_seeding_densities.csv"
