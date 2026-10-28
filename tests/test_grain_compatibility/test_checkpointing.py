@@ -1,10 +1,14 @@
-"""Integration tests for the unified randomness and checkpointing strategy.
+"""Integration tests for the unified randomness and checkpointing
+strategy.
 
-These tests verify that the entire pipeline (Grain DataLoader + SynthPix Sampler)
-can be correctly checkpointed and restored using Orbax, achieving
-bit-perfect reproducibility.
+These tests verify that the entire pipeline (Grain DataLoader +
+SynthPix Sampler) can be correctly checkpointed and restored using
+Orbax, achieving bit-perfect reproducibility.
 """
 
+from __future__ import annotations
+
+from pathlib import Path
 from typing import cast
 
 import jax.numpy as jnp
@@ -16,8 +20,11 @@ from synthpix import make, save_checkpoint
 from synthpix.sampler import SyntheticImageSampler
 
 
-def test_full_pipeline_checkpoint_reproducibility(mock_mat_files, tmp_path):
-    """Verify bit-perfect reproducibility of the whole pipeline after Orbax restore.
+def test_full_pipeline_checkpoint_reproducibility(
+    mock_mat_files: tuple[list[str], dict[str, int]], tmp_path: Path
+) -> None:
+    """Verify bit-perfect reproducibility of the whole pipeline after Orbax
+    restore.
 
     This test simulates a training loop where we:
     1. Initialize the pipeline (Grain + Sampler).
@@ -26,6 +33,10 @@ def test_full_pipeline_checkpoint_reproducibility(mock_mat_files, tmp_path):
     4. Step for a few more iterations (Ground Truth for resumption).
     5. Initialize a NEW pipeline and restore from checkpoint.
     6. Step and verify that resumed output matches Ground Truth.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
+        tmp_path: Temporary directory for this test.
     """
     paths, _ = mock_mat_files  # 2 files of 64x64
     checkpoint_dir = tmp_path / "checkpoints"
@@ -99,7 +110,8 @@ def test_full_pipeline_checkpoint_reproducibility(mock_mat_files, tmp_path):
         f"Resumed step mismatch. Expected {gt_step}, got {new_sampler._step}"
     )
     assert resumed_img_mean == pytest.approx(gt_img_mean), (
-        f"Resumed image mean mismatch. Expected {gt_img_mean}, got {resumed_img_mean}"
+        f"Resumed image mean mismatch. Expected {gt_img_mean}"
+        f", got {resumed_img_mean}"
     )
     assert jnp.allclose(resumed_batch.images1, gt_batch.images1), (
         "Resumed images are not bit-perfectly identical to ground truth"
@@ -115,13 +127,21 @@ def test_full_pipeline_checkpoint_reproducibility(mock_mat_files, tmp_path):
         )
     else:
         assert resumed_batch.seeds is None, "seeds should be None after restore"
+    assert resumed_batch.epoch is not None
+    assert gt_batch.epoch is not None
     assert jnp.allclose(resumed_batch.epoch, gt_batch.epoch), (
-        f"Epoch mismatch after restore. Expected {gt_batch.epoch}, got {resumed_batch.epoch}"
+        f"Epoch mismatch after restore. Expected "
+        f"{gt_batch.epoch}, got {resumed_batch.epoch}"
     )
 
 
-def test_empty_dataset_handling(tmp_path):
-    """Verify that the pipeline handles empty datasets gracefully or with clear errors."""
+def test_empty_dataset_handling(tmp_path: Path) -> None:
+    """Verify the pipeline handles empty datasets gracefully or with clear
+    errors.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     # Create empty directory
     empty_dir = tmp_path / "empty"
     empty_dir.mkdir()
@@ -139,14 +159,18 @@ def test_empty_dataset_handling(tmp_path):
     }
 
     # make() should probably fail early if no files are found
-    with pytest.raises((ValueError, RuntimeError), match=".*found.*|.*empty.*"):
-        sampler = cast(
-            SyntheticImageSampler, make(config, use_grain_scheduler=True)
-        )
+    with pytest.raises(
+        (ValueError, RuntimeError), match=r".*found.*|.*empty.*"
+    ):
+        cast(SyntheticImageSampler, make(config, use_grain_scheduler=True))
 
 
-def test_real_sampler_checkpointing(tmp_path):
-    """Verify detailed checkpointing flow with generic Sampler support."""
+def test_real_sampler_checkpointing(tmp_path: Path) -> None:
+    """Verify detailed checkpointing flow with generic Sampler support.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     checkpoint_dir = tmp_path / "checkpoints_real"
 
     # 0. Setup Configuration (same as other tests)
@@ -187,25 +211,32 @@ def test_real_sampler_checkpointing(tmp_path):
     s1_state = sampler.scheduler.state
     s2_state = resumed.scheduler.state
 
-    assert type(s1_state) == type(s2_state), (
+    assert type(s1_state) is type(s2_state), (
         "Scheduler states are not structurally compatible"
     )
     assert s1_state == s2_state, "Scheduler states do not match after restore"
 
 
-def test_files_scheduler_restoration(tmp_path):
-    """Verify that files_scheduler is restored correctly from checkpoint.
+def test_files_scheduler_restoration(tmp_path: Path) -> None:
+    """Verify files_scheduler is restored correctly from checkpoint.
 
-    This test reproduces a previous bug where `files_scheduler` (and other
-    dynamic metadata) was lost during restoration because `restore_state`
-    returned `None` for uninitialized fields, causing Orbax to skip them.
+    This test reproduces a previous bug where `files_scheduler` (and
+    other dynamic metadata) was lost during restoration because
+    `restore_state` returned `None` for uninitialized fields, causing
+    Orbax to skip them.
 
     The test ensures that:
-    1. A sampler initialized and run for one step has a valid `files_scheduler`.
-    2. After saving and restoring, the `files_scheduler` is present in the
+    1. A sampler initialized and run for one step has a valid
+    `files_scheduler`.
+    2. After saving and restoring, the `files_scheduler` is present in
+    the
        restored instance.
-    3. The restored sampler continues to generate valid batches with correct
+    3. The restored sampler continues to generate valid batches with
+    correct
        file metadata.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     checkpoint_dir = tmp_path / "checkpoints_files_scheduler"
 
@@ -229,7 +260,8 @@ def test_files_scheduler_restoration(tmp_path):
         "min_speed_x": 0.0,
         "min_speed_y": 0.0,
         "output_units": "pixels",
-        "batches_per_flow_batch": 2,  # Generate 2 batches per flow to allow mid-buffer save
+        # Generate two batches per flow to allow a mid-buffer save.
+        "batches_per_flow_batch": 2,
         "flow_fields_per_batch": 1,
         "img_offset": (0, 0),
         "seeding_density_range": (0.01, 0.01),
@@ -265,6 +297,7 @@ def test_files_scheduler_restoration(tmp_path):
         config, use_grain_scheduler=True, load_from=checkpoint_dir
     )
 
+    assert isinstance(restored_sampler, SyntheticImageSampler)
     # Verify state BEFORE next()
     # current_flows should be restored
     assert restored_sampler._current_flows is not None

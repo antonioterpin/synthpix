@@ -1,26 +1,40 @@
-"""Integration tests for the synthetic image sampler using a Grain-based backend.
+"""Integration tests for the synthetic image sampler using a
+Grain-based backend.
 
-These tests verify that `SyntheticImageSampler` can correctly interact with
-`GrainEpisodicAdapter` to retrieve flow fields and manage episodic
-transitions when using Google Grain's `DataLoader`.
+These tests verify that `SyntheticImageSampler` can correctly
+interact with `GrainEpisodicAdapter` to retrieve flow fields and
+manage episodic transitions when using Google Grain's `DataLoader`.
 """
+
+from __future__ import annotations
+
+from pathlib import Path
 
 import grain.python as grain
 import pytest
 
 from synthpix.data_sources.adapter import GrainEpisodicAdapter
+from synthpix.data_sources.episodic import EpisodicDataSource
 from synthpix.data_sources.mat import MATDataSource
 from synthpix.sampler.synthetic import SyntheticImageSampler
 from synthpix.scheduler.protocol import EpisodicSchedulerProtocol
+from synthpix.types import ImageGenerationSpecification
 
 
 @pytest.mark.parametrize("mock_mat_files", [10], indirect=True)
-def test_sampler_with_grain_integration(tmp_path, mock_mat_files):
-    """Verify full-stack integration between Grain, the episodic adapter, and the sampler.
+def test_sampler_with_grain_integration(
+    tmp_path: Path, mock_mat_files: tuple[list[str], dict[str, int]]
+) -> None:
+    """Verify full-stack integration between Grain, the episodic adapter,
+    and the sampler.
 
     Tests that the sampler correctly retrieves batches from a Grain
     loader and that `next_episode()` properly resets the sequence within
     the sampler loop.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
     """
     num_files = 10
     batch_size = 2
@@ -34,8 +48,6 @@ def test_sampler_with_grain_integration(tmp_path, mock_mat_files):
         f"Expected {num_files} files in MATDataSource, got {len(ds)}"
     )
 
-    from synthpix.data_sources.episodic import EpisodicDataSource
-
     episodic_ds = EpisodicDataSource(
         ds, batch_size=batch_size, episode_length=episode_length
     )
@@ -44,7 +56,8 @@ def test_sampler_with_grain_integration(tmp_path, mock_mat_files):
     num_chunks = num_episodes // batch_size
     expected_len = num_chunks * batch_size * episode_length
     assert len(episodic_ds) == expected_len, (
-        f"EpisodicDataSource length mismatch. Expected {expected_len}, got {len(episodic_ds)}"
+        f"EpisodicDataSource length mismatch. Expected "
+        f"{expected_len}, got {len(episodic_ds)}"
     )
 
     loader = grain.DataLoader(
@@ -59,8 +72,6 @@ def test_sampler_with_grain_integration(tmp_path, mock_mat_files):
     )
 
     adapter = GrainEpisodicAdapter(loader)
-
-    from synthpix.types import ImageGenerationSpecification
 
     gs = ImageGenerationSpecification(batch_size=batch_size)
 
@@ -89,14 +100,17 @@ def test_sampler_with_grain_integration(tmp_path, mock_mat_files):
         256,
         2,
     ), (
-        f"Batch flow fields shape mismatch. Expected {(batch_size, 256, 256, 2)}, got {batch_data.flow_fields.shape}"
+        f"Batch flow fields shape mismatch. Expected "
+        f"{(batch_size, 256, 256, 2)}, got "
+        f"{batch_data.flow_fields.shape}"
     )
 
     assert isinstance(sampler.scheduler, EpisodicSchedulerProtocol), (
         "Sampler scheduler must implement EpisodicSchedulerProtocol"
     )
     assert sampler.scheduler.steps_remaining() == episode_length - 1, (
-        f"Expected {episode_length - 1} steps remaining, got {sampler.scheduler.steps_remaining()}"
+        f"Expected {episode_length - 1} steps remaining, got "
+        f"{sampler.scheduler.steps_remaining()}"
     )
 
     sampler.next_episode()
@@ -108,5 +122,7 @@ def test_sampler_with_grain_integration(tmp_path, mock_mat_files):
         256,
         2,
     ), (
-        f"Second batch flow fields shape mismatch. Expected {(batch_size, 256, 256, 2)}, got {batch_data_2.flow_fields.shape}"
+        f"Second batch flow fields shape mismatch. Expected "
+        f"{(batch_size, 256, 256, 2)}, got "
+        f"{batch_data_2.flow_fields.shape}"
     )

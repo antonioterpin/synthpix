@@ -1,11 +1,16 @@
 """Tests for EpisodicDataSource.
 
-EpisodicDataSource wraps a FileDataSource and provides an episodic view of the data.
-It supports interleaving multiple episodes into mini-batches and ensures that
-timesteps within an episode are yielded sequentially.
+EpisodicDataSource wraps a FileDataSource and provides an episodic
+view of the data. It supports interleaving multiple episodes into
+mini-batches and ensures that timesteps within an episode are
+yielded sequentially.
 """
 
+from __future__ import annotations
+
 import os
+from pathlib import Path
+from typing import Any
 
 import grain.python as grain
 import numpy as np
@@ -17,29 +22,61 @@ from synthpix.data_sources import EpisodicDataSource, FileDataSource
 class MockDataSource(FileDataSource):
     """Simple source that returns the filepath."""
 
-    def __init__(self, file_list, include_images=False):
+    def __init__(
+        self, file_list: list[str], include_images: bool = False
+    ) -> None:
+        """Initialize the test double.
+
+        Args:
+            file_list: Input file paths for the scheduler.
+            include_images: Include images for this test case.
+        """
         super().__init__(dataset_path=file_list)
         self._include_images = include_images
 
-    def load_file(self, file_path):
+    def load_file(self, file_path: Path) -> dict[str, Any]:
+        """Load file.
+
+        Args:
+            file_path: File path used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return {"file": file_path}
 
     @property
     def include_images(self) -> bool:
+        """Include images.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return self._include_images
 
 
-def test_episodic_interleaving(tmp_path):
-    """Test that multiple episodes are correctly interleaved in mini-batches.
+def test_episodic_interleaving(tmp_path: Path) -> None:
+    """Test that multiple episodes are correctly interleaved in
+    mini-batches.
 
-    This test sets up a mock file system with two directories (representing two
+    This test sets up a mock file system with two directories
+    (representing two
     sequences), and verifies that:
-    1. The data source length accounts for all possible episode starts and padding.
-    2. Items at the same index across a 'chunk' represent the same timestep (t=0)
+    1. The data source length accounts for all possible episode starts
+    and
+    padding.
+    2. Items at the same index across a 'chunk' represent the same
+    timestep (t=0)
        across different episodes.
-    3. Sequential indices within a 'chunk' follow the temporal order of a single
+    3. Sequential indices within a 'chunk' follow the temporal order of
+    a
+    single
        episode.
-    4. Metadata like '_timestep' and '_chunk_id' are correctly populated.
+    4. Metadata like '_timestep' and '_chunk_id' are correctly
+    populated.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     # Setup mock file system: 2 dirs, 10 files each
     # d1: [f0..f9], d2: [f0..f9]
@@ -106,21 +143,34 @@ def test_episodic_interleaving(tmp_path):
     f2 = item2["file"]
 
     # Extract index from filename "f_XX.mat"
-    def extract_idx(f):
+    def extract_idx(f: Any) -> int:
+        """Extract idx.
+
+        Args:
+            f: F used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return int(os.path.basename(f).split("_")[1].split(".")[0])
 
     idx0 = extract_idx(str(f0))
     idx2 = extract_idx(str(f2))
     assert idx2 == idx0 + 1, (
-        f"Files in episode should be sequential. Expected {idx0 + 1}, got {idx2}"
+        f"Files in episode should be sequential. Expected "
+        f"{idx0 + 1}, got {idx2}"
     )
     assert os.path.dirname(str(f0)) == os.path.dirname(str(f2)), (
         "Sequential items within a chunk should come from the same directory"
     )
 
 
-def test_episodic_grain_integration(tmp_path):
-    """Verify it actually works efficiently with Grain DataLoader."""
+def test_episodic_grain_integration(tmp_path: Path) -> None:
+    """Verify it actually works efficiently with Grain DataLoader.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     d = tmp_path / "d"
     d.mkdir()
     files = []
@@ -165,20 +215,25 @@ def test_episodic_grain_integration(tmp_path):
     )
 
 
-def test_episodic_type_validation():
+def test_episodic_type_validation() -> None:
     """Test that TypeError is raised if source is not FileDataSource."""
     with pytest.raises(
         TypeError, match="must be an instance of FileDataSource"
     ):
         EpisodicDataSource(
-            source="not_a_source",
+            source="not_a_source",  # pyright: ignore[reportArgumentType]
             batch_size=2,
             episode_length=5,  # type: ignore
         )
 
 
-def test_episodic_wrap_around_padding(tmp_path):
-    """Test that data is wrapped around if it doesn't fit into a full batch."""
+def test_episodic_wrap_around_padding(tmp_path: Path) -> None:
+    """Test that data is wrapped around if it doesn't fit into a full
+    batch.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     # 1 directory, 7 files. Episode length 5.
     d = tmp_path / "d"
     d.mkdir()
@@ -197,8 +252,12 @@ def test_episodic_wrap_around_padding(tmp_path):
     )
 
 
-def test_episodic_delegation(tmp_path):
-    """Test that include_images and file_list are delegated to source."""
+def test_episodic_delegation(tmp_path: Path) -> None:
+    """Test that include_images and file_list are delegated to source.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     d = tmp_path / "d"
     d.mkdir()
     f1 = d / "a"
@@ -216,8 +275,12 @@ def test_episodic_delegation(tmp_path):
     assert ds.file_list == files, "file_list should be delegated to source"
 
 
-def test_episodic_no_valid_episodes(tmp_path):
-    """Test that ValueError is raised if no valid episodes are found."""
+def test_episodic_no_valid_episodes(tmp_path: Path) -> None:
+    """Test that ValueError is raised if no valid episodes are found.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     # 3 files, episode length 5 -> No valid starts
     d = tmp_path / "d"
     d.mkdir()
@@ -233,12 +296,13 @@ def test_episodic_no_valid_episodes(tmp_path):
         EpisodicDataSource(source, batch_size=2, episode_length=5)
 
 
-def test_episodic_invalid_directory():
-    """Test that ValueError is raised if a file path points to a non-existent directory.
+def test_episodic_invalid_directory() -> None:
+    """Test that ValueError is raised if a file path points to a
+    non-existent directory.
 
-    EpisodicDataSource groups files by their parent directory to identify
-    sequences. If a file path is provided whose directory cannot be resolved,
-    it should raise a ValueError.
+    EpisodicDataSource groups files by their parent directory to
+    identify sequences. If a file path is provided whose directory
+    cannot be resolved, it should raise a ValueError.
     """
     files = ["/non_existent_dir/f_0.mat"]
     source = MockDataSource(files)
@@ -255,22 +319,48 @@ def test_episodic_invalid_directory():
 class MockFileSource(FileDataSource):
     """Simple source that returns metadata for verification."""
 
-    def __init__(self, file_list):
+    def __init__(self, file_list: list[str]) -> None:
+        """Initialize the test double.
+
+        Args:
+            file_list: Input file paths for the scheduler.
+        """
         super().__init__(dataset_path=file_list)
 
-    def load_file(self, file_path):
+    def load_file(self, file_path: Path) -> dict[str, Any]:
+        """Load file.
+
+        Args:
+            file_path: File path used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return {"file": file_path}
 
     @property
     def include_images(self) -> bool:
+        """Include images.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return False
 
 
-def create_mock_dataset(tmp_path, folder_structure):
+def create_mock_dataset(tmp_path: Path, folder_structure: Any) -> Any:
     """Helper to create a nested directory structure and empty mock files.
 
-    `folder_structure` is a dict mapping subfolder names to the number of
-    `.mat` files to create in each. Returns a sorted list of absolute paths.
+    `folder_structure` is a dict mapping subfolder names to the number
+    of `.mat` files to create in each. Returns a sorted list of absolute
+    paths.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+        folder_structure: Folder structure for this test case.
+
+    Returns:
+        The value produced for the test scenario.
     """
     files = []
     for folder_name, num_files in folder_structure.items():
@@ -283,12 +373,15 @@ def create_mock_dataset(tmp_path, folder_structure):
     return sorted(files)
 
 
-def test_padding_flag_accuracy(tmp_path):
-    """Verify that `_is_padding` is correctly flagged for interleaving chunks.
+def test_padding_flag_accuracy(tmp_path: Path) -> None:
+    """Verify `_is_padding` is correctly flagged for interleaving chunks.
 
-    When the total number of episodes isn't a multiple of the batch size,
-    the `EpisodicDataSource` should fill the remainder with padded episodes
-    marked with `_is_padding=True`.
+    When the total number of episodes isn't a multiple of the batch
+    size, the `EpisodicDataSource` should fill the remainder with padded
+    episodes marked with `_is_padding=True`.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     # 1 directory, 3 files, episode_length 2 -> 2 possible starts (0, 1)
     # batch_size 3 -> needs 2 chunks of 3 episodes = 6 episodes total.
@@ -340,11 +433,14 @@ def test_padding_flag_accuracy(tmp_path):
     )
 
 
-def test_is_last_step_precision(tmp_path):
-    """Verify that `_is_last_step` is only True at the conclusion of an episode.
+def test_is_last_step_precision(tmp_path: Path) -> None:
+    """Verify `_is_last_step` is only True at the conclusion of an episode.
 
     Checks the logic for tracking timesteps and ensuring the signal for
     episode completion is accurate for all batches.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     files = create_mock_dataset(tmp_path, {"seq": 5})
     source = MockFileSource(files)
@@ -366,20 +462,26 @@ def test_is_last_step_precision(tmp_path):
         t = batch["_timestep"][0]
         last = batch["_is_last_step"][0]
         if t == episode_length - 1:
-            assert last == True, (
-                f"Expected _is_last_step to be True at timestep {t} (end of length {episode_length} episode)"
+            assert last, (
+                f"Expected _is_last_step to be True at timestep {t}"
+                f" (end of length {episode_length} episode)"
             )
         else:
-            assert last == False, (
-                f"Expected _is_last_step to be False before end of episode (timestep {t})"
+            assert not last, (
+                f"Expected _is_last_step to be False before "
+                f"end of episode (timestep {t})"
             )
 
 
-def test_asymmetric_folder_lengths(tmp_path):
-    """Verify that folders with different file counts contribute properly to starts.
+def test_asymmetric_folder_lengths(tmp_path: Path) -> None:
+    """Verify folders with different file counts contribute properly to
+    starts.
 
     The number of possible episode starts depends on the length of each
     sequence relative to the required `episode_length`.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     folder_structure = {
         "long": 10,  # 10 - 5 + 1 = 6 starts
@@ -397,18 +499,24 @@ def test_asymmetric_folder_lengths(tmp_path):
     # Count occurrences of каждой dir in starts
     dirs = [s[0] for s in ds._starts]
     assert dirs.count(str(tmp_path / "long")) == 6, (
-        f"Expected 6 starts from 'long' folder, got {dirs.count(str(tmp_path / 'long'))}"
+        f"Expected 6 starts from 'long' folder, got "
+        f"{dirs.count(str(tmp_path / 'long'))}"
     )
     assert dirs.count(str(tmp_path / "short")) == 1, (
-        f"Expected 1 start from 'short' folder, got {dirs.count(str(tmp_path / 'short'))}"
+        f"Expected 1 start from 'short' folder, got "
+        f"{dirs.count(str(tmp_path / 'short'))}"
     )
 
 
-def test_extreme_padding(tmp_path):
-    """Verify behavior when the batch size exceeds the total available episodes.
+def test_extreme_padding(tmp_path: Path) -> None:
+    """Verify behavior when the batch size exceeds the total available
+    episodes.
 
     The source should handle large amounts of padding gracefully,
     filling almost the entire chunk with marked padded episodes.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     files = create_mock_dataset(tmp_path, {"seq": 5})
     source = MockFileSource(files)
@@ -423,22 +531,25 @@ def test_extreme_padding(tmp_path):
     )
 
     batch = ds[0]  # t=0
-    assert batch["_is_padding"] == False, (
+    assert not batch["_is_padding"], (
         "First episode in chunk should not be padded"
     )
 
     batch_padded = ds[1]  # t=0 of second (padded) episode
-    assert batch_padded["_is_padding"] == True, (
+    assert batch_padded["_is_padding"], (
         "Second episode in chunk should be padded"
     )
 
 
-def test_reproducibility(tmp_path):
-    """Verify that the random interleaving is deterministic given a seed.
+def test_reproducibility(tmp_path: Path) -> None:
+    """Verify the random interleaving is deterministic given a seed.
 
     Multiple instances of `EpisodicDataSource` initialized with the same
     parameters and seed must yield the exact same sequence of files and
     chunk assignments.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     files = create_mock_dataset(tmp_path, {"seq1": 5, "seq2": 5})
     source = MockFileSource(files)
@@ -458,11 +569,15 @@ def test_reproducibility(tmp_path):
         )
 
 
-def test_multiple_epochs_total_count(tmp_path):
-    """Verify that the total number of batches matches the epoch-chunk product.
+def test_multiple_epochs_total_count(tmp_path: Path) -> None:
+    """Verify the total number of batches matches the epoch-chunk product.
 
     Ensures that Grain correctly handles multiple passes over the
-    `EpisodicDataSource` while respecting the underlying chunk structure.
+    `EpisodicDataSource` while respecting the underlying chunk
+    structure.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     files = create_mock_dataset(tmp_path, {"seq1": 5})
     source = MockFileSource(files)

@@ -1,20 +1,29 @@
-"""Tests for GPU device selection and mesh configuration in `SyntheticImageSampler`.
+"""Tests for GPU device selection and mesh configuration in
+`SyntheticImageSampler`.
 
-These tests verify that the sampler correctly identifies available NVIDIA GPUs
-and allows users to specify exactly which devices should be used for
-JAX-accelerated image generation via the `device_ids` parameter.
+These tests verify that the sampler correctly identifies available
+NVIDIA GPUs and allows users to specify exactly which devices should
+be used for JAX-accelerated image generation via the `device_ids`
+parameter.
 """
+
+from __future__ import annotations
+
+from typing import Any
 
 import jax
 import pytest
+from typing_extensions import Self
 
 from synthpix.sampler import SyntheticImageSampler
 from synthpix.scheduler import BaseFlowFieldScheduler
-from synthpix.types import ImageGenerationSpecification
+from synthpix.types import ImageGenerationSpecification, SchedulerData
 
 
 class _DummyScheduler(BaseFlowFieldScheduler):
-    def __init__(self, temp_file:str, h:int=64, w:int=64):
+    """Dummy Scheduler test double."""
+
+    def __init__(self, temp_file: str, h: int = 64, w: int = 64) -> None:
         """A minimal scheduler for testing device selection logic.
 
         Args:
@@ -25,42 +34,94 @@ class _DummyScheduler(BaseFlowFieldScheduler):
         super().__init__(file_list=[temp_file])
         self._shape = (h, w, 2)
 
-    def get_flow_fields_shape(self):
+    def get_flow_fields_shape(self) -> tuple[int, int, int]:
+        """Get flow fields shape.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return self._shape
 
-    def __iter__(self):
+    def __iter__(self) -> Any:
+        """Return the iterator for this fixture.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         return self
 
-    def __next__(self):
+    def __next__(self) -> None:
+        """Advance the simulated iterator.
+
+        Raises:
+            StopIteration: When the simulated failure is triggered.
+        """
         raise StopIteration
 
-    def reset(self):
+    def reset(self) -> None:
+        """Reset."""
         pass
 
-    def get_batch(self, *_):
+    def get_batch(self, *_: Any) -> SchedulerData:
+        """Get batch.
+
+        Args:
+            *_: used by this test.
+
+        Raises:
+            StopIteration: When the simulated failure is triggered.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         raise StopIteration
 
-    def load_file(self, file_path: str):
-        pass
+    def load_file(self, file_path: str) -> SchedulerData:
+        """Load file.
 
-    def get_next_slice(self):
+        Args:
+            file_path: File path used by this test.
+
+        Raises:
+            NotImplementedError: When the simulated failure is triggered.
+
+        Returns:
+            The value produced for the test scenario.
+        """
+        raise NotImplementedError(
+            "This scheduler only exercises device selection"
+        )
+
+    def get_next_slice(self) -> None:
+        """Get next slice."""
         pass
 
     @classmethod
-    def from_config(cls, config: dict):
+    def from_config(cls, config: dict) -> Self:
+        """From config.
+
+        Args:
+            config: Config used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return cls(config["temp_file"])
 
 
-def _make_sampler(device_ids, temp_file):
+def _make_sampler(device_ids: Any, temp_file: str) -> Any:
     """Helper to create a `SyntheticImageSampler` with specific device IDs.
 
-    Uses a dummy scheduler and minimal configuration to isolate the device
-    selection logic.
+    Uses a dummy scheduler and minimal configuration to isolate the
+    device selection logic.
 
     Args:
-        device_ids:
-            A list of device IDs to use, or None to use all available devices
+        device_ids: A list of device IDs to use, or None to use all
+            available devices
         temp_file: A temporary file path to pass to the dummy scheduler.
+
+    Returns:
+        The value produced for the test scenario.
     """
     return SyntheticImageSampler(
         scheduler=_DummyScheduler(temp_file),
@@ -104,7 +165,7 @@ def _make_sampler(device_ids, temp_file):
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="User not connected to the server.",
 )
-def test_sampler_uses_all_devices_when_none_passed(temp_file: str):
+def test_sampler_uses_all_devices_when_none_passed(temp_file: str) -> None:
     """Test that the sampler defaults to using all available JAX devices.
 
     If `device_ids=None` is passed to the constructor, the internal
@@ -121,7 +182,8 @@ def test_sampler_uses_all_devices_when_none_passed(temp_file: str):
     expected_device_ids = [d.id for d in jax.devices()]
     actual_device_ids = [d.id for d in sampler.mesh.devices]
     assert expected_device_ids == actual_device_ids, (
-        f"Default device IDs mismatch. Expected {expected_device_ids}, got {actual_device_ids}"
+        f"Default device IDs mismatch. Expected "
+        f"{expected_device_ids}, got {actual_device_ids}"
     )
     assert len(sampler.mesh.devices) >= 1, (
         "Sampler mesh should contain at least one device"
@@ -133,7 +195,7 @@ def test_sampler_uses_all_devices_when_none_passed(temp_file: str):
     reason="User not connected to the server.",
 )
 @pytest.mark.parametrize("ids", [[0], [0, 1]])
-def test_sampler_uses_requested_subset(ids: list[int], temp_file: str):
+def test_sampler_uses_requested_subset(ids: list[int], temp_file: str) -> None:
     """Test that the sampler respects a specific subset of device IDs.
 
     Verifies that only the requested indices are included in the
@@ -156,8 +218,9 @@ def test_sampler_uses_requested_subset(ids: list[int], temp_file: str):
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="User not connected to the server.",
 )
-def test_sampler_rejects_invalid_device_ids(temp_file: str):
-    """Test that specifying only non-existent device IDs raises a ValueError.
+def test_sampler_rejects_invalid_device_ids(temp_file: str) -> None:
+    """Test that specifying only non-existent device IDs raises a
+    ValueError.
 
     Ensures that the sampler fails early if it cannot map any of the
     provided `device_ids` to actual physical hardware.
@@ -167,5 +230,5 @@ def test_sampler_rejects_invalid_device_ids(temp_file: str):
     """
     # one past the last valid index
     invalid_id = max(d.id for d in jax.devices()) + 1
-    with pytest.raises(ValueError, match="No valid device IDs provided."):
+    with pytest.raises(ValueError, match=r"No valid device IDs provided."):
         _make_sampler(device_ids=[invalid_id], temp_file=temp_file)

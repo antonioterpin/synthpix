@@ -1,14 +1,19 @@
 """Tests for applying flow fields to images and particle positions.
 
 These tests verify the correctness and performance of various flow
-application methods, including callable-based warping and array-based
-particle advection, with support for both 2D and 3D domains.
+application methods, including callable-based warping and
+array-based particle advection, with support for both 2D and 3D
+domains.
 """
 
+from __future__ import annotations
+
 import timeit
+from typing import Any
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
@@ -31,11 +36,18 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_APPLY"]
     "image_shape",
     [(16, 16), (64, 32), (32, 64), (256, 128), (128, 256), (256, 256)],
 )
-def test_flow_apply_to_image(image_shape, visualize=False):
-    """Test that a callable flow function can be applied to warp a synthetic image.
+def test_flow_apply_to_image(
+    image_shape: tuple[int, int], visualize: bool = False
+) -> None:
+    """Test that a callable flow function can be applied to warp a
+    synthetic image.
 
     Verifies that the warped image maintains the expected dimensions and
     provides an optional visualization hook for manual inspection.
+
+    Args:
+        image_shape: Height and width of the output images.
+        visualize: Visualize for this test case.
     """
     # 1. Generate a synthetic particle image
     # 1. Generate random particles and their characteristics
@@ -85,13 +97,22 @@ def test_flow_apply_to_image(image_shape, visualize=False):
     )
 
     # 2. Apply a simple horizontal flow
-    def flow_f(_t, _x, _y):
+    def flow_f(_t: Any, _x: Any, _y: Any) -> tuple[float, float]:
+        """Flow f.
+
+        Args:
+            _t: T used by this test.
+            _x: X used by this test.
+            _y: Y used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return 1.0, 0.0
 
     img_warped = apply_flow_to_image_callable(img, flow_f, t=0.0)
     if visualize:
-        import matplotlib.pyplot as plt
-        import numpy as np
+        import matplotlib.pyplot as plt  # noqa: PLC0415 - optional or intentionally lazy import
 
         plt.figure(figsize=(8, 4))
         plt.subplot(1, 2, 1)
@@ -108,18 +129,32 @@ def test_flow_apply_to_image(image_shape, visualize=False):
 
 
 @pytest.mark.parametrize("dt", [1.0])
-def test_flow_apply_to_image_forward(dt):
-    """Verify that forward flow correctly shifts pixels to their new coordinates.
+def test_flow_apply_to_image_forward(dt: float) -> None:
+    """Verify forward flow correctly shifts pixels to their new
+    coordinates.
 
     Uses a simple impulse image (single active pixel) to confirm that
     the transformation logic moves data in the intended direction.
+
+    Args:
+        dt: Dt for this test case.
     """
     # 1. Build a simple test image: one bright pixel in the centre.
     img = jnp.zeros((5, 5))
     img = img.at[2, 2].set(1.0)
 
     # 2. Constant horizontal flow (u = +1 px / step, v = 0).
-    def flow_f(_t, _x, _y):
+    def flow_f(_t: Any, _x: Any, _y: Any) -> tuple[float, float]:
+        """Flow f.
+
+        Args:
+            _t: T used by this test.
+            _x: X used by this test.
+            _y: Y used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return 1.0, 0.0
 
     # 3. Apply the flow in the *forward* sense.
@@ -137,7 +172,8 @@ def test_flow_apply_to_image_forward(dt):
 
     # 5. Verify shape, location and intensity.
     assert img_warped.shape == expected.shape, (
-        f"Warped image shape mismatch. Expected {expected.shape}, got {img_warped.shape}"
+        f"Warped image shape mismatch. Expected {expected.shape}"
+        f", got {img_warped.shape}"
     )
     assert jnp.allclose(img_warped, expected), (
         "Forward mapping did not move the pixel correctly."
@@ -145,11 +181,14 @@ def test_flow_apply_to_image_forward(dt):
 
 
 @pytest.mark.parametrize("dt", [1.0])
-def test_apply_flow_to_particles_3d_constant(dt):
+def test_apply_flow_to_particles_3d_constant(dt: float) -> None:
     """Verify 3D particle advection using a constant velocity field.
 
     Ensures that (x, y, z) coordinates are correctly updated based on
     (u, v, w) velocity components and the timestep.
+
+    Args:
+        dt: Dt for this test case.
     """
     # Random particles
     key = jax.random.PRNGKey(42)
@@ -174,7 +213,8 @@ def test_apply_flow_to_particles_3d_constant(dt):
 
     # Verify shape and values
     assert advected.shape == particles.shape, (
-        f"Advected particles shape mismatch. Expected {particles.shape}, got {advected.shape}"
+        f"Advected particles shape mismatch. Expected "
+        f"{particles.shape}, got {advected.shape}"
     )
     assert jnp.allclose(advected, expected), (
         "3D particles displacement produced wrong positions."
@@ -188,18 +228,29 @@ def test_apply_flow_to_particles_3d_constant(dt):
 @pytest.mark.parametrize("intensity_range", [(50, 200)])
 @pytest.mark.parametrize("rho_range", [(-0.5, 0.5)])
 def test_particles_flow_apply_array(
-    selected_flow,
-    seeding_density,
-    image_shape,
-    diameter_range,
-    intensity_range,
-    rho_range,
-    visualize=False,
-):
-    """Test particle advection using an array-based flow field representation.
+    selected_flow: str,
+    seeding_density: float,
+    image_shape: tuple[int, int],
+    diameter_range: tuple[float, float],
+    intensity_range: tuple[float, float],
+    rho_range: tuple[float, float],
+    visualize: bool = False,
+) -> None:
+    """Test particle advection using an array-based flow field
+    representation.
 
     Verifies that the synthetic image generated from advected particles
-    matches the expected state after being warped by the discrete flow field.
+    matches the expected state after being warped by the discrete flow
+    field.
+
+    Args:
+        selected_flow: Name of the analytical flow used as ground truth.
+        seeding_density: Seeding density for this test case.
+        image_shape: Height and width of the output images.
+        diameter_range: Diameter range for this test case.
+        intensity_range: Intensity range for this test case.
+        rho_range: Rho range for this test case.
+        visualize: Visualize for this test case.
     """
 
     # 1. Generate random particles and their characteristics
@@ -267,8 +318,7 @@ def test_particles_flow_apply_array(
     )
 
     if visualize:
-        import matplotlib.pyplot as plt
-        import numpy as np
+        import matplotlib.pyplot as plt  # noqa: PLC0415 - optional or intentionally lazy import
 
         plt.imsave("img.png", np.array(img), cmap="gray")
         plt.imsave("img_warped.png", np.array(img_warped), cmap="gray")
@@ -282,16 +332,21 @@ def test_particles_flow_apply_array(
 @pytest.mark.parametrize(
     "particle_positions", [1, [[1, 2], [3, 4]], [[1, 2, 3], [4, 5, 6]]]
 )
-def test_invalid_particle_positions(particle_positions):
-    """Test that providing particle positions with invalid rank or dimensions raises a ValueError.
+def test_invalid_particle_positions(particle_positions: Any) -> None:
+    """Test that providing particle positions with invalid rank or
+    dimensions raises a ValueError.
 
-    Validates that input arrays are 2D with either 2 (2D) or 3 (3D) components.
+    Validates that input arrays are 2D with either 2 (2D) or 3 (3D)
+    components.
+
+    Args:
+        particle_positions: Particle positions for this test case.
     """
     flow_field = jnp.zeros((128, 128, 2))
     with pytest.raises(
         ValueError,
         match=(
-            "Particle_positions must be a 2D jnp.ndarray with shape "
+            r"Particle_positions must be a 2D jnp.ndarray with shape "
             "\\(N, 2\\) or \\(N, 3\\)"
         ),
     ):
@@ -308,23 +363,28 @@ def test_invalid_particle_positions(particle_positions):
         [[[10, 20, 30]]],
     ],
 )
-def test_invalid_flow_field(flow_field):
-    """Test that providing flow fields with invalid rank or components raises a ValueError.
+def test_invalid_flow_field(flow_field: Any) -> None:
+    """Test that providing flow fields with invalid rank or components
+    raises a ValueError.
 
-    Expects a 3D array (H, W, C) where C matches the dimensionality
-    of the particle positions.
+    Expects a 3D array (H, W, C) where C matches the dimensionality of
+    the particle positions.
+
+    Args:
+        flow_field: Flow field supplied to the operation under test.
     """
     particle_positions = jnp.zeros((1, 2))
     with pytest.raises(
         ValueError,
         match=(
-            "Flow_field must be a 3D jnp.ndarray with shape "
+            r"Flow_field must be a 3D jnp.ndarray with shape "
             "\\(H, W, 2\\) or \\(H, W, 3\\)"
         ),
     ):
         input_check_apply_flow(particle_positions, flow_field)
 
-#NOTE: issue #232 proposes solving this.
+
+# NOTE: issue #232 proposes solving this.
 # We make code operational while it hasn't beeen closed yet.
 @pytest.mark.to_fix
 @pytest.mark.parametrize(
@@ -333,19 +393,28 @@ def test_invalid_flow_field(flow_field):
         (
             jnp.zeros((128, 128, 3)),
             jnp.zeros((1, 2)),
-            "Particle positions are in 2D, but the flow field is in 3D.",
+            ("Particle positions are in 2D, but the flow field is in 3D."),
         ),
         (
             jnp.zeros((128, 128, 2)),
             jnp.zeros((1, 3)),
-            "Particle positions are in 3D, but the flow field is in 2D.",
+            ("Particle positions are in 3D, but the flow field is in 2D."),
         ),
     ],
 )
-def test_invalid_flow_field_shape(flow_field, particle_positions, error_msg):
-    """Test for mismatches between particle dimensionality and flow field components.
+def test_invalid_flow_field_shape(
+    flow_field: Any, particle_positions: Any, error_msg: Any
+) -> None:
+    """Test for mismatches between particle dimensionality and flow field
+    components.
 
-    Ensures that 2D particles cannot be advected by 3D flows and vice-versa.
+    Ensures that 2D particles cannot be advected by 3D flows and
+    vice-versa.
+
+    Args:
+        flow_field: Flow field supplied to the operation under test.
+        particle_positions: Particle positions for this test case.
+        error_msg: Error msg for this test case.
     """
     with pytest.raises(
         ValueError,
@@ -357,8 +426,12 @@ def test_invalid_flow_field_shape(flow_field, particle_positions, error_msg):
 @pytest.mark.parametrize(
     "dt", ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])]
 )
-def test_invalid_dt(dt):
-    """Test that invalid dt raise a ValueError."""
+def test_invalid_dt(dt: Any) -> None:
+    """Test that invalid dt raise a ValueError.
+
+    Args:
+        dt: Dt for this test case.
+    """
     particle_positions = jnp.zeros((1, 2))
     flow_field = jnp.zeros((128, 128, 2))
     with pytest.raises(
@@ -371,13 +444,17 @@ def test_invalid_dt(dt):
     "flow_field_res_x",
     ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])],
 )
-def test_invalid_flow_field_res_x(flow_field_res_x):
-    """Test that invalid flow_field_res_x raise a ValueError."""
+def test_invalid_flow_field_res_x(flow_field_res_x: Any) -> None:
+    """Test that invalid flow_field_res_x raise a ValueError.
+
+    Args:
+        flow_field_res_x: Flow field res x for this test case.
+    """
     particle_positions = jnp.zeros((1, 2))
     flow_field = jnp.zeros((128, 128, 2))
     with pytest.raises(
         ValueError,
-        match="flow_field_res_x must be a positive scalar \\(int or float\\)",
+        match=("flow_field_res_x must be a positive scalar \\(int or float\\)"),
     ):
         input_check_apply_flow(
             particle_positions, flow_field, flow_field_res_x=flow_field_res_x
@@ -388,13 +465,17 @@ def test_invalid_flow_field_res_x(flow_field_res_x):
     "flow_field_res_y",
     ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])],
 )
-def test_invalid_flow_field_res_y(flow_field_res_y):
-    """Test that invalid flow_field_res_y raise a ValueError."""
+def test_invalid_flow_field_res_y(flow_field_res_y: Any) -> None:
+    """Test that invalid flow_field_res_y raise a ValueError.
+
+    Args:
+        flow_field_res_y: Flow field res y for this test case.
+    """
     particle_positions = jnp.zeros((1, 2))
     flow_field = jnp.zeros((128, 128, 2))
     with pytest.raises(
         ValueError,
-        match="flow_field_res_y must be a positive scalar \\(int or float\\)",
+        match=("flow_field_res_y must be a positive scalar \\(int or float\\)"),
     ):
         input_check_apply_flow(
             particle_positions, flow_field, flow_field_res_y=flow_field_res_y
@@ -405,13 +486,17 @@ def test_invalid_flow_field_res_y(flow_field_res_y):
     "flow_field_res_z",
     ["a", [1, 2], jnp.array([1, 2]), jnp.array([[1, 2]])],
 )
-def test_invalid_flow_field_res_z(flow_field_res_z):
-    """Test that invalid flow_field_res_z raise a ValueError."""
+def test_invalid_flow_field_res_z(flow_field_res_z: Any) -> None:
+    """Test that invalid flow_field_res_z raise a ValueError.
+
+    Args:
+        flow_field_res_z: Flow field res z for this test case.
+    """
     particle_positions = jnp.zeros((1, 2))
     flow_field = jnp.zeros((128, 128, 2))
     with pytest.raises(
         ValueError,
-        match="flow_field_res_z must be a positive scalar \\(int or float\\)",
+        match=("flow_field_res_z must be a positive scalar \\(int or float\\)"),
     ):
         input_check_apply_flow(
             particle_positions, flow_field, flow_field_res_z=flow_field_res_z
@@ -427,12 +512,17 @@ def test_invalid_flow_field_res_z(flow_field_res_z):
 @pytest.mark.parametrize("seeding_density", [0.016])
 @pytest.mark.parametrize("image_shape", [(1216, 1936)])
 def test_speed_apply_flow_to_particles(
-    seeding_density, selected_flow, image_shape
-):
+    seeding_density: float, selected_flow: str, image_shape: tuple[int, int]
+) -> None:
     """Benchmark performance of GPU-parallelized particle advection.
 
     Uses `shard_map` to distribute particles across available GPUs and
     verifies that the advection completion time is within tight limits.
+
+    Args:
+        seeding_density: Seeding density for this test case.
+        selected_flow: Name of the analytical flow used as ground truth.
+        image_shape: Height and width of the output images.
     """
 
     # Name of the axis for the device mesh
@@ -458,7 +548,8 @@ def test_speed_apply_flow_to_particles(
     # Setup device mesh
     # We want to shard the particles along the first axis
     # and replicate the flow field along all devices.
-    # The idea is that each device will apply the flow to a part of the particles
+    # The idea is that each device will apply the flow to a part of the
+    # particles
     # and then we will combine the results.
     mesh = Mesh(devices, axis_names=(shard_particles))
 
@@ -476,7 +567,8 @@ def test_speed_apply_flow_to_particles(
     )
 
     # 2. Send the particles to the devices
-    # To make the test also consider the time of sending the variables to the devices
+    # To make the test also consider the time of sending the variables to the
+    # devices
     # comment the next lines
     sharding_particles = NamedSharding(mesh, PartitionSpec(shard_particles))
     particles = jax.device_put(particles, sharding_particles)
@@ -493,7 +585,8 @@ def test_speed_apply_flow_to_particles(
     # 5. Create the jit function
     apply_flow_to_particles_jit = jax.jit(apply_flow_to_particles)
 
-    def run_apply_jit():
+    def run_apply_jit() -> None:
+        """Run apply jit."""
         result = apply_flow_to_particles_jit(particles, flow_field_replicated)
         result.block_until_ready()
 

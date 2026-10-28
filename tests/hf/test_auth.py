@@ -10,13 +10,26 @@ import pytest
 from synthpix.hf import auth
 
 
-def _clear_env(monkeypatch):
-    """Remove every HF-related env var to start each test from a blank slate."""
+def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Remove every HF-related env var to start each test from a blank
+    slate.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+    """
     monkeypatch.delenv("HF_TOKEN", raising=False)
     monkeypatch.delenv("HF_HUB_TOKEN", raising=False)
 
 
-def test_resolve_token_prefers_explicit_argument(monkeypatch):
+def test_resolve_token_prefers_explicit_argument(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify resolve token prefers explicit argument.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     _clear_env(monkeypatch)
     monkeypatch.setenv("HF_TOKEN", "env-token")
     monkeypatch.setenv("HF_HUB_TOKEN", "hub-token")
@@ -26,7 +39,15 @@ def test_resolve_token_prefers_explicit_argument(monkeypatch):
     assert result == "explicit-token"
 
 
-def test_resolve_token_uses_hf_token_when_no_explicit(monkeypatch):
+def test_resolve_token_uses_hf_token_when_no_explicit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify resolve token uses hf token when no explicit.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     _clear_env(monkeypatch)
     monkeypatch.setenv("HF_TOKEN", "env-token")
     monkeypatch.setenv("HF_HUB_TOKEN", "hub-token")
@@ -36,7 +57,15 @@ def test_resolve_token_uses_hf_token_when_no_explicit(monkeypatch):
     assert result == "env-token"
 
 
-def test_resolve_token_uses_hf_hub_token_when_hf_token_missing(monkeypatch):
+def test_resolve_token_uses_hf_hub_token_when_hf_token_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify resolve token uses hf hub token when hf token missing.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     _clear_env(monkeypatch)
     monkeypatch.setenv("HF_HUB_TOKEN", "hub-token")
 
@@ -45,7 +74,15 @@ def test_resolve_token_uses_hf_hub_token_when_hf_token_missing(monkeypatch):
     assert result == "hub-token"
 
 
-def test_resolve_token_ignores_empty_strings(monkeypatch):
+def test_resolve_token_ignores_empty_strings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify resolve token ignores empty strings.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     _clear_env(monkeypatch)
     monkeypatch.setenv("HF_TOKEN", "")
     monkeypatch.setenv("HF_HUB_TOKEN", "hub-token")
@@ -55,7 +92,15 @@ def test_resolve_token_ignores_empty_strings(monkeypatch):
     assert result == "hub-token"
 
 
-def test_resolve_token_falls_back_to_cached(monkeypatch):
+def test_resolve_token_falls_back_to_cached(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify resolve token falls back to cached.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     pytest.importorskip("huggingface_hub")
     _clear_env(monkeypatch)
 
@@ -70,19 +115,27 @@ def test_resolve_token_falls_back_to_cached(monkeypatch):
     assert result == "cached-token"
 
 
-def test_resolve_token_uses_modern_get_token_without_hffolder(monkeypatch):
-    """Regression: hub 1.x removed ``HfFolder``; ``get_token`` must be used.
+def test_resolve_token_uses_modern_get_token_without_hffolder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: hub 1.x removed ``HfFolder``; ``get_token`` must be
+    used.
 
-    Installs a fake ``huggingface_hub`` module that exposes ``get_token``
-    but NOT ``HfFolder`` (mirroring huggingface_hub >= 1.0). The old
-    ``_cached_token`` did ``from huggingface_hub import HfFolder`` which
-    raised inside the lazy ``__getattr__`` and was swallowed, so the
-    cached token was silently never found.
+    Installs a fake ``huggingface_hub`` module that exposes
+    ``get_token`` but NOT ``HfFolder`` (mirroring huggingface_hub >=
+    1.0). The old ``_cached_token`` did ``from huggingface_hub import
+    HfFolder`` which raised inside the lazy ``__getattr__`` and was
+    swallowed, so the cached token was silently never found.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
     """
     _clear_env(monkeypatch)
 
     fake_hub = types.ModuleType("huggingface_hub")
-    fake_hub.get_token = lambda: "cli-cached-token"  # type: ignore[attr-defined]
+    monkeypatch.setattr(
+        fake_hub, "get_token", lambda: "cli-cached-token", raising=False
+    )
     assert not hasattr(fake_hub, "HfFolder")
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hub)
 
@@ -91,18 +144,32 @@ def test_resolve_token_uses_modern_get_token_without_hffolder(monkeypatch):
     assert result == "cli-cached-token"
 
 
-def test_resolve_token_cached_empty_string_is_ignored(monkeypatch):
-    """An empty cached token must be treated as missing (-> ``None``)."""
+def test_resolve_token_cached_empty_string_is_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty cached token must be treated as missing (-> ``None``).
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+    """
     _clear_env(monkeypatch)
 
     fake_hub = types.ModuleType("huggingface_hub")
-    fake_hub.get_token = lambda: ""  # type: ignore[attr-defined]
+    monkeypatch.setattr(fake_hub, "get_token", lambda: "", raising=False)
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hub)
 
     assert auth.resolve_token() is None
 
 
-def test_resolve_token_returns_none_when_nothing_set(monkeypatch):
+def test_resolve_token_returns_none_when_nothing_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify resolve token returns none when nothing set.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     _clear_env(monkeypatch)
 
     # Force the lazy import to fail so we exercise the safe branch when
@@ -114,7 +181,15 @@ def test_resolve_token_returns_none_when_nothing_set(monkeypatch):
     assert result is None
 
 
-def test_resolve_token_does_not_raise_when_hub_missing(monkeypatch):
+def test_resolve_token_does_not_raise_when_hub_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify resolve token does not raise when hub missing.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     _clear_env(monkeypatch)
     monkeypatch.setitem(sys.modules, "huggingface_hub", None)
 

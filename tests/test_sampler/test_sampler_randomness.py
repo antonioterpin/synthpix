@@ -1,11 +1,15 @@
 """Unit tests for the hybrid randomness logic in SyntheticImageSampler.
 
-These tests verify that the sampler correctly handles deterministic randomness
-from both Grain-provided seeds (modern path) and its own internal RNG (legacy path).
-They also ensure that the sampler's state (RNG and step counter) is correctly
-managed for checkpointing reproducibility using the high-level `make` API.
+These tests verify that the sampler correctly handles deterministic
+randomness from both Grain-provided seeds (modern path) and its own
+internal RNG (legacy path). They also ensure that the sampler's
+state (RNG and step counter) is correctly managed for checkpointing
+reproducibility using the high-level `make` API.
 """
 
+from __future__ import annotations
+
+from pathlib import Path
 from typing import Any, cast
 
 import jax
@@ -15,13 +19,21 @@ import pytest
 
 from synthpix import make, save_checkpoint
 from synthpix.sampler import SyntheticImageSampler
+from synthpix.sampler.real import RealImageSampler
 from synthpix.scheduler import SchedulerProtocol
 from synthpix.types import ImageGenerationSpecification, SchedulerData
 
 
 @pytest.fixture
-def dummy_data(tmp_path):
-    """Creates a dummy .npy dataset for testing."""
+def dummy_data(tmp_path: Path) -> list[str]:
+    """Creates a dummy .npy dataset for testing.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     data_dir = tmp_path / "data"
     data_dir.mkdir()
 
@@ -35,8 +47,15 @@ def dummy_data(tmp_path):
 
 
 @pytest.fixture
-def base_config(dummy_data):
-    """Base configuration for tests."""
+def base_config(dummy_data: list[str]) -> dict[str, Any]:
+    """Base configuration for tests.
+
+    Args:
+        dummy_data: Dummy data for this test case.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     return {
         "scheduler_class": ".npy",
         "file_list": dummy_data,
@@ -72,8 +91,13 @@ def base_config(dummy_data):
     }
 
 
-def test_sampler_grain_randomness_path(base_config):
-    """Verify that the sampler uses Grain-provided seeds when available."""
+def test_sampler_grain_randomness_path(base_config: dict[str, Any]) -> None:
+    """Verify the sampler uses Grain-provided seeds when available.
+
+    Args:
+        base_config: Valid sampler configuration to customize for this
+            case.
+    """
     # Initialize with Grain scheduler
     sampler = cast(
         SyntheticImageSampler, make(base_config, use_grain_scheduler=True)
@@ -107,8 +131,14 @@ def test_sampler_grain_randomness_path(base_config):
     )
 
 
-def test_sampler_legacy_randomness_path(base_config):
-    """Verify that the sampler falls back to internal RNG if using legacy scheduler."""
+def test_sampler_legacy_randomness_path(base_config: dict[str, Any]) -> None:
+    """Verify the sampler falls back to internal RNG if using legacy
+    scheduler.
+
+    Args:
+        base_config: Valid sampler configuration to customize for this
+            case.
+    """
     # Initialize with Legacy scheduler
     sampler = cast(
         SyntheticImageSampler, make(base_config, use_grain_scheduler=False)
@@ -128,8 +158,16 @@ def test_sampler_legacy_randomness_path(base_config):
     )
 
 
-def test_sampler_checkpoint_state_consistency(base_config, tmp_path):
-    """Verify that get_state (via make) preserves state structure."""
+def test_sampler_checkpoint_state_consistency(
+    base_config: dict[str, Any], tmp_path: Path
+) -> None:
+    """Verify get_state (via make) preserves state structure.
+
+    Args:
+        base_config: Valid sampler configuration to customize for this
+            case.
+        tmp_path: Temporary directory for this test.
+    """
     sampler = cast(
         SyntheticImageSampler, make(base_config, use_grain_scheduler=True)
     )
@@ -147,8 +185,16 @@ def test_sampler_checkpoint_state_consistency(base_config, tmp_path):
     assert "scheduler_state" in state
 
 
-def test_sampler_bit_perfect_reproducibility(base_config, tmp_path):
-    """Verify bit-perfect reproducibility using make API."""
+def test_sampler_bit_perfect_reproducibility(
+    base_config: dict[str, Any], tmp_path: Path
+) -> None:
+    """Verify bit-perfect reproducibility using make API.
+
+    Args:
+        base_config: Valid sampler configuration to customize for this
+            case.
+        tmp_path: Temporary directory for this test.
+    """
     checkpoint_dir = tmp_path / "checkpoints_repro"
 
     # 1. Ground Truth Run
@@ -181,14 +227,24 @@ def test_sampler_bit_perfect_reproducibility(base_config, tmp_path):
     assert jnp.allclose(gt_batch.images1, resumed_batch.images1), (
         "Images should be bit-perfectly identical after restore"
     )
+    assert gt_batch.keys is not None
+    assert resumed_batch.keys is not None
     assert jnp.array_equal(gt_batch.keys, resumed_batch.keys), (
         "Keys should be bit-perfectly identical after restore"
     )
     assert resumed_sampler._step == gt_step
 
 
-def test_sampler_repetition_logic_across_resumes(base_config, tmp_path):
-    """Verify repetition index restoration using make API."""
+def test_sampler_repetition_logic_across_resumes(
+    base_config: dict[str, Any], tmp_path: Path
+) -> None:
+    """Verify repetition index restoration using make API.
+
+    Args:
+        base_config: Valid sampler configuration to customize for this
+            case.
+        tmp_path: Temporary directory for this test.
+    """
     checkpoint_dir = tmp_path / "checkpoints_reps"
 
     # Force reuse config
@@ -223,7 +279,7 @@ def test_sampler_repetition_logic_across_resumes(base_config, tmp_path):
     # Capture original flow BEFORE save (hacky access for test)
     original_flows = sampler._current_flows
 
-    batch = next(new_sampler)
+    next(new_sampler)
     assert new_sampler._batches_generated == 2
 
     # Verify flows match original
@@ -235,17 +291,42 @@ def test_sampler_repetition_logic_across_resumes(base_config, tmp_path):
 
 
 class MockScheduler(SchedulerProtocol):
-    def __init__(self, flow_fields_per_batch, flow_shape=(20, 20, 2)):
+    """Mock Scheduler test double."""
+
+    def __init__(
+        self,
+        flow_fields_per_batch: int,
+        flow_shape: tuple[int, int, int] = (20, 20, 2),
+    ) -> None:
+        """Initialize the test double.
+
+        Args:
+            flow_fields_per_batch: Flow fields per batch for this test case.
+            flow_shape: Flow shape for this test case.
+        """
         self.flow_fields_per_batch = flow_fields_per_batch
         self.flow_shape = flow_shape
         self._file_list = []
         self._state = {}
 
-    def get_flow_fields_shape(self):
+    def get_flow_fields_shape(self) -> tuple[int, int, int]:
+        """Get flow fields shape.
+
+        Returns:
+            The result used by the test assertions.
+        """
         # returns (H, W, 2)
         return self.flow_shape
 
-    def get_batch(self, batch_size):
+    def get_batch(self, batch_size: int) -> SchedulerData:
+        """Get batch.
+
+        Args:
+            batch_size: Batch size used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         # Returns SchedulerData
         # Flow fields: (B, H, W, 2)
         flows = np.zeros((batch_size, *self.flow_shape))
@@ -264,40 +345,68 @@ class MockScheduler(SchedulerProtocol):
         )
 
     def shutdown(self) -> None:
+        """Shutdown."""
         pass
 
     def reset(self) -> None:
+        """Reset."""
         pass
 
     @property
     def file_list(self) -> list[str]:
+        """File list.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return self._file_list
 
     @file_list.setter
     def file_list(self, value: list[str]) -> None:
+        """File list.
+
+        Args:
+            value: Value used by this test.
+        """
         self._file_list = value
 
     @property
     def state(self) -> dict[str, Any]:
+        """State.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return self._state
 
     @state.setter
     def state(self, value: dict[str, Any]) -> None:
+        """State.
+
+        Args:
+            value: Value used by this test.
+        """
         self._state = value
 
     @property
     def grain_iterator(self) -> Any | None:
+        """Grain iterator.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return None
 
 
-def test_jax_seeds_uniqueness():
+def test_jax_seeds_uniqueness() -> None:
     """Test each image and jax seed are different"""
     # flow_fields_per_batch = 1
     # batch_size = 4
     # This implies that the single flow field and its corresponding seed
     # will be tiled/repeated 4 times in the batch expansion.
     # We want to verify that despite using the same seed due to tiling,
-    # the generated output (specifically random parameters) differs across the batch.
+    # the generated output (specifically random parameters) differs across the
+    # batch.
 
     batch_size = 4
     flow_fields_per_batch = 1
@@ -328,7 +437,8 @@ def test_jax_seeds_uniqueness():
         min_speed_y=0.0,
         output_units="pixels",
         generation_specification=spec,
-        # Use single device logic - sharding is handled internally but with 1 device it's just batch
+        # Use single device logic - sharding is handled internally but with 1
+        # device it's just batch
         device_ids=[0],
     )
 
@@ -341,6 +451,8 @@ def test_jax_seeds_uniqueness():
     )
 
     params = batch.params
+
+    assert params is not None
     # Seeding densities: sampled per image.
     seeding_densities = params.seeding_densities
 
@@ -357,12 +469,20 @@ def test_jax_seeds_uniqueness():
         flow_fields_per_batch, flow_shape=(20, 20, 2)
     )
 
-    def get_batch_keys(bs):
+    def get_batch_keys(bs: int) -> SchedulerData:
+        """Get batch keys.
+
+        Args:
+            bs: Bs used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         flows = np.zeros((bs, 20, 20, 2))
         jax_seeds = jax.random.split(jax.random.PRNGKey(0), bs)
-        return SchedulerData(flow_fields=flows, jax_seed=jax_seeds)
+        return SchedulerData(flow_fields=flows, jax_seed=np.asarray(jax_seeds))
 
-    scheduler_keys.get_batch = get_batch_keys
+    scheduler_keys.get_batch = get_batch_keys  # pyright: ignore[reportAttributeAccessIssue]
 
     sampler_keys = SyntheticImageSampler(
         scheduler=scheduler_keys,
@@ -386,8 +506,13 @@ def test_jax_seeds_uniqueness():
     print("Successfully generated batch using keys as seeds")
 
 
-def test_sampler_keys_uniqueness_and_ids(base_config):
-    """Verify that keys are unique across the batch and can serve as IDs."""
+def test_sampler_keys_uniqueness_and_ids(base_config: dict[str, Any]) -> None:
+    """Verify keys are unique across the batch and can serve as IDs.
+
+    Args:
+        base_config: Valid sampler configuration to customize for this
+            case.
+    """
     sampler = cast(
         SyntheticImageSampler, make(base_config, use_grain_scheduler=True)
     )
@@ -401,8 +526,15 @@ def test_sampler_keys_uniqueness_and_ids(base_config):
     assert len(set(key_tuples)) == len(key_tuples), "Batch keys must be unique"
 
 
-def test_sampler_keys_across_steps_and_reps(base_config):
-    """Verify that keys change across different steps and repetitions."""
+def test_sampler_keys_across_steps_and_reps(
+    base_config: dict[str, Any],
+) -> None:
+    """Verify keys change across different steps and repetitions.
+
+    Args:
+        base_config: Valid sampler configuration to customize for this
+            case.
+    """
     config = base_config.copy()
     config["batches_per_flow_batch"] = 2
     sampler = cast(
@@ -422,9 +554,18 @@ def test_sampler_keys_across_steps_and_reps(base_config):
     keys3 = batch3.keys
 
     # All should be different
-    def keys_to_set(keys):
+    def keys_to_set(keys: jax.Array) -> Any:
+        """Keys to set.
+
+        Args:
+            keys: Keys used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return {tuple(k.tolist()) for k in keys}
 
+    assert keys1 is not None and keys2 is not None and keys3 is not None
     s1, s2, s3 = keys_to_set(keys1), keys_to_set(keys2), keys_to_set(keys3)
 
     assert s1.isdisjoint(s2), (
@@ -436,22 +577,41 @@ def test_sampler_keys_across_steps_and_reps(base_config):
     )
 
 
-def test_real_sampler_keys(base_config):
-    """Verify that RealImageSampler also provides unique keys."""
+def test_real_sampler_keys(base_config: dict[str, Any]) -> None:
+    """Verify RealImageSampler also provides unique keys.
+
+    Args:
+        base_config: Valid sampler configuration to customize for this
+            case.
+    """
 
     class RealMockScheduler(MockScheduler):
+        """Real Mock Scheduler test double."""
+
         @property
-        def include_images(self):
+        def include_images(self) -> bool:
+            """Include images.
+
+            Returns:
+                The result used by the test assertions.
+            """
             return True
 
-        def get_batch(self, batch_size):
+        def get_batch(self, batch_size: int) -> SchedulerData:
+            """Get batch.
+
+            Args:
+                batch_size: Batch size used by this test.
+
+            Returns:
+                The result used by the test assertions.
+            """
             data = super().get_batch(batch_size)
             # Add dummy images
             images = np.zeros((batch_size, 32, 32))
             return data.update(images1=images, images2=images)
 
     scheduler = RealMockScheduler(flow_fields_per_batch=2)
-    from synthpix.sampler.real import RealImageSampler
 
     sampler = RealImageSampler(scheduler=scheduler, batch_size=2)
 

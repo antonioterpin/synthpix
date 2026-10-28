@@ -1,22 +1,30 @@
 """Tests for image masking during synthetic data generation.
 
-These tests verify that binary masks are correctly loaded and applied to
-generated images, ensuring that masked regions are strictly zeroed out
-while unmasked regions retain their rendered content.
+These tests verify that binary masks are correctly loaded and
+applied to generated images, ensuring that masked regions are
+strictly zeroed out while unmasked regions retain their rendered
+content.
 """
 
+from __future__ import annotations
+
 import re
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
+import synthpix.data_generate as generate_mod
 from synthpix.data_generate import (
     generate_images_from_flow,
     input_check_gen_img_from_flow,
 )
 from synthpix.sampler import SyntheticImageSampler
+from synthpix.scheduler.protocol import SchedulerProtocol
 from synthpix.types import ImageGenerationSpecification
 
 # Import existing modules
@@ -26,8 +34,21 @@ sampler_config = load_configuration("config/test_data.yaml")
 
 
 @pytest.fixture
-def mock_invalid_mask_file(tmp_path, numpy_test_dims, request):
-    """Create and save a numpy invalid mask to a temporary file."""
+def mock_invalid_mask_file(
+    tmp_path: Path,
+    numpy_test_dims: dict[str, int],
+    request: pytest.FixtureRequest,
+) -> Iterator[tuple[str, dict[str, int]]]:
+    """Create and save a numpy invalid mask to a temporary file.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+        numpy_test_dims: Numpy test dims for this test case.
+        request: Fixture request with indirect test parameters.
+
+    Yields:
+        tuple[str, dict[str, int]]: Fixture data retained until teardown.
+    """
     shape = numpy_test_dims["height"], numpy_test_dims["width"]
     value = getattr(request, "param", 2)
 
@@ -39,8 +60,18 @@ def mock_invalid_mask_file(tmp_path, numpy_test_dims, request):
 
 
 @pytest.fixture
-def mock_mask_file(tmp_path, numpy_test_dims):
-    """Create and save a numpy mask to a temporary file."""
+def mock_mask_file(
+    tmp_path: Path, numpy_test_dims: dict[str, int]
+) -> Iterator[tuple[str, dict[str, int]]]:
+    """Create and save a numpy mask to a temporary file.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+        numpy_test_dims: Numpy test dims for this test case.
+
+    Yields:
+        tuple[str, dict[str, int]]: Fixture data retained until teardown.
+    """
     shape = numpy_test_dims["height"], numpy_test_dims["width"]
 
     path = tmp_path / "mask.npy"
@@ -64,13 +95,19 @@ def mock_mask_file(tmp_path, numpy_test_dims):
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_mask_type(mask, scheduler):
-    """Test that the sampler rejects non-string mask paths during initialization.
+def test_invalid_mask_type(mask: Any, scheduler: SchedulerProtocol) -> None:
+    """Test that the sampler rejects non-string mask paths during
+    initialization.
 
-    The `mask` parameter in the configuration should be a path to a `.npy` file.
+    The `mask` parameter in the configuration should be a path to a
+    `.npy` file.
+
+    Args:
+        mask: Validity flags or invalid input used by this case.
+        scheduler: Scheduler fixture or test double under test.
     """
     with pytest.raises(
-        ValueError, match="mask must be a string representing the mask path."
+        ValueError, match=r"mask must be a string representing the mask path."
     ):
         config = sampler_config.copy()
         config["mask"] = mask
@@ -93,8 +130,14 @@ def test_invalid_mask_type(mask, scheduler):
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_mask_path(mask, scheduler):
-    """Test that the sampler raises a ValueError for missing or invalid mask file paths."""
+def test_invalid_mask_path(mask: Any, scheduler: SchedulerProtocol) -> None:
+    """Test that the sampler raises a ValueError for missing or invalid
+    mask file paths.
+
+    Args:
+        mask: Validity flags or invalid input used by this case.
+        scheduler: Scheduler fixture or test double under test.
+    """
     with pytest.raises(ValueError, match=f"Mask file {mask} does not exist."):
         config = sampler_config.copy()
         config["mask"] = mask
@@ -111,10 +154,20 @@ def test_invalid_mask_path(mask, scheduler):
 @pytest.mark.parametrize(
     "mock_invalid_mask_file", [0.0, 1.0, 0.0], indirect=True
 )
-def test_invalid_mask_shape(scheduler, mock_invalid_mask_file, image_shape):
-    """Test that a mask with dimensions mismatched to the image raises a ValueError.
+def test_invalid_mask_shape(
+    scheduler: SchedulerProtocol, mock_invalid_mask_file: Any, image_shape: Any
+) -> None:
+    """Test that a mask with dimensions mismatched to the image raises a
+    ValueError.
 
-    Ensures that the mask can be applied bitwise without shape broadcasting issues.
+    Ensures that the mask can be applied bitwise without shape
+    broadcasting issues.
+
+    Args:
+        scheduler: Scheduler fixture or test double under test.
+        mock_invalid_mask_file: Mock invalid mask file for this test
+            case.
+        image_shape: Height and width of the output images.
     """
     # Create a dummy mask with an invalid shape
     mask = jnp.array(np.load(mock_invalid_mask_file[0]))
@@ -141,16 +194,25 @@ def test_invalid_mask_shape(scheduler, mock_invalid_mask_file, image_shape):
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_invalid_mask_values(scheduler, mock_invalid_mask_file):
-    """Test that masks containing values other than 0 or 1 raise a ValueError.
+def test_invalid_mask_values(
+    scheduler: SchedulerProtocol, mock_invalid_mask_file: Any
+) -> None:
+    """Test that masks containing values other than 0 or 1 raise a
+    ValueError.
 
-    Masks are expected to be binary indicators for valid/invalid regions.
+    Masks are expected to be binary indicators for valid/invalid
+    regions.
+
+    Args:
+        scheduler: Scheduler fixture or test double under test.
+        mock_invalid_mask_file: Mock invalid mask file for this test
+            case.
     """
     # Create a dummy mask with an invalid shape
     mask = jnp.array(np.load(mock_invalid_mask_file[0]))
 
     with pytest.raises(
-        ValueError, match="Mask must only contain 0 and 1 values."
+        ValueError, match=r"Mask must only contain 0 and 1 values."
     ):
         config = sampler_config.copy()
         config["mask"] = mock_invalid_mask_file[0]
@@ -164,10 +226,17 @@ def test_invalid_mask_values(scheduler, mock_invalid_mask_file):
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": False}], indirect=True
 )
-def test_mask_is_correct(scheduler, mock_mask_file):
-    """Test that a valid mask is correctly loaded and stored in the sampler.
+def test_mask_is_correct(
+    scheduler: SchedulerProtocol, mock_mask_file: str
+) -> None:
+    """Test that a valid mask is correctly loaded and stored in the
+    sampler.
 
     Verifies the integrity of the mask data after being read from disk.
+
+    Args:
+        scheduler: Scheduler fixture or test double under test.
+        mock_mask_file: Mock mask file for this test case.
     """
     # Create a dummy mask with a valid shape
     mask = jnp.array(np.load(mock_mask_file[0]))
@@ -181,23 +250,30 @@ def test_mask_is_correct(scheduler, mock_mask_file):
     )
 
     assert isinstance(sampler.mask_images, jnp.ndarray), (
-        f"Expected mask_images to be jnp.ndarray, got {type(sampler.mask_images)}"
+        f"Expected mask_images to be jnp.ndarray, got "
+        f"{type(sampler.mask_images)}"
     )
     assert sampler.mask_images.shape == mask.shape, (
-        f"Mask shape mismatch. Expected {mask.shape}, got {sampler.mask_images.shape}"
+        f"Mask shape mismatch. Expected {mask.shape}, got "
+        f"{sampler.mask_images.shape}"
     )
     assert jnp.array_equal(sampler.mask_images, mask), (
         "Mask loaded from file does not match the expected mask."
     )
 
 
-def test_input_check_gen_img_from_flow_logs_mask(monkeypatch):
-    """Test that the input_check_gen_img_from_flow function logs the mask shape."""
+def test_input_check_gen_img_from_flow_logs_mask(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that the input_check_gen_img_from_flow function logs the mask
+    shape.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+    """
     flow_field = jnp.zeros((1, 8, 8, 2))
     image_shape = (4, 4)
     mask = jnp.ones(image_shape)
-
-    import synthpix.data_generate as generate_mod
 
     # Collect debug messages
     logged = []
@@ -222,14 +298,20 @@ def test_input_check_gen_img_from_flow_logs_mask(monkeypatch):
 
 
 @pytest.mark.parametrize("mask", ["a", [1, 2]])
-def test_invalid_mask_type_in_generate(mask):
-    """Test that direct calls to generation functions reject non-array masks.
+def test_invalid_mask_type_in_generate(mask: Any) -> None:
+    """Test that direct calls to generation functions reject non-array
+    masks.
 
     Ensures type safety in the low-level rendering API.
+
+    Args:
+        mask: Validity flags or invalid input used by this case.
     """
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
-    with pytest.raises(ValueError, match="mask must be a jnp.ndarray or None."):
+    with pytest.raises(
+        ValueError, match=r"mask must be a jnp.ndarray or None."
+    ):
         input_check_gen_img_from_flow(
             flow_field=flow_field,
             mask=mask,
@@ -247,8 +329,12 @@ def test_invalid_mask_type_in_generate(mask):
         jnp.ones((128, 128, 1)),
     ],  # Invalid shapes
 )
-def test_invalid_mask_shape_in_generate(mask):
-    """Test that generation functions enforce mask-image shape matching."""
+def test_invalid_mask_shape_in_generate(mask: Any) -> None:
+    """Test that generation functions enforce mask-image shape matching.
+
+    Args:
+        mask: Validity flags or invalid input used by this case.
+    """
     flow_field = jnp.zeros((1, 128, 128, 2))
     image_shape = (128, 128)
     with pytest.raises(
@@ -275,11 +361,15 @@ def test_invalid_mask_shape_in_generate(mask):
         jnp.zeros((32, 32)),  # all masked (everything should be zero)
     ],
 )
-def test_mask_applies_zeros(mask):
-    """Verify that the mask correctly zeros out specific regions in the output images.
+def test_mask_applies_zeros(mask: jax.Array) -> None:
+    """Verify the mask correctly zeros out specific regions in the output
+    images.
 
     Tests multiple mask geometries (identity, horizontal, eye, full) and
     confirms that pixels are zeroed exactly where indicated.
+
+    Args:
+        mask: Validity flags or invalid input used by this case.
     """
     key = jax.random.PRNGKey(1)
     flow_field = jnp.zeros((1, 32, 32, 2))  # no motion

@@ -1,16 +1,20 @@
 """Tests for KinematicDataSource.
 
-KinematicDataSource generates smooth random displacement fields in-memory
-(the kinematic-training RFG of Manickathan et al. 2022) according to the
-equation ds_ref = a * G_sigma * xi, where xi is independent U(-1, 1) noise,
-G_sigma is a Gaussian filter, and a is the per-field scale. ``scale_mode``
-selects how a is applied: ``"peak"`` (default) normalizes each field so its
-peak displacement magnitude equals a px (paper-faithful, Manickathan et al.
-2023 Table 1; sigma-independent), while ``"linear"`` multiplies the filtered
-noise by a directly (sigma-dependent). Generation must be deterministic in the
-record index so the Grain pipeline can checkpoint and replay it, and a larger
-Gaussian filter width must yield a smoother field.
+KinematicDataSource generates smooth random displacement fields
+in-memory (the kinematic-training RFG of Manickathan et al. 2022)
+according to the equation ds_ref = a * G_sigma * xi, where xi is
+independent U(-1, 1) noise, G_sigma is a Gaussian filter, and a is
+the per-field scale. ``scale_mode`` selects how a is applied:
+``"peak"`` (default) normalizes each field so its peak displacement
+magnitude equals a px (paper-faithful, Manickathan et al. 2023 Table
+1; sigma-independent), while ``"linear"`` multiplies the filtered
+noise by a directly (sigma-dependent). Generation must be
+deterministic in the record index so the Grain pipeline can
+checkpoint and replay it, and a larger Gaussian filter width must
+yield a smoother field.
 """
+
+from __future__ import annotations
 
 import numpy as np
 import pytest
@@ -18,13 +22,13 @@ import pytest
 from synthpix.data_sources import KinematicDataSource
 
 
-def test_len_reports_num_examples():
+def test_len_reports_num_examples() -> None:
     """The dataset length equals the configured number of examples."""
     ds = KinematicDataSource(num_examples=37, image_shape=(32, 32))
     assert len(ds) == 37, f"Expected 37 examples, got {len(ds)}"
 
 
-def test_getitem_returns_flow_field_record():
+def test_getitem_returns_flow_field_record() -> None:
     """An item holds a float32 (H, W, 2) flow field and a file id."""
     ds = KinematicDataSource(num_examples=10, image_shape=(48, 64))
 
@@ -44,7 +48,7 @@ def test_getitem_returns_flow_field_record():
     )
 
 
-def test_generation_is_deterministic_per_index():
+def test_generation_is_deterministic_per_index() -> None:
     """The same index always yields the same field (replay safety)."""
     ds = KinematicDataSource(num_examples=10, image_shape=(32, 32), seed=7)
 
@@ -56,26 +60,26 @@ def test_generation_is_deterministic_per_index():
     )
 
 
-def test_distinct_indices_differ():
+def test_distinct_indices_differ() -> None:
     """Different indices yield different fields."""
     ds = KinematicDataSource(num_examples=10, image_shape=(32, 32))
 
-    assert not np.array_equal(
-        ds[0]["flow_fields"], ds[1]["flow_fields"]
-    ), "Distinct indices produced identical fields"
+    assert not np.array_equal(ds[0]["flow_fields"], ds[1]["flow_fields"]), (
+        "Distinct indices produced identical fields"
+    )
 
 
-def test_seed_changes_output():
+def test_seed_changes_output() -> None:
     """Changing the base seed changes the generated field."""
     a = KinematicDataSource(num_examples=4, image_shape=(32, 32), seed=0)
     b = KinematicDataSource(num_examples=4, image_shape=(32, 32), seed=1)
 
-    assert not np.array_equal(
-        a[0]["flow_fields"], b[0]["flow_fields"]
-    ), "Different seeds produced identical fields"
+    assert not np.array_equal(a[0]["flow_fields"], b[0]["flow_fields"]), (
+        "Different seeds produced identical fields"
+    )
 
 
-def test_zero_scale_factor_yields_zero_field():
+def test_zero_scale_factor_yields_zero_field() -> None:
     """A zero scale factor range produces a zero field."""
     ds = KinematicDataSource(
         num_examples=4,
@@ -88,8 +92,10 @@ def test_zero_scale_factor_yields_zero_field():
     )
 
 
-def test_scale_factor_produces_proportional_scaling():
-    """Larger scale factors produce proportionally larger fields with same seed/sigma/index."""
+def test_scale_factor_produces_proportional_scaling() -> None:
+    """Larger scale factors produce proportionally larger fields with same
+    seed/sigma/index.
+    """
     ds_small = KinematicDataSource(
         num_examples=1,
         image_shape=(32, 32),
@@ -108,14 +114,23 @@ def test_scale_factor_produces_proportional_scaling():
     flow_small = ds_small[0]["flow_fields"]
     flow_large = ds_large[0]["flow_fields"]
 
-    # flow_large should be approximately 2x flow_small (scale factor ratio is 4/2=2)
+    # flow_large should be approximately 2x flow_small (scale factor ratio is
+    # 4/2=2)
     assert np.allclose(flow_large, 2.0 * flow_small, rtol=1e-5, atol=1e-7)
 
 
-def test_larger_sigma_is_smoother():
+def test_larger_sigma_is_smoother() -> None:
     """A larger Gaussian width yields a lower-gradient (smoother) field."""
 
     def mean_abs_gradient(sigma: float) -> float:
+        """Mean abs gradient.
+
+        Args:
+            sigma: Sigma used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         ds = KinematicDataSource(
             num_examples=1,
             image_shape=(96, 96),
@@ -147,7 +162,7 @@ def _peak_magnitude(flow: np.ndarray) -> float:
     return float(np.sqrt(flow[..., 0] ** 2 + flow[..., 1] ** 2).max())
 
 
-def test_peak_mode_is_the_default():
+def test_peak_mode_is_the_default() -> None:
     """Without an explicit mode, fields are peak-normalized in pixels."""
     a = 8.0
     ds = KinematicDataSource(
@@ -162,11 +177,12 @@ def test_peak_mode_is_the_default():
 
 
 @pytest.mark.parametrize("sigma", [5.0, 30.0, 100.0])
-def test_peak_mode_hits_target_regardless_of_sigma(sigma: float):
+def test_peak_mode_hits_target_regardless_of_sigma(sigma: float) -> None:
     """Peak mode sets max|ds_ref| == a independent of the filter width.
 
     Args:
-        sigma: Gaussian filter width (px) to test the normalization against.
+        sigma: Gaussian filter width (px) to test the normalization
+            against.
     """
     a = 6.5
     ds = KinematicDataSource(
@@ -181,12 +197,13 @@ def test_peak_mode_hits_target_regardless_of_sigma(sigma: float):
     assert _peak_magnitude(ds[0]["flow_fields"]) == pytest.approx(a, rel=1e-4)
 
 
-def test_linear_mode_amplitude_collapses_with_sigma():
-    """Linear mode applies a raw multiplier, so larger sigma shrinks motion.
+def test_linear_mode_amplitude_collapses_with_sigma() -> None:
+    """Linear mode applies a raw multiplier, so larger sigma shrinks
+    motion.
 
-    This is the sigma-dependent attenuation that motivates the peak-normalizing
-    default: with the bare scale range a wide filter drives the displacement
-    far below the nominal ``a``.
+    This is the sigma-dependent attenuation that motivates the
+    peak-normalizing default: with the bare scale range a wide filter
+    drives the displacement far below the nominal ``a``.
     """
     a = 8.0
     sharp = KinematicDataSource(
@@ -215,7 +232,7 @@ def test_linear_mode_amplitude_collapses_with_sigma():
     )
 
 
-def test_peak_and_linear_modes_differ():
+def test_peak_and_linear_modes_differ() -> None:
     """The two modes yield different fields for an identical random draw."""
     peak = KinematicDataSource(
         num_examples=1,
@@ -234,12 +251,12 @@ def test_peak_and_linear_modes_differ():
         seed=3,
     )
 
-    assert not np.allclose(
-        peak[0]["flow_fields"], linear[0]["flow_fields"]
-    ), "peak and linear modes produced identical fields"
+    assert not np.allclose(peak[0]["flow_fields"], linear[0]["flow_fields"]), (
+        "peak and linear modes produced identical fields"
+    )
 
 
-def test_from_config_reads_scale_mode():
+def test_from_config_reads_scale_mode() -> None:
     """`from_config` honors an explicit scale_mode and defaults to peak."""
     linear = KinematicDataSource.from_config(
         {"image_shape": [48, 48], "scale_mode": "linear"}
@@ -250,13 +267,13 @@ def test_from_config_reads_scale_mode():
     assert "scale_mode='peak'" in repr(default)
 
 
-def test_include_images_is_false():
+def test_include_images_is_false() -> None:
     """The kinematic source never advertises real images."""
     ds = KinematicDataSource(num_examples=1)
     assert ds.include_images is False
 
 
-def test_repr_is_stable_and_descriptive():
+def test_repr_is_stable_and_descriptive() -> None:
     """The repr is deterministic and records the generation parameters."""
     ds = KinematicDataSource(
         num_examples=5,
@@ -277,7 +294,7 @@ def test_repr_is_stable_and_descriptive():
     assert "scale_mode='peak'" in text, f"repr missing scale_mode: {text}"
 
 
-def test_from_config_reads_keys():
+def test_from_config_reads_keys() -> None:
     """`from_config` maps dataset-config keys onto the generator."""
     config = {
         "num_examples": 12,
@@ -295,7 +312,7 @@ def test_from_config_reads_keys():
     )
 
 
-def test_from_config_uses_defaults():
+def test_from_config_uses_defaults() -> None:
     """`from_config` falls back to the paper defaults when keys are absent."""
     ds = KinematicDataSource.from_config({})
 
@@ -324,7 +341,8 @@ def test_invalid_arguments_raise(kwargs: dict) -> None:
     """Malformed generator settings raise ValueError.
 
     Args:
-        kwargs: A dictionary of invalid arguments to pass to KinematicDataSource.
+        kwargs: A dictionary of invalid arguments to pass to
+            KinematicDataSource.
     """
     with pytest.raises(ValueError):
         KinematicDataSource(**kwargs)
