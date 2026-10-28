@@ -35,6 +35,16 @@ To run the pytests:
 uv run pytest
 ```
 
+CI runs `uv run pytest -m "not benchmark"` to exclude speed and throughput
+benchmarks whose results depend on the runner's hardware and load. Mark new
+timing benchmarks with `@pytest.mark.benchmark` so functional tests remain
+independent of performance thresholds.
+
+Run benchmarks locally with `uv run pytest -m benchmark`. Parameter sweeps
+marked `run_explicitly` require
+`uv run pytest -m "benchmark and run_explicitly"`. Existing GPU requirements
+still apply.
+
 ## Coding style
 The `Coding style validation` action will fail if the pre-commit checks do not pass. To make sure that these are checked automatically on push, run:
 ```sh

@@ -826,6 +826,7 @@ def test_generate_images_from_flow(
 @pytest.mark.parametrize("position_bounds", [(1536, 2048)])
 @pytest.mark.parametrize("img_offset", [(160, 56)])
 @pytest.mark.parametrize("num_flow_fields", [100])
+@pytest.mark.benchmark
 def test_speed_generate_images_from_flow(
     selected_flow: str,
     seeding_density_range: tuple[float, float],
@@ -1143,6 +1144,7 @@ def test_img_parameter_combinations(
 @pytest.mark.parametrize("position_bounds", [(128, 128)])
 @pytest.mark.parametrize("intensity_ranges", [[(100, 200)]])
 @pytest.mark.parametrize("rho_ranges", [[(-0.2, 0.2)]])
+@pytest.mark.benchmark
 def test_speed_parameter_combinations(
     selected_flow: str,
     seeding_density_range: tuple[float, float],
