@@ -1,5 +1,8 @@
 """Tests for the checkpoint_args helper in synthpix.make."""
 
+from __future__ import annotations
+
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import grain.python as grain
@@ -10,7 +13,7 @@ from synthpix.make import checkpoint_args
 from synthpix.sampler import Sampler
 
 
-def test_checkpoint_args_save():
+def test_checkpoint_args_save() -> None:
     """Verify checkpoint_args returns correct SaveArgs."""
     sampler = MagicMock(spec=Sampler)
     sampler.grain_iterator = MagicMock()
@@ -19,6 +22,8 @@ def test_checkpoint_args_save():
     args = checkpoint_args(sampler, is_restore=False)
 
     assert isinstance(args, ocp.args.Composite)
+    # Orbax dynamically constructs Composite; its stubs omit mapping methods.
+    args = cast(Any, args)
     # Check if keys are present
     assert "sampler" in args
     assert "grain" in args
@@ -28,7 +33,7 @@ def test_checkpoint_args_save():
     assert args["grain"].item == sampler.grain_iterator
 
 
-def test_checkpoint_args_restore():
+def test_checkpoint_args_restore() -> None:
     """Verify checkpoint_args returns correct RestoreArgs."""
     sampler = MagicMock(spec=Sampler)
     sampler.grain_iterator = MagicMock()
@@ -36,6 +41,8 @@ def test_checkpoint_args_restore():
     args = checkpoint_args(sampler, is_restore=True)
 
     assert isinstance(args, ocp.args.Composite)
+    # Orbax dynamically constructs Composite; its stubs omit mapping methods.
+    args = cast(Any, args)
     # Check if keys are present
     assert "sampler" in args
     assert "grain" in args
@@ -45,7 +52,7 @@ def test_checkpoint_args_restore():
     assert args["grain"].item == sampler.grain_iterator
 
 
-def test_checkpoint_args_no_iterator():
+def test_checkpoint_args_no_iterator() -> None:
     """Verify checkpoint_args raises ValueError if grain_iterator is None."""
     sampler = MagicMock(spec=Sampler)
     sampler.grain_iterator = None

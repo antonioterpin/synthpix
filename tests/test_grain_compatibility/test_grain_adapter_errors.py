@@ -1,10 +1,13 @@
 """Tests for error handling in the Grain-to-Scheduler adapters.
 
-These tests verify that `GrainSchedulerAdapter` and `GrainEpisodicAdapter`
-correctly raise exceptions for empty loaders, missing images, and
-malformed metadata (like missing timesteps).
+These tests verify that `GrainSchedulerAdapter` and
+`GrainEpisodicAdapter` correctly raise exceptions for empty loaders,
+missing images, and malformed metadata (like missing timesteps).
 """
 
+from __future__ import annotations
+
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import grain.python as grain
@@ -18,11 +21,12 @@ from synthpix.data_sources.adapter import (
 from synthpix.data_sources.episodic import EpisodicDataSource
 
 
-def test_grain_adapter_empty_loader_error():
-    """Test that the adapter raises `StopIteration` if the loader has no data.
+def test_grain_adapter_empty_loader_error() -> None:
+    """Test that the adapter raises `StopIteration` if the loader has no
+    data.
 
-    Checks the behavior during initial shape inference when the
-    iterator is empty.
+    Checks the behavior during initial shape inference when the iterator
+    is empty.
     """
     loader = MagicMock(spec=grain.DataLoader)
     loader.__iter__.return_value = iter([])
@@ -33,11 +37,15 @@ def test_grain_adapter_empty_loader_error():
         adapter.get_flow_fields_shape()
 
 
-def test_grain_adapter_missing_images_error(tmp_path):
-    """Test that a `KeyError` is raised if images are requested but missing from the batch.
+def test_grain_adapter_missing_images_error(tmp_path: Path) -> None:
+    """Test that a `KeyError` is raised if images are requested but missing
+    from the batch.
 
     Verifies strict validation of batch content against the data source
     configuration.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     batch = {"flow_fields": np.zeros((1, 64, 64, 2))}
 
@@ -55,7 +63,7 @@ def test_grain_adapter_missing_images_error(tmp_path):
         adapter.get_batch(1)
 
 
-def test_grain_episodic_missing_metadata_error():
+def test_grain_episodic_missing_metadata_error() -> None:
     """Test that missing `_timestep` metadata raises a `KeyError`.
 
     Episodic adapters rely on metadata to manage sequence boundaries;
@@ -75,12 +83,14 @@ def test_grain_episodic_missing_metadata_error():
 
     loader._data_source = mock_eds
 
-    # GrainEpisodicAdapter checks isinstance(loader._data_source, EpisodicDataSource)
+    # GrainEpisodicAdapter checks isinstance(loader._data_source,
+    # EpisodicDataSource)
     # MagicMock(spec=EpisodicDataSource) passes this check.
 
     adapter = GrainEpisodicAdapter(loader)
 
-    # Manually trigger next_episode which should fail because batch lacks _timestep
+    # Manually trigger next_episode which should fail because batch lacks
+    # _timestep
     # We set _current_timestep to something > -1 to trigger the skip loop
     adapter._current_timestep = 0
 

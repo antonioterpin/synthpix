@@ -6,6 +6,7 @@ import gc
 import os
 import shutil
 import uuid
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from pathlib import Path
 
@@ -30,19 +31,37 @@ WORKER_ROOT.mkdir(exist_ok=True)
 # Generic random HDF5 creator
 # ──────────────────────────────────────────────────────────────────────────────
 @pytest.fixture(scope="session")
-def generate_hdf5_file(tmp_path_factory):
+def generate_hdf5_file(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[Callable[[str, dict[str, int]], str]]:
     """Return a callable that writes an HDF5 file and yields its Path.
 
-    Every file created through the factory is registered for removal, so the
-    session-scoped teardown sweeps any folder a consuming fixture did not
-    already delete (e.g. after a hard interrupt). Combined with the eager
-    per-test cleanup in the consumer fixtures, this keeps the (potentially
-    multi-GB with ``--large-hdf5``) fixtures from accumulating on disk even
-    when tests fail.
+    Every file created through the factory is registered for removal, so
+    the session-scoped teardown sweeps any folder a consuming fixture
+    did not already delete (e.g. after a hard interrupt). Combined with
+    the eager per-test cleanup in the consumer fixtures, this keeps the
+    (potentially multi-GB with ``--large-hdf5``) fixtures from
+    accumulating on disk even when tests fail.
+
+    Args:
+        tmp_path_factory: Factory for temporary fixture directories.
+
+    Yields:
+        Callable[[str, dict[str, int]], str]:
+            Factory retained until teardown.
     """
     created: list[Path] = []
 
-    def _generate(stem: str, dims: dict[str, int]) -> Path:
+    def _generate(stem: str, dims: dict[str, int]) -> str:
+        """Generate.
+
+        Args:
+            stem: Stem for this test case.
+            dims: Dims for this test case.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         folder = tmp_path_factory.mktemp("hdf5")
         path = folder / f"{stem}_{uuid.uuid4().hex}.h5"
 
@@ -64,13 +83,19 @@ def generate_hdf5_file(tmp_path_factory):
 # Default dimensions
 # ──────────────────────────────────────────────────────────────────────────────
 @pytest.fixture(scope="session")
-def hdf5_test_dims(request) -> dict[str, int]:
+def hdf5_test_dims(request: pytest.FixtureRequest) -> dict[str, int]:
     """Return default dimensions for HDF5 test files.
 
-    Small by default (~1.3 MB per file) so the suite stays fast and does not
-    flood the (often tmpfs-backed) temp directory. Pass ``--large-hdf5`` to
-    generate the full-size ~2.4 GB arrays for heavier, explicitly-requested
-    runs.
+    Small by default (~1.3 MB per file) so the suite stays fast and does
+    not flood the (often tmpfs-backed) temp directory. Pass
+    ``--large-hdf5`` to generate the full-size ~2.4 GB arrays for
+    heavier, explicitly-requested runs.
+
+    Args:
+        request: Fixture request with indirect test parameters.
+
+    Returns:
+        The value produced for the test scenario.
     """
     if request.config.getoption("--large-hdf5", default=False):
         return {"x_dim": 1536, "y_dim": 100, "z_dim": 2048, "features": 2}
@@ -81,10 +106,23 @@ def hdf5_test_dims(request) -> dict[str, int]:
 # Single temporary HDF5 file
 # ──────────────────────────────────────────────────────────────────────────────
 @pytest.fixture
-def temp_file(request, hdf5_test_dims, generate_hdf5_file):
-    """Create a temporary HDF5 file with specified dimensions."""
+def temp_file(
+    request: pytest.FixtureRequest,
+    hdf5_test_dims: dict[str, int],
+    generate_hdf5_file: Callable[[str, dict[str, int]], str],
+) -> Iterator[str]:
+    """Create a temporary HDF5 file with specified dimensions.
+
+    Args:
+        request: Fixture request with indirect test parameters.
+        hdf5_test_dims: Hdf5 test dims for this test case.
+        generate_hdf5_file: Factory for writing HDF5 flow files.
+
+    Yields:
+        str: Fixture data retained until teardown.
+    """
     dims = getattr(request, "param", hdf5_test_dims)
-    path = generate_hdf5_file(stem="flow_data", dims=dims)
+    path = generate_hdf5_file("flow_data", dims)
     yield path
     # Runs even when the test fails, so multi-GB fixtures never accumulate.
     shutil.rmtree(Path(path).parent, ignore_errors=True)
@@ -94,11 +132,24 @@ def temp_file(request, hdf5_test_dims, generate_hdf5_file):
 # Multiple HDF5 files
 # ──────────────────────────────────────────────────────────────────────────────
 @pytest.fixture
-def mock_hdf5_files(request, hdf5_test_dims, generate_hdf5_file):
-    """Create multiple temporary HDF5 files with specified dimensions."""
+def mock_hdf5_files(
+    request: pytest.FixtureRequest,
+    hdf5_test_dims: dict[str, int],
+    generate_hdf5_file: Callable[[str, dict[str, int]], str],
+) -> Iterator[tuple[list[str], dict[str, int]]]:
+    """Create multiple temporary HDF5 files with specified dimensions.
+
+    Args:
+        request: Fixture request with indirect test parameters.
+        hdf5_test_dims: Hdf5 test dims for this test case.
+        generate_hdf5_file: Factory for writing HDF5 flow files.
+
+    Yields:
+        tuple[list[str], dict[str, int]]: Fixture data retained until teardown.
+    """
     num_files = getattr(request, "param", 1)
     paths = [
-        generate_hdf5_file(stem=f"flow_data_{i}", dims=hdf5_test_dims)
+        generate_hdf5_file(f"flow_data_{i}", hdf5_test_dims)
         for i in range(num_files)
     ]
     yield paths, hdf5_test_dims
@@ -111,18 +162,41 @@ def mock_hdf5_files(request, hdf5_test_dims, generate_hdf5_file):
 # Scheduler
 # ──────────────────────────────────────────────────────────────────────────────
 @pytest.fixture(scope="module")
-def temp_file_module(request, hdf5_test_dims, generate_hdf5_file):
-    """Create a temporary HDF5 file for module scope tests."""
+def temp_file_module(
+    request: pytest.FixtureRequest,
+    hdf5_test_dims: dict[str, int],
+    generate_hdf5_file: Callable[[str, dict[str, int]], str],
+) -> Iterator[str]:
+    """Create a temporary HDF5 file for module scope tests.
+
+    Args:
+        request: Fixture request with indirect test parameters.
+        hdf5_test_dims: Hdf5 test dims for this test case.
+        generate_hdf5_file: Factory for writing HDF5 flow files.
+
+    Yields:
+        str: Fixture data retained until teardown.
+    """
     dims = getattr(request, "param", hdf5_test_dims)
-    path = generate_hdf5_file(stem="flow_data_module", dims=dims)
+    path = generate_hdf5_file("flow_data_module", dims)
     yield path
     # Runs even when the module's tests fail, so fixtures never accumulate.
     shutil.rmtree(Path(path).parent, ignore_errors=True)
 
 
 @pytest.fixture
-def scheduler(temp_file_module, request):
-    """Create a scheduler for module scope tests."""
+def scheduler(
+    temp_file_module: str, request: pytest.FixtureRequest
+) -> Iterator[HDF5FlowFieldScheduler]:
+    """Create a scheduler for module scope tests.
+
+    Args:
+        temp_file_module: Temp file module for this test case.
+        request: Fixture request with indirect test parameters.
+
+    Yields:
+        HDF5FlowFieldScheduler: Fixture data retained until teardown.
+    """
     randomize = False
     loop = False
 
@@ -139,8 +213,15 @@ def scheduler(temp_file_module, request):
 # Text file
 # ──────────────────────────────────────────────────────────────────────────────
 @pytest.fixture
-def temp_txt_file(tmp_path):
-    """Create a temporary text file with some content."""
+def temp_txt_file(tmp_path: Path) -> Iterator[list[str]]:
+    """Create a temporary text file with some content.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+
+    Yields:
+        list[str]: Fixture data retained until teardown.
+    """
     path = tmp_path / "mock_data.txt"
     path.write_text("This is a test file.")
     yield [str(path)]
@@ -150,14 +231,31 @@ def temp_txt_file(tmp_path):
 # Numpy helpers
 # ──────────────────────────────────────────────────────────────────────────────
 @pytest.fixture(scope="session")
-def numpy_test_dims():
-    """Return default dimensions for Numpy test files."""
+def numpy_test_dims() -> dict[str, int]:
+    """Return default dimensions for Numpy test files.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     return {"height": 64, "width": 64}
 
 
 @pytest.fixture
-def mock_numpy_files(tmp_path, numpy_test_dims, request):
-    """Create multiple temporary Numpy files with random data."""
+def mock_numpy_files(
+    tmp_path: Path,
+    numpy_test_dims: dict[str, int],
+    request: pytest.FixtureRequest,
+) -> Iterator[tuple[list[str], dict[str, int]]]:
+    """Create multiple temporary Numpy files with random data.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+        numpy_test_dims: Numpy test dims for this test case.
+        request: Fixture request with indirect test parameters.
+
+    Yields:
+        tuple[list[str], dict[str, int]]: Fixture data retained until teardown.
+    """
     param = getattr(request, "param", 2)
 
     if isinstance(param, dict):
@@ -188,14 +286,31 @@ def mock_numpy_files(tmp_path, numpy_test_dims, request):
 # .mat helpers
 # ──────────────────────────────────────────────────────────────────────────────
 @pytest.fixture(scope="session")
-def mat_test_dims():
-    """Return default dimensions for .mat test files."""
+def mat_test_dims() -> dict[str, int]:
+    """Return default dimensions for .mat test files.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     return {"height": 64, "width": 64}
 
 
 @pytest.fixture
-def mock_mat_files(tmp_path, mat_test_dims, request):
-    """Create multiple temporary .mat files with random data."""
+def mock_mat_files(
+    tmp_path: Path,
+    mat_test_dims: dict[str, int],
+    request: pytest.FixtureRequest,
+) -> Iterator[tuple[list[str], dict[str, int]]]:
+    """Create multiple temporary .mat files with random data.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+        mat_test_dims: Mat test dims for this test case.
+        request: Fixture request with indirect test parameters.
+
+    Yields:
+        tuple[list[str], dict[str, int]]: Fixture data retained until teardown.
+    """
     param = getattr(request, "param", 2)
 
     if isinstance(param, dict):
@@ -244,7 +359,12 @@ def mock_mat_files(tmp_path, mat_test_dims, request):
 # ──────────────────────────────────────────────────────────────────────────────
 # CLI options
 # ──────────────────────────────────────────────────────────────────────────────
-def pytest_addoption(parser):
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Pytest addoption.
+
+    Args:
+        parser: Parser used by this test.
+    """
     # Register custom command-line options for the test suite.
     parser.addoption(
         "--run-hf-live",
@@ -266,14 +386,21 @@ def pytest_addoption(parser):
 # ──────────────────────────────────────────────────────────────────────────────
 # Collection modifier
 # ──────────────────────────────────────────────────────────────────────────────
-def pytest_collection_modifyitems(config, items):
-    """Skip tests unless explicitly selected with -m run_explicitly."""
-    explicit_marker = (
-        config.getoption("-m") and "run_explicitly" in config.getoption("-m")
-    )
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Skip tests unless explicitly selected with -m run_explicitly.
+
+    Args:
+        config: Configuration supplied to the operation under test.
+        items: Items for this test case.
+    """
+    explicit_marker = config.getoption(
+        "-m"
+    ) and "run_explicitly" in config.getoption("-m")
     run_hf_live = config.getoption("--run-hf-live", default=False)
     skip_explicit = pytest.mark.skip(
-        reason="Skipped unless explicitly selected with -m run_explicitly"
+        reason=("Skipped unless explicitly selected with -m run_explicitly")
     )
     skip_hf_live = pytest.mark.skip(
         reason="Skipped unless --run-hf-live is passed on the CLI"
@@ -286,15 +413,19 @@ def pytest_collection_modifyitems(config, items):
 
 
 @pytest.fixture(autouse=True)
-def clear_after_test():
-    """Clear JAX backends and free memory after each test."""
+def clear_after_test() -> Iterator[None]:
+    """Clear JAX backends and free memory after each test.
+
+    Yields:
+        None: Fixture data retained until teardown.
+    """
     yield  # --- run the test ---
     # Free Python-side references
     gc.collect()
 
     # Finish goggles session
     try:
-        import goggles as gg
+        import goggles as gg  # noqa: PLC0415 - optional or intentionally lazy import
 
         gg.finish()
     except Exception:

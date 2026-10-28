@@ -1,11 +1,21 @@
 repos:
   # Ruff: lint + autofix
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.1
+    rev: v0.14.10
     hooks:
       - id: ruff
         stages: [pre-commit, pre-push]
         args: ["--fix"]
+
+      # Require typed signatures and documented tests in addition to the
+      # shared lint rules. Any remains valid for deliberate invalid inputs
+      # and dynamic mocks, which are common in validation tests.
+      - id: ruff
+        alias: ruff-test-contracts
+        name: ruff test signatures and docstrings
+        files: ^tests/.*\.py$
+        stages: [pre-commit, pre-push]
+        args: ["--select", "ANN,D100,D101,D102,D103", "--ignore", "ANN401"]
 
       - id: ruff-format
         stages: [pre-commit, pre-push]

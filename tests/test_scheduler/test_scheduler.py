@@ -1,13 +1,18 @@
 """Comprehensive tests for the flow field scheduler hierarchy.
 
-These tests verify the core scheduling logic, including input validation,
-dataset iteration, randomized shuffling, looping behavior, and prefetching
-capabilities across HDF5 and NumPy-based schedulers.
+These tests verify the core scheduling logic, including input
+validation, dataset iteration, randomized shuffling, looping
+behavior, and prefetching capabilities across HDF5 and NumPy-based
+schedulers.
 """
+
+from __future__ import annotations
 
 import os
 import timeit
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -37,15 +42,24 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_SCHEDULER"]
 @pytest.mark.parametrize(
     "file_list", [[None], [123, "invalid"], [123, "invalid"]]
 )
-def test_invalid_file_list_type(file_list):
-    """Test that `HDF5FlowFieldScheduler` rejects non-list `file_list` inputs.
+def test_invalid_file_list_type(file_list: Any) -> None:
+    """Test that `HDF5FlowFieldScheduler` rejects non-list `file_list`
+    inputs.
 
     The scheduler expects a list of file paths (strings).
+
+    Args:
+        file_list: Input file paths for the scheduler.
     """
 
 
 @pytest.mark.parametrize("file_list", [["nonexistent.h5"]])
-def test_invalid_file_paths(file_list):
+def test_invalid_file_paths(file_list: Any) -> None:
+    """Verify invalid file paths.
+
+    Args:
+        file_list: File list used by this test.
+    """
     with pytest.raises(
         ValueError, match=f"File {file_list[0]} does not exist."
     ):
@@ -53,8 +67,14 @@ def test_invalid_file_paths(file_list):
 
 
 @pytest.mark.parametrize("randomize", [None, 123, "invalid"])
-def test_invalid_randomize(randomize, temp_file):
-    with pytest.raises(ValueError, match="randomize must be a boolean value."):
+def test_invalid_randomize(randomize: Any, temp_file: str) -> None:
+    """Verify invalid randomize.
+
+    Args:
+        randomize: Randomize used by this test.
+        temp_file: Temp file used by this test.
+    """
+    with pytest.raises(ValueError, match=r"randomize must be a boolean value."):
         HDF5FlowFieldScheduler.from_config(
             {
                 "file_list": [temp_file],
@@ -64,8 +84,14 @@ def test_invalid_randomize(randomize, temp_file):
 
 
 @pytest.mark.parametrize("loop", [None, 123, "invalid"])
-def test_invalid_loop(loop, temp_file):
-    with pytest.raises(ValueError, match="loop must be a boolean value."):
+def test_invalid_loop(loop: Any, temp_file: str) -> None:
+    """Verify invalid loop.
+
+    Args:
+        loop: Loop used by this test.
+        temp_file: Temp file used by this test.
+    """
+    with pytest.raises(ValueError, match=r"loop must be a boolean value."):
         HDF5FlowFieldScheduler.from_config(
             {
                 "file_list": [temp_file],
@@ -83,8 +109,17 @@ def test_invalid_loop(loop, temp_file):
         ([], False, False),
     ],
 )
-def test_empty_file_list(file_list, randomize, loop):
-    with pytest.raises(ValueError, match="The file_list must not be empty."):
+def test_empty_file_list(
+    file_list: list[str], randomize: bool, loop: bool
+) -> None:
+    """Verify empty file list.
+
+    Args:
+        file_list: File list used by this test.
+        randomize: Randomize used by this test.
+        loop: Loop used by this test.
+    """
+    with pytest.raises(ValueError, match=r"The file_list must not be empty."):
         HDF5FlowFieldScheduler.from_config(
             {
                 "file_list": file_list,
@@ -99,20 +134,30 @@ def test_empty_file_list(file_list, randomize, loop):
 # ============================
 
 
-def test_non_hdf5_file(temp_txt_file):
-    """Test that non-HDF5 files raise a ValueError."""
+def test_non_hdf5_file(temp_txt_file: list[str]) -> None:
+    """Test that non-HDF5 files raise a ValueError.
+
+    Args:
+        temp_txt_file: Temp txt file for this test case.
+    """
     with pytest.raises(
-        ValueError, match="All files must be HDF5 files with .h5 extension."
+        ValueError, match=r"All files must be HDF5 files with .h5 extension."
     ):
         HDF5FlowFieldScheduler(file_list=temp_txt_file)
 
 
 @pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
-def test_numpy_scheduler_iteration(mock_numpy_files):
-    """Verify that `NumpyFlowFieldScheduler` correctly iterates through all files.
+def test_numpy_scheduler_iteration(
+    mock_numpy_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify `NumpyFlowFieldScheduler` correctly iterates through all
+    files.
 
     Confirms that `get_batch` yields the expected number of batches with
     the correct flow field dimensions.
+
+    Args:
+        mock_numpy_files: Temporary NumPy file paths and dimensions.
     """
     files, dims = mock_numpy_files
 
@@ -138,7 +183,9 @@ def test_numpy_scheduler_iteration(mock_numpy_files):
                 dims["width"],
                 2,
             ), (
-                f"Expected flow shape {(1, dims['height'], dims['width'], 2)}, got {flow.shape}"
+                f"Expected flow shape "
+                f"{(1, dims['height'], dims['width'], 2)}, got "
+                f"{flow.shape}"
             )
             count += 1
         except StopIteration:
@@ -147,7 +194,15 @@ def test_numpy_scheduler_iteration(mock_numpy_files):
     assert count == 2, f"Expected 2 files to be processed, but got {count}"
 
 
-def test_numpy_scheduler_shape(mock_numpy_files):
+def test_numpy_scheduler_shape(
+    mock_numpy_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify numpy scheduler shape.
+
+    Args:
+        mock_numpy_files: Temporary NumPy file paths and their
+            dimensions.
+    """
     files, dims = mock_numpy_files
     scheduler = NumpyFlowFieldScheduler.from_config(
         {
@@ -160,12 +215,21 @@ def test_numpy_scheduler_shape(mock_numpy_files):
         dims["width"],
         2,
     ), (
-        f"Expected flow field shape {(dims['height'], dims['width'], 2)}, got {shape}"
+        f"Expected flow field shape "
+        f"{(dims['height'], dims['width'], 2)}, got {shape}"
     )
 
 
 @pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
-def test_numpy_scheduler_init_flags(mock_numpy_files):
+def test_numpy_scheduler_init_flags(
+    mock_numpy_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify numpy scheduler init flags.
+
+    Args:
+        mock_numpy_files: Temporary NumPy file paths and their
+            dimensions.
+    """
     files, _ = mock_numpy_files
     scheduler = NumpyFlowFieldScheduler.from_config(
         {
@@ -182,17 +246,27 @@ def test_numpy_scheduler_init_flags(mock_numpy_files):
     )
 
 
-def test_numpy_scheduler_invalid_ext(tmp_path):
+def test_numpy_scheduler_invalid_ext(tmp_path: Path) -> None:
+    """Verify numpy scheduler invalid ext.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     bad_file = tmp_path / "invalid.txt"
     bad_file.write_text("invalid content")
 
     with pytest.raises(
-        ValueError, match="All files must be numpy files with '.npy' extension"
+        ValueError, match=r"All files must be numpy files with '.npy' extension"
     ):
         NumpyFlowFieldScheduler([str(bad_file)])
 
 
-def test_numpy_scheduler_invalid_npy(tmp_path):
+def test_numpy_scheduler_invalid_npy(tmp_path: Path) -> None:
+    """Verify numpy scheduler invalid npy.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     bad_file = tmp_path / "floww_0.npy"
     np.zeros((1, 64, 64, 2)).astype(np.float32).tofile(bad_file)
 
@@ -200,17 +274,33 @@ def test_numpy_scheduler_invalid_npy(tmp_path):
         NumpyFlowFieldScheduler([str(bad_file)], include_images=True)
 
 
-def test_numpy_scheduler_missing_images(tmp_path):
+def test_numpy_scheduler_missing_images(tmp_path: Path) -> None:
+    """Verify numpy scheduler missing images.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     file = tmp_path / "flow_1.npy"
     np.zeros((1, 64, 64, 2)).astype(np.float32).tofile(file)
 
-    pattern = f"Missing images for frame {1}: {tmp_path}/img_0.jpg, {tmp_path}/img_1.jpg"
+    pattern = (
+        f"Missing images for frame {1}: {tmp_path}/img_0.jpg, "
+        f"{tmp_path}/img_1.jpg"
+    )
     with pytest.raises(FileNotFoundError, match=pattern):
         NumpyFlowFieldScheduler([str(file)], include_images=True)
 
 
 @pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
-def test_numpy_scheduler_get_batch(mock_numpy_files):
+def test_numpy_scheduler_get_batch(
+    mock_numpy_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify numpy scheduler get batch.
+
+    Args:
+        mock_numpy_files: Temporary NumPy file paths and their
+            dimensions.
+    """
     files, dims = mock_numpy_files
     scheduler = NumpyFlowFieldScheduler.from_config(
         {
@@ -229,12 +319,22 @@ def test_numpy_scheduler_get_batch(mock_numpy_files):
         dims["width"],
         2,
     ), (
-        f"Expected flow field shape {(batch_size, dims['height'], dims['width'], 2)}, got {batch.flow_fields.shape}"
+        f"Expected flow field shape "
+        f"{(batch_size, dims['height'], dims['width'], 2)}, got "
+        f"{batch.flow_fields.shape}"
     )
 
 
 @pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
-def test_numpy_scheduler_with_images(mock_numpy_files):
+def test_numpy_scheduler_with_images(
+    mock_numpy_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify numpy scheduler with images.
+
+    Args:
+        mock_numpy_files: Temporary NumPy file paths and their
+            dimensions.
+    """
     files, dims = mock_numpy_files
     scheduler = NumpyFlowFieldScheduler.from_config(
         {"file_list": files, "include_images": True, "loop": False}
@@ -270,7 +370,9 @@ def test_numpy_scheduler_with_images(mock_numpy_files):
             dims["width"],
             2,
         ), (
-            f"Expected flow shape {(batch_size, dims['height'], dims['width'], 2)}, got {flow.shape}"
+            f"Expected flow shape "
+            f"{(batch_size, dims['height'], dims['width'], 2)}, got "
+            f"{flow.shape}"
         )
         assert isinstance(img_prev, np.ndarray), (
             f"Expected images1 to be np.ndarray, got {type(img_prev)}"
@@ -281,7 +383,9 @@ def test_numpy_scheduler_with_images(mock_numpy_files):
             dims["width"],
             3,
         ), (
-            f"Expected images1 shape {(batch_size, dims['height'], dims['width'], 3)}, got {img_prev.shape}"
+            f"Expected images1 shape "
+            f"{(batch_size, dims['height'], dims['width'], 3)}, got "
+            f"{img_prev.shape}"
         )
         assert isinstance(img_next, np.ndarray), (
             f"Expected images2 to be np.ndarray, got {type(img_next)}"
@@ -292,17 +396,25 @@ def test_numpy_scheduler_with_images(mock_numpy_files):
             dims["width"],
             3,
         ), (
-            f"Expected images2 shape {(batch_size, dims['height'], dims['width'], 3)}, got {img_next.shape}"
+            f"Expected images2 shape "
+            f"{(batch_size, dims['height'], dims['width'], 3)}, got "
+            f"{img_next.shape}"
         )
 
 
 @pytest.mark.parametrize("mock_numpy_files", [2], indirect=True)
-def test_numpy_scheduler_loop_reset(mock_numpy_files):
-    """Test that the NumPy scheduler automatically restarts when `loop=True`.
+def test_numpy_scheduler_loop_reset(
+    mock_numpy_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Test that the NumPy scheduler automatically restarts when
+    `loop=True`.
 
-    Verifies that after the last file is yielded, the scheduler resets its
-    internal pointer and returns to the first file instead of raising
-    `StopIteration`.
+    Verifies that after the last file is yielded, the scheduler resets
+    its internal pointer and returns to the first file instead of
+    raising `StopIteration`.
+
+    Args:
+        mock_numpy_files: Temporary NumPy file paths and dimensions.
     """
     files, dims = mock_numpy_files
     scheduler = NumpyFlowFieldScheduler(
@@ -318,7 +430,8 @@ def test_numpy_scheduler_loop_reset(mock_numpy_files):
 
     # We should have received the right number of samples
     assert len(out_shapes) == expected_total, (
-        f"Expected {expected_total} samples due to looping, but got {len(out_shapes)}"
+        f"Expected {expected_total}"
+        f" samples due to looping, but got {len(out_shapes)}"
     )
 
     # Every returned flow must have the correct shape
@@ -331,12 +444,15 @@ def test_numpy_scheduler_loop_reset(mock_numpy_files):
     )
 
 
-def test_numpy_scheduler_skips_bad_file(tmp_path):
+def test_numpy_scheduler_skips_bad_file(tmp_path: Path) -> None:
     """Covers the branch where an Exception is raised while loading a file.
 
-    The first .npy file is deliberately corrupted so that `np.load` fails.
-    The scheduler must log the error, skip that file, and yield the flow
-    from the subsequent valid file instead of crashing.
+    The first .npy file is deliberately corrupted so that `np.load`
+    fails. The scheduler must log the error, skip that file, and yield
+    the flow from the subsequent valid file instead of crashing.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     # -- corrupt file (cannot be read with np.load)
     bad_file = tmp_path / "flow_0.npy"
@@ -371,21 +487,52 @@ def test_numpy_scheduler_skips_bad_file(tmp_path):
 
 
 class DummyScheduler(BaseFlowFieldScheduler):
-    """Minimal implementation of `BaseFlowFieldScheduler` for testing abstract logic.
+    """Minimal implementation of `BaseFlowFieldScheduler` for testing
+    abstract logic.
 
-    Provides concrete implementations for `load_file`, `get_next_slice`,
-    and `get_flow_fields_shape` to verify base class behavior like
-    randomization and batching.
+        Provides concrete implementations for `load_file`, `get_next_slice`,
+        and `get_flow_fields_shape` to verify base class behavior like
+        randomization and batching.
     """
 
-    def __init__(self, file_list, randomize=False, loop=False, key=None):
+    def __init__(
+        self,
+        file_list: list[str],
+        randomize: bool = False,
+        loop: bool = False,
+        key: jax.Array | None = None,
+    ) -> None:
+        """Initialize the test double.
+
+        Args:
+            file_list: Input file paths for the scheduler.
+            randomize: Randomize for this test case.
+            loop: Loop for this test case.
+            key: Key for this test case.
+        """
         super().__init__(file_list, randomize, loop, key)
 
-    def load_file(self, file_path) -> SchedulerData:
+    def load_file(self, file_path: Path) -> SchedulerData:
+        """Load file.
+
+        Args:
+            file_path: File path used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         data = np.random.rand(4, 2, 4, 3).astype(np.float32)
         return SchedulerData(flow_fields=data)
 
     def get_next_slice(self) -> SchedulerData:
+        """Get next slice.
+
+        Returns:
+            The result used by the test assertions.
+
+        Raises:
+            FileEndedError: When the simulated failure is triggered.
+        """
         assert self._cached_data is not None, (
             "Internal error: _cached_data is None in DummyScheduler"
         )
@@ -396,6 +543,11 @@ class DummyScheduler(BaseFlowFieldScheduler):
         )
 
     def get_flow_fields_shape(self) -> tuple[int, int, int]:
+        """Get flow fields shape.
+
+        Returns:
+            The result used by the test assertions.
+        """
         assert self._cached_data is not None, (
             "Internal error: _cached_data is None in DummyScheduler"
         )
@@ -406,7 +558,15 @@ class DummyScheduler(BaseFlowFieldScheduler):
         )
 
     @classmethod
-    def from_config(cls, config: dict) -> "DummyScheduler":
+    def from_config(cls, config: dict) -> DummyScheduler:
+        """From config.
+
+        Args:
+            config: Config used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return cls(
             file_list=config["file_list"],
             randomize=config.get("randomize", False),
@@ -415,18 +575,37 @@ class DummyScheduler(BaseFlowFieldScheduler):
 
 
 class FailingDummyScheduler(DummyScheduler):
-    """Same as DummyScheduler, but the first file intentionally fails to load."""
+    """Simulate a load failure for the first file."""
 
-    def load_file(self, file_path):
+    def load_file(self, file_path: Path) -> SchedulerData:
+        """Load file.
+
+        Args:
+            file_path: File path used by this test.
+
+        Returns:
+            The result used by the test assertions.
+
+        Raises:
+            ValueError: When the simulated failure is triggered.
+        """
         if "bad" in Path(file_path).stem:
             raise ValueError("Corrupted file")
         return super().load_file(file_path)
 
 
-def test_abstract_scheduler_iteration(generate_hdf5_file):
+def test_abstract_scheduler_iteration(
+    generate_hdf5_file: Callable[[str, dict[str, int]], str],
+) -> None:
+    """Verify abstract scheduler iteration.
+
+    Args:
+        generate_hdf5_file: Factory that writes an HDF5 flow file and
+            returns its path.
+    """
     tmp_file = generate_hdf5_file(
         "dummy_test.h5",
-        dims={"x_dim": 4, "y_dim": 2, "z_dim": 4, "features": 3},
+        {"x_dim": 4, "y_dim": 2, "z_dim": 4, "features": 3},
     )
     scheduler = DummyScheduler([tmp_file])
     count = 0
@@ -440,18 +619,33 @@ def test_abstract_scheduler_iteration(generate_hdf5_file):
     os.remove(tmp_file)
 
 
-def test_reset_calls_random_shuffle(monkeypatch, tmp_path):
-    """Verify that `reset()` correctly re-shuffles the file list using JAX.
+def test_reset_calls_random_shuffle(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify `reset()` correctly re-shuffles the file list using JAX.
 
     Ensures that when `randomize=True`, the `jax.random.permutation`
     function is used to reorder files upon manual or automatic reset.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+        tmp_path: Temporary directory for this test.
     """
     files = [tmp_path / f"f{i}.dat" for i in range(3)]
     for f in files:
         f.write_text("x")
     call_flag = {"called": 0}
 
-    def spy(key, indices):
+    def spy(key: jax.Array, indices: Any) -> jax.Array:
+        """Spy.
+
+        Args:
+            key: Key used by this test.
+            indices: Indices used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         call_flag["called"] += 1
         return jnp.flip(indices)
 
@@ -470,7 +664,8 @@ def test_reset_calls_random_shuffle(monkeypatch, tmp_path):
     for _ in range(5):
         sch.reset()
     assert call_flag["called"] == 6, (
-        f"Expected 6 total permutation calls (init + 5 resets), got {call_flag['called']}"
+        f"Expected 6 total permutation calls (init + 5"
+        f" resets), got {call_flag['called']}"
     )
 
     assert isinstance(sch.file_list, list), (
@@ -482,7 +677,12 @@ def test_reset_calls_random_shuffle(monkeypatch, tmp_path):
     )
 
 
-def test_directory_initialisation(tmp_path):
+def test_directory_initialisation(tmp_path: Path) -> None:
+    """Verify directory initialisation.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     for idx in range(3):  # create three dummy files in a tmp dir
         (tmp_path / f"flow_{idx}.dat").write_text("irrelevant")
 
@@ -494,7 +694,12 @@ def test_directory_initialisation(tmp_path):
     assert scheduler.file_list == sorted(map(str, tmp_path.iterdir()))
 
 
-def test_error_branch_skips_bad_file(tmp_path):
+def test_error_branch_skips_bad_file(tmp_path: Path) -> None:
+    """Verify error branch skips bad file.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     bad = tmp_path / "bad_file.dat"
     good = tmp_path / "good_file.dat"
     bad.write_text("✗")  # unreadable by design
@@ -514,7 +719,12 @@ def test_error_branch_skips_bad_file(tmp_path):
         _ = scheduler.get_batch(1)
 
 
-def test_get_batch_success(tmp_path):
+def test_get_batch_success(tmp_path: Path) -> None:
+    """Verify get batch success.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     f = tmp_path / "file.dat"
     f.write_text("data")
     scheduler = DummyScheduler([str(f)], randomize=False, loop=False)
@@ -523,7 +733,12 @@ def test_get_batch_success(tmp_path):
     assert batch.flow_fields.shape == (2, 4, 4, 2)  # (batch, x, z, 2)
 
 
-def test_get_batch_partial_raises_stopiteration(tmp_path):
+def test_get_batch_partial_raises_stopiteration(tmp_path: Path) -> None:
+    """Verify get batch partial raises stopiteration.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     f = tmp_path / "one_file.dat"
     f.write_text("data")
     scheduler = DummyScheduler([str(f)], randomize=False, loop=False)
@@ -536,7 +751,8 @@ def test_get_batch_partial_raises_stopiteration(tmp_path):
         4,
         2,
     ), (
-        f"Expected padded batch shape (3, 4, 4, 2), got {batch.flow_fields.shape}"
+        f"Expected padded batch shape (3, 4, 4, 2), got "
+        f"{batch.flow_fields.shape}"
     )
     assert batch.mask is not None, "Expected mask to be present in padded batch"
     assert batch.mask.sum() == 2, f"Expected mask sum 2, got {batch.mask.sum()}"
@@ -546,7 +762,12 @@ def test_get_batch_partial_raises_stopiteration(tmp_path):
     assert batch.flow_fields[2:].sum() == 0, "Padded slice should be zeroed out"
 
 
-def test_get_batch_warning_and_return(tmp_path):
+def test_get_batch_warning_and_return(tmp_path: Path) -> None:
+    """Verify get batch warning and return.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     f = tmp_path / "file.dat"
     f.write_text("x")
 
@@ -566,7 +787,12 @@ def test_get_batch_warning_and_return(tmp_path):
     assert batch.flow_fields.shape == (2, 4, 4, 2)
 
 
-def test_loop_resets_and_continues_dummy(tmp_path):
+def test_loop_resets_and_continues_dummy(tmp_path: Path) -> None:
+    """Verify loop resets and continues dummy.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     # TODO: fix
     f = tmp_path / "one.dat"
     f.write_text("x")
@@ -578,7 +804,8 @@ def test_loop_resets_and_continues_dummy(tmp_path):
 
     assert third.flow_fields.shape == (1, 4, 4, 2)
     assert sch.index == 0 and sch._slice_idx == 1, (
-        f"Expected index 0 and _slice_idx 1 after reset, got {sch.index} and {sch._slice_idx}"
+        f"Expected index 0 and _slice_idx 1 after reset, got "
+        f"{sch.index} and {sch._slice_idx}"
     )
 
 
@@ -586,7 +813,16 @@ def test_loop_resets_and_continues_dummy(tmp_path):
     "randomize, loop",
     [(True, True), (False, True), (True, False), (False, False)],
 )
-def test_flow_field_scheduler_init(randomize, loop, temp_file):
+def test_flow_field_scheduler_init(
+    randomize: bool, loop: bool, temp_file: str
+) -> None:
+    """Verify flow field scheduler init.
+
+    Args:
+        randomize: Randomize used by this test.
+        loop: Loop used by this test.
+        temp_file: Temp file used by this test.
+    """
     scheduler = HDF5FlowFieldScheduler([temp_file], randomize, loop)
     assert scheduler.randomize is randomize, (
         f"Expected randomize={randomize}, got {scheduler.randomize}"
@@ -604,7 +840,14 @@ def test_flow_field_scheduler_init(randomize, loop, temp_file):
     "hdf5_test_dims", [{"x_dim": 10, "y_dim": 6, "z_dim": 20}], indirect=True
 )
 @pytest.mark.parametrize("mock_hdf5_files", [2], indirect=True)
-def test_scheduler_iteration(mock_hdf5_files):
+def test_scheduler_iteration(
+    mock_hdf5_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify scheduler iteration.
+
+    Args:
+        mock_hdf5_files: Temporary HDF5 file paths and their dimensions.
+    """
     files, dims = mock_hdf5_files
 
     scheduler = HDF5FlowFieldScheduler(
@@ -638,8 +881,14 @@ def test_scheduler_iteration(mock_hdf5_files):
     indirect=True,
 )
 @pytest.mark.parametrize("mock_hdf5_files", [2], indirect=True)
-def test_scheduler_iteration_with_multiple_files(mock_hdf5_files):
-    """Test that the scheduler iterates correctly over multiple HDF5 files."""
+def test_scheduler_iteration_with_multiple_files(
+    mock_hdf5_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Test that the scheduler iterates correctly over multiple HDF5 files.
+
+    Args:
+        mock_hdf5_files: Temporary HDF5 file paths and dimensions.
+    """
     files, dims = mock_hdf5_files
 
     scheduler = HDF5FlowFieldScheduler(files, randomize=True, loop=False)
@@ -670,8 +919,16 @@ def test_scheduler_iteration_with_multiple_files(mock_hdf5_files):
 
 @pytest.mark.parametrize("randomize", [True, False])
 @pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
-def test_scheduler_time(randomize, mock_hdf5_files):
-    files, dims = mock_hdf5_files
+def test_scheduler_time(
+    randomize: bool, mock_hdf5_files: tuple[list[str], dict[str, int]]
+) -> None:
+    """Verify scheduler time.
+
+    Args:
+        randomize: Randomize used by this test.
+        mock_hdf5_files: Temporary HDF5 file paths and their dimensions.
+    """
+    files, _dims = mock_hdf5_files
     CI = os.environ.get("CI") == "true"
     time_limit = 0.01 if CI else 10
 
@@ -679,7 +936,8 @@ def test_scheduler_time(randomize, mock_hdf5_files):
         file_list=files, randomize=randomize, loop=False
     )
 
-    def iterate_scheduler():
+    def iterate_scheduler() -> None:
+        """Iterate scheduler."""
         while True:
             try:
                 _ = scheduler.get_batch(1)
@@ -705,11 +963,18 @@ def test_scheduler_time(randomize, mock_hdf5_files):
 
 
 @pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
-def test_prefetch_batch_shapes(mock_hdf5_files):
-    """Test that `PrefetchingFlowFieldScheduler` preserves flow field dimensions.
+def test_prefetch_batch_shapes(
+    mock_hdf5_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Test that `PrefetchingFlowFieldScheduler` preserves flow field
+    dimensions.
 
-    Verifies that the prefetching wrapper correctly passes through batches
-    with the expected shape while managing its background thread.
+    Verifies that the prefetching wrapper correctly passes through
+    batches with the expected shape while managing its background
+    thread.
+
+    Args:
+        mock_hdf5_files: Temporary HDF5 file paths and dimensions.
     """
     files, dims = mock_hdf5_files
     scheduler = HDF5FlowFieldScheduler(files, loop=False)
@@ -728,18 +993,32 @@ def test_prefetch_batch_shapes(mock_hdf5_files):
 
 
 @pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
-def test_prefetch_batch_size_validation(mock_hdf5_files):
+def test_prefetch_batch_size_validation(
+    mock_hdf5_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify prefetch batch size validation.
+
+    Args:
+        mock_hdf5_files: Temporary HDF5 file paths and their dimensions.
+    """
     files, _ = mock_hdf5_files
     scheduler = HDF5FlowFieldScheduler(files, loop=False)
     prefetch = PrefetchingFlowFieldScheduler(scheduler=scheduler, batch_size=4)
 
-    with pytest.raises(ValueError, match="Batch size .* does not match"):
+    with pytest.raises(ValueError, match=r"Batch size .* does not match"):
         prefetch.get_batch(8)
     prefetch.shutdown()
 
 
 @pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
-def test_prefetch_scheduler_exhaustion(mock_hdf5_files):
+def test_prefetch_scheduler_exhaustion(
+    mock_hdf5_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify prefetch scheduler exhaustion.
+
+    Args:
+        mock_hdf5_files: Temporary HDF5 file paths and their dimensions.
+    """
     files, _ = mock_hdf5_files
     scheduler = HDF5FlowFieldScheduler(files, loop=False)
     prefetch = PrefetchingFlowFieldScheduler(
@@ -760,7 +1039,14 @@ def test_prefetch_scheduler_exhaustion(mock_hdf5_files):
 
 
 @pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
-def test_prefetch_scheduler_shutdown(mock_hdf5_files):
+def test_prefetch_scheduler_shutdown(
+    mock_hdf5_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify prefetch scheduler shutdown.
+
+    Args:
+        mock_hdf5_files: Temporary HDF5 file paths and their dimensions.
+    """
     files, _ = mock_hdf5_files
     scheduler = HDF5FlowFieldScheduler(files, loop=True)
     prefetch = PrefetchingFlowFieldScheduler(scheduler=scheduler, batch_size=2)
@@ -774,12 +1060,17 @@ def test_prefetch_scheduler_shutdown(mock_hdf5_files):
 @pytest.mark.parametrize("bad_include_images", ["bad_value", None, 123])
 @pytest.mark.parametrize("mock_numpy_files", [1], indirect=True)
 def test_mat_scheduler_invalid_include_images(
-    bad_include_images, mock_numpy_files
-):
-    """Test that invalid `include_images` values raise a ValueError."""
+    bad_include_images: Any, mock_numpy_files: tuple[list[str], dict[str, int]]
+) -> None:
+    """Test that invalid `include_images` values raise a ValueError.
+
+    Args:
+        bad_include_images: Bad include images for this test case.
+        mock_numpy_files: Temporary NumPy file paths and dimensions.
+    """
     files, _ = mock_numpy_files
     with pytest.raises(
-        ValueError, match="include_images must be a boolean value."
+        ValueError, match=r"include_images must be a boolean value."
     ):
         NumpyFlowFieldScheduler.from_config(
             {
@@ -789,9 +1080,15 @@ def test_mat_scheduler_invalid_include_images(
         )
 
 
-def test_numpy_scheduler_outputs_files(mock_numpy_files):
-    """Test that the scheduler returns correct file paths in the batch."""
-    files, dims = mock_numpy_files
+def test_numpy_scheduler_outputs_files(
+    mock_numpy_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Test that the scheduler returns correct file paths in the batch.
+
+    Args:
+        mock_numpy_files: Temporary NumPy file paths and dimensions.
+    """
+    files, _dims = mock_numpy_files
     scheduler = NumpyFlowFieldScheduler.from_config(
         {
             "file_list": files,
@@ -819,13 +1116,20 @@ def test_numpy_scheduler_outputs_files(mock_numpy_files):
             assert os.path.basename(file_path) in [
                 os.path.basename(f) for f in files
             ], (
-                f"File {os.path.basename(file_path)} does not match any input files"
+                f"File {os.path.basename(file_path)}"
+                f" does not match any input files"
             )
 
 
-def test_hdf5_scheduler_outputs_files(mock_hdf5_files):
-    """Test that the scheduler returns correct file paths in the batch."""
-    files, dims = mock_hdf5_files
+def test_hdf5_scheduler_outputs_files(
+    mock_hdf5_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Test that the scheduler returns correct file paths in the batch.
+
+    Args:
+        mock_hdf5_files: Temporary HDF5 file paths and dimensions.
+    """
+    files, _dims = mock_hdf5_files
     scheduler = HDF5FlowFieldScheduler.from_config(
         {
             "file_list": files,
@@ -853,5 +1157,6 @@ def test_hdf5_scheduler_outputs_files(mock_hdf5_files):
             assert os.path.basename(file_path) in [
                 os.path.basename(f) for f in files
             ], (
-                f"File {os.path.basename(file_path)} does not match any input files"
+                f"File {os.path.basename(file_path)}"
+                f" does not match any input files"
             )

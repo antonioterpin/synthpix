@@ -1,11 +1,14 @@
 """Tests for MATDataSource.
 
-MATDataSource specializes in loading flow fields and images from MATLAB (.mat)
-files. It supports both legacy (v7 and earlier, via scipy.io) and modern
-(v7.3+, via h5py) MATLAB formats.
+MATDataSource specializes in loading flow fields and images from
+MATLAB (.mat) files. It supports both legacy (v7 and earlier, via
+scipy.io) and modern (v7.3+, via h5py) MATLAB formats.
 """
 
+from __future__ import annotations
+
 import os
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -15,11 +18,15 @@ import scipy.io
 from synthpix.data_sources import MATDataSource
 
 
-def test_mat_loading(mock_mat_files):
+def test_mat_loading(mock_mat_files: tuple[list[str], dict[str, int]]) -> None:
     """Test standard loading of MAT files using the mock_mat_files fixture.
 
-    Verifies that the data source correctly identifies files, extracts flow
-    fields with the expected shape, and stores the file path metadata.
+    Verifies that the data source correctly identifies files, extracts
+    flow fields with the expected shape, and stores the file path
+    metadata.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
     """
     file_paths, dims = mock_mat_files  # mock_mat_files yields (paths, dims)
     root = os.path.dirname(file_paths[0])
@@ -35,35 +42,46 @@ def test_mat_loading(mock_mat_files):
         dims["width"],
         2,
     ), (
-        f"Flow field shape mismatch. Expected {(dims['height'], dims['width'], 2)}, got {item['flow_fields'].shape}"
+        f"Flow field shape mismatch. Expected "
+        f"{(dims['height'], dims['width'], 2)}, got "
+        f"{item['flow_fields'].shape}"
     )
     assert item["file"] in file_paths, (
         "Item file path not in original file list"
     )
 
 
-def test_mat_resizing(mock_mat_files):
+def test_mat_resizing(mock_mat_files: tuple[list[str], dict[str, int]]) -> None:
     """Test the automatic resizing of flow fields to a target output shape.
 
-    When output_shape is provided to the MATDataSource, all retrieved flow
-    fields should be resized to that shape correctly.
+    When output_shape is provided to the MATDataSource, all retrieved
+    flow fields should be resized to that shape correctly.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
     """
-    file_paths, dims = mock_mat_files
+    file_paths, _dims = mock_mat_files
     root = os.path.dirname(file_paths[0])
 
     # Test resize to 50x50
     new_shape = (50, 50)
     ds = MATDataSource([root], output_shape=new_shape)
     item = ds[0]
-    assert item["flow_fields"].shape == new_shape + (2,), (
-        f"Resized flow field shape mismatch. Expected {new_shape + (2,)}, got {item['flow_fields'].shape}"
+    assert item["flow_fields"].shape == (*new_shape, 2), (
+        f"Resized flow field shape mismatch. Expected "
+        f"{(*new_shape, 2)}, got {item['flow_fields'].shape}"
     )
 
 
-def test_mat_missing_images(tmp_path):
-    """Test that ValueError is raised if images are requested but missing from the MAT file.
+def test_mat_missing_images(tmp_path: Path) -> None:
+    """Test that ValueError is raised if images are requested but missing
+    from the MAT file.
 
-    When include_images=True, the MAT file must contain 'I0' and 'I1' keys.
+    When include_images=True, the MAT file must contain 'I0' and 'I1'
+    keys.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     p1 = tmp_path / "no_images.mat"
     # Create a simple .mat file with ONLY 'V' (using scipy for simplicity here)
@@ -76,8 +94,12 @@ def test_mat_missing_images(tmp_path):
         _ = ds[0]
 
 
-def test_file_discovery_recursive(tmp_path):
-    """Test recursive file discovery using tmp_path."""
+def test_file_discovery_recursive(tmp_path: Path) -> None:
+    """Test recursive file discovery using tmp_path.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     subdir = tmp_path / "subdir"
     subdir.mkdir()
 
@@ -98,11 +120,15 @@ def test_file_discovery_recursive(tmp_path):
     ], f"Incorrect file discovery. Expected ['a.mat', 'b.mat'], got {files}"
 
 
-def test_mat_hdf5_fallback(tmp_path):
-    """Test that MATDataSource correctly falls back to h5py for v7.3 MAT files.
+def test_mat_hdf5_fallback(tmp_path: Path) -> None:
+    """Test that MATDataSource correctly falls back to h5py for v7.3 MAT
+    files.
 
-    Legacy MAT files are handled by scipy.io, but newer ones use the HDF5
-    container format and require h5py.
+    Legacy MAT files are handled by scipy.io, but newer ones use the
+    HDF5 container format and require h5py.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     p_h5 = tmp_path / "test_v73.mat"
 
@@ -120,12 +146,18 @@ def test_mat_hdf5_fallback(tmp_path):
         256,
         2,
     ), (
-        f"HDF5 fallback flow field shape mismatch. Expected (256, 256, 2), got {item['flow_fields'].shape}"
+        f"HDF5 fallback flow field shape mismatch. "
+        f"Expected (256, 256, 2), got "
+        f"{item['flow_fields'].shape}"
     )
 
 
-def test_mat_missing_v_key(tmp_path):
-    """Test that ValueError is raised if 'V' key is missing."""
+def test_mat_missing_v_key(tmp_path: Path) -> None:
+    """Test that ValueError is raised if 'V' key is missing.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     p = tmp_path / "bad.mat"
     data = {"WrongKey": np.random.rand(64, 64, 2)}
     scipy.io.savemat(p, data)
@@ -135,8 +167,12 @@ def test_mat_missing_v_key(tmp_path):
         _ = ds[0]
 
 
-def test_mat_failed_to_load(tmp_path):
-    """Test ValueError when file cannot be loaded as Scipy or HDF5."""
+def test_mat_failed_to_load(tmp_path: Path) -> None:
+    """Test ValueError when file cannot be loaded as Scipy or HDF5.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     p = tmp_path / "garbage.mat"
     with open(p, "wb") as f:
         f.write(b"garbage")
@@ -146,8 +182,13 @@ def test_mat_failed_to_load(tmp_path):
         _ = ds[0]
 
 
-def test_mat_transpose_channel(tmp_path):
-    """Test that flow fields with shape (2, H, W) are transposed to (H, W, 2)."""
+def test_mat_transpose_channel(tmp_path: Path) -> None:
+    """Test that flow fields with shape (2, H, W) are transposed to (H, W,
+    2).
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     p = tmp_path / "transposed.mat"
     # Create data with shape (2, 32, 32)
     data = {"V": np.random.rand(2, 32, 32)}
@@ -163,8 +204,12 @@ def test_mat_transpose_channel(tmp_path):
     ), f"Expected transposed shape (32, 32, 2), got {item['flow_fields'].shape}"
 
 
-def test_mat_image_resizing(tmp_path):
-    """Test that images are resized if they don't match output_shape."""
+def test_mat_image_resizing(tmp_path: Path) -> None:
+    """Test that images are resized if they don't match output_shape.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     p = tmp_path / "img_resize.mat"
     # Original content 64x64
     data = {
@@ -182,21 +227,28 @@ def test_mat_image_resizing(tmp_path):
     item = ds[0]
 
     assert item["images1"].shape == target_shape, (
-        f"Image1 shape mismatch. Expected {target_shape}, got {item['images1'].shape}"
+        f"Image1 shape mismatch. Expected {target_shape}, got "
+        f"{item['images1'].shape}"
     )
     assert item["images2"].shape == target_shape, (
-        f"Image2 shape mismatch. Expected {target_shape}, got {item['images2'].shape}"
+        f"Image2 shape mismatch. Expected {target_shape}, got "
+        f"{item['images2'].shape}"
     )
-    assert item["flow_fields"].shape == target_shape + (2,), (
-        f"Resized flow field shape mismatch. Expected {target_shape + (2,)}, got {item['flow_fields'].shape}"
+    assert item["flow_fields"].shape == (*target_shape, 2), (
+        f"Resized flow field shape mismatch. Expected "
+        f"{(*target_shape, 2)}, got {item['flow_fields'].shape}"
     )
 
 
-def test_mat_recursive_hdf5_flattening(tmp_path):
-    """Test that the HDF5 loader correctly flattens nested groups into a flat dictionary.
+def test_mat_recursive_hdf5_flattening(tmp_path: Path) -> None:
+    """Test that the HDF5 loader correctly flattens nested groups into a
+    flat dictionary.
 
-    This ensures that variables stored within MATLAB structures (which map to
-    HDF5 groups in v7.3) can still be discovered and loaded.
+    This ensures that variables stored within MATLAB structures (which
+    map to HDF5 groups in v7.3) can still be discovered and loaded.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     p_h5 = tmp_path / "recursive.mat"
     with h5py.File(p_h5, "w") as f:
@@ -208,18 +260,24 @@ def test_mat_recursive_hdf5_flattening(tmp_path):
         # The MATDataSource logic:
         # 1. recursively_load_hdf5_group(f) -> returns flat dict
         # 2. Checks if "V" in data.
-        # But if V is at "Group1/Group2/V", properties check will look for "V" key?
+        # But if V is at "Group1/Group2/V", properties check will look for "V"
+        # key?
         # `data` dict keys will be paths.
-        # The existing code: `if "V" not in data:` check at line 92 of mat.py only checks top-level 'V'.
-        # Wait, `recursively_load_hdf5_group` returns `{'Group1/Group2/V': ...}`.
+        # The existing code: `if "V" not in data:` check at line 92 of mat.py
+        # only checks top-level 'V'.
+        # Wait, `recursively_load_hdf5_group` returns `{'Group1/Group2/V':
+        # ...}`.
         # So "V" will NOT be in data. It will fail.
-        # This implies `recursively_load_hdf5_group` is only useful if structure mimics MATLAB structs?
+        # This implies `recursively_load_hdf5_group` is only useful if structure
+        # mimics MATLAB structs?
         # If I save a struct in MATLAB v7.3, it appears as Group?
         # But if the variable is named "V", it should be at root?
         # If I have a struct `S.V`, it would be `S/V`.
         # The code expects `data["V"]`.
-        # So this test reveals that the code might NOT handle nested "V" unless checking specific paths.
-        # However, we just want to cover the `recursively_load_hdf5_group` function lines 29-30.
+        # So this test reveals that the code might NOT handle nested "V" unless
+        # checking specific paths.
+        # However, we just want to cover the `recursively_load_hdf5_group`
+        # function lines 29-30.
         # Ensure we have a root V so it doesn't fail, but ALSO have a nested
         # group to trigger the recursion.
 
@@ -230,7 +288,8 @@ def test_mat_recursive_hdf5_flattening(tmp_path):
     ds = MATDataSource([str(tmp_path)])
     item = ds[0]
     # Check if nested data was loaded?
-    # `item` only contains "flow_fields", "images1", "images2" and keys from original file that are not __.
+    # `item` only contains "flow_fields", "images1", "images2" and keys from
+    # original file that are not __.
     # But `load_file` logic: `result = {"flow_fields": ...}`
     # It does NOT return all keys from `data`. It extracts V, I0, I1.
     # So `recursively_load_hdf5_group` is executed, but its result is filtered.

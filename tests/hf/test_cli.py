@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -10,13 +11,23 @@ from synthpix.hf import cli
 
 
 def _populate(tmp_path: Path) -> None:
+    """Populate.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     # Drop a single ``.mat`` file so ``inspect_local_layout`` succeeds.
     train = tmp_path / "train"
     train.mkdir()
     (train / "flow.mat").write_bytes(b"x" * 8)
 
 
-def test_card_subcommand_writes_readme(tmp_path: Path):
+def test_card_subcommand_writes_readme(tmp_path: Path) -> None:
+    """Verify card subcommand writes readme.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     _populate(tmp_path)
     rc = cli.main(
         [
@@ -37,7 +48,14 @@ def test_card_subcommand_writes_readme(tmp_path: Path):
     assert "fake citation" in readme.read_text()
 
 
-def test_card_subcommand_refuses_overwrite_without_force(tmp_path: Path):
+def test_card_subcommand_refuses_overwrite_without_force(
+    tmp_path: Path,
+) -> None:
+    """Verify card subcommand refuses overwrite without force.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     _populate(tmp_path)
     readme = tmp_path / "README.md"
     readme.write_text("existing content")
@@ -57,7 +75,12 @@ def test_card_subcommand_refuses_overwrite_without_force(tmp_path: Path):
     assert readme.read_text() == "existing content"
 
 
-def test_card_subcommand_overwrites_with_force(tmp_path: Path):
+def test_card_subcommand_overwrites_with_force(tmp_path: Path) -> None:
+    """Verify card subcommand overwrites with force.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     _populate(tmp_path)
     readme = tmp_path / "README.md"
     readme.write_text("existing content")
@@ -78,7 +101,12 @@ def test_card_subcommand_overwrites_with_force(tmp_path: Path):
     assert "fake citation" in readme.read_text()
 
 
-def test_card_subcommand_reads_citation_from_file(tmp_path: Path):
+def test_card_subcommand_reads_citation_from_file(tmp_path: Path) -> None:
+    """Verify card subcommand reads citation from file.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     _populate(tmp_path)
     citation_file = tmp_path / "CITATION.bib"
     citation_file.write_text("@misc{example, title={Example}}")
@@ -99,7 +127,12 @@ def test_card_subcommand_reads_citation_from_file(tmp_path: Path):
     assert "@misc{example" in readme.read_text()
 
 
-def test_card_citation_literal_not_treated_as_path(tmp_path: Path):
+def test_card_citation_literal_not_treated_as_path(tmp_path: Path) -> None:
+    """Verify card citation literal not treated as path.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     # A literal --citation that matches a CWD file must not be silently read.
     _populate(tmp_path)
     # Create a file whose name matches the literal we will pass.
@@ -119,12 +152,20 @@ def test_card_citation_literal_not_treated_as_path(tmp_path: Path):
 
     readme = (tmp_path / "README.md").read_text()
     assert rc == 0
-    # The literal string was preserved verbatim — the decoy content did not leak in.
+    # The literal string was preserved verbatim — the decoy content did not leak
+    # in.
     assert "file-contents-should-not-leak" not in readme
     assert str(decoy) in readme
 
 
-def test_card_citation_and_citation_file_are_mutually_exclusive(tmp_path: Path):
+def test_card_citation_and_citation_file_are_mutually_exclusive(
+    tmp_path: Path,
+) -> None:
+    """Verify card citation and citation file are mutually exclusive.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     _populate(tmp_path)
     citation_file = tmp_path / "CITATION.bib"
     citation_file.write_text("@misc{example}")
@@ -144,7 +185,12 @@ def test_card_citation_and_citation_file_are_mutually_exclusive(tmp_path: Path):
         )
 
 
-def test_card_output_creates_missing_parent_directory(tmp_path: Path):
+def test_card_output_creates_missing_parent_directory(tmp_path: Path) -> None:
+    """Verify card output creates missing parent directory.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     _populate(tmp_path)
     output = tmp_path / "nested" / "deeper" / "card.md"
     assert not output.parent.exists()
@@ -166,7 +212,12 @@ def test_card_output_creates_missing_parent_directory(tmp_path: Path):
     assert output.exists()
 
 
-def test_card_subcommand_respects_output(tmp_path: Path):
+def test_card_subcommand_respects_output(tmp_path: Path) -> None:
+    """Verify card subcommand respects output.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     _populate(tmp_path)
     output = tmp_path / "custom.md"
 
@@ -189,11 +240,19 @@ def test_card_subcommand_respects_output(tmp_path: Path):
 
 
 def test_cli_push_requires_allow_public_when_public(
-    monkeypatch, tmp_path: Path, capsys
-):
-    monkeypatch.setattr(
-        cli, "push_dataset", lambda *a, **kw: "should-not-call"
-    )
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify cli push requires allow public when public.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+        capsys: Capture of standard output and standard error.
+    """
+    monkeypatch.setattr(cli, "push_dataset", lambda *a, **kw: "should-not-call")
 
     rc = cli.main(["push", str(tmp_path), "user/repo", "--public"])
 
@@ -203,11 +262,29 @@ def test_cli_push_requires_allow_public_when_public(
 
 
 def test_cli_push_public_with_allow_public_skips_tty_prompt_when_not_tty(
-    monkeypatch, tmp_path: Path
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify cli push public with allow public skips tty prompt when not
+    tty.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     captured: dict = {}
 
-    def _fake(local_dir, repo_id, **kwargs):
+    def _fake(local_dir: Path, repo_id: str, **kwargs: Any) -> str:
+        """Fake.
+
+        Args:
+            local_dir: Local dir for this test case.
+            repo_id: Repo id for this test case.
+            **kwargs: Keyword arguments accepted by the test double.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         captured["local_dir"] = local_dir
         captured["repo_id"] = repo_id
         captured.update(kwargs)
@@ -231,10 +308,29 @@ def test_cli_push_public_with_allow_public_skips_tty_prompt_when_not_tty(
     assert captured["allow_public"] is True
 
 
-def test_cli_push_public_prompts_on_tty(monkeypatch, tmp_path: Path):
+def test_cli_push_public_prompts_on_tty(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify cli push public prompts on tty.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     calls: list[dict] = []
 
-    def _fake(local_dir, repo_id, **kwargs):
+    def _fake(local_dir: Path, repo_id: str, **kwargs: Any) -> str:
+        """Fake.
+
+        Args:
+            local_dir: Local dir for this test case.
+            repo_id: Repo id for this test case.
+            **kwargs: Keyword arguments accepted by the test double.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         calls.append({"local_dir": local_dir, "repo_id": repo_id, **kwargs})
         return "sha-abc"
 
@@ -269,11 +365,19 @@ def test_cli_push_public_prompts_on_tty(monkeypatch, tmp_path: Path):
 
 
 def test_cli_push_card_partial_args_errors(
-    monkeypatch, tmp_path: Path, capsys
-):
-    monkeypatch.setattr(
-        cli, "push_dataset", lambda *a, **kw: "should-not-call"
-    )
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify cli push card partial args errors.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+        capsys: Capture of standard output and standard error.
+    """
+    monkeypatch.setattr(cli, "push_dataset", lambda *a, **kw: "should-not-call")
 
     rc = cli.main(
         [
@@ -290,10 +394,29 @@ def test_cli_push_card_partial_args_errors(
     assert "card" in captured.err.lower()
 
 
-def test_cli_push_card_full_args_builds_meta(monkeypatch, tmp_path: Path):
+def test_cli_push_card_full_args_builds_meta(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify cli push card full args builds meta.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     captured: dict = {}
 
-    def _fake(local_dir, repo_id, **kwargs):
+    def _fake(local_dir: Path, repo_id: str, **kwargs: Any) -> str:
+        """Fake.
+
+        Args:
+            local_dir: Local dir for this test case.
+            repo_id: Repo id for this test case.
+            **kwargs: Keyword arguments accepted by the test double.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         captured.update(kwargs)
         return "sha-1"
 
@@ -321,10 +444,29 @@ def test_cli_push_card_full_args_builds_meta(monkeypatch, tmp_path: Path):
     assert meta.pretty_name == "Pretty Name"
 
 
-def test_cli_push_no_card_passes_none(monkeypatch, tmp_path: Path):
+def test_cli_push_no_card_passes_none(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify cli push no card passes none.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     captured: dict = {}
 
-    def _fake(local_dir, repo_id, **kwargs):
+    def _fake(local_dir: Path, repo_id: str, **kwargs: Any) -> str:
+        """Fake.
+
+        Args:
+            local_dir: Local dir for this test case.
+            repo_id: Repo id for this test case.
+            **kwargs: Keyword arguments accepted by the test double.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         captured.update(kwargs)
         return "sha-1"
 
@@ -347,27 +489,67 @@ def test_cli_push_no_card_passes_none(monkeypatch, tmp_path: Path):
     assert captured["card_meta"] is None
 
 
-def test_cli_push_dry_run_propagates(monkeypatch, tmp_path: Path):
+def test_cli_push_dry_run_propagates(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify cli push dry run propagates.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     captured: dict = {}
 
-    def _fake(local_dir, repo_id, **kwargs):
+    def _fake(local_dir: Path, repo_id: str, **kwargs: Any) -> str:
+        """Fake.
+
+        Args:
+            local_dir: Local dir for this test case.
+            repo_id: Repo id for this test case.
+            **kwargs: Keyword arguments accepted by the test double.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         captured.update(kwargs)
         return "dry-run"
 
     monkeypatch.setattr(cli, "push_dataset", _fake)
 
-    rc = cli.main(
-        ["push", str(tmp_path), "user/repo", "--dry-run"]
-    )
+    rc = cli.main(["push", str(tmp_path), "user/repo", "--dry-run"])
 
     assert rc == 0
     assert captured["dry_run"] is True
 
 
 def test_cli_push_token_not_logged(
-    monkeypatch, tmp_path: Path, capsys, caplog
-):
-    def _fake(local_dir, repo_id, **kwargs):
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Verify cli push token not logged.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+        capsys: Capture of standard output and standard error.
+        caplog: Capture of emitted log records.
+    """
+
+    def _fake(local_dir: Path, repo_id: str, **kwargs: Any) -> str:
+        """Fake.
+
+        Args:
+            local_dir: Local dir for this test case.
+            repo_id: Repo id for this test case.
+            **kwargs: Keyword arguments accepted by the test double.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         return "sha-secret-free"
 
     monkeypatch.setattr(cli, "push_dataset", _fake)
@@ -390,10 +572,29 @@ def test_cli_push_token_not_logged(
         assert "hf_secret" not in record.getMessage()
 
 
-def test_cli_pull_invokes_pull_dataset(monkeypatch, tmp_path: Path):
+def test_cli_pull_invokes_pull_dataset(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify cli pull invokes pull dataset.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     captured: dict = {}
 
-    def _fake(repo_id, local_dir, **kwargs):
+    def _fake(repo_id: str, local_dir: Path, **kwargs: Any) -> Path:
+        """Fake.
+
+        Args:
+            repo_id: Repo id for this test case.
+            local_dir: Local dir for this test case.
+            **kwargs: Keyword arguments accepted by the test double.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         captured["repo_id"] = repo_id
         captured["local_dir"] = local_dir
         captured.update(kwargs)
@@ -422,10 +623,29 @@ def test_cli_pull_invokes_pull_dataset(monkeypatch, tmp_path: Path):
     assert captured["token"] is None
 
 
-def test_cli_pull_multiple_include_flags(monkeypatch, tmp_path: Path):
+def test_cli_pull_multiple_include_flags(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify cli pull multiple include flags.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     captured: dict = {}
 
-    def _fake(repo_id, local_dir, **kwargs):
+    def _fake(repo_id: str, local_dir: Path, **kwargs: Any) -> Path:
+        """Fake.
+
+        Args:
+            repo_id: Repo id for this test case.
+            local_dir: Local dir for this test case.
+            **kwargs: Keyword arguments accepted by the test double.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         captured.update(kwargs)
         Path(local_dir).mkdir(parents=True, exist_ok=True)
         return Path(local_dir)
@@ -449,9 +669,29 @@ def test_cli_pull_multiple_include_flags(monkeypatch, tmp_path: Path):
 
 
 def test_cli_pull_exit_nonzero_on_runtime_error(
-    monkeypatch, tmp_path: Path, capsys
-):
-    def _boom(*_args, **_kwargs):
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify cli pull exit nonzero on runtime error.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+        capsys: Capture of standard output and standard error.
+    """
+
+    def _boom(*_args: Any, **_kwargs: Any) -> None:
+        """Boom.
+
+        Args:
+            *_args: Positional arguments accepted by the test double.
+            **_kwargs: Keyword arguments accepted by the test double.
+
+        Raises:
+            RuntimeError: When the simulated failure is triggered.
+        """
         raise RuntimeError("boom!")
 
     monkeypatch.setattr(cli, "pull_dataset", _boom)
@@ -463,10 +703,29 @@ def test_cli_pull_exit_nonzero_on_runtime_error(
     assert "boom!" in captured.err
 
 
-def test_cli_pull_splits_strips_whitespace(monkeypatch, tmp_path: Path):
+def test_cli_pull_splits_strips_whitespace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify cli pull splits strips whitespace.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     captured: dict = {}
 
-    def _fake(repo_id, local_dir, **kwargs):
+    def _fake(repo_id: str, local_dir: Path, **kwargs: Any) -> Path:
+        """Fake.
+
+        Args:
+            repo_id: Repo id for this test case.
+            local_dir: Local dir for this test case.
+            **kwargs: Keyword arguments accepted by the test double.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         captured.update(kwargs)
         Path(local_dir).mkdir(parents=True, exist_ok=True)
         return Path(local_dir)
@@ -488,10 +747,29 @@ def test_cli_pull_splits_strips_whitespace(monkeypatch, tmp_path: Path):
     assert captured["splits"] == ("train", "val", "test")
 
 
-def test_cli_pull_splits_all_empty_becomes_none(monkeypatch, tmp_path: Path):
+def test_cli_pull_splits_all_empty_becomes_none(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify cli pull splits all empty becomes none.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     captured: dict = {}
 
-    def _fake(repo_id, local_dir, **kwargs):
+    def _fake(repo_id: str, local_dir: Path, **kwargs: Any) -> Path:
+        """Fake.
+
+        Args:
+            repo_id: Repo id for this test case.
+            local_dir: Local dir for this test case.
+            **kwargs: Keyword arguments accepted by the test double.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         captured.update(kwargs)
         Path(local_dir).mkdir(parents=True, exist_ok=True)
         return Path(local_dir)
@@ -513,14 +791,34 @@ def test_cli_pull_splits_all_empty_becomes_none(monkeypatch, tmp_path: Path):
 
 
 def test_cli_pull_summary_counts_root_files(
-    monkeypatch, tmp_path: Path, capsys
-):
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify cli pull summary counts root files.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+        capsys: Capture of standard output and standard error.
+    """
     # The summary line must count root-level files (e.g. README.md) that
     # ``pull_dataset(..., splits=...)`` brings along, not just files under
     # the recognized split directories.
     target = tmp_path / "data"
 
-    def _fake(repo_id, local_dir, **_kwargs):
+    def _fake(repo_id: str, local_dir: Path, **_kwargs: Any) -> Path:
+        """Fake.
+
+        Args:
+            repo_id: Repo id for this test case.
+            local_dir: Local dir for this test case.
+            **_kwargs: Keyword arguments accepted by the test double.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         local = Path(local_dir)
         (local / "train").mkdir(parents=True, exist_ok=True)
         (local / "train" / "a.mat").write_bytes(b"x" * 4)
@@ -546,9 +844,32 @@ def test_cli_pull_summary_counts_root_files(
 
 
 def test_cli_pull_token_not_logged(
-    monkeypatch, tmp_path: Path, capsys, caplog
-):
-    def _fake(repo_id, local_dir, **_kwargs):
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Verify cli pull token not logged.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+        capsys: Capture of standard output and standard error.
+        caplog: Capture of emitted log records.
+    """
+
+    def _fake(repo_id: str, local_dir: Path, **_kwargs: Any) -> Path:
+        """Fake.
+
+        Args:
+            repo_id: Repo id for this test case.
+            local_dir: Local dir for this test case.
+            **_kwargs: Keyword arguments accepted by the test double.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         Path(local_dir).mkdir(parents=True, exist_ok=True)
         return Path(local_dir)
 

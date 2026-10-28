@@ -1,12 +1,15 @@
 """Ablation benchmarks for the SyntheticImageSampler.
 
 These tests perform detailed timing sweeps across various sampler
-configurations, recording performance statistics (mean, std, percentiles)
-to CSV for offline analysis of throughput bottlenecks.
+configurations, recording performance statistics (mean, std,
+percentiles) to CSV for offline analysis of throughput bottlenecks.
 """
+
+from __future__ import annotations
 
 import csv
 import timeit
+from typing import Any
 
 import jax
 import numpy as np
@@ -14,6 +17,7 @@ import pytest
 
 from synthpix.sampler import SyntheticImageSampler
 from synthpix.scheduler import PrefetchingFlowFieldScheduler
+from synthpix.scheduler.protocol import SchedulerProtocol
 from synthpix.utils import load_configuration
 
 sampler_config = load_configuration("config/test_data.yaml")
@@ -24,7 +28,13 @@ REPETITIONS = config["REPETITIONS"]
 NUMBER_OF_EXECUTIONS = config["EXECUTIONS_SAMPLER"]
 
 
-def write_speed_stats_to_csv(filename, all_rows):
+def write_speed_stats_to_csv(filename: str, all_rows: Any) -> None:
+    """Write speed stats to csv.
+
+    Args:
+        filename: Filename used by this test.
+        all_rows: All rows used by this test.
+    """
     with open(filename, "w", newline="") as f:
         writer = csv.DictWriter(
             f,
@@ -60,10 +70,18 @@ def write_speed_stats_to_csv(filename, all_rows):
 @pytest.mark.parametrize("batch_size", [64])
 @pytest.mark.parametrize("batches_per_flow_batch", [1, 10, 100, 1000])
 def test_speed_sampler_sweep_all(
-    scheduler,
-    batch_size,
-    batches_per_flow_batch,
-):
+    scheduler: SchedulerProtocol,
+    batch_size: int,
+    batches_per_flow_batch: int,
+) -> None:
+    """Verify speed sampler sweep all.
+
+    Args:
+        scheduler: Scheduler fixture or test double under test.
+        batch_size: Batch size used by this test.
+        batches_per_flow_batch: Batches per flow batch used by this
+            test.
+    """
     config = sampler_config.copy()
     particles_dim = [[0.8, 1.2]]  # diameter_range
     seeding_density = 0.06  # seeding_density
@@ -113,16 +131,18 @@ def test_speed_sampler_sweep_all(
 
     all_rows = []
 
-    def run_sampler():
+    def run_sampler() -> None:
+        """Run sampler."""
         # Time the data sampling (batch_size batches)
         for i, batch in enumerate(sampler):
             batch.images1.block_until_ready()
             batch.images2.block_until_ready()
             batch.flow_fields.block_until_ready()
-            batch.params.seeding_densities.block_until_ready()  # type: ignore
-            batch.params.diameter_ranges.block_until_ready()  # type: ignore
-            batch.params.intensity_ranges.block_until_ready()  # type: ignore
-            batch.params.rho_ranges.block_until_ready()  # type: ignore
+            assert batch.params is not None
+            batch.params.seeding_densities.block_until_ready()
+            batch.params.diameter_ranges.block_until_ready()
+            batch.params.intensity_ranges.block_until_ready()
+            batch.params.rho_ranges.block_until_ready()
             if i + 1 >= NUMBER_OF_EXECUTIONS:
                 sampler.reset(scheduler_reset=False)
                 break

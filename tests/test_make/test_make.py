@@ -1,19 +1,23 @@
 """Tests for the `make` factory function and configuration validation.
 
-This module verifies that the `make` function correctly instantiates the
-appropriate scheduler and sampler combinations based on user configuration.
-It covers parameter validation, legacy vs. Grain stack selection, and
-correct delegation of arguments to underlying components.
+This module verifies that the `make` function correctly instantiates
+the appropriate scheduler and sampler combinations based on user
+configuration. It covers parameter validation, legacy vs. Grain
+stack selection, and correct delegation of arguments to underlying
+components.
 """
 
+from __future__ import annotations
+
 import importlib
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
-from synthpix.data_sources import FileDataSource
+from synthpix.data_sources import FileDataSource, MATDataSource
 
 make_mod = importlib.import_module("synthpix.make")
 make = make_mod.make
@@ -23,20 +27,38 @@ class DummyScheduler:
     """Lightweight stand-in for real schedulers."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the test double.
+
+        Args:
+            *args: Positional arguments accepted by the test double.
+            **kwargs: Keyword arguments accepted by the test double.
+        """
         self.args = args
         self.kwargs = kwargs
 
     @classmethod
-    def from_config(cls, cfg: dict) -> "DummyScheduler":
+    def from_config(cls, cfg: dict) -> DummyScheduler:
+        """From config.
+
+        Args:
+            cfg: Cfg used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         # Record config passed by make()
         return cls(cfg)
 
 
 class DummyPrefetchScheduler(DummyScheduler):
+    """Dummy Prefetch Scheduler test double."""
+
     pass
 
 
 class DummyEpisodicScheduler(DummyScheduler):
+    """Dummy Episodic Scheduler test double."""
+
     pass
 
 
@@ -50,6 +72,14 @@ class DummySampler:
         *args: Any,
         **kwargs: Any,
     ) -> None:
+        """Initialize the test double.
+
+        Args:
+            scheduler: Scheduler fixture or test double under test.
+            batch_size: Number of samples requested in each batch.
+            *args: Positional arguments accepted by the test double.
+            **kwargs: Keyword arguments accepted by the test double.
+        """
         self.scheduler = scheduler
         self.batch_size = batch_size
         self.kwargs = kwargs
@@ -57,14 +87,31 @@ class DummySampler:
     @classmethod
     def from_config(
         cls, scheduler: DummyScheduler, *args: Any, **kwargs: Any
-    ) -> "DummySampler":
+    ) -> DummySampler:
+        """From config.
+
+        Args:
+            scheduler: Scheduler fixture or test double under test.
+            *args: Args used by this test.
+            **kwargs: Kwargs used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return cls(
             scheduler=scheduler, batch_size=kwargs["config"]["batch_size"]
         )
 
 
 def _patch_common(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
-    """Patch SynthPix symbols with dummy stand-ins for isolation."""
+    """Patch SynthPix symbols with dummy stand-ins for isolation.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     monkeypatch.setattr(make_mod, "RealImageSampler", DummySampler)
     monkeypatch.setattr(make_mod, "SyntheticImageSampler", DummySampler)
     monkeypatch.setattr(make_mod, "MATFlowFieldScheduler", DummyScheduler)
@@ -99,11 +146,18 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
 
 
 @pytest.mark.parametrize("bad", [123, 3.14, ["a"], ("t",), None])
-def test_rejects_non_str_or_dict(monkeypatch, bad):
-    """Test that make() raises TypeError if config is not a string or a dictionary.
+def test_rejects_non_str_or_dict(
+    monkeypatch: pytest.MonkeyPatch, bad: Any
+) -> None:
+    """Test that make() raises TypeError if config is not a string or a
+    dictionary.
 
-    The config argument must be either a path to a YAML file (string) or a
-    pre-loaded configuration dictionary.
+    The config argument must be either a path to a YAML file (string) or
+    a pre-loaded configuration dictionary.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+        bad: Deliberately invalid input.
     """
     _patch_common(monkeypatch)
     with pytest.raises(
@@ -112,17 +166,33 @@ def test_rejects_non_str_or_dict(monkeypatch, bad):
         make(bad)
 
 
-def test_rejects_non_yaml_file(monkeypatch, tmp_path):
-    """Test that make() raises ValueError if the config path does not end in .yaml."""
+def test_rejects_non_yaml_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Test that make() raises ValueError if the config path does not end
+    in .yaml.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+        tmp_path: Temporary directory for this test.
+    """
     _patch_common(monkeypatch)
     path = tmp_path / "config.txt"
     path.write_text("scheduler_class: '.mat'")
-    with pytest.raises(ValueError, match="must point to a .yaml file"):
+    with pytest.raises(ValueError, match=r"must point to a .yaml file"):
         make(str(path))
 
 
-def test_rejects_directory_instead_of_file(monkeypatch, tmp_path):
-    """Test that make() raises ValueError if a directory path is provided instead of a file."""
+def test_rejects_directory_instead_of_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Test that make() raises ValueError if a directory path is provided
+    instead of a file.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+        tmp_path: Temporary directory for this test.
+    """
     _patch_common(monkeypatch)
     dirpath = tmp_path / "foo.yaml"
     dirpath.mkdir()
@@ -130,20 +200,42 @@ def test_rejects_directory_instead_of_file(monkeypatch, tmp_path):
         make(str(dirpath))
 
 
-def test_raises_file_not_found(monkeypatch, tmp_path):
-    """Test that make() raises FileNotFoundError if the specified YAML file does not exist."""
+def test_raises_file_not_found(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Test that make() raises FileNotFoundError if the specified YAML file
+    does not exist.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+        tmp_path: Temporary directory for this test.
+    """
     _patch_common(monkeypatch)
     with pytest.raises(FileNotFoundError):
         make(str(tmp_path / "missing.yaml"))
 
 
-def test_missing_scheduler_class(monkeypatch):
+def test_missing_scheduler_class(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify missing scheduler class.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     _patch_common(monkeypatch)
     with pytest.raises(ValueError, match="must contain 'scheduler_class'"):
         make({})
 
 
-def test_scheduler_class_not_in_mapping(monkeypatch):
+def test_scheduler_class_not_in_mapping(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify scheduler class not in mapping.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     _patch_common(monkeypatch)
     cfg = {
         "scheduler_class": ".foo",
@@ -155,7 +247,16 @@ def test_scheduler_class_not_in_mapping(monkeypatch):
 
 
 @pytest.mark.parametrize("bad", [0, -1])
-def test_rejects_nonpositive_batch(monkeypatch, bad):
+def test_rejects_nonpositive_batch(
+    monkeypatch: pytest.MonkeyPatch, bad: Any
+) -> None:
+    """Verify rejects nonpositive batch.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        bad: Deliberately invalid input for validation coverage.
+    """
     _patch_common(monkeypatch)
     cfg = {
         "scheduler_class": ".mat",
@@ -169,7 +270,16 @@ def test_rejects_nonpositive_batch(monkeypatch, bad):
 
 
 @pytest.mark.parametrize("bad", [-3, "x"])
-def test_rejects_invalid_buffer_size(monkeypatch, bad):
+def test_rejects_invalid_buffer_size(
+    monkeypatch: pytest.MonkeyPatch, bad: Any
+) -> None:
+    """Verify rejects invalid buffer size.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        bad: Deliberately invalid input for validation coverage.
+    """
     _patch_common(monkeypatch)
     cfg = {
         "scheduler_class": ".mat",
@@ -182,7 +292,16 @@ def test_rejects_invalid_buffer_size(monkeypatch, bad):
 
 
 @pytest.mark.parametrize("bad", [-3, "x"])
-def test_rejects_invalid_episode_length(monkeypatch, bad):
+def test_rejects_invalid_episode_length(
+    monkeypatch: pytest.MonkeyPatch, bad: Any
+) -> None:
+    """Verify rejects invalid episode length.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        bad: Deliberately invalid input for validation coverage.
+    """
     _patch_common(monkeypatch)
     cfg = {
         "scheduler_class": ".mat",
@@ -194,14 +313,30 @@ def test_rejects_invalid_episode_length(monkeypatch, bad):
         make(cfg)
 
 
-def test_requires_flow_fields_per_batch(monkeypatch):
+def test_requires_flow_fields_per_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify requires flow fields per batch.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     _patch_common(monkeypatch)
     cfg = {"scheduler_class": ".npy", "batch_size": 2}
     with pytest.raises(ValueError, match="flow_fields_per_batch"):
         make(cfg)
 
 
-def test_requires_batches_per_flow_batch_for_synthetic(monkeypatch):
+def test_requires_batches_per_flow_batch_for_synthetic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify requires batches per flow batch for synthetic.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     _patch_common(monkeypatch)
     cfg = {
         "scheduler_class": ".npy",
@@ -212,7 +347,13 @@ def test_requires_batches_per_flow_batch_for_synthetic(monkeypatch):
         make(cfg, use_grain_scheduler=False)
 
 
-def test_include_images_must_be_bool(monkeypatch):
+def test_include_images_must_be_bool(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify include images must be bool.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     _patch_common(monkeypatch)
     cfg = {
         "scheduler_class": ".mat",
@@ -224,7 +365,13 @@ def test_include_images_must_be_bool(monkeypatch):
         make(cfg)
 
 
-def test_include_images_requires_mat(monkeypatch):
+def test_include_images_requires_mat(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify include images requires mat.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     _patch_common(monkeypatch)
     cfg = {
         "scheduler_class": ".npy",
@@ -241,7 +388,16 @@ def test_include_images_requires_mat(monkeypatch):
 # ---------------------- #
 
 
-def test_make_from_yaml_path_success(monkeypatch, tmp_path):
+def test_make_from_yaml_path_success(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify make from yaml path success.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     helpers = _patch_common(monkeypatch)
     yaml_path = tmp_path / "config.yaml"
     yaml_path.write_text("scheduler_class: '.npy'")
@@ -261,7 +417,13 @@ def test_make_from_yaml_path_success(monkeypatch, tmp_path):
     )
 
 
-def test_real_sampler_with_episode(monkeypatch):
+def test_real_sampler_with_episode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify real sampler with episode.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     helpers = _patch_common(monkeypatch)
     cfg = {
         "scheduler_class": ".mat",
@@ -277,11 +439,19 @@ def test_real_sampler_with_episode(monkeypatch):
     assert isinstance(
         sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler
     ), (
-        f"Expected underlying scheduler to be DummyScheduler, got {type(sampler.scheduler.kwargs['scheduler'])}"
+        f"Expected underlying scheduler to be "
+        f"DummyScheduler, got "
+        f"{type(sampler.scheduler.kwargs['scheduler'])}"
     )
 
 
-def test_real_sampler_with_prefetch(monkeypatch):
+def test_real_sampler_with_prefetch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify real sampler with prefetch.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     helpers = _patch_common(monkeypatch)
     cfg = {
         "scheduler_class": ".mat",
@@ -297,11 +467,21 @@ def test_real_sampler_with_prefetch(monkeypatch):
     assert isinstance(
         sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler
     ), (
-        f"Expected underlying scheduler to be DummyScheduler, got {type(sampler.scheduler.kwargs['scheduler'])}"
+        f"Expected underlying scheduler to be "
+        f"DummyScheduler, got "
+        f"{type(sampler.scheduler.kwargs['scheduler'])}"
     )
 
 
-def test_synthetic_sampler_with_prefetch(monkeypatch):
+def test_synthetic_sampler_with_prefetch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify synthetic sampler with prefetch.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     helpers = _patch_common(monkeypatch)
     cfg = {
         "scheduler_class": ".npy",
@@ -317,11 +497,21 @@ def test_synthetic_sampler_with_prefetch(monkeypatch):
     assert isinstance(
         sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler
     ), (
-        f"Expected underlying scheduler to be DummyScheduler, got {type(sampler.scheduler.kwargs['scheduler'])}"
+        f"Expected underlying scheduler to be "
+        f"DummyScheduler, got "
+        f"{type(sampler.scheduler.kwargs['scheduler'])}"
     )
 
 
-def test_synthetic_sampler_with_episode(monkeypatch):
+def test_synthetic_sampler_with_episode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify synthetic sampler with episode.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     helpers = _patch_common(monkeypatch)
     cfg = {
         "scheduler_class": ".npy",
@@ -337,7 +527,9 @@ def test_synthetic_sampler_with_episode(monkeypatch):
     assert isinstance(
         sampler.scheduler.kwargs["scheduler"], helpers.DummyScheduler
     ), (
-        f"Expected underlying scheduler to be DummyScheduler, got {type(sampler.scheduler.kwargs['scheduler'])}"
+        f"Expected underlying scheduler to be "
+        f"DummyScheduler, got "
+        f"{type(sampler.scheduler.kwargs['scheduler'])}"
     )
 
 
@@ -346,8 +538,13 @@ def test_synthetic_sampler_with_episode(monkeypatch):
 # ---------------------- #
 
 
-def test_make_grain_scheduler_call(monkeypatch):
-    """Test that make() calls make_grain_scheduler correctly with non-episodic config."""
+def test_make_grain_scheduler_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that make() calls make_grain_scheduler correctly with
+    non-episodic config.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+    """
     _patch_common(monkeypatch)
 
     mock_grain = SimpleNamespace(
@@ -366,21 +563,51 @@ def test_make_grain_scheduler_call(monkeypatch):
     mock_grain_adapter.return_value = adapter_instance
 
     class MockDataSource(FileDataSource):
-        def __init__(self, **kwargs):
+        """Mock Data Source test double."""
+
+        def __init__(self, **kwargs: Any) -> None:
+            """Initialize the test double.
+
+            Args:
+                **kwargs: Keyword arguments accepted by the test double.
+            """
             super().__init__(dataset_path=["mock_path"])
 
-        def __len__(self):
+        def __len__(self) -> int:
+            """Return the number of records.
+
+            Returns:
+                The value produced for the test scenario.
+            """
             return 10
 
-        def load_file(self, f):
+        def load_file(self, f: Any) -> dict[str, Any]:
+            """Load file.
+
+            Args:
+                f: F used by this test.
+
+            Returns:
+                The result used by the test assertions.
+            """
             return {}
 
         @property
-        def file_list(self):
+        def file_list(self) -> list[str]:
+            """File list.
+
+            Returns:
+                The result used by the test assertions.
+            """
             return []
 
         @property
-        def include_images(self):
+        def include_images(self) -> bool:
+            """Include images.
+
+            Returns:
+                The result used by the test assertions.
+            """
             return False
 
     mock_data_source_cls = MagicMock(return_value=MockDataSource())
@@ -408,8 +635,14 @@ def test_make_grain_scheduler_call(monkeypatch):
     )
 
 
-def test_make_grain_scheduler_episodic_error(monkeypatch):
-    """Test ValueError when worker_count > 0 with episodic data."""
+def test_make_grain_scheduler_episodic_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test ValueError when worker_count > 0 with episodic data.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+    """
     _patch_common(monkeypatch)
 
     mock_grain = SimpleNamespace(
@@ -440,9 +673,15 @@ def test_make_grain_scheduler_episodic_error(monkeypatch):
         make(cfg, use_grain_scheduler=True)
 
 
-def test_make_grain_scheduler_episodic_success(monkeypatch):
-    """Test successful creation of episodic Grain scheduler."""
-    helpers = _patch_common(monkeypatch)
+def test_make_grain_scheduler_episodic_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test successful creation of episodic Grain scheduler.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+    """
+    _patch_common(monkeypatch)
     mock_grain = SimpleNamespace(
         IndexSampler=MagicMock(),
         DataLoader=MagicMock(),
@@ -469,12 +708,19 @@ def test_make_grain_scheduler_episodic_success(monkeypatch):
     }
     sampler = make(cfg, use_grain_scheduler=True)
     assert sampler.scheduler == "epi_adapter", (
-        f"Expected sampler scheduler to be 'epi_adapter', got {sampler.scheduler}"
+        f"Expected sampler scheduler to be 'epi_adapter', got "
+        f"{sampler.scheduler}"
     )
 
 
-def test_make_grain_scheduler_warning_multi_worker(monkeypatch):
-    """Test warning for multi-worker non-episodic Grain scheduler."""
+def test_make_grain_scheduler_warning_multi_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test warning for multi-worker non-episodic Grain scheduler.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+    """
     _patch_common(monkeypatch)
     mock_grain = SimpleNamespace(
         IndexSampler=MagicMock(),
@@ -506,8 +752,14 @@ def test_make_grain_scheduler_warning_multi_worker(monkeypatch):
     mock_logger.warning.assert_called()
 
 
-def test_make_grain_scheduler_with_file_list(monkeypatch):
-    """Test Grain scheduler with explicit file_list."""
+def test_make_grain_scheduler_with_file_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test Grain scheduler with explicit file_list.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+    """
     _patch_common(monkeypatch)
     mock_grain = SimpleNamespace(
         IndexSampler=MagicMock(),
@@ -532,35 +784,43 @@ def test_make_grain_scheduler_with_file_list(monkeypatch):
     }
     make(cfg, use_grain_scheduler=True)
     # Check that data source was instantiated with dataset_path
-    args, kwargs = mock_ds_cls.call_args
+    _args, kwargs = mock_ds_cls.call_args
     assert kwargs["dataset_path"] == ["f1.mat"], (
         f"Expected dataset_path ['f1.mat'], got {kwargs['dataset_path']}"
     )
 
 
-def test_get_base_scheduler_invalid():
+def test_get_base_scheduler_invalid() -> None:
     """Test get_base_scheduler raises ValueError for invalid extension."""
     with pytest.raises(ValueError, match="not found"):
         make_mod.get_base_scheduler(".invalid")
 
 
-def test_get_data_source_class_invalid():
+def test_get_data_source_class_invalid() -> None:
     """Test get_data_source_class raises ValueError for invalid extension."""
     with pytest.raises(ValueError, match="not found"):
         make_mod.get_data_source_class(".invalid")
 
 
-def test_get_data_source_class_valid():
-    """Test get_data_source_class returns correct class for valid extension."""
-    from synthpix.data_sources import MATDataSource
+def test_get_data_source_class_valid() -> None:
+    """Test get_data_source_class returns correct class for valid
+    extension.
+    """
 
     assert make_mod.get_data_source_class(".mat") == MATDataSource, (
         "get_data_source_class('.mat') should return MATDataSource"
     )
 
 
-def test_make_rejects_non_dict_config_loaded(monkeypatch, tmp_path):
-    """Test that make() raises TypeError if loaded config is not a dict."""
+def test_make_rejects_non_dict_config_loaded(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Test that make() raises TypeError if loaded config is not a dict.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+        tmp_path: Temporary directory for this test.
+    """
     _patch_common(monkeypatch)
     yaml_path = tmp_path / "config.yaml"
     yaml_path.write_text("foo")

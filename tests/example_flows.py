@@ -1,9 +1,11 @@
 """Example flow functions for testing purposes.
 
-This module provides various analytical flow field functions (horizontal,
-vertical, diagonal, pipe, vortex) used as ground truth for verifying
-particle advection and image generation logic.
+This module provides various analytical flow field functions
+(horizontal, vertical, diagonal, pipe, vortex) used as ground truth
+for verifying particle advection and image generation logic.
 """
+
+from __future__ import annotations
 
 from collections.abc import Callable
 
@@ -18,9 +20,9 @@ def horizontal_flow(t: float, x: float, y: float) -> tuple[float, float]:
     v = 0
 
     Args:
-        t (float): The time
-        x (float): The x-coordinate.
-        y (float): The y-coordinate.
+        t: The time
+        x: The x-coordinate.
+        y: The y-coordinate.
 
     Returns:
         Tuple[float, float]: The flow field components.
@@ -36,9 +38,9 @@ def pipe_horizontal_flow(t: float, x: float, y: float) -> tuple[float, float]:
     v = 0
 
     Args:
-        t (float): The time
-        x (float): The x-coordinate.
-        y (float): The y-coordinate.
+        t: The time
+        x: The x-coordinate.
+        y: The y-coordinate.
 
     Returns:
         Tuple[float, float]: The flow field components.
@@ -56,9 +58,9 @@ def vortex_flow(
     v =  x * cos(t)
 
     Args:
-        t (float): The time
-        x (float): The x-coordinate.
-        y (float): The y-coordinate.
+        t: The time
+        x: The x-coordinate.
+        y: The y-coordinate.
 
     Returns:
         Tuple[float, float]: The flow field components.
@@ -72,7 +74,8 @@ def vortex_flow(
 def get_flow_function(
     selected_flow: str, image_shape: tuple[int, int] = (128, 128)
 ) -> Callable[
-    [jnp.ndarray, jnp.ndarray, jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]
+    [jnp.ndarray, jnp.ndarray, jnp.ndarray],
+    tuple[jnp.ndarray, jnp.ndarray],
 ]:
     """Generate a flow field for testing purposes.
 
@@ -83,21 +86,24 @@ def get_flow_function(
         image_shape: The image shape.
 
     Returns:
-        Tuple[float, float]: The flow field components.
+        Callable that returns the two velocity components as JAX arrays.
+
+    Raises:
+        ValueError: When the simulated failure is triggered.
     """
     match selected_flow:
         case "horizontal":
-            return lambda t, x, y: (10.0, 0.0)
+            return lambda t, x, y: (jnp.asarray(10.0), jnp.asarray(0.0))
         case "vertical":
-            return lambda t, x, y: (0.0, 10.0)
+            return lambda t, x, y: (jnp.asarray(0.0), jnp.asarray(10.0))
         case "diagonal":
-            return lambda t, x, y: (10.0, 10.0)
+            return lambda t, x, y: (jnp.asarray(10.0), jnp.asarray(10.0))
         case "no_flow":
-            return lambda t, x, y: (0.0, 0.0)
+            return lambda t, x, y: (jnp.asarray(0.0), jnp.asarray(0.0))
         case "pipe_horizontal":
             return lambda t, x, y: (
                 20 - 0.004 * (y - image_shape[1] / 2) ** 2,
-                0.0,
+                jnp.asarray(0.0),
             )
         case "vortex":
             return lambda t, x, y: (

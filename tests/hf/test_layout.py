@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
@@ -10,14 +11,26 @@ from synthpix.hf.layout import LayoutSummary, inspect_local_layout
 
 
 def _make_mat(path: Path, payload: bytes = b"x" * 16) -> None:
-    """Create a fake ``.mat`` file with a known byte payload."""
+    """Create a fake ``.mat`` file with a known byte payload.
+
+    Args:
+        path: Path for this test case.
+        payload: Payload for this test case.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(payload)
 
 
 @pytest.fixture
 def synthetic_tree(tmp_path: Path) -> Path:
-    """Build a representative dataset layout under ``tmp_path``."""
+    """Build a representative dataset layout under ``tmp_path``.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     for i in range(4):
         _make_mat(tmp_path / "train" / f"flow_{i:04d}.mat")
     for i in range(2):
@@ -41,13 +54,23 @@ def synthetic_tree(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def test_inspect_returns_layout_summary(synthetic_tree: Path):
+def test_inspect_returns_layout_summary(synthetic_tree: Path) -> None:
+    """Verify inspect returns layout summary.
+
+    Args:
+        synthetic_tree: Synthetic tree used by this test.
+    """
     summary = inspect_local_layout(synthetic_tree)
 
     assert isinstance(summary, LayoutSummary)
 
 
-def test_inspect_counts_mat_files_per_split(synthetic_tree: Path):
+def test_inspect_counts_mat_files_per_split(synthetic_tree: Path) -> None:
+    """Verify inspect counts mat files per split.
+
+    Args:
+        synthetic_tree: Synthetic tree used by this test.
+    """
     summary = inspect_local_layout(synthetic_tree)
 
     assert summary.splits["train"] == 4
@@ -56,7 +79,12 @@ def test_inspect_counts_mat_files_per_split(synthetic_tree: Path):
     assert summary.splits["tune"] == 0
 
 
-def test_inspect_maps_reynolds_subdirs(synthetic_tree: Path):
+def test_inspect_maps_reynolds_subdirs(synthetic_tree: Path) -> None:
+    """Verify inspect maps reynolds subdirs.
+
+    Args:
+        synthetic_tree: Synthetic tree used by this test.
+    """
     summary = inspect_local_layout(synthetic_tree)
 
     assert summary.subdirs_by_split["test"] == ["DNS_turbulence", "cylinder"]
@@ -64,7 +92,12 @@ def test_inspect_maps_reynolds_subdirs(synthetic_tree: Path):
     assert summary.subdirs_by_split["train"] == []
 
 
-def test_inspect_counts_extras_and_skips_dotfiles(synthetic_tree: Path):
+def test_inspect_counts_extras_and_skips_dotfiles(synthetic_tree: Path) -> None:
+    """Verify inspect counts extras and skips dotfiles.
+
+    Args:
+        synthetic_tree: Synthetic tree used by this test.
+    """
     summary = inspect_local_layout(synthetic_tree)
 
     assert summary.mat_files == 4 + 2 + 4
@@ -72,7 +105,12 @@ def test_inspect_counts_extras_and_skips_dotfiles(synthetic_tree: Path):
     assert summary.total_bytes > 0
 
 
-def test_inspect_tolerates_missing_split(tmp_path: Path):
+def test_inspect_tolerates_missing_split(tmp_path: Path) -> None:
+    """Verify inspect tolerates missing split.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     _make_mat(tmp_path / "train" / "flow.mat")
 
     summary = inspect_local_layout(tmp_path)
@@ -81,7 +119,12 @@ def test_inspect_tolerates_missing_split(tmp_path: Path):
     assert summary.splits == {"train": 1}
 
 
-def test_inspect_skips_files_in_hidden_directories(tmp_path: Path):
+def test_inspect_skips_files_in_hidden_directories(tmp_path: Path) -> None:
+    """Verify inspect skips files in hidden directories.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     # Files nested under any hidden ancestor must not be counted.
     _make_mat(tmp_path / "train" / "real.mat")
     _make_mat(tmp_path / "train" / ".cache" / "leaked.mat")
@@ -97,8 +140,14 @@ def test_inspect_skips_files_in_hidden_directories(tmp_path: Path):
     assert ".cache" not in summary.subdirs_by_split["train"]
 
 
-def test_layout_summary_is_frozen(synthetic_tree: Path):
+def test_layout_summary_is_frozen(synthetic_tree: Path) -> None:
+    """Verify layout summary is frozen.
+
+    Args:
+        synthetic_tree: Synthetic tree used by this test.
+    """
     summary = inspect_local_layout(synthetic_tree)
 
-    with pytest.raises(Exception):
-        summary.mat_files = 0  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        # Deliberately assign a read-only field to verify the frozen contract.
+        summary.mat_files = 0  # pyright: ignore[reportAttributeAccessIssue]

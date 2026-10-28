@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib
 import types
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -21,9 +22,18 @@ class _FakeHub:
     """Minimal stand-in for the ``huggingface_hub`` module."""
 
     def __init__(self) -> None:
+        """Initialize the test double."""
         self.calls: list[dict] = []
 
-    def snapshot_download(self, **kwargs):
+    def snapshot_download(self, **kwargs: Any) -> str:
+        """Snapshot download.
+
+        Args:
+            **kwargs: Kwargs used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         self.calls.append(kwargs)
         # Materialize the target so resolved paths are well-defined.
         local_dir = kwargs.get("local_dir")
@@ -32,24 +42,44 @@ class _FakeHub:
         return str(local_dir)
 
 
-def _install_fake_hub(monkeypatch) -> _FakeHub:
+def _install_fake_hub(monkeypatch: pytest.MonkeyPatch) -> _FakeHub:
+    """Install fake hub.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     # Patch ``importlib.import_module`` so the lazy import yields a fake.
     fake = _FakeHub()
 
     real_import_module = importlib.import_module
 
-    def _import_module(name, package=None):
+    def _import_module(name: str, package: str | None = None) -> Any:
+        """Import module.
+
+        Args:
+            name: Name for this test case.
+            package: Package for this test case.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         if name == "huggingface_hub":
             return fake
         return real_import_module(name, package)
 
-    monkeypatch.setattr(
-        pull_mod.importlib, "import_module", _import_module
-    )
+    monkeypatch.setattr(pull_mod.importlib, "import_module", _import_module)
     return fake
 
 
-def _clear_env(monkeypatch) -> None:
+def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Clear env.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+    """
     monkeypatch.delenv("HF_TOKEN", raising=False)
     monkeypatch.delenv("HF_HUB_TOKEN", raising=False)
     # Neutralize the on-disk cached token so token resolution is
@@ -59,7 +89,16 @@ def _clear_env(monkeypatch) -> None:
     monkeypatch.setattr(auth_mod, "_cached_token", lambda: None)
 
 
-def test_pull_dataset_basic(monkeypatch, tmp_path):
+def test_pull_dataset_basic(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify pull dataset basic.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     fake = _install_fake_hub(monkeypatch)
 
@@ -77,7 +116,16 @@ def test_pull_dataset_basic(monkeypatch, tmp_path):
     assert call["max_workers"] == 8
 
 
-def test_pull_dataset_splits_filter(monkeypatch, tmp_path):
+def test_pull_dataset_splits_filter(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify pull dataset splits filter.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     fake = _install_fake_hub(monkeypatch)
 
@@ -91,7 +139,16 @@ def test_pull_dataset_splits_filter(monkeypatch, tmp_path):
     assert call["allow_patterns"] == ["train/**", "val/**", "README.md"]
 
 
-def test_pull_dataset_explicit_includes_win(monkeypatch, tmp_path):
+def test_pull_dataset_explicit_includes_win(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify pull dataset explicit includes win.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     fake = _install_fake_hub(monkeypatch)
 
@@ -115,20 +172,36 @@ def test_pull_dataset_explicit_includes_win(monkeypatch, tmp_path):
     assert "splits" in warnings[0].lower()
 
 
-def test_pull_dataset_token_passes_through(monkeypatch, tmp_path):
+def test_pull_dataset_token_passes_through(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify pull dataset token passes through.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     fake = _install_fake_hub(monkeypatch)
 
-    pull_mod.pull_dataset(
-        "user/repo", tmp_path / "with_token", token="hf_xxx"
-    )
+    pull_mod.pull_dataset("user/repo", tmp_path / "with_token", token="hf_xxx")
     assert fake.calls[-1]["token"] == "hf_xxx"
 
     pull_mod.pull_dataset("user/repo", tmp_path / "no_token")
     assert fake.calls[-1]["token"] is None
 
 
-def test_pull_dataset_token_resolved_from_env(monkeypatch, tmp_path):
+def test_pull_dataset_token_resolved_from_env(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify pull dataset token resolved from env.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     monkeypatch.setenv("HF_TOKEN", "hf_env")
     fake = _install_fake_hub(monkeypatch)
@@ -138,7 +211,16 @@ def test_pull_dataset_token_resolved_from_env(monkeypatch, tmp_path):
     assert fake.calls[-1]["token"] == "hf_env"
 
 
-def test_pull_dataset_returns_resolved_path(monkeypatch, tmp_path):
+def test_pull_dataset_returns_resolved_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify pull dataset returns resolved path.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
 
@@ -148,7 +230,16 @@ def test_pull_dataset_returns_resolved_path(monkeypatch, tmp_path):
     assert result == target.expanduser().resolve()
 
 
-def test_pull_dataset_target_is_file_raises(monkeypatch, tmp_path):
+def test_pull_dataset_target_is_file_raises(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify pull dataset target is file raises.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
 
@@ -159,10 +250,31 @@ def test_pull_dataset_target_is_file_raises(monkeypatch, tmp_path):
         pull_mod.pull_dataset("user/repo", bad)
 
 
-def test_pull_dataset_hf_not_installed(monkeypatch, tmp_path):
+def test_pull_dataset_hf_not_installed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify pull dataset hf not installed.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
 
-    def _missing(name, package=None):
+    def _missing(name: str, package: str | None = None) -> Any:
+        """Missing.
+
+        Args:
+            name: Name for this test case.
+            package: Package for this test case.
+
+        Returns:
+            The value produced for the test scenario.
+
+        Raises:
+            ImportError: When the simulated failure is triggered.
+        """
         if name == "huggingface_hub":
             raise ImportError("no module named huggingface_hub")
         return importlib.import_module(name, package)
@@ -175,18 +287,34 @@ def test_pull_dataset_hf_not_installed(monkeypatch, tmp_path):
     assert "synthpix[hf]" in str(excinfo.value)
 
 
-def test_pull_dataset_passes_max_workers(monkeypatch, tmp_path):
+def test_pull_dataset_passes_max_workers(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify pull dataset passes max workers.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     fake = _install_fake_hub(monkeypatch)
 
-    pull_mod.pull_dataset(
-        "user/repo", tmp_path / "data", max_workers=2
-    )
+    pull_mod.pull_dataset("user/repo", tmp_path / "data", max_workers=2)
 
     assert fake.calls[-1]["max_workers"] == 2
 
 
-def test_pull_dataset_explicit_ignore_globs(monkeypatch, tmp_path):
+def test_pull_dataset_explicit_ignore_globs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify pull dataset explicit ignore globs.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     fake = _install_fake_hub(monkeypatch)
 
@@ -200,15 +328,22 @@ def test_pull_dataset_explicit_ignore_globs(monkeypatch, tmp_path):
 
 
 def test_pull_dataset_enables_hf_transfer_before_import(
-    monkeypatch, tmp_path
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify pull dataset enables hf transfer before import.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     # huggingface_hub reads HF_HUB_ENABLE_HF_TRANSFER at *import* time,
     # so the env flag must be set BEFORE the lazy import. Capture the
     # environment as the import call runs and verify the flag was already
     # present.
-    import os as _os
+    import os as _os  # noqa: PLC0415 - optional or intentionally lazy import
 
-    from synthpix.hf import _transfer as transfer_mod
+    from synthpix.hf import _transfer as transfer_mod  # noqa: PLC0415
 
     _clear_env(monkeypatch)
     monkeypatch.delenv("HF_HUB_ENABLE_HF_TRANSFER", raising=False)
@@ -218,7 +353,16 @@ def test_pull_dataset_enables_hf_transfer_before_import(
     fake = _FakeHub()
     real_import_module = importlib.import_module
 
-    def _import_module(name, package=None):
+    def _import_module(name: str, package: str | None = None) -> Any:
+        """Import module.
+
+        Args:
+            name: Name for this test case.
+            package: Package for this test case.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         if name == "huggingface_hub":
             seen_flag["set"] = (
                 _os.environ.get("HF_HUB_ENABLE_HF_TRANSFER") == "1"
@@ -238,7 +382,8 @@ def test_pull_dataset_enables_hf_transfer_before_import(
 
 # Sanity check: the helper does not pull huggingface_hub into the module
 # graph eagerly.
-def test_pull_module_does_not_eagerly_import_hub():
+def test_pull_module_does_not_eagerly_import_hub() -> None:
+    """Verify pull module does not eagerly import hub."""
     # When this test runs huggingface_hub may or may not be installed in
     # the dev venv; either way, the pull module must remain importable
     # without it. We can only assert the module imports cleanly here.

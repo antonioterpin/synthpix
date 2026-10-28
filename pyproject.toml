@@ -124,7 +124,6 @@ markers = [
 [tool.ruff]
 line-length = 80
 target-version = "py310"
-exclude = ["tests"]
 
 [tool.ruff.lint]
 # Enable comprehensive rule sets
@@ -173,7 +172,7 @@ baseline = ".pydoclint-baseline"
 [tool.pyright]
 typeCheckingMode = "basic"
 pythonVersion = "3.10"
-include = ["src"]
+include = ["src", "tests"]
 
 reportMissingTypeStubs = false
 reportUnknownMemberType = false

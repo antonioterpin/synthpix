@@ -1,9 +1,14 @@
 """Correctness comparison between Legacy and Grain schedulers.
 
-These tests verify that the modern Grain-based data loading stack produces
-bit-identical results to the legacy scheduler implementation for the same
-input data and seeds, ensuring a direct and reliable migration path.
+These tests verify that the modern Grain-based data loading stack
+produces bit-identical results to the legacy scheduler
+implementation for the same input data and seeds, ensuring a direct
+and reliable migration path.
 """
+
+from __future__ import annotations
+
+from pathlib import Path
 
 import grain.python as grain
 import h5py
@@ -26,13 +31,23 @@ from synthpix.scheduler.mat import MATFlowFieldScheduler
     ],
 )
 def test_legacy_vs_grain_equality_simple(
-    tmp_path, mat_test_dims, batch_size, episode_length
-):
-    """Verify that Legacy and Grain stacks yield identical results for a simple case.
+    tmp_path: Path,
+    mat_test_dims: dict[str, int],
+    batch_size: int,
+    episode_length: int,
+) -> None:
+    """Verify Legacy and Grain stacks yield identical results for a simple
+    case.
 
     Generates a single episode of data and confirms that both the old
     `EpisodicFlowFieldScheduler` and the new `GrainEpisodicAdapter`
     produce bit-identical flow field batches.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+        mat_test_dims: Mat test dims for this test case.
+        batch_size: Number of samples requested in each batch.
+        episode_length: Episode length for this test case.
     """
     # Create exactly episode_length files in one directory
     num_files = episode_length
@@ -109,12 +124,18 @@ def test_legacy_vs_grain_equality_simple(
 
 
 @pytest.mark.parametrize("mock_mat_files", [20], indirect=True)
-def test_grain_ordering(tmp_path, mock_mat_files):
-    """Verify that the Grain adapter maintains strict temporal order of data.
+def test_grain_ordering(
+    tmp_path: Path, mock_mat_files: tuple[list[str], dict[str, int]]
+) -> None:
+    """Verify the Grain adapter maintains strict temporal order of data.
 
     In single-worker mode (`worker_count=0`), batches produced by Grain
     should follow the expected sequence of timesteps within each
     interleaved chunk, ensuring no frame shuffling occurs.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
     """
     dataset_dir = tmp_path
     episode_length = 5
@@ -154,7 +175,8 @@ def test_grain_ordering(tmp_path, mock_mat_files):
         if prev_c == curr_c:
             expected_t = prev_t + 1
             assert curr_t == expected_t, (
-                f"Order violation at batch {i}: Chunk {prev_c} t={prev_t} -> t={curr_t}"
+                f"Order violation at batch {i}: Chunk {prev_c} t="
+                f"{prev_t} -> t={curr_t}"
             )
         else:
             assert curr_t == 0, (
