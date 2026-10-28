@@ -109,6 +109,7 @@ def test_generate_image_from_data(
 @pytest.mark.parametrize("diameter_range", [(1, 2)])
 @pytest.mark.parametrize("intensity_range", [(100, 200)])
 @pytest.mark.parametrize("rho_range", [(-0.2, 0.2)])
+@pytest.mark.benchmark
 def test_speed_img_gen(
     seeding_density: float,
     image_shape: tuple[int, int],

@@ -69,6 +69,7 @@ def write_speed_stats_to_csv(filename: str, all_rows: Any) -> None:
 )
 @pytest.mark.parametrize("batch_size", [64])
 @pytest.mark.parametrize("batches_per_flow_batch", [1, 10, 100, 1000])
+@pytest.mark.benchmark
 def test_speed_sampler_sweep_all(
     scheduler: SchedulerProtocol,
     batch_size: int,

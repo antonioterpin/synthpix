@@ -1418,6 +1418,7 @@ def test_sampler_with_real_img_gen_fn(
 @pytest.mark.parametrize(
     "scheduler", [{"randomize": False, "loop": True}], indirect=True
 )
+@pytest.mark.benchmark
 def test_speed_sampler_real_fn(
     batch_size: int,
     batches_per_flow_batch: int,

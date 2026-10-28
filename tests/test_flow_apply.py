@@ -511,6 +511,7 @@ def test_invalid_flow_field_res_z(flow_field_res_z: Any) -> None:
 @pytest.mark.parametrize("selected_flow", ["horizontal"])
 @pytest.mark.parametrize("seeding_density", [0.016])
 @pytest.mark.parametrize("image_shape", [(1216, 1936)])
+@pytest.mark.benchmark
 def test_speed_apply_flow_to_particles(
     seeding_density: float, selected_flow: str, image_shape: tuple[int, int]
 ) -> None:
