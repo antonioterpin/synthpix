@@ -1,10 +1,10 @@
 """Live, network-touching tests for ``synthpix.hf.push_dataset``.
 
-Skipped by default. To run, set ``HF_TOKEN`` in the environment and pass
-``--run-hf-live`` on the pytest command line, e.g.::
+Skipped by default. To run, set ``HF_TOKEN`` in the environment and
+pass ``--run-hf-live`` on the pytest command line, e.g.::
 
-    HF_TOKEN=hf_xxx uv run pytest tests/hf/test_push_live.py \
-        -m hf_live --run-hf-live
+    HF_TOKEN=hf_xxx uv run pytest tests/hf/test_push_live.py         -m
+    hf_live --run-hf-live
 
 The test pushes a tiny fixture to a unique private repo derived from
 the authenticated user, pulls it back, asserts byte equality, and
@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -23,7 +24,15 @@ import pytest
 
 
 @pytest.mark.hf_live
-def test_push_dataset_live_roundtrip(tmp_path, request):
+def test_push_dataset_live_roundtrip(
+    tmp_path: Path, request: pytest.FixtureRequest
+) -> None:
+    """Verify push dataset live roundtrip.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+        request: Fixture request containing indirect test parameters.
+    """
     if not request.config.getoption("--run-hf-live", default=False):
         pytest.skip("requires --run-hf-live")
     token = os.environ.get("HF_TOKEN")
@@ -31,7 +40,7 @@ def test_push_dataset_live_roundtrip(tmp_path, request):
         pytest.skip("requires HF_TOKEN in env")
 
     try:
-        from huggingface_hub import HfApi
+        from huggingface_hub import HfApi  # noqa: PLC0415
     except ImportError:
         pytest.skip("huggingface_hub is not installed")
 
@@ -57,20 +66,23 @@ def test_push_dataset_live_roundtrip(tmp_path, request):
             "I1",
             data=np.random.randint(0, 255, size=(h, w), dtype=np.uint8),
         )
-        f.create_dataset(
-            "V", data=np.random.rand(h, w, 2).astype(np.float32)
-        )
+        f.create_dataset("V", data=np.random.rand(h, w, 2).astype(np.float32))
     header = (
-        f"MATLAB 7.3 MAT-file, Platform: Python-h5py, "
-        f"Created on {datetime.now():%c}"
-    ).encode("ascii").ljust(116, b" ")
+        (
+            f"MATLAB 7.3 MAT-file, Platform: Python-h5py, "
+            f"Created on {datetime.now():%c}"
+        )
+        .encode("ascii")
+        .ljust(116, b" ")
+    )
     header += b" " * (512 - 116)
     with open(mat_path, "r+b") as fp:
         fp.write(header)
 
     original_bytes = mat_path.read_bytes()
 
-    def _cleanup():
+    def _cleanup() -> None:
+        """Cleanup."""
         try:
             api.delete_repo(
                 repo_id=repo_id, repo_type="dataset", missing_ok=True
@@ -80,7 +92,10 @@ def test_push_dataset_live_roundtrip(tmp_path, request):
 
     request.addfinalizer(_cleanup)
 
-    from synthpix.hf import pull_dataset, push_dataset
+    from synthpix.hf import (  # noqa: PLC0415 - optional or intentionally lazy import
+        pull_dataset,
+        push_dataset,
+    )
 
     push_dataset(
         tmp_path / "src",

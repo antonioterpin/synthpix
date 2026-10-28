@@ -305,7 +305,11 @@ def checkpoint_args(
     # Save/RestoreArgs classes, so we ignore type issues here
     if is_restore:
         return ocp.args.Composite(
-            sampler=ocp.args.StandardRestore(sampler.restore_state),  # pyright: ignore[reportCallIssue]
+            # No template: Orbax restores the saved shapes and dtypes. A
+            # template built from a fresh sampler would have to guess shapes
+            # for fields that are still None, and Orbax >= 0.11.33 enforces
+            # template shapes.
+            sampler=ocp.args.StandardRestore(),  # pyright: ignore[reportCallIssue]
             grain=grain.PyGrainCheckpointRestore(grain_iter),  # pyright: ignore[reportCallIssue]
         )
     else:

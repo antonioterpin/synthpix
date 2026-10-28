@@ -1,11 +1,18 @@
-"""Tests for Grain Adapters including GrainSchedulerAdapter and GrainEpisodicAdapter.
+"""Tests for Grain Adapters including GrainSchedulerAdapter and
+GrainEpisodicAdapter.
 
-These adapters are responsible for bridging the Grain DataLoader (which handles
-data loading, sampling, and batching) with the SynthPix internal protocols.
-The tests cover basic loading, padding, truncation, epoch-aware behavior,
-episodic handling (including episode exhaustion), and various error conditions.
+These adapters are responsible for bridging the Grain DataLoader
+(which handles data loading, sampling, and batching) with the
+SynthPix internal protocols. The tests cover basic loading, padding,
+truncation, epoch-aware behavior, episodic handling (including
+episode exhaustion), and various error conditions.
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import grain.python as grain
@@ -21,23 +28,43 @@ from synthpix.scheduler.protocol import EpisodeEndError
 
 
 class MockDataSource(grain.RandomAccessDataSource):
-    """Mock RandomAccessDataSource that returns predictable episodic metadata.
+    """Mock RandomAccessDataSource that returns predictable episodic
+    metadata.
 
     Simulates a sequence of items with '_chunk_id', '_timestep', and
     '_is_last_step' keys, allowing verification of how adapters handle
     episodic boundaries.
     """
 
-    def __init__(self, length=10, episode_len=5):
+    def __init__(self, length: int = 10, episode_len: int = 5) -> None:
+        """Initialize the test double.
+
+        Args:
+            length: Length for this test case.
+            episode_len: Episode len for this test case.
+        """
         super().__init__()
         self._length = length
         self.episode_length = episode_len
         self.include_images = False
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """Return the number of records.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         return self._length
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> dict[str, Any]:
+        """Return the record at the requested index.
+
+        Args:
+            idx: Idx for this test case.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         # Simulate episodes: 0,1,2,3,4 | 0,1,2,3,4
         t = idx % self.episode_length
         return {
@@ -49,27 +76,55 @@ class MockDataSource(grain.RandomAccessDataSource):
 
 
 class MockFileSource(FileDataSource):
-    def __init__(self, files, include_images=False):
+    """Mock File Source test double."""
+
+    def __init__(self, files: list[str], include_images: bool = False) -> None:
+        """Initialize the test double.
+
+        Args:
+            files: Files for this test case.
+            include_images: Include images for this test case.
+        """
         super().__init__(dataset_path=files)
         self._include_images = include_images
 
     @property
-    def include_images(self):
+    def include_images(self) -> bool:
+        """Include images.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return self._include_images
 
     @include_images.setter
-    def include_images(self, value):
+    def include_images(self, value: Any) -> None:
+        """Include images.
+
+        Args:
+            value: Value used by this test.
+        """
         self._include_images = value
 
-    def load_file(self, f):
+    def load_file(self, f: Any) -> dict[str, Any]:
+        """Load file.
+
+        Args:
+            f: F used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return {}
 
 
-def test_scheduler_adapter_basic():
+def test_scheduler_adapter_basic() -> None:
     """Test standard non-episodic adapter behavior.
 
-    Verifies that GrainSchedulerAdapter correctly retrieves batches from a
-    Grain DataLoader, maintains the expected flow field shape, and can be
+    Verifies that GrainSchedulerAdapter correctly retrieves batches from
+    a
+    Grain DataLoader, maintains the expected flow field shape, and can
+    be
        reset.
     """
     ds = MockDataSource(length=10)
@@ -95,7 +150,8 @@ def test_scheduler_adapter_basic():
         32,
         2,
     ), (
-        f"Flow field shape mismatch. Expected (2, 32, 32, 2), got {batch.flow_fields.shape}"
+        f"Flow field shape mismatch. Expected (2, 32, "
+        f"32, 2), got {batch.flow_fields.shape}"
     )
     assert batch.mask is not None, "Batch mask should not be None"
     assert batch.mask.shape == (2,), (
@@ -122,15 +178,18 @@ def test_scheduler_adapter_basic():
         32,
         2,
     ), (
-        f"Reset flow field shape mismatch. Expected (2, 32, 32, 2), got {batch_rst.flow_fields.shape}"
+        f"Reset flow field shape mismatch. Expected "
+        f"(2, 32, 32, 2), got {batch_rst.flow_fields.shape}"
     )
 
 
-def test_scheduler_adapter_padding():
-    """Test padding when the requested batch size exceeds the DataLoader's batch size.
+def test_scheduler_adapter_padding() -> None:
+    """Test padding when the requested batch size exceeds the DataLoader's
+    batch size.
 
     GrainSchedulerAdapter should structurally pad the returned batch to
-    match the requested size, marking the padded items as invalid in the mask.
+    match the requested size, marking the padded items as invalid in the
+    mask.
     """
     # Data returns batch size 2 (from Grain), but we ask for 4.
     ds = MockDataSource(length=2)
@@ -153,7 +212,8 @@ def test_scheduler_adapter_padding():
         32,
         2,
     ), (
-        f"Padded flow field shape mismatch. Expected (4, 32, 32, 2), got {batch.flow_fields.shape}"
+        f"Padded flow field shape mismatch. Expected "
+        f"(4, 32, 32, 2), got {batch.flow_fields.shape}"
     )
     # First 2 valid, last 2 invalid
     assert batch.mask is not None, "Batch mask should not be None"
@@ -161,11 +221,12 @@ def test_scheduler_adapter_padding():
         f"Expected 2 valid items in mask, got {np.sum(batch.mask)}"
     )
     assert batch.mask[0], "First item in mask should be True"
-    assert batch.mask[2] == False, "Third item in mask should be False (padded)"
+    assert not batch.mask[2], "Third item in mask should be False (padded)"
 
 
-def test_episodic_adapter_exhaustion():
-    """Test that GrainEpisodicAdapter raises EpisodeEndError when the loader is exhausted.
+def test_episodic_adapter_exhaustion() -> None:
+    """Test that GrainEpisodicAdapter raises EpisodeEndError when the
+    loader is exhausted.
 
     In an episodic context, reaching the end of the DataLoader stream
     specifically signifies the end of an episode sequence.
@@ -196,7 +257,7 @@ def test_episodic_adapter_exhaustion():
         adapter.get_batch(1)
 
 
-def test_get_flow_fields_shape_empty():
+def test_get_flow_fields_shape_empty() -> None:
     """Test behavior when loader is empty."""
     # Mock loader directly since grain.DataLoader doesn't like empty sources
     # easily
@@ -209,10 +270,11 @@ def test_get_flow_fields_shape_empty():
         adapter.get_flow_fields_shape()
 
 
-def test_adapter_shutdown():
+def test_adapter_shutdown() -> None:
     """Test that the shutdown method can be called without error.
 
-    The adapter delegates shutdown to the underlying loader if supported.
+    The adapter delegates shutdown to the underlying loader if
+    supported.
     """
     ds = MockDataSource(length=1)
     loader = grain.DataLoader(
@@ -224,10 +286,12 @@ def test_adapter_shutdown():
     adapter.shutdown()  # Should do nothing but exist
 
 
-def test_adapter_properties():
-    """Test delegation of 'include_images' and 'file_list' properties to the source.
+def test_adapter_properties() -> None:
+    """Test delegation of 'include_images' and 'file_list' properties to
+    the source.
 
-    The adapter should expose metadata from the underlying FileDataSource.
+    The adapter should expose metadata from the underlying
+    FileDataSource.
     """
     ds = MockFileSource(files=["a"], include_images=True)
 
@@ -239,8 +303,10 @@ def test_adapter_properties():
         operations=[],
     )
 
-    # Grain might not expose _data_source easily in all versions, but our adapter relies on it.
-    # If the adapter implementation uses `loader._data_source`, we assume it's there.
+    # Grain might not expose _data_source easily in all versions, but our
+    # adapter relies on it.
+    # If the adapter implementation uses `loader._data_source`, we assume it's
+    # there.
     # Ensure our MockDataSource is attached.
     # grain.DataLoader usually sets self._data_source = data_source
 
@@ -257,19 +323,36 @@ def test_adapter_properties():
         adapter.file_list = ["b"]
 
 
-def test_adapter_images_and_files_padding():
-    """Test correct handling and structural padding of paired images and file metadata.
+def test_adapter_images_and_files_padding() -> None:
+    """Test correct handling and structural padding of paired images and
+    file metadata.
 
     When structural padding is applied, all batch fields (flow_fields,
-    images1, images2, files) must be padded consistently to the target batch size.
+    images1, images2, files) must be padded consistently to the target
+    batch size.
     """
 
     # Source returning images and file
     class ImageSource(grain.RandomAccessDataSource):
-        def __len__(self):
+        """Image Source test double."""
+
+        def __len__(self) -> int:
+            """Return the number of records.
+
+            Returns:
+                The value produced for the test scenario.
+            """
             return 1
 
-        def __getitem__(self, idx):
+        def __getitem__(self, idx: int) -> dict[str, Any]:
+            """Return the record at the requested index.
+
+            Args:
+                idx: Idx for this test case.
+
+            Returns:
+                The value produced for the test scenario.
+            """
             return {
                 "flow_fields": np.zeros((32, 32, 2)),
                 "images1": np.zeros((32, 32, 3)),
@@ -282,10 +365,11 @@ def test_adapter_images_and_files_padding():
         sampler=grain.IndexSampler(1, grain.NoSharding()),
         operations=[grain.Batch(batch_size=1)],
     )
-    # Mock property inheritance manually if needed, but ImageSource doesn't have it.
+    # Mock property inheritance manually if needed, but ImageSource doesn't have
+    # it.
     # Adapter checks loader._data_source.include_images.
     # We set it on the source instance.
-    loader._data_source.include_images = True  # type: ignore
+    cast(Any, loader._data_source).include_images = True
 
     adapter = GrainSchedulerAdapter(loader)
 
@@ -298,7 +382,8 @@ def test_adapter_images_and_files_padding():
         32,
         3,
     ), (
-        f"Images1 shape mismatch. Expected (2, 32, 32, 3), got {batch.images1.shape}"
+        f"Images1 shape mismatch. Expected (2, 32, 32, 3), got "
+        f"{batch.images1.shape}"
     )
     assert batch.images2 is not None, "Batch images2 should not be None"
     assert batch.images2.shape == (
@@ -307,23 +392,23 @@ def test_adapter_images_and_files_padding():
         32,
         3,
     ), (
-        f"Images2 shape mismatch. Expected (2, 32, 32, 3), got {batch.images2.shape}"
+        f"Images2 shape mismatch. Expected (2, 32, 32, 3), got "
+        f"{batch.images2.shape}"
     )
     assert batch.files == (
         "file_path",
         "",
     ), f"Files metadata mismatch. Expected ('file_path', ''), got {batch.files}"
     assert batch.mask is not None, "Batch mask should not be None"
-    assert batch.mask[1] == False, (
-        "Second item in mask should be False (padded)"
-    )
+    assert not batch.mask[1], "Second item in mask should be False (padded)"
 
 
-def test_episodic_next_episode_logic():
-    """Test that next_episode() correctly advances the DataLoader to the next sequence.
+def test_episodic_next_episode_logic() -> None:
+    """Test that next_episode() correctly advances the DataLoader to the
+    next sequence.
 
-    It should consume items until a new episode (timestep 0) is encountered
-    or the stream is exhausted.
+    It should consume items until a new episode (timestep 0) is
+    encountered or the stream is exhausted.
     """
     # Create a loader that yields:
     # 0: {ts: 0}
@@ -385,7 +470,8 @@ def test_episodic_next_episode_logic():
     # 3. Next call should be batch_next (t0)
     # Adapter sets _current_timestep = -1 after skip loop
     assert adapter._current_timestep == -1, (
-        f"Expected current timestep -1 after skipping episode, got {adapter._current_timestep}"
+        f"Expected current timestep -1 after skipping "
+        f"episode, got {adapter._current_timestep}"
     )
 
     b_new = adapter.get_batch(1)
@@ -397,14 +483,15 @@ def test_episodic_next_episode_logic():
         "New batch flow fields do not match expected data"
     )
     assert adapter._current_timestep == 0, (
-        f"Expected current timestep 0 after new episode, got {adapter._current_timestep}"
+        f"Expected current timestep 0 after new episode, got "
+        f"{adapter._current_timestep}"
     )
 
 
-def test_adapter_init_errors():
+def test_adapter_init_errors() -> None:
     """Test validation errors during initialization."""
-    with pytest.raises(ValueError, match="must be a grain.DataLoader"):
-        GrainSchedulerAdapter("not_a_loader")  # type: ignore
+    with pytest.raises(ValueError, match=r"must be a grain.DataLoader"):
+        GrainSchedulerAdapter("not_a_loader")  # type: ignore  # pyright: ignore[reportArgumentType]
 
     loader = MagicMock(spec=grain.DataLoader)
     # MagicMock has everything by default.
@@ -415,7 +502,7 @@ def test_adapter_init_errors():
         GrainSchedulerAdapter(loader)
 
 
-def test_adapter_missing_data_source_property():
+def test_adapter_missing_data_source_property() -> None:
     """Test fallback when underlying loader has no _data_source."""
     loader = MagicMock(spec=grain.DataLoader)
     loader.__iter__.return_value = iter([])
@@ -427,7 +514,8 @@ def test_adapter_missing_data_source_property():
         "include_images should be False if source is missing"
     )
     assert adapter.file_list == [], (
-        f"file_list should be empty if source is missing, got {adapter.file_list}"
+        f"file_list should be empty if source is missing, got "
+        f"{adapter.file_list}"
     )
 
     # Test setting file_list still raises
@@ -435,11 +523,12 @@ def test_adapter_missing_data_source_property():
         adapter.file_list = []
 
 
-def test_adapter_batch_truncation():
-    """Test that the batch is truncated if the DataLoader returns more items than requested.
+def test_adapter_batch_truncation() -> None:
+    """Test that the batch is truncated if the DataLoader returns more
+    items than requested.
 
-    This scenario can occur if Grain's batching configuration differs from the
-    adapter's retrieval request.
+    This scenario can occur if Grain's batching configuration differs
+    from the adapter's retrieval request.
     """
     # This covers `elif B > target_batch_size:` branches.
     ds = MockDataSource(length=4)
@@ -458,7 +547,8 @@ def test_adapter_batch_truncation():
         32,
         2,
     ), (
-        f"Truncated flow field shape mismatch. Expected (2, 32, 32, 2), got {batch.flow_fields.shape}"
+        f"Truncated flow field shape mismatch. "
+        f"Expected (2, 32, 32, 2), got {batch.flow_fields.shape}"
     )
     assert batch.mask is not None, "Batch mask should not be None"
     assert batch.mask.shape == (2,), (
@@ -466,19 +556,36 @@ def test_adapter_batch_truncation():
     )
 
 
-def test_adapter_images_pad_branch():
-    """Test that images are correctly padded when structural padding is applied.
+def test_adapter_images_pad_branch() -> None:
+    """Test that images are correctly padded when structural padding is
+    applied.
 
-    Verifies that the image arrays are zero-padded to match the target batch size.
+    Verifies that the image arrays are zero-padded to match the target
+    batch size.
     """
 
     # To hit `if pad_size > 0: ... images1 = np.pad`
     # We need a batch with images, smaller than target.
     class ImageSource(grain.RandomAccessDataSource):
-        def __len__(self):
+        """Image Source test double."""
+
+        def __len__(self) -> int:
+            """Return the number of records.
+
+            Returns:
+                The value produced for the test scenario.
+            """
             return 1
 
-        def __getitem__(self, idx):
+        def __getitem__(self, idx: int) -> dict[str, Any]:
+            """Return the record at the requested index.
+
+            Args:
+                idx: Idx for this test case.
+
+            Returns:
+                The value produced for the test scenario.
+            """
             return {
                 "flow_fields": np.zeros((32, 32, 2)),
                 "images1": np.zeros((32, 32, 3)),
@@ -492,7 +599,7 @@ def test_adapter_images_pad_branch():
         operations=[grain.Batch(1)],
     )
 
-    loader._data_source.include_images = True
+    cast(Any, loader._data_source).include_images = True
 
     adapter = GrainSchedulerAdapter(loader)
     batch = adapter.get_batch(2)  # Pad 1
@@ -504,7 +611,8 @@ def test_adapter_images_pad_branch():
         32,
         3,
     ), (
-        f"Padded images1 shape mismatch. Expected (2, 32, 32, 3), got {batch.images1.shape}"
+        f"Padded images1 shape mismatch. Expected (2, "
+        f"32, 32, 3), got {batch.images1.shape}"
     )
     assert batch.images2 is not None, "Batch images2 should not be None"
     assert batch.images2.shape == (
@@ -513,22 +621,40 @@ def test_adapter_images_pad_branch():
         32,
         3,
     ), (
-        f"Padded images2 shape mismatch. Expected (2, 32, 32, 3), got {batch.images2.shape}"
+        f"Padded images2 shape mismatch. Expected (2, "
+        f"32, 32, 3), got {batch.images2.shape}"
     )
 
 
-def test_adapter_images_truncate_branch():
-    """Test that images are correctly truncated when the batch is larger than requested.
+def test_adapter_images_truncate_branch() -> None:
+    """Test that images are correctly truncated when the batch is larger
+    than requested.
 
-    Verifies that the image arrays are sliced to match the target batch size.
+    Verifies that the image arrays are sliced to match the target batch
+    size.
     """
 
     # To hit `elif B > target_batch_size: ... images1 = ...`
     class ImageSource(grain.RandomAccessDataSource):
-        def __len__(self):
+        """Image Source test double."""
+
+        def __len__(self) -> int:
+            """Return the number of records.
+
+            Returns:
+                The value produced for the test scenario.
+            """
             return 2
 
-        def __getitem__(self, idx):
+        def __getitem__(self, idx: int) -> dict[str, Any]:
+            """Return the record at the requested index.
+
+            Args:
+                idx: Idx for this test case.
+
+            Returns:
+                The value produced for the test scenario.
+            """
             return {
                 "flow_fields": np.zeros((32, 32, 2)),
                 "images1": np.zeros((32, 32, 3)),
@@ -541,7 +667,7 @@ def test_adapter_images_truncate_branch():
         sampler=grain.IndexSampler(2, grain.NoSharding()),
         operations=[grain.Batch(2)],
     )
-    loader._data_source.include_images = True
+    cast(Any, loader._data_source).include_images = True
 
     adapter = GrainSchedulerAdapter(loader)
     batch = adapter.get_batch(1)  # Truncate to 1
@@ -552,7 +678,8 @@ def test_adapter_images_truncate_branch():
         32,
         3,
     ), (
-        f"Truncated images1 shape mismatch. Expected (1, 32, 32, 3), got {batch.images1.shape}"
+        f"Truncated images1 shape mismatch. Expected "
+        f"(1, 32, 32, 3), got {batch.images1.shape}"
     )
 
     with pytest.raises(NotImplementedError):
@@ -560,11 +687,21 @@ def test_adapter_images_truncate_branch():
 
 
 class MissingImageSource(MockFileSource):
-    def load_file(self, f):
+    """Missing Image Source test double."""
+
+    def load_file(self, f: Any) -> dict[str, Any]:
+        """Load file.
+
+        Args:
+            f: F used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return {"flow_fields": np.zeros((32, 32, 2))}
 
 
-def test_adapter_missing_images_error():
+def test_adapter_missing_images_error() -> None:
     """Test KeyError if include_images is True but batch lacks them."""
     ds = MissingImageSource(files=["f"], include_images=True)
     loader = grain.DataLoader(
@@ -583,10 +720,12 @@ def test_adapter_missing_images_error():
         adapter.get_batch(1)
 
 
-def test_adapter_exhaustion():
-    """Test that StopIteration is raised with a descriptive message when the loader is exhausted.
+def test_adapter_exhaustion() -> None:
+    """Test that StopIteration is raised with a descriptive message when
+    the loader is exhausted.
 
-    In a non-episodic context, this signals that all data has been consumed.
+    In a non-episodic context, this signals that all data has been
+    consumed.
     """
     loader = MagicMock(spec=grain.DataLoader)
     loader.__iter__.return_value = iter(
@@ -599,7 +738,7 @@ def test_adapter_exhaustion():
         adapter.get_batch(1)
 
 
-def test_adapter_invalid_types_validation():
+def test_adapter_invalid_types_validation() -> None:
     """Test that the adapter validates the type of returned data.
 
     It should raise a ValueError if 'flow_fields' is not a NumPy array.
@@ -612,11 +751,11 @@ def test_adapter_invalid_types_validation():
     )
 
     adapter = GrainSchedulerAdapter(loader)
-    with pytest.raises(ValueError, match="Flow fields must be a np.ndarray"):
+    with pytest.raises(ValueError, match=r"Flow fields must be a np.ndarray"):
         adapter.get_batch(1)
 
 
-def test_adapter_invalid_images_validation():
+def test_adapter_invalid_images_validation() -> None:
     """Test Validation Errors for non-ndarray images."""
     loader = MagicMock(spec=grain.DataLoader)
     loader.__iter__.return_value = iter(
@@ -641,10 +780,10 @@ def test_adapter_invalid_images_validation():
     # We can mock adapter.include_images to True on the instance to skip setup?
     # Or set valid property.
     loader._data_source = MagicMock()
-    loader._data_source.include_images = True
+    cast(Any, loader._data_source).include_images = True
 
     adapter = GrainSchedulerAdapter(loader)
-    with pytest.raises(ValueError, match="Images1 must be a np.ndarray"):
+    with pytest.raises(ValueError, match=r"Images1 must be a np.ndarray"):
         adapter.get_batch(1)
 
     # Test images2 invalid
@@ -663,15 +802,15 @@ def test_adapter_invalid_images_validation():
     loader._data_source.include_images = False
 
     # When include_images is False, images1 and
-    with pytest.raises(ValueError, match="Images2 must be a np.ndarray"):
+    with pytest.raises(ValueError, match=r"Images2 must be a np.ndarray"):
         adapter.get_batch(1)
 
 
-def test_episodic_adapter_init_error():
+def test_episodic_adapter_init_error() -> None:
     """Test that GrainEpisodicAdapter requires an EpisodicDataSource.
 
-    It should raise a ValueError if the underlying loader's source does not
-    implement episodic features.
+    It should raise a ValueError if the underlying loader's source does
+    not implement episodic features.
     """
     loader = MagicMock(spec=grain.DataLoader)
     loader._data_source = MagicMock()  # Not EpisodicDataSource
@@ -684,11 +823,12 @@ def test_episodic_adapter_init_error():
         GrainEpisodicAdapter(loader)
 
 
-def test_episodic_truncated_episode():
-    """Test that next_episode() handles premature stream exhaustion gracefully.
+def test_episodic_truncated_episode() -> None:
+    """Test that next_episode() handles premature stream exhaustion
+    gracefully.
 
-    If the DataLoader runs out of items while skipping to the next episode,
-    the adapter should reset its state correctly.
+    If the DataLoader runs out of items while skipping to the next
+    episode, the adapter should reset its state correctly.
     """
     loader = MagicMock(spec=grain.DataLoader)
     # Mock iterator that is empty
@@ -709,11 +849,12 @@ def test_episodic_truncated_episode():
     adapter.next_episode()
 
     assert adapter._current_timestep == -1, (
-        f"Expected current timestep -1 after stream exhaustion, got {adapter._current_timestep}"
+        f"Expected current timestep -1 after stream "
+        f"exhaustion, got {adapter._current_timestep}"
     )
 
 
-def test_episodic_missing_metadata_in_next_episode():
+def test_episodic_missing_metadata_in_next_episode() -> None:
     """Test KeyError if batch missing _timestep in next_episode loop."""
     loader = MagicMock(spec=grain.DataLoader)
     loader._data_source = MagicMock(spec=EpisodicDataSource)
@@ -731,10 +872,12 @@ def test_episodic_missing_metadata_in_next_episode():
         adapter.next_episode()
 
 
-def test_episodic_adapter_unknown_length():
-    """Test that accessing episode_length raises ValueError if the source doesn't provide it.
+def test_episodic_adapter_unknown_length() -> None:
+    """Test that accessing episode_length raises ValueError if the source
+    doesn't provide it.
 
-    In some cases, the episodic length might not be determinable from the source.
+    In some cases, the episodic length might not be determinable from
+    the source.
     """
     loader = MagicMock(spec=grain.DataLoader)
     src = MagicMock(spec=EpisodicDataSource)
@@ -749,7 +892,7 @@ def test_episodic_adapter_unknown_length():
         _ = adapter.episode_length
 
 
-def test_episodic_adapter_property_access():
+def test_episodic_adapter_property_access() -> None:
     """Test valid episode_length property access."""
     loader = MagicMock(spec=grain.DataLoader)
     src = MagicMock(spec=EpisodicDataSource)
@@ -762,7 +905,7 @@ def test_episodic_adapter_property_access():
     )
 
 
-def test_adapter_file_list_error():
+def test_adapter_file_list_error() -> None:
     """Test that setting file_list raises NotImplementedError."""
     ds = MockDataSource(length=1)
     loader = grain.DataLoader(
@@ -776,7 +919,7 @@ def test_adapter_file_list_error():
         adapter.file_list = ["a"]
 
 
-def test_adapter_explicit_padding():
+def test_adapter_explicit_padding() -> None:
     """Test that adapter respects _is_padding flag."""
     # Batch size 2.
     # Flow shape (2, 10, 10, 2)
@@ -803,7 +946,7 @@ def test_adapter_explicit_padding():
     loader.__iter__.return_value = iter([batch])
     # Ensure include_images checks pass if needed
     loader._data_source = MagicMock()
-    loader._data_source.include_images = True  # type: ignore
+    cast(Any, loader._data_source).include_images = True
     # Ensure epoch logic treats this as last epoch (or single epoch)
     loader._sampler = MagicMock()
     loader._sampler.num_epochs = 1
@@ -820,35 +963,57 @@ def test_adapter_explicit_padding():
         "First item in batch should not be zeroed out"
     )
     assert data.mask is not None, "Batch mask should not be None"
-    assert data.mask[0] == True, "First item in mask should be True"
+    assert data.mask[0], "First item in mask should be True"
 
     # Item 1 should be zeroed out
     assert np.all(data.flow_fields[1] == 0.0), (
-        f"Padded flow field item should be zeroed out, but got values like {data.flow_fields[1].flatten()[0]}"
+        f"Padded flow field item should be zeroed out,"
+        f" but got values like "
+        f"{data.flow_fields[1].flatten()[0]}"
     )
     assert data.images1 is not None, "Batch images1 should not be None"
     assert np.all(data.images1[1] == 0.0), (
-        f"Padded images1 item should be zeroed out, but got values like {data.images1[1].flatten()[0]}"
+        f"Padded images1 item should be zeroed out, "
+        f"but got values like {data.images1[1].flatten()[0]}"
     )
     assert data.images2 is not None, "Batch images2 should not be None"
     assert np.all(data.images2[1] == 0.0), (
-        f"Padded images2 item should be zeroed out, but got values like {data.images2[1].flatten()[0]}"
+        f"Padded images2 item should be zeroed out, "
+        f"but got values like {data.images2[1].flatten()[0]}"
     )
-    assert data.mask[1] == False, "Second item in mask should be False (padded)"
+    assert not data.mask[1], "Second item in mask should be False (padded)"
 
 
 class MockFileDataSource(FileDataSource):
     """Mock source returning custom files."""
 
-    def __init__(self, files):
+    def __init__(self, files: list[str]) -> None:
+        """Initialize the test double.
+
+        Args:
+            files: Files for this test case.
+        """
         self.files = files
         super().__init__(dataset_path=self.files)
 
     @property
-    def file_list(self):
+    def file_list(self) -> list[str]:
+        """File list.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return self.files
 
-    def load_file(self, file_path):
+    def load_file(self, file_path: Path) -> dict[str, Any]:
+        """Load file.
+
+        Args:
+            file_path: File path used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         # Return dummy data
         return {
             "flow_fields": np.zeros((10, 10, 2), dtype=np.float32),
@@ -857,8 +1022,9 @@ class MockFileDataSource(FileDataSource):
         }
 
 
-def test_epoch_aware_wrapping_and_padding(tmp_path):
-    """Verify GrainSchedulerAdapter handles epoch-aware wrapping and padding.
+def test_epoch_aware_wrapping_and_padding(tmp_path: Path) -> None:
+    """Verify GrainSchedulerAdapter handles epoch-aware wrapping and
+    padding.
 
     Test scenario:
     - 3 files, Episode length 1.
@@ -873,11 +1039,15 @@ def test_epoch_aware_wrapping_and_padding(tmp_path):
 
     Expectation:
     - Non-Final Epochs (Epoch 0, 1):
-      Data should seamlessly wrap around. The wrapped item (index 0 reused)
+        Data should seamlessly wrap around. The wrapped item (index 0
+      reused)
       should NOT be padded (mask=True). This ensures continuity.
     - Final Epoch (Epoch 2):
       The wrapped item should be padded (mask=False) to indicate end of
       dataset training without starting a partial new epoch.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     d = tmp_path / "data"
     d.mkdir()
@@ -891,7 +1061,8 @@ def test_epoch_aware_wrapping_and_padding(tmp_path):
     # Ensure stable order logic inside EpisodicDataSource
     ds = EpisodicDataSource(source, batch_size=2, episode_length=1, seed=42)
 
-    # Check ds length: 2 chunks * 1 step = 2 items per epoch * 2 batch size = 4 items
+    # Check ds length: 2 chunks * 1 step = 2 items per epoch * 2 batch size = 4
+    # items
     assert len(ds) == 4, (
         f"Expected 4 items in EpisodicDataSource, got {len(ds)}"
     )
@@ -917,55 +1088,83 @@ def test_epoch_aware_wrapping_and_padding(tmp_path):
         pass
 
     assert len(batches) == 6, (
-        f"Expected 6 batches across 3 epochs (2 batches/epoch), got {len(batches)}"
+        f"Expected 6 batches across 3 epochs (2 "
+        f"batches/epoch), got {len(batches)}"
     )
 
     # Epoch 1
     b1 = batches[1]
-    assert b1.mask[1] == True, (
+    assert b1.mask[1], (
         f"Epoch 1 wrap should be valid, but mask[1] is {b1.mask[1]}"
     )
 
     # Epoch 2
     b3 = batches[3]
-    assert b3.mask[1] == True, (
+    assert b3.mask[1], (
         f"Epoch 2 wrap should be valid, but mask[1] is {b3.mask[1]}"
     )
 
     # Epoch 3
     b5 = batches[5]
-    assert b5.mask[1] == False, (
-        f"Epoch 3 wrap should be padded (final epoch), but mask[1] is {b5.mask[1]}"
+    assert not b5.mask[1], (
+        f"Epoch 3 wrap should be padded (final epoch),"
+        f" but mask[1] is {b5.mask[1]}"
     )
 
 
 class CrashingLoader(grain.DataLoader):
     """Loader that crashes during attribute inspection."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize the test double."""
         pass
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Any]:
+        """Return the iterator for this fixture.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         return iter([])
 
     @property
-    def sampler(self):
+    def sampler(self) -> None:
+        """Sampler.
+
+        Raises:
+            RuntimeError: When the simulated failure is triggered.
+        """
         raise RuntimeError("Crash on access")
 
     @property
-    def _sampler(self):
+    def _sampler(self) -> None:
+        """Sampler.
+
+        Raises:
+            RuntimeError: When the simulated failure is triggered.
+        """
         raise RuntimeError("Crash on access")
 
     @property
-    def _data_source(self):
+    def _data_source(self) -> None:
+        """Data source.
+
+        Raises:
+            RuntimeError: When the simulated failure is triggered.
+        """
         raise RuntimeError("Crash on access")
 
     @property
-    def _dataset(self):
+    def _dataset(self) -> None:
+        """Dataset.
+
+        Raises:
+            RuntimeError: When the simulated failure is triggered.
+        """
         raise RuntimeError("Crash on access")
 
 
-def test_adapter_init_exception_fallback():
+def test_adapter_init_exception_fallback() -> None:
     """Test fallback when loader inspection raises exception."""
     loader = CrashingLoader()
     # Should not raise, just warn and default to unsafe epoch logic
@@ -975,7 +1174,7 @@ def test_adapter_init_exception_fallback():
     )
 
 
-def test_cached_shape():
+def test_cached_shape() -> None:
     """Test get_flow_fields_shape uses cache."""
     # Mock loader
     batch = {
@@ -992,14 +1191,15 @@ def test_cached_shape():
 
     # Second call - should hit cache (missing line 92)
     # We can verify by exhausting the iterator or mocking it
-    # If it called iter() again, it would be fine, but coverage checks if the return path is taken.
+    # If it called iter() again, it would be fine, but coverage checks if the
+    # return path is taken.
     shape2 = adapter.get_flow_fields_shape()
     assert shape2 == (10, 10, 2), (
         f"Expected cached shape (10, 10, 2), got {shape2}"
     )
 
 
-def test_file_list_setter():
+def test_file_list_setter() -> None:
     """Test setting file_list raises NotImplementedError."""
     loader = MagicMock(spec=grain.DataLoader)
     adapter = GrainSchedulerAdapter(loader)
@@ -1008,8 +1208,10 @@ def test_file_list_setter():
         adapter.file_list = ["foo"]
 
 
-def test_infinite_epoch_logic():
-    """Test fallback when dataset len is known but num_epochs is None (Infinite)."""
+def test_infinite_epoch_logic() -> None:
+    """Test fallback when dataset len is known but num_epochs is None
+    (Infinite).
+    """
     # Cover line 188-189
     loader = MagicMock(spec=grain.DataLoader)
     loader.__iter__.return_value = iter([])
@@ -1046,7 +1248,8 @@ def test_infinite_epoch_logic():
     adapter.reset()
 
     data = adapter.get_batch(2)
-    # If respect_padding is False (expected), then data masked should be True for both
+    # If respect_padding is False (expected), then data masked should be True
+    # for both
     # because user wants infinite stream
     assert data.mask is not None, "Batch mask should not be None"
     assert np.all(data.mask), (
@@ -1054,8 +1257,10 @@ def test_infinite_epoch_logic():
     )
 
 
-def test_structural_and_explicit_padding_combination():
-    """Test combination of structural padding (pad_size > 0) AND explicit _is_padding flag."""
+def test_structural_and_explicit_padding_combination() -> None:
+    """Test combination of structural padding (pad_size > 0) AND explicit
+    _is_padding flag.
+    """
     # Cover lines 265-266
 
     # Batch has 1 item. Target is 2.
@@ -1090,17 +1295,16 @@ def test_structural_and_explicit_padding_combination():
     # Item 1: Structural Pad -> Mask=False, Zeroed.
     # Both should be masked out.
     assert data.mask is not None, "Batch mask should not be None"
-    assert data.mask[0] == False, "First item (padding) should be masked"
-    assert data.mask[1] == False, (
-        "Second item (structural pad) should be masked"
-    )
+    assert not data.mask[0], "First item (padding) should be masked"
+    assert not data.mask[1], "Second item (structural pad) should be masked"
     # data.flow_fields[0] should be 0
     assert np.all(data.flow_fields[0] == 0.0), (
-        f"Padded item should be zeroed out, but got values like {data.flow_fields[0].flatten()[0]}"
+        f"Padded item should be zeroed out, but got values like "
+        f"{data.flow_fields[0].flatten()[0]}"
     )
 
 
-def test_truncation_with_padding_flag():
+def test_truncation_with_padding_flag() -> None:
     """Test truncation (target < current) with explicit _is_padding flag."""
     # Ensure line 253 is covered
 
@@ -1143,11 +1347,12 @@ def test_truncation_with_padding_flag():
     # but execution path guarantees it.
 
 
-def test_adapter_epoch_calculation_accuracy():
-    """Verify that GrainSchedulerAdapter correctly tracks epochs across multiple dataset wraps.
+def test_adapter_epoch_calculation_accuracy() -> None:
+    """Verify GrainSchedulerAdapter correctly tracks epochs across multiple
+    dataset wraps.
 
-    This test ensures that the epoch counter increments precisely at the dataset
-    boundary and stays constant during the epoch.
+    This test ensures that the epoch counter increments precisely at the
+    dataset boundary and stays constant during the epoch.
     """
     # Dataset size 2. Batch size 1. 3 Epochs = 6 items.
     data_source = MagicMock()
@@ -1177,12 +1382,13 @@ def test_adapter_epoch_calculation_accuracy():
     )
 
 
-def test_adapter_jax_seed_delivery():
-    """Verify that GrainSchedulerAdapter extracts and delivers jax_seed from Grain records.
+def test_adapter_jax_seed_delivery() -> None:
+    """Verify GrainSchedulerAdapter extracts and delivers jax_seed from
+    Grain records.
 
-    Grain records might contain a '_jax_seed' key injected by the AddJAXSeed transform.
-    This test verifies that the adapter extracts this key and provides it as 'jax_seed'
-    in the SchedulerData output.
+    Grain records might contain a '_jax_seed' key injected by the
+    AddJAXSeed transform. This test verifies that the adapter extracts
+    this key and provides it as 'jax_seed' in the SchedulerData output.
     """
     batch_size = 2
     jax_seeds = np.array([123, 456], dtype=np.uint32)
@@ -1203,7 +1409,8 @@ def test_adapter_jax_seed_delivery():
     data = adapter.get_batch(batch_size)
 
     assert data.jax_seed is not None, (
-        "jax_seed should be present in SchedulerData if provided by Grain record"
+        "jax_seed should be present in SchedulerData if "
+        "provided by Grain record"
     )
     assert np.array_equal(data.jax_seed, jax_seeds), (
         f"jax_seed values mismatch. Expected {jax_seeds}, got {data.jax_seed}"
@@ -1213,8 +1420,9 @@ def test_adapter_jax_seed_delivery():
     )
 
 
-def test_adapter_handling_missing_seed():
-    """Verify that GrainSchedulerAdapter handles records without _jax_seed gracefully.
+def test_adapter_handling_missing_seed() -> None:
+    """Verify GrainSchedulerAdapter handles records without _jax_seed
+    gracefully.
 
     For legacy pipelines or records without the AddJAXSeed transform,
     the adapter should return None for jax_seed.
@@ -1233,8 +1441,10 @@ def test_adapter_handling_missing_seed():
     )
 
 
-def test_grain_scheduler_adapter_epoch_logic():
-    """Test that GrainSchedulerAdapter correctly calculates and returns epoch information."""
+def test_grain_scheduler_adapter_epoch_logic() -> None:
+    """Test that GrainSchedulerAdapter correctly calculates and returns
+    epoch information.
+    """
     # Mock source
     ds = MockDataSource(length=4)
     # Mock loader
@@ -1255,7 +1465,7 @@ def test_grain_scheduler_adapter_epoch_logic():
     loader.__iter__.return_value = iter(
         [batch_content, batch_content, batch_content]
     )
-    loader._data_source.include_images = True
+    cast(Any, loader._data_source).include_images = True
 
     adapter = GrainSchedulerAdapter(loader)
 
@@ -1278,8 +1488,10 @@ def test_grain_scheduler_adapter_epoch_logic():
     assert np.all(b3.epoch == 1), f"Expected Epoch 1, got {b3.epoch}"
 
 
-def test_grain_episodic_adapter_epoch_logic():
-    """Test that GrainEpisodicAdapter correctly calculates and returns epoch information."""
+def test_grain_episodic_adapter_epoch_logic() -> None:
+    """Test that GrainEpisodicAdapter correctly calculates and returns
+    epoch information.
+    """
     ds_ep = MagicMock(spec=EpisodicDataSource)
     ds_ep.episode_length = 2
     ds_ep.__len__.return_value = 4

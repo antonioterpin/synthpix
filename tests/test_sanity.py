@@ -1,19 +1,24 @@
 """Tests for sanity check utilities and configuration validation.
 
-These tests verify the tools used to calculate dataset statistics (like speed
-ranges), update configuration files, and handle user interaction during
-dataset validation.
+These tests verify the tools used to calculate dataset statistics
+(like speed ranges), update configuration files, and handle user
+interaction during dataset validation.
 """
+
+from __future__ import annotations
 
 import builtins
 import os
 import tempfile
+from pathlib import Path
+from typing import Any
 
 import jax.numpy as jnp
 import numpy as np
 import pytest
 import yaml
 
+import synthpix.sanity as sp_sanity
 from synthpix.sanity import (
     calculate_min_and_max_speeds,
     missing_speeds_panel,
@@ -22,8 +27,9 @@ from synthpix.sanity import (
 from synthpix.utils import load_configuration
 
 
-def test_update_config_file():
-    """Test that `update_config_file` correctly modifies YAML configuration values.
+def test_update_config_file() -> None:
+    """Test that `update_config_file` correctly modifies YAML configuration
+    values.
 
     Verifies that specified keys are updated while leaving unrelated
     configuration parameters untouched.
@@ -50,13 +56,15 @@ def test_update_config_file():
         # Assert that the updates were applied correctly
         for key, value in updates.items():
             assert updated_config[key] == value, (
-                f"Key '{key}' was not updated correctly. Expected {value}, got {updated_config[key]}"
+                f"Key '{key}' was not updated correctly. Expected "
+                f"{value}, got {updated_config[key]}"
             )
         # Assert that other keys remain unchanged
         for key in base_config:
             if key not in updates:
                 assert updated_config[key] == base_config[key], (
-                    f"Unrelated key '{key}' was modified. Expected {base_config[key]}, got {updated_config[key]}"
+                    f"Unrelated key '{key}' was modified. Expected "
+                    f"{base_config[key]}, got {updated_config[key]}"
                 )
     finally:
         # Ensure the temporary file is deleted
@@ -64,11 +72,15 @@ def test_update_config_file():
             os.remove(temp_config_path)
 
 
-def test_convert_to_standard_type(tmp_path):
-    """Test the internal recursive type conversion for configuration updates.
+def test_convert_to_standard_type(tmp_path: Path) -> None:
+    """Test the internal recursive type conversion for configuration
+    updates.
 
     Ensures that NumPy and JAX scalars/arrays are converted to standard
     Python types (float, int, list) before being written to YAML files.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     # 1. create a minimal temporary YAML config
     cfg_path = tmp_path / "sample_cfg.yaml"
@@ -95,19 +107,25 @@ def test_convert_to_standard_type(tmp_path):
         isinstance(cfg["np_float"], float)
         and pytest.approx(cfg["np_float"]) == 1.23
     ), (
-        f"np_float conversion failed. Expected float around 1.23, got {type(cfg['np_float'])} with value {cfg['np_float']}"
+        f"np_float conversion failed. Expected float "
+        f"around 1.23, got {type(cfg['np_float'])} with value "
+        f"{cfg['np_float']}"
     )
     assert (
         isinstance(cfg["jnp_float"], float)
         and pytest.approx(cfg["jnp_float"]) == 4.56
     ), (
-        f"jnp_float conversion failed. Expected float around 4.56, got {type(cfg['jnp_float'])} with value {cfg['jnp_float']}"
+        f"jnp_float conversion failed. Expected float "
+        f"around 4.56, got {type(cfg['jnp_float'])} with value "
+        f"{cfg['jnp_float']}"
     )
     assert isinstance(cfg["np_int"], int) and cfg["np_int"] == 7, (
-        f"np_int conversion failed. Expected int 7, got {type(cfg['np_int'])} with value {cfg['np_int']}"
+        f"np_int conversion failed. Expected int 7, got "
+        f"{type(cfg['np_int'])} with value {cfg['np_int']}"
     )
     assert isinstance(cfg["jnp_int"], int) and cfg["jnp_int"] == 8, (
-        f"jnp_int conversion failed. Expected int 8, got {type(cfg['jnp_int'])} with value {cfg['jnp_int']}"
+        f"jnp_int conversion failed. Expected int 8, got "
+        f"{type(cfg['jnp_int'])} with value {cfg['jnp_int']}"
     )
 
     assert cfg["np_array"] == [1, 2, 3], (
@@ -124,13 +142,19 @@ def test_convert_to_standard_type(tmp_path):
 
 
 @pytest.mark.parametrize("mock_hdf5_files", [2], indirect=True)
-def test_calculate_min_and_max_speeds(mock_hdf5_files):
-    """Test the automatic calculation of min/max velocities across multiple HDF5 files.
+def test_calculate_min_and_max_speeds(
+    mock_hdf5_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Test the automatic calculation of min/max velocities across multiple
+    HDF5 files.
 
     Verifies that the aggregate speed ranges are correctly computed from
     individual file datasets.
+
+    Args:
+        mock_hdf5_files: Temporary HDF5 file paths and dimensions.
     """
-    files, dims = mock_hdf5_files
+    files, _dims = mock_hdf5_files
 
     # Call the function to calculate speeds
     result = calculate_min_and_max_speeds(files)
@@ -151,10 +175,12 @@ def test_calculate_min_and_max_speeds(mock_hdf5_files):
 
     # Ensure the values are within expected ranges based on the mock data
     assert result["min_speed_x"] <= result["max_speed_x"], (
-        f"Expected min_speed_x ({result['min_speed_x']}) <= max_speed_x ({result['max_speed_x']})"
+        f"Expected min_speed_x ({result['min_speed_x']}"
+        f") <= max_speed_x ({result['max_speed_x']})"
     )
     assert result["min_speed_y"] <= result["max_speed_y"], (
-        f"Expected min_speed_y ({result['min_speed_y']}) <= max_speed_y ({result['max_speed_y']})"
+        f"Expected min_speed_y ({result['min_speed_y']}"
+        f") <= max_speed_y ({result['max_speed_y']})"
     )
 
 
@@ -173,12 +199,19 @@ def test_calculate_min_and_max_speeds(mock_hdf5_files):
     ],
 )
 def test_invalid_inputs_missing_speeds_panel(
-    tmp_path, cfg_name, cfg_content, expected_exception
-):
-    """Test that `missing_speeds_panel` raises errors for malformed configuration files.
+    tmp_path: Path, cfg_name: Any, cfg_content: Any, expected_exception: Any
+) -> None:
+    """Test that `missing_speeds_panel` raises errors for malformed
+    configuration files.
 
     Checks scenarios like missing file lists, non-list values, and
     non-string entries.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+        cfg_name: Cfg name for this test case.
+        cfg_content: Cfg content for this test case.
+        expected_exception: Expected exception.
     """
     cfg_file = tmp_path / f"{cfg_name}.yaml"
     cfg_file.write_text(yaml.safe_dump(cfg_content))
@@ -186,8 +219,12 @@ def test_invalid_inputs_missing_speeds_panel(
         missing_speeds_panel(str(cfg_file))
 
 
-def test_not_h5_inputs_missing_speeds_panel(tmp_path):
-    """Test that `missing_speeds_panel` enforces the usage of `.h5` files."""
+def test_not_h5_inputs_missing_speeds_panel(tmp_path: Path) -> None:
+    """Test that `missing_speeds_panel` enforces the usage of `.h5` files.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     cfg_file = tmp_path / "not_h5.yaml"
     cfg_content = {"file_list": [str(cfg_file)]}
     cfg_file.write_text(yaml.safe_dump(cfg_content))
@@ -195,8 +232,15 @@ def test_not_h5_inputs_missing_speeds_panel(tmp_path):
         missing_speeds_panel(str(cfg_file))
 
 
-def _fake_calculate(_files):
-    """Stand-in for calculate_min_and_max_speeds."""
+def _fake_calculate(_files: list[str]) -> dict[str, Any]:
+    """Stand-in for calculate_min_and_max_speeds.
+
+    Args:
+        _files: Files for this test case.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     return {
         "max_speed_x": 10.0,
         "max_speed_y": 20.0,
@@ -216,17 +260,26 @@ def _fake_calculate(_files):
 )
 @pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
 def test_missing_speeds_panel_all_branches(
-    monkeypatch,
-    mock_hdf5_files,
-    tmp_path,
-    cli_answers,
-    expect_exception,
-    expect_speeds,
-):
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hdf5_files: tuple[list[str], dict[str, int]],
+    tmp_path: Path,
+    cli_answers: Any,
+    expect_exception: type[Exception] | None,
+    expect_speeds: dict[str, float] | None,
+) -> None:
     """Test all interaction branches of the missing speeds validation tool.
 
-    Simulates user CLI responses for automatic calculation, manual entry,
-    and abortion, using monkeypatching for input and configuration updates.
+    Simulates user CLI responses for automatic calculation, manual
+    entry, and abortion, using monkeypatching for input and
+    configuration updates.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+        mock_hdf5_files: Temporary HDF5 file paths and dimensions.
+        tmp_path: Temporary directory for this test.
+        cli_answers: Cli answers for this test case.
+        expect_exception: Expect exception for this test case.
+        expect_speeds: Expect speeds for this test case.
     """
     files, _dims = mock_hdf5_files
     # Write initial config with only file_list
@@ -241,8 +294,6 @@ def test_missing_speeds_panel_all_branches(
     monkeypatch.setattr(
         "synthpix.sanity.update_config_file", lambda *_, **__: None
     )
-    # ensure update_config_file would target our config file path
-    import synthpix.sanity as sp_sanity
 
     monkeypatch.setattr(sp_sanity, "config_path", str(cfg_file), raising=False)
 
@@ -263,12 +314,20 @@ def test_missing_speeds_panel_all_branches(
 
 @pytest.mark.parametrize("mock_hdf5_files", [1], indirect=True)
 def test_missing_speeds_panel_when_values_present(
-    monkeypatch, mock_hdf5_files, tmp_path
-):
-    """Verify the 'fast-path' when all speed values are already in the config.
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hdf5_files: tuple[list[str], dict[str, int]],
+    tmp_path: Path,
+) -> None:
+    """Verify the 'fast-path' when all speed values are already in the
+    config.
 
-    Ensures that no prompts are shown and values are returned directly if
-    the configuration is complete.
+    Ensures that no prompts are shown and values are returned directly
+    if the configuration is complete.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+        mock_hdf5_files: Temporary HDF5 file paths and dimensions.
+        tmp_path: Temporary directory for this test.
     """
     files, _dims = mock_hdf5_files
     # Write config with all required keys

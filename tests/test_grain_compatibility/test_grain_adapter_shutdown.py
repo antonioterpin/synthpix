@@ -1,8 +1,11 @@
 """Tests for the shutdown method in GrainSchedulerAdapter.
 
-These tests verify that `GrainSchedulerAdapter.shutdown` correctly closes
-the underlying Grain iterator and handles exceptions gracefully.
+These tests verify that `GrainSchedulerAdapter.shutdown` correctly
+closes the underlying Grain iterator and handles exceptions
+gracefully.
 """
+
+from __future__ import annotations
 
 from unittest.mock import MagicMock
 
@@ -11,7 +14,7 @@ import grain.python as grain
 from synthpix.data_sources.adapter import GrainSchedulerAdapter
 
 
-def test_grain_adapter_shutdown_sets_none():
+def test_grain_adapter_shutdown_sets_none() -> None:
     """Test that shutdown sets the iterator to None."""
     loader = MagicMock(spec=grain.DataLoader)
     mock_iterator = MagicMock()

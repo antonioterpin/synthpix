@@ -1,11 +1,15 @@
 """Tests for the MATLAB (.mat) file flow field scheduler.
 
-These tests verify the loading of flow fields and images from .mat files (both
-v5 and v7.3/HDF5 formats), including resizing, scaling, and handling of
-various interleaved data layouts.
+These tests verify the loading of flow fields and images from .mat
+files (both v5 and v7.3/HDF5 formats), including resizing, scaling,
+and handling of various interleaved data layouts.
 """
 
+from __future__ import annotations
+
 import os
+from pathlib import Path
+from typing import Any
 
 import h5py
 import jax
@@ -26,12 +30,18 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_SCHEDULER"]
 @pytest.mark.parametrize("bad_include_images", ["string", 123, None, []])
 @pytest.mark.parametrize("mock_mat_files", [1], indirect=True)
 def test_mat_scheduler_invalid_include_images(
-    bad_include_images, mock_mat_files
-):
-    """Test that `MATFlowFieldScheduler` rejects non-boolean `include_images` values."""
+    bad_include_images: Any, mock_mat_files: tuple[list[str], dict[str, int]]
+) -> None:
+    """Test that `MATFlowFieldScheduler` rejects non-boolean
+    `include_images` values.
+
+    Args:
+        bad_include_images: Bad include images for this test case.
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
+    """
     files, _ = mock_mat_files
     with pytest.raises(
-        ValueError, match="include_images must be a boolean value."
+        ValueError, match=r"include_images must be a boolean value."
     ):
         MATFlowFieldScheduler.from_config(
             {
@@ -44,8 +54,15 @@ def test_mat_scheduler_invalid_include_images(
 @pytest.mark.parametrize(
     "bad_output_shape", ["bad_value", None, 123, (256,), (1, 2, 1)]
 )
-def test_mat_scheduler_invalid_output_shape(bad_output_shape, mock_mat_files):
-    """Test that invalid `output_shape` values raise a ValueError."""
+def test_mat_scheduler_invalid_output_shape(
+    bad_output_shape: Any, mock_mat_files: tuple[list[str], dict[str, int]]
+) -> None:
+    """Test that invalid `output_shape` values raise a ValueError.
+
+    Args:
+        bad_output_shape: Bad output shape for this test case.
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
+    """
     files, _ = mock_mat_files
     with pytest.raises((ValueError, TypeError)):
         MATFlowFieldScheduler.from_config(
@@ -60,12 +77,17 @@ def test_mat_scheduler_invalid_output_shape(bad_output_shape, mock_mat_files):
     "bad_output_shape", [(256, -1), (0, 256), (256, 0), (-1, -1)]
 )
 def test_mat_scheduler_invalid_output_shape_values(
-    bad_output_shape, mock_mat_files
-):
-    """Test that invalid `output_shape` values raise a ValueError."""
+    bad_output_shape: Any, mock_mat_files: tuple[list[str], dict[str, int]]
+) -> None:
+    """Test that invalid `output_shape` values raise a ValueError.
+
+    Args:
+        bad_output_shape: Bad output shape for this test case.
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
+    """
     files, _ = mock_mat_files
     with pytest.raises(
-        ValueError, match="output_shape must contain positive integers."
+        ValueError, match=r"output_shape must contain positive integers."
     ):
         MATFlowFieldScheduler.from_config(
             {
@@ -76,11 +98,17 @@ def test_mat_scheduler_invalid_output_shape_values(
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
-def test_mat_scheduler_iteration(mock_mat_files):
-    """Verify that `MATFlowFieldScheduler` correctly iterates through multiple .mat files.
+def test_mat_scheduler_iteration(
+    mock_mat_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify `MATFlowFieldScheduler` correctly iterates through multiple
+    .mat files.
 
     Confirms that `get_batch` yields the expected number of batches with
     accurate flow field shapes.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
     """
     files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler.from_config(
@@ -104,7 +132,8 @@ def test_mat_scheduler_iteration(mock_mat_files):
                 256,
                 2,
             ), (
-                f"Expected flow field shape (1, 256, 256, 2), got {data.flow_fields.shape}"
+                f"Expected flow field shape (1, 256, 256, 2), got "
+                f"{data.flow_fields.shape}"
             )
             count += 1
         except StopIteration:
@@ -114,7 +143,15 @@ def test_mat_scheduler_iteration(mock_mat_files):
 
 
 @pytest.mark.parametrize("mock_mat_files", [1], indirect=True)
-def test_mat_scheduler_shape(mock_mat_files):
+def test_mat_scheduler_shape(
+    mock_mat_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify mat scheduler shape.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and their
+            dimensions.
+    """
     files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler.from_config(
         {
@@ -130,7 +167,15 @@ def test_mat_scheduler_shape(mock_mat_files):
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
-def test_mat_scheduler_init_flags(mock_mat_files):
+def test_mat_scheduler_init_flags(
+    mock_mat_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify mat scheduler init flags.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and their
+            dimensions.
+    """
     files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler.from_config(
         {
@@ -147,21 +192,30 @@ def test_mat_scheduler_init_flags(mock_mat_files):
     )
 
 
-def test_mat_scheduler_invalid_ext(tmp_path):
+def test_mat_scheduler_invalid_ext(tmp_path: Path) -> None:
+    """Verify mat scheduler invalid ext.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     bad_file = tmp_path / "invalid.txt"
     bad_file.write_text("invalid content")
 
     with pytest.raises(
-        ValueError, match="All files must be MATLAB .mat files with HDF5 format"
+        ValueError,
+        match=r"All files must be MATLAB .mat files with HDF5 format",
     ):
         MATFlowFieldScheduler([str(bad_file)])
 
 
-def test_mat_scheduler_file_dir(tmp_path):
+def test_mat_scheduler_file_dir(tmp_path: Path) -> None:
     """Test that the scheduler looks for files in the correct directory.
 
-    This test creates a temporary directory and multiple mock .mat files in it,
-    then checks if the scheduler correctly identifies the files.
+    This test creates a temporary directory and multiple mock .mat files
+    in it, then checks if the scheduler correctly identifies the files.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     mat_files = []
     for i in range(2):
@@ -177,7 +231,15 @@ def test_mat_scheduler_file_dir(tmp_path):
 
 
 @pytest.mark.parametrize("mock_mat_files", [1], indirect=True)
-def test_mat_scheduler_get_batch(mock_mat_files):
+def test_mat_scheduler_get_batch(
+    mock_mat_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify mat scheduler get batch.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and their
+            dimensions.
+    """
     files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler(files)
 
@@ -192,16 +254,22 @@ def test_mat_scheduler_get_batch(mock_mat_files):
         256,
         2,
     ), (
-        f"Expected flow field shape {(batch_size, 256, 256, 2)}, got {batch.flow_fields.shape}"
+        f"Expected flow field shape {(batch_size, 256, 256, 2)}"
+        f", got {batch.flow_fields.shape}"
     )
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
-def test_mat_scheduler_with_images(mock_mat_files):
-    """Verify that the scheduler correctly loads both flow fields and images.
+def test_mat_scheduler_with_images(
+    mock_mat_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify the scheduler correctly loads both flow fields and images.
 
     Checks that images are present in the output and match the expected
     dimensions when `include_images=True`.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
     """
     files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler(
@@ -223,7 +291,8 @@ def test_mat_scheduler_with_images(mock_mat_files):
             256,
             2,
         ), (
-            f"Expected flow field shape (1, 256, 256, 2), got {batch.flow_fields.shape}"
+            f"Expected flow field shape (1, 256, 256, 2), got "
+            f"{batch.flow_fields.shape}"
         )
         assert batch.images1 is not None, (
             "Expected images1 to be present in batch"
@@ -249,11 +318,17 @@ def test_mat_scheduler_with_images(mock_mat_files):
 
 
 @pytest.mark.parametrize("mock_mat_files", [16], indirect=True)
-def test_episode_iteration(mock_mat_files):
-    """Verify that `EpisodicFlowFieldScheduler` correctly groups frames into episodes.
+def test_episode_iteration(
+    mock_mat_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify `EpisodicFlowFieldScheduler` correctly groups frames into
+    episodes.
 
     Tests full iteration through an episode and confirms that
     `get_batch` yields consistent flow field shapes.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
     """
     files, dims = mock_mat_files
     H, W = dims["height"], dims["width"]
@@ -285,7 +360,8 @@ def test_episode_iteration(mock_mat_files):
             W,
             2,
         ), (
-            f"Expected flow field shape {(batch_size, H, W, 2)}, got {batch.flow_fields.shape}"
+            f"Expected flow field shape {(batch_size, H, W, 2)}"
+            f", got {batch.flow_fields.shape}"
         )
 
         steps.append(t)
@@ -301,11 +377,16 @@ def test_episode_iteration(mock_mat_files):
 
 
 @pytest.mark.parametrize("mock_mat_files", [16], indirect=True)
-def test_reset_episode_resamples(mock_mat_files):
-    """Verify that `reset_episode` correctly reshuffles data for a new episode.
+def test_reset_episode_resamples(
+    mock_mat_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify `reset_episode` correctly reshuffles data for a new episode.
 
-    Ensures that calling `reset_episode` leads to a different sequence of
-    frames, confirming that the internal base scheduler is reset.
+    Ensures that calling `reset_episode` leads to a different sequence
+    of frames, confirming that the internal base scheduler is reset.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
     """
     files, dims = mock_mat_files
     H, W = dims["height"], dims["width"]
@@ -327,9 +408,10 @@ def test_reset_episode_resamples(mock_mat_files):
     post_reset_files = base.file_list
     second0 = epi.get_batch(batch_size)  # new t = 0
     assert epi.steps_remaining() == episode_length - 1, (
-        f"Expected {episode_length - 1} steps remaining, but got {epi.steps_remaining()}"
+        f"Expected {episode_length - 1}"
+        f" steps remaining, but got {epi.steps_remaining()}"
     )
-    # ensure we didn’t get the exact same files twice
+    # ensure we didn't get the exact same files twice
     assert not np.array_equal(first0.flow_fields, second0.flow_fields), (
         "Flow fields before and after reset should be different"
     )
@@ -352,7 +434,15 @@ def test_reset_episode_resamples(mock_mat_files):
 
 
 @pytest.mark.parametrize("mock_mat_files", [64], indirect=True)  # 64 frames
-def test_steps_remaining(mock_mat_files):
+def test_steps_remaining(
+    mock_mat_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Verify steps remaining.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and their
+            dimensions.
+    """
     files, dims = mock_mat_files
     H, W = dims["height"], dims["width"]
 
@@ -368,16 +458,19 @@ def test_steps_remaining(mock_mat_files):
     )
 
     assert epi.steps_remaining() == episode_length, (
-        f"Expected {episode_length} steps remaining, got {epi.steps_remaining()}"
+        f"Expected {episode_length} steps remaining, got "
+        f"{epi.steps_remaining()}"
     )
     _ = epi.get_batch(batch_size)
     _ = epi.get_batch(batch_size)
     assert epi.steps_remaining() == episode_length - 2, (
-        f"Expected {episode_length - 2} steps remaining after 2 batches, got {epi.steps_remaining()}"
+        f"Expected {episode_length - 2}"
+        f" steps remaining after 2 batches, got "
+        f"{epi.steps_remaining()}"
     )
 
 
-def test_path_is_hdf5_nonexistent():
+def test_path_is_hdf5_nonexistent() -> None:
     """_path_is_hdf5 should gracefully handle a missing file."""
     assert (
         MATFlowFieldScheduler._path_is_hdf5("does_not_exist_123.mat") is False
@@ -390,27 +483,59 @@ def test_path_is_hdf5_nonexistent():
     ), "Expected False for non-existent .npy file"
 
 
-def _rand_flow(shape):
-    """Generate a optical-flow field."""
+def _rand_flow(shape: tuple[int, ...]) -> Any:
+    """Generate a optical-flow field.
+
+    Args:
+        shape: Shape for this test case.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     rng = np.random.default_rng(42)
     return rng.standard_normal(shape).astype(np.float32)
 
 
-def _rand_image(shape):
-    """Generate a random image."""
+def _rand_image(shape: tuple[int, ...]) -> Any:
+    """Generate a random image.
+
+    Args:
+        shape: Shape for this test case.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     rng = np.random.default_rng(123)
     return rng.integers(0, 256, size=shape, dtype=np.uint8)
 
 
-def make_mat(tmp_path, name, **variables):
-    """Create a v5 .mat file via SciPy and return its path."""
+def make_mat(tmp_path: Path, name: str, **variables: Any) -> str:
+    """Create a v5 .mat file via SciPy and return its path.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+        name: Name for this test case.
+        **variables: Keyword arguments accepted by the test double.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     p = tmp_path / f"{name}.mat"
     scipy.io.savemat(p, variables)
     return str(p)
 
 
-def make_hdf5(tmp_path, name, **variables):
-    """Create a simple HDF5 file (mimicking MATLAB v7.3)."""
+def make_hdf5(tmp_path: Path, name: str, **variables: Any) -> str:
+    """Create a simple HDF5 file (mimicking MATLAB v7.3).
+
+    Args:
+        tmp_path: Temporary directory for this test.
+        name: Name for this test case.
+        **variables: Keyword arguments accepted by the test double.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     p = tmp_path / f"{name}.mat"
     with h5py.File(p, "w") as f:
         for k, v in variables.items():
@@ -418,8 +543,12 @@ def make_hdf5(tmp_path, name, **variables):
     return str(p)
 
 
-def test_mat_v5_basic(tmp_path):
-    """SciPy branch, include_images=False, sized exactly."""
+def test_mat_v5_basic(tmp_path: Path) -> None:
+    """SciPy branch, include_images=False, sized exactly.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     V = _rand_flow((4, 4, 2))
     fpath = make_mat(tmp_path, "basic", V=V)
     loader = MATFlowFieldScheduler(
@@ -433,12 +562,15 @@ def test_mat_v5_basic(tmp_path):
     np.testing.assert_array_equal(data.flow_fields, V)
 
 
-def test_mat_with_images_resize(tmp_path):
+def test_mat_with_images_resize(tmp_path: Path) -> None:
     """Test automatic resizing and scaling of images and flow fields.
 
     Verifies that when the input dimensions differ from the target
     `output_shape`, both images and flow vectors are correctly
     interpolated and scaled (in the case of flow).
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     I0 = _rand_image((2, 2))
     I1 = _rand_image((2, 2))
@@ -450,11 +582,12 @@ def test_mat_with_images_resize(tmp_path):
     )
     data = loader.load_file(fpath)
 
-    # images resized to 4×4
+    # images resized to 4x4
     assert data.images1 is not None, "Expected images1 to be present"
     assert data.images2 is not None, "Expected images2 to be present"
     assert data.images1.shape == data.images2.shape == (4, 4), (
-        f"Expected 4x4 images, got {data.images1.shape} and {data.images2.shape}"
+        f"Expected 4x4 images, got {data.images1.shape} and "
+        f"{data.images2.shape}"
     )
     # flow resized and *scaled* by factor 2 on both axes
     assert data.flow_fields.shape == (
@@ -470,11 +603,14 @@ def test_mat_with_images_resize(tmp_path):
     )
 
 
-def test_flow_transposed(tmp_path):
+def test_flow_transposed(tmp_path: Path) -> None:
     """Test handling of transposed flow layouts (2, H, W).
 
-    Verifies that the loader correctly permutes the axes to the
-    standard (H, W, 2) format.
+    Verifies that the loader correctly permutes the axes to the standard
+    (H, W, 2) format.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     V = _rand_flow((2, 4, 4))
     fpath = make_mat(tmp_path, "transpose", V=V)
@@ -496,8 +632,13 @@ def test_flow_transposed(tmp_path):
     )
 
 
-def test_hdf5_fallback(monkeypatch, tmp_path):
-    """SciPy raises NotImplementedError -> h5py branch loads data."""
+def test_hdf5_fallback(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """SciPy raises NotImplementedError -> h5py branch loads data.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+        tmp_path: Temporary directory for this test.
+    """
     # Patch scipy.io.loadmat to always raise NotImplementedError
     monkeypatch.setattr(
         scipy.io,
@@ -518,8 +659,12 @@ def test_hdf5_fallback(monkeypatch, tmp_path):
     np.testing.assert_array_equal(data.flow_fields, V)
 
 
-def test_missing_V_raises(tmp_path):
-    """No 'V' present should raise."""
+def test_missing_v_raises(tmp_path: Path) -> None:
+    """No 'V' present should raise.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     fpath = make_mat(
         tmp_path, "noV", I0=_rand_image((4, 4)), I1=_rand_image((4, 4))
     )
@@ -528,8 +673,12 @@ def test_missing_V_raises(tmp_path):
         loader.load_file(fpath)
 
 
-def test_missing_images_raises(tmp_path):
-    """include_images=True but only one image in file."""
+def test_missing_images_raises(tmp_path: Path) -> None:
+    """include_images=True but only one image in file.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     V = _rand_flow((4, 4, 2))
     fpath = make_mat(tmp_path, "noI1", V=V, I0=_rand_image((4, 4)))
     loader = MATFlowFieldScheduler([fpath], include_images=True)
@@ -537,8 +686,15 @@ def test_missing_images_raises(tmp_path):
         loader.load_file(fpath)
 
 
-def test_load_fails_non_hdf5(monkeypatch, tmp_path):
-    """SciPy ValueError & path is NOT HDF5."""
+def test_load_fails_non_hdf5(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """SciPy ValueError & path is NOT HDF5.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+        tmp_path: Temporary directory for this test.
+    """
     # Force scipy.io.loadmat to raise ValueError
     monkeypatch.setattr(
         scipy.io,
@@ -551,13 +707,19 @@ def test_load_fails_non_hdf5(monkeypatch, tmp_path):
     path = str(empty_path)
 
     loader = MATFlowFieldScheduler([path])
-    with pytest.raises(ValueError, match="Failed to load .*legacy MATLAB"):
+    with pytest.raises(ValueError, match=r"Failed to load .*legacy MATLAB"):
         loader.load_file(path)
 
 
 @pytest.mark.parametrize("mock_mat_files", [3], indirect=True)
-def test_mat_scheduler_get_batch_with_images(mock_mat_files):
-    """Cover get_batch include_images==True."""
+def test_mat_scheduler_get_batch_with_images(
+    mock_mat_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Cover get_batch include_images==True.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
+    """
     files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler(
         files,
@@ -597,7 +759,12 @@ def test_mat_scheduler_get_batch_with_images(mock_mat_files):
     )
 
 
-def test_next_loop_reset(tmp_path):
+def test_next_loop_reset(tmp_path: Path) -> None:
+    """Verify next loop reset.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     flow = _rand_flow((4, 4, 2))
     fpath = make_mat(tmp_path, "one", V=flow)
 
@@ -625,7 +792,12 @@ def test_next_loop_reset(tmp_path):
     assert sched.loop is True, "Sanity check: expected loop=True"
 
 
-def test_next_skip_on_error(tmp_path):
+def test_next_skip_on_error(tmp_path: Path) -> None:
+    """Verify next skip on error.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     # 1) Corrupted file that `load_file` cannot interpret
     bad_path = tmp_path / "broken.mat"
     bad_path.write_bytes(b"definitely not a MATLAB file")
@@ -650,17 +822,23 @@ def test_next_skip_on_error(tmp_path):
 
     # Both list entries have been consumed (bad skipped, good returned)
     assert sched.index == 1, (
-        f"Expected index 1 after skipping bad file and returning good file, got {sched.index}"
+        f"Expected index 1 after skipping bad file and"
+        f" returning good file, got {sched.index}"
     )
 
 
 @pytest.mark.parametrize("mock_mat_files", [2], indirect=True)
 def test_mat_scheduler_get_batch_too_large_pads_correctly(
-    mock_mat_files, caplog
-):
+    mock_mat_files: tuple[list[str], dict[str, int]],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """Ask for a batch that is larger than the number of remaining slices.
 
     Because loop=False, the scheduler should raise StopIteration.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
+        caplog: Captured log records.
     """
     files, _ = mock_mat_files
     scheduler = MATFlowFieldScheduler(
@@ -683,7 +861,8 @@ def test_mat_scheduler_get_batch_too_large_pads_correctly(
         256,
         2,
     ), (
-        f"Expected flow field shape {(batch_size, 256, 256, 2)}, got {batch.flow_fields.shape}"
+        f"Expected flow field shape {(batch_size, 256, 256, 2)}"
+        f", got {batch.flow_fields.shape}"
     )
     assert batch.images1 is not None, "Expected images1 to be present"
     assert batch.images2 is not None, "Expected images2 to be present"
@@ -692,21 +871,32 @@ def test_mat_scheduler_get_batch_too_large_pads_correctly(
         256,
         256,
     ), (
-        f"Expected images1 shape {(batch_size, 256, 256)}, got {batch.images1.shape}"
+        f"Expected images1 shape {(batch_size, 256, 256)}, got "
+        f"{batch.images1.shape}"
     )
     assert batch.images2.shape == (
         batch_size,
         256,
         256,
     ), (
-        f"Expected images2 shape {(batch_size, 256, 256)}, got {batch.images2.shape}"
+        f"Expected images2 shape {(batch_size, 256, 256)}, got "
+        f"{batch.images2.shape}"
     )
     assert batch.flow_fields[len(files) :, ...].sum() == 0.0, (
         "Padded entries in flow fields should be zeroed out"
     )
 
 
-def test_hdf5_recursive_group(monkeypatch, tmp_path):
+def test_hdf5_recursive_group(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify hdf5 recursive group.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     # 1) Make sure SciPy cannot handle the file so the loader switches to h5py
     monkeypatch.setattr(
         scipy.io,
@@ -731,9 +921,15 @@ def test_hdf5_recursive_group(monkeypatch, tmp_path):
     np.testing.assert_array_equal(data.flow_fields, flow)
 
 
-def test_mat_scheduler_outputs_files(mock_mat_files):
-    """Test that the scheduler returns correct file paths in the batch."""
-    files, dims = mock_mat_files
+def test_mat_scheduler_outputs_files(
+    mock_mat_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Test that the scheduler returns correct file paths in the batch.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
+    """
+    files, _dims = mock_mat_files
     scheduler = MATFlowFieldScheduler.from_config(
         {
             "file_list": files,
@@ -763,5 +959,6 @@ def test_mat_scheduler_outputs_files(mock_mat_files):
             assert os.path.basename(file_path) in [
                 os.path.basename(f) for f in files
             ], (
-                f"File {os.path.basename(file_path)} does not match any of the input files"
+                f"File {os.path.basename(file_path)}"
+                f" does not match any of the input files"
             )

@@ -1,13 +1,19 @@
 """Ablation benchmarks for low-level image generation.
 
-This module evaluates the performance of the rendering pipeline through
-parameter sweeps (batch sizes, image sizes, seeding densities), logging
-GPU-accelerated throughput statistics to CSV files.
+This module evaluates the performance of the rendering pipeline
+through parameter sweeps (batch sizes, image sizes, seeding
+densities), logging GPU-accelerated throughput statistics to CSV
+files.
 """
+
+from __future__ import annotations
 
 import csv
 import itertools
 import timeit
+from collections.abc import Callable
+from functools import partial
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -28,7 +34,13 @@ REPETITIONS = config["REPETITIONS"]
 NUMBER_OF_EXECUTIONS = config["EXECUTIONS_DATA_GEN"]
 
 
-def write_speed_stats_to_csv(filename, all_rows):
+def write_speed_stats_to_csv(filename: str, all_rows: Any) -> None:
+    """Write speed stats to csv.
+
+    Args:
+        filename: Filename used by this test.
+        all_rows: All rows used by this test.
+    """
     with open(filename, "w", newline="") as f:
         writer = csv.DictWriter(
             f,
@@ -57,7 +69,8 @@ def write_speed_stats_to_csv(filename, all_rows):
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
     reason="user not connected to the server.",
 )
-def test_speed_generate_images_sweep_all():
+def test_speed_generate_images_sweep_all() -> None:
+    """Verify speed generate images sweep all."""
     output_csv = "new_seeding_densities.csv"
     # ---- PARAMETERS TO SWEEP ----
     batch_sizes = [64]
@@ -142,9 +155,8 @@ def test_speed_generate_images_sweep_all():
 
         jit_generate_images = jax.jit(
             jax.shard_map(
-                lambda key, flow: generate_images_from_flow(
-                    key=key,
-                    flow_field=flow,
+                partial(
+                    generate_images_from_flow,
                     position_bounds=position_bounds,
                     parameters=ImageGenerationSpecification(
                         image_shape=image_shape,
@@ -173,7 +185,18 @@ def test_speed_generate_images_sweep_all():
             )
         )
 
-        def run_generate_jit():
+        def run_generate_jit(
+            jit_generate_images: Callable[..., Any] = jit_generate_images,
+            keys_sharded: jax.Array = keys_sharded,
+            flow_field_sharded: jax.Array = flow_field_sharded,
+        ) -> None:
+            """Run generate jit.
+
+            Args:
+                jit_generate_images: Jit generate images for this test case.
+                keys_sharded: Keys sharded for this test case.
+                flow_field_sharded: Flow field sharded for this test case.
+            """
             data = jit_generate_images(keys_sharded, flow_field_sharded)
             imgs1 = data.images1
             imgs2 = data.images2

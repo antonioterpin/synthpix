@@ -10,7 +10,7 @@ from __future__ import annotations
 import importlib
 import sys
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pytest
 
@@ -19,17 +19,27 @@ from synthpix.hf.card import DatasetCardMeta
 
 
 class _FakeCommitInfo:
+    """Fake Commit Info test double."""
+
     def __init__(self, oid: str = "deadbeef") -> None:
+        """Initialize the test double.
+
+        Args:
+            oid: Oid for this test case.
+        """
         self.oid = oid
 
 
-class _FakeDatasetInfo:
-    def __init__(self, sha: str = "largesha0123") -> None:
-        self.sha = sha
-
-
 class _FakeHfApi:
-    def __init__(self, token=None, **_: object) -> None:
+    """Fake Hf Api test double."""
+
+    def __init__(self, token: str | None = None, **_: object) -> None:
+        """Initialize the test double.
+
+        Args:
+            token: Token for this test case.
+            **_: Keyword arguments accepted by the test double.
+        """
         self.token = token
         self.create_repo_calls: list[dict] = []
         self.upload_folder_calls: list[dict] = []
@@ -40,46 +50,72 @@ class _FakeHfApi:
         self.list_repo_files_return: list[str] = []
         self.list_repo_files_raises: BaseException | None = None
         self.upload_folder_return: object = _FakeCommitInfo()
-        self.upload_large_folder_calls: list[dict] = []
-        self.dataset_info_calls: list[dict] = []
-        self.dataset_info_return: object = _FakeDatasetInfo()
 
-    def create_repo(self, **kwargs):
+    def create_repo(self, **kwargs: Any) -> dict[str, Any]:
+        """Create repo.
+
+        Args:
+            **kwargs: Kwargs used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         self.create_repo_calls.append(kwargs)
         return {"url": "https://huggingface.co/datasets/" + kwargs["repo_id"]}
 
-    def upload_folder(self, **kwargs):
+    def upload_folder(self, **kwargs: Any) -> Any:
+        """Upload folder.
+
+        Args:
+            **kwargs: Kwargs used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         self.upload_folder_calls.append(kwargs)
         return self.upload_folder_return
 
-    def upload_large_folder(self, **kwargs):
-        self.upload_large_folder_calls.append(kwargs)
-        return None
+    def list_repo_files(self, repo_id: str, **kwargs: Any) -> Any:
+        """List repo files.
 
-    def dataset_info(self, repo_id, **kwargs):
-        self.dataset_info_calls.append({"repo_id": repo_id, **kwargs})
-        return self.dataset_info_return
+        Args:
+            repo_id: Repo id used by this test.
+            **kwargs: Kwargs used by this test.
 
-    def list_repo_files(self, repo_id, **kwargs):
-        self.list_repo_files_calls.append(
-            {"repo_id": repo_id, **kwargs}
-        )
+        Returns:
+            The result used by the test assertions.
+
+        Raises:
+            self.list_repo_files_raises: When the simulated failure is
+                triggered.
+        """
+        self.list_repo_files_calls.append({"repo_id": repo_id, **kwargs})
         if self.list_repo_files_raises is not None:
             raise self.list_repo_files_raises
         return list(self.list_repo_files_return)
 
 
 class _FakeHfApiCollector:
+    """Fake Hf Api Collector test double."""
+
     # Module-level shared list so tests can find the instance that
     # ``push_dataset`` constructed.
     _INSTANCES: ClassVar[list[_FakeHfApi]] = []
 
 
 class _FakeRepoNotFoundError(Exception):
+    """Fake Repo Not Found Error test double."""
+
     pass
 
 
 class _FakeErrorsModule:
+    """Expose the Hub exception used by push tests.
+
+    Attributes:
+        RepositoryNotFoundError: Error raised for a missing repository.
+    """
+
     RepositoryNotFoundError = _FakeRepoNotFoundError
 
 
@@ -87,34 +123,60 @@ class _FakeHub:
     """Minimal stand-in for ``huggingface_hub``."""
 
     def __init__(self) -> None:
+        """Initialize the test double."""
         self.HfApi = _FakeHfApi
         self.errors = _FakeErrorsModule
 
 
-def _install_fake_hub(monkeypatch) -> _FakeHub:
+def _install_fake_hub(monkeypatch: pytest.MonkeyPatch) -> _FakeHub:
+    """Install fake hub.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     _FakeHfApiCollector._INSTANCES.clear()
     fake = _FakeHub()
     real_import_module = importlib.import_module
 
-    def _import_module(name, package=None):
+    def _import_module(name: str, package: str | None = None) -> Any:
+        """Import module.
+
+        Args:
+            name: Name for this test case.
+            package: Package for this test case.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         if name == "huggingface_hub":
             return fake
         if name == "huggingface_hub.errors":
             return fake.errors
         return real_import_module(name, package)
 
-    monkeypatch.setattr(
-        push_mod.importlib, "import_module", _import_module
-    )
+    monkeypatch.setattr(push_mod.importlib, "import_module", _import_module)
     return fake
 
 
-def _clear_env(monkeypatch) -> None:
+def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Clear env.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+    """
     monkeypatch.delenv("HF_TOKEN", raising=False)
     monkeypatch.delenv("HF_HUB_TOKEN", raising=False)
 
 
 def _populate(local_dir: Path) -> None:
+    """Populate.
+
+    Args:
+        local_dir: Local dir for this test case.
+    """
     train = local_dir / "train"
     train.mkdir(parents=True)
     (train / "flow.mat").write_bytes(b"\x00" * 16)
@@ -126,6 +188,9 @@ def _populate_piv_tree(root: Path) -> None:
     Splits at ``{train,val,test,tune}/<scenario>/Re####/*.mat`` plus a
     ``splits/`` dir, a top-level README.md, and the ``raw_class1/`` /
     ``packed_class1/`` staging dirs that must NOT be uploaded.
+
+    Args:
+        root: Root for this test case.
     """
     (root / "train" / "backstep" / "Re1000").mkdir(parents=True)
     (root / "train" / "backstep" / "Re1000" / "flow_0001.mat").write_bytes(
@@ -149,18 +214,19 @@ def _populate_piv_tree(root: Path) -> None:
     (root / "raw_class1" / "PIV_zips").mkdir(parents=True)
     (root / "raw_class1" / "PIV_zips" / "a.zip").write_bytes(b"PK")
     (root / "packed_class1" / "backstep").mkdir(parents=True)
-    (root / "packed_class1" / "backstep" / "flow_0001.mat").write_bytes(
-        b"\x00"
-    )
+    (root / "packed_class1" / "backstep" / "flow_0001.mat").write_bytes(b"\x00")
     # Junk that must be ignored even though it sits under a split.
     (root / "train" / ".DS_Store").write_bytes(b"junk")
     (root / "train" / "backstep" / "__pycache__").mkdir(parents=True)
-    (root / "train" / "backstep" / "__pycache__" / "x.pyc").write_bytes(
-        b"\x00"
-    )
+    (root / "train" / "backstep" / "__pycache__" / "x.pyc").write_bytes(b"\x00")
 
 
-def test_filter_local_files_matches_real_piv_layout(tmp_path):
+def test_filter_local_files_matches_real_piv_layout(tmp_path: Path) -> None:
+    """Verify filter local files matches real piv layout.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     _populate_piv_tree(tmp_path)
 
     selected = push_mod._filter_local_files(
@@ -186,7 +252,16 @@ def test_filter_local_files_matches_real_piv_layout(tmp_path):
     assert not any("__pycache__" in s for s in selected)
 
 
-def test_push_basic_private(monkeypatch, tmp_path):
+def test_push_basic_private(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify push basic private.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
     _populate(tmp_path)
@@ -217,7 +292,16 @@ def test_push_basic_private(monkeypatch, tmp_path):
     assert result == "deadbeef"
 
 
-def test_push_public_without_allow_public_raises(monkeypatch, tmp_path):
+def test_push_public_without_allow_public_raises(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify push public without allow public raises.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
     _populate(tmp_path)
@@ -230,8 +314,16 @@ def test_push_public_without_allow_public_raises(monkeypatch, tmp_path):
 
 @pytest.mark.parametrize("private_value", [0, "", None])
 def test_push_safety_gate_uses_truthiness_not_identity(
-    monkeypatch, tmp_path, private_value
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, private_value: Any
+) -> None:
+    """Verify push safety gate uses truthiness not identity.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+        private_value: Private value used by this test.
+    """
     # Regression: the gate must not be bypassed by a falsy-but-not-False
     # ``private`` value (0, "", None). Identity comparison
     # (``private is False``) would let these through.
@@ -245,7 +337,16 @@ def test_push_safety_gate_uses_truthiness_not_identity(
     assert _FakeHfApiCollector._INSTANCES == []
 
 
-def test_push_public_with_allow_public_succeeds(monkeypatch, tmp_path):
+def test_push_public_with_allow_public_succeeds(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify push public with allow public succeeds.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
     _populate(tmp_path)
@@ -258,7 +359,16 @@ def test_push_public_with_allow_public_succeeds(monkeypatch, tmp_path):
     assert api.create_repo_calls[0]["private"] is False
 
 
-def test_push_local_dir_must_exist(monkeypatch, tmp_path):
+def test_push_local_dir_must_exist(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify push local dir must exist.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
 
@@ -266,7 +376,16 @@ def test_push_local_dir_must_exist(monkeypatch, tmp_path):
         push_mod.push_dataset(tmp_path / "nope", "user/repo")
 
 
-def test_push_local_dir_must_be_directory(monkeypatch, tmp_path):
+def test_push_local_dir_must_be_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify push local dir must be directory.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
     f = tmp_path / "file.txt"
@@ -276,7 +395,16 @@ def test_push_local_dir_must_be_directory(monkeypatch, tmp_path):
         push_mod.push_dataset(f, "user/repo")
 
 
-def test_push_repo_id_must_have_owner_name_shape(monkeypatch, tmp_path):
+def test_push_repo_id_must_have_owner_name_shape(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify push repo id must have owner name shape.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
     _populate(tmp_path)
@@ -285,7 +413,16 @@ def test_push_repo_id_must_have_owner_name_shape(monkeypatch, tmp_path):
         push_mod.push_dataset(tmp_path, "just-a-name")
 
 
-def test_push_writes_card_when_meta_provided(monkeypatch, tmp_path):
+def test_push_writes_card_when_meta_provided(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify push writes card when meta provided.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
     _populate(tmp_path)
@@ -304,7 +441,16 @@ def test_push_writes_card_when_meta_provided(monkeypatch, tmp_path):
     assert "My citation" in readme.read_text()
 
 
-def test_push_dry_run_does_not_write_card(monkeypatch, tmp_path):
+def test_push_dry_run_does_not_write_card(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify push dry run does not write card.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     # Regression: dry-run must not mutate the working tree. Even when
     # ``card_meta`` is provided, ``README.md`` must not be rewritten by
     # a previewing call.
@@ -320,14 +466,21 @@ def test_push_dry_run_does_not_write_card(monkeypatch, tmp_path):
         citation="My citation",
     )
 
-    push_mod.push_dataset(
-        tmp_path, "user/repo", card_meta=meta, dry_run=True
-    )
+    push_mod.push_dataset(tmp_path, "user/repo", card_meta=meta, dry_run=True)
 
     assert readme.read_text() == "preserve-me"
 
 
-def test_push_card_overwrite_logs_warning(monkeypatch, tmp_path):
+def test_push_card_overwrite_logs_warning(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify push card overwrite logs warning.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
     _populate(tmp_path)
@@ -354,7 +507,16 @@ def test_push_card_overwrite_logs_warning(monkeypatch, tmp_path):
     assert any("overwriting" in w.lower() for w in warnings)
 
 
-def test_push_card_skipped_when_meta_none(monkeypatch, tmp_path):
+def test_push_card_skipped_when_meta_none(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify push card skipped when meta none.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
     _populate(tmp_path)
@@ -367,7 +529,19 @@ def test_push_card_skipped_when_meta_none(monkeypatch, tmp_path):
     assert readme.read_text() == "untouched content"
 
 
-def test_push_dry_run_lists_files(monkeypatch, tmp_path, capsys):
+def test_push_dry_run_lists_files(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify push dry run lists files.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+        capsys: Capture of standard output and standard error.
+    """
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
     _populate(tmp_path)
@@ -375,7 +549,16 @@ def test_push_dry_run_lists_files(monkeypatch, tmp_path, capsys):
     (tmp_path / "train" / "extra.mat").write_bytes(b"\x00" * 8)
 
     # Configure the FakeHfApi to claim one of the local files exists remote.
-    def _factory_token(token=None, **_kwargs):
+    def _factory_token(token: str | None = None, **_kwargs: Any) -> Any:
+        """Factory token.
+
+        Args:
+            token: Token for this test case.
+            **_kwargs: Keyword arguments accepted by the test double.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         api = _FakeHfApi(token=token)
         api.list_repo_files_return = ["train/flow.mat"]
         return api
@@ -386,9 +569,7 @@ def test_push_dry_run_lists_files(monkeypatch, tmp_path, capsys):
         _factory_token,
     )
 
-    result = push_mod.push_dataset(
-        tmp_path, "user/repo", dry_run=True
-    )
+    result = push_mod.push_dataset(tmp_path, "user/repo", dry_run=True)
 
     captured = capsys.readouterr()
     assert result == "dry-run"
@@ -401,13 +582,32 @@ def test_push_dry_run_lists_files(monkeypatch, tmp_path, capsys):
 
 
 def test_push_dry_run_repo_not_found_treated_as_all_new(
-    monkeypatch, tmp_path, capsys
-):
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify push dry run repo not found treated as all new.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+        capsys: Capture of standard output and standard error.
+    """
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
     _populate(tmp_path)
 
-    def _factory_token(token=None, **_kwargs):
+    def _factory_token(token: str | None = None, **_kwargs: Any) -> Any:
+        """Factory token.
+
+        Args:
+            token: Token for this test case.
+            **_kwargs: Keyword arguments accepted by the test double.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         api = _FakeHfApi(token=token)
         api.list_repo_files_raises = _FakeRepoNotFoundError("missing")
         return api
@@ -418,9 +618,7 @@ def test_push_dry_run_repo_not_found_treated_as_all_new(
         _factory_token,
     )
 
-    result = push_mod.push_dataset(
-        tmp_path, "user/repo", dry_run=True
-    )
+    result = push_mod.push_dataset(tmp_path, "user/repo", dry_run=True)
 
     captured = capsys.readouterr()
     assert result == "dry-run"
@@ -428,7 +626,16 @@ def test_push_dry_run_repo_not_found_treated_as_all_new(
     assert "unchanged files: 0" in captured.out
 
 
-def test_push_token_passes_through(monkeypatch, tmp_path):
+def test_push_token_passes_through(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify push token passes through.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
     _populate(tmp_path)
@@ -439,7 +646,16 @@ def test_push_token_passes_through(monkeypatch, tmp_path):
     assert api.token == "hf_xxx"
 
 
-def test_push_token_resolved_from_env(monkeypatch, tmp_path):
+def test_push_token_resolved_from_env(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify push token resolved from env.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     monkeypatch.setenv("HF_TOKEN", "hf_env")
     _install_fake_hub(monkeypatch)
@@ -451,13 +667,34 @@ def test_push_token_resolved_from_env(monkeypatch, tmp_path):
     assert api.token == "hf_env"
 
 
-def test_push_hf_not_installed(monkeypatch, tmp_path):
+def test_push_hf_not_installed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verify push hf not installed.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+    """
     _clear_env(monkeypatch)
     _populate(tmp_path)
 
     real_import_module = importlib.import_module
 
-    def _missing(name, package=None):
+    def _missing(name: str, package: str | None = None) -> Any:
+        """Missing.
+
+        Args:
+            name: Name for this test case.
+            package: Package for this test case.
+
+        Returns:
+            The value produced for the test scenario.
+
+        Raises:
+            ImportError: When the simulated failure is triggered.
+        """
         if name == "huggingface_hub" or name.startswith("huggingface_hub."):
             raise ImportError("no module named huggingface_hub")
         return real_import_module(name, package)
@@ -477,9 +714,8 @@ def test_push_hf_not_installed(monkeypatch, tmp_path):
 class _StrictHfApi(_FakeHfApi):
     """Like ``_FakeHfApi`` but ``upload_folder`` rejects unknown kwargs.
 
-    huggingface_hub >= 1.0's ``HfApi.upload_folder`` has NO ``num_workers``
-    parameter, so passing it raises ``TypeError`` against the real Hub.
-    This fake mirrors the real 1.x signature so the regression is caught
+    Mirrors the real hub 2.0 ``HfApi.upload_folder`` signature, so
+    passing an unsupported kwarg (e.g. ``num_workers``) is caught
     without a network call.
     """
 
@@ -500,24 +736,18 @@ class _StrictHfApi(_FakeHfApi):
         "run_as_future",
     }
 
-    # Verified against hub 1.15: signature is
-    #   (repo_id, folder_path, repo_type, revision, private,
-    #    allow_patterns, ignore_patterns, num_workers, print_report).
-    # Any future hub-side drift on this set will be caught without a
-    # network call.
-    _ALLOWED_LARGE: ClassVar[set[str]] = {
-        "repo_id",
-        "folder_path",
-        "repo_type",
-        "revision",
-        "private",
-        "allow_patterns",
-        "ignore_patterns",
-        "num_workers",
-        "print_report",
-    }
+    def upload_folder(self, **kwargs: Any) -> Any:
+        """Upload folder.
 
-    def upload_folder(self, **kwargs):
+        Args:
+            **kwargs: Kwargs used by this test.
+
+        Returns:
+            The result used by the test assertions.
+
+        Raises:
+            TypeError: When the simulated failure is triggered.
+        """
         unexpected = set(kwargs) - self._ALLOWED
         if unexpected:
             raise TypeError(
@@ -526,34 +756,35 @@ class _StrictHfApi(_FakeHfApi):
             )
         return super().upload_folder(**kwargs)
 
-    def upload_large_folder(self, **kwargs):
-        unexpected = set(kwargs) - self._ALLOWED_LARGE
-        if unexpected:
-            raise TypeError(
-                "upload_large_folder() got an unexpected keyword argument "
-                f"{sorted(unexpected)[0]!r}"
-            )
-        return super().upload_large_folder(**kwargs)
 
+def _install_strict_hub(monkeypatch: pytest.MonkeyPatch) -> _FakeHub:
+    """Install strict hub.
 
-def _install_strict_hub(monkeypatch) -> _FakeHub:
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     fake = _install_fake_hub(monkeypatch)
     fake.HfApi = _StrictHfApi
     return fake
 
 
-def test_push_upload_folder_no_unsupported_kwargs(monkeypatch, tmp_path):
-    """Regression: ``num_workers`` is not a valid hub-1.x kwarg.
+def test_push_upload_folder_no_unsupported_kwargs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``upload_folder`` only gets kwargs the real hub 2.0 accepts.
 
-    The old code passed ``num_workers=max_workers`` which raises
-    ``TypeError`` on the real Hub. This test uses a fake whose
-    ``upload_folder`` signature matches hub 1.x.
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+        tmp_path: Temporary directory for this test.
     """
     _clear_env(monkeypatch)
     _install_strict_hub(monkeypatch)
     _populate(tmp_path)
 
-    result = push_mod.push_dataset(tmp_path, "user/repo", max_workers=4)
+    result = push_mod.push_dataset(tmp_path, "user/repo")
 
     [api] = _FakeHfApiCollector._INSTANCES
     assert len(api.upload_folder_calls) == 1
@@ -563,29 +794,61 @@ def test_push_upload_folder_no_unsupported_kwargs(monkeypatch, tmp_path):
     assert result == "deadbeef"
 
 
-def test_push_returns_oid_not_commit_url(monkeypatch, tmp_path):
+def test_push_returns_oid_not_commit_url(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Regression: hub-1.x ``CommitInfo`` is a ``str`` whose value is the
     commit URL, not the oid.
 
-    Because ``CommitInfo`` subclasses ``str``, ``isinstance(ci, str)`` is
-    ``True``; the old branch order then returned the full commit URL
+    Because ``CommitInfo`` subclasses ``str``, ``isinstance(ci, str)``
+    is ``True``; the old branch order then returned the full commit URL
     instead of the short commit sha.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+        tmp_path: Temporary directory for this test.
     """
     _clear_env(monkeypatch)
     fake = _install_fake_hub(monkeypatch)
     _populate(tmp_path)
 
     class _StrCommitInfo(str):
+        """String commit URL with the Hub commit identifier.
+
+        Attributes:
+            oid: Commit identifier returned by the upload.
+        """
+
+        oid: str
+
         # Mirrors huggingface_hub.CommitInfo: a str whose value is the
         # commit URL, with an ``oid`` attribute holding the sha.
-        def __new__(cls, url: str, oid: str):
+        def __new__(cls, url: str, oid: str) -> Any:
+            """Construct the test value.
+
+            Args:
+                url: Url for this test case.
+                oid: Oid for this test case.
+
+            Returns:
+                The value produced for the test scenario.
+            """
             obj = super().__new__(cls, url)
             obj.oid = oid
             return obj
 
     commit_url = "https://huggingface.co/datasets/user/repo/commit/abc123sha"
 
-    def _factory(token=None, **_kwargs):
+    def _factory(token: str | None = None, **_kwargs: Any) -> Any:
+        """Factory.
+
+        Args:
+            token: Token for this test case.
+            **_kwargs: Keyword arguments accepted by the test double.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         api = _FakeHfApi(token=token)
         api.upload_folder_return = _StrCommitInfo(commit_url, "abc123sha")
         return api
@@ -598,7 +861,21 @@ def test_push_returns_oid_not_commit_url(monkeypatch, tmp_path):
     assert result != commit_url
 
 
-def test_push_token_never_logged(monkeypatch, tmp_path, capsys, caplog):
+def test_push_token_never_logged(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Verify push token never logged.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+        tmp_path: Temporary directory for this test.
+        capsys: Capture of standard output and standard error.
+        caplog: Capture of emitted log records.
+    """
     _clear_env(monkeypatch)
     _install_fake_hub(monkeypatch)
     _populate(tmp_path)
@@ -607,7 +884,18 @@ def test_push_token_never_logged(monkeypatch, tmp_path, capsys, caplog):
     for level in ("info", "warning", "error", "debug"):
         original = getattr(push_mod.logger, level)
 
-        def _spy(msg, *a, __orig=original, **kw):
+        def _spy(msg: str, *a: Any, __orig: Any = original, **kw: Any) -> Any:
+            """Spy.
+
+            Args:
+                msg: Msg for this test case.
+                *a: Positional arguments accepted by the test double.
+                __orig: Orig for this test case.
+                **kw: Keyword arguments accepted by the test double.
+
+            Returns:
+                The value produced for the test scenario.
+            """
             seen_log_messages.append(str(msg))
             return __orig(msg, *a, **kw)
 
@@ -622,106 +910,3 @@ def test_push_token_never_logged(monkeypatch, tmp_path, capsys, caplog):
         assert "hf_secret" not in msg
     for record in caplog.records:
         assert "hf_secret" not in record.getMessage()
-
-
-# --- large-folder transport routing -------------------------------------
-
-
-def test_push_small_uses_upload_folder(monkeypatch, tmp_path):
-    _clear_env(monkeypatch)
-    _install_fake_hub(monkeypatch)
-    _populate(tmp_path)  # single file, well under the threshold
-
-    result = push_mod.push_dataset(tmp_path, "user/repo")
-
-    [api] = _FakeHfApiCollector._INSTANCES
-    assert len(api.upload_folder_calls) == 1
-    assert api.upload_large_folder_calls == []
-    assert result == "deadbeef"  # oid from _FakeCommitInfo
-
-
-def test_push_force_large_uses_upload_large_folder(monkeypatch, tmp_path):
-    _clear_env(monkeypatch)
-    _install_fake_hub(monkeypatch)
-    _populate(tmp_path)
-
-    result = push_mod.push_dataset(
-        tmp_path, "user/repo", revision="dev", large_folder=True
-    )
-
-    [api] = _FakeHfApiCollector._INSTANCES
-    assert api.upload_folder_calls == []
-    assert len(api.upload_large_folder_calls) == 1
-    call = api.upload_large_folder_calls[0]
-    # upload_large_folder has no commit_message; it does take num_workers.
-    assert "commit_message" not in call
-    assert call["num_workers"] == 8
-    assert call["repo_type"] == "dataset"
-    assert call["revision"] == "dev"
-    assert call["print_report"] is False
-    assert isinstance(call["allow_patterns"], list)
-    assert isinstance(call["ignore_patterns"], list)
-    # upload_large_folder returns None -> sha resolved via dataset_info.
-    assert api.dataset_info_calls[0]["repo_id"] == "user/repo"
-    assert api.dataset_info_calls[0]["revision"] == "dev"
-    assert result == "largesha0123"
-
-
-def test_push_upload_large_folder_no_unsupported_kwargs(
-    monkeypatch, tmp_path
-):
-    # Regression guard for the path a real PIV class-1 push (>1000 files)
-    # actually takes via auto-routing. ``_StrictHfApi.upload_large_folder``
-    # mirrors the hub-1.15 signature, so any future hub-side drift on this
-    # surface is caught without a network call.
-    _clear_env(monkeypatch)
-    _install_strict_hub(monkeypatch)
-    _populate(tmp_path)
-
-    push_mod.push_dataset(tmp_path, "user/repo", large_folder=True)
-
-
-def test_push_auto_routes_large_by_threshold(monkeypatch, tmp_path):
-    _clear_env(monkeypatch)
-    _install_fake_hub(monkeypatch)
-    _populate_piv_tree(tmp_path)  # 8 selected files
-
-    push_mod.push_dataset(
-        tmp_path, "user/repo", large_folder_threshold=2
-    )
-
-    [api] = _FakeHfApiCollector._INSTANCES
-    assert api.upload_folder_calls == []
-    assert len(api.upload_large_folder_calls) == 1
-
-
-def test_push_force_small_overrides_threshold(monkeypatch, tmp_path):
-    _clear_env(monkeypatch)
-    _install_fake_hub(monkeypatch)
-    _populate_piv_tree(tmp_path)
-
-    push_mod.push_dataset(
-        tmp_path,
-        "user/repo",
-        large_folder=False,
-        large_folder_threshold=0,
-    )
-
-    [api] = _FakeHfApiCollector._INSTANCES
-    assert len(api.upload_folder_calls) == 1
-    assert api.upload_large_folder_calls == []
-
-
-def test_push_dry_run_unaffected_by_large_folder(monkeypatch, tmp_path):
-    _clear_env(monkeypatch)
-    _install_fake_hub(monkeypatch)
-    _populate(tmp_path)
-
-    result = push_mod.push_dataset(
-        tmp_path, "user/repo", large_folder=True, dry_run=True
-    )
-
-    [api] = _FakeHfApiCollector._INSTANCES
-    assert result == "dry-run"
-    assert api.upload_folder_calls == []
-    assert api.upload_large_folder_calls == []

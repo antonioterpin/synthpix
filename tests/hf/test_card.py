@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import subprocess
+from typing import Any
 
 import pytest
 from ruamel.yaml import YAML
@@ -13,6 +14,11 @@ from synthpix.hf.layout import LayoutSummary
 
 
 def _fake_layout() -> LayoutSummary:
+    """Fake layout.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     return LayoutSummary(
         splits={"train": 10, "val": 2, "test": 4},
         subdirs_by_split={
@@ -27,6 +33,14 @@ def _fake_layout() -> LayoutSummary:
 
 
 def _parse_frontmatter(card: str) -> dict:
+    """Parse frontmatter.
+
+    Args:
+        card: Card for this test case.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     assert card.startswith("---\n")
     end = card.index("\n---\n", 4)
     body = card[4:end]
@@ -34,7 +48,8 @@ def _parse_frontmatter(card: str) -> dict:
     return yaml.load(io.StringIO(body))
 
 
-def test_card_starts_with_yaml_frontmatter():
+def test_card_starts_with_yaml_frontmatter() -> None:
+    """Verify card starts with yaml frontmatter."""
     meta = DatasetCardMeta(
         name="example-piv",
         source_url="https://example.org/data",
@@ -54,7 +69,8 @@ def test_card_starts_with_yaml_frontmatter():
     assert "synthetic" in fm["tags"]
 
 
-def test_card_body_contains_source_citation_and_counts():
+def test_card_body_contains_source_citation_and_counts() -> None:
+    """Verify card body contains source citation and counts."""
     meta = DatasetCardMeta(
         name="example-piv",
         source_url="https://example.org/data",
@@ -76,7 +92,8 @@ def test_card_body_contains_source_citation_and_counts():
     assert "abc1234" in card
 
 
-def test_card_license_note_is_present():
+def test_card_license_note_is_present() -> None:
+    """Verify card license note is present."""
     meta = DatasetCardMeta(
         name="example-piv",
         source_url="https://example.org/data",
@@ -91,7 +108,15 @@ def test_card_license_note_is_present():
     assert "hosted under terms set by the original authors" in card
 
 
-def test_card_meta_auto_fills_synthpix_version(monkeypatch):
+def test_card_meta_auto_fills_synthpix_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify card meta auto fills synthpix version.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     monkeypatch.setattr(
         "synthpix.hf.card._lookup_synthpix_version", lambda: "1.2.3"
     )
@@ -109,8 +134,26 @@ def test_card_meta_auto_fills_synthpix_version(monkeypatch):
     assert "1.2.3" in card
 
 
-def test_card_meta_auto_fills_synthpix_commit(monkeypatch):
-    def fake_check_output(*args, **kwargs):
+def test_card_meta_auto_fills_synthpix_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify card meta auto fills synthpix commit.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
+
+    def fake_check_output(*args: Any, **kwargs: Any) -> bytes:
+        """Fake check output.
+
+        Args:
+            *args: Args used by this test.
+            **kwargs: Kwargs used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return b"feedface1234\n"
 
     monkeypatch.setattr(subprocess, "check_output", fake_check_output)
@@ -128,8 +171,27 @@ def test_card_meta_auto_fills_synthpix_commit(monkeypatch):
     assert "feedface1234" in card
 
 
-def test_card_meta_handles_commit_failure(monkeypatch):
-    def raise_error(*args, **kwargs):
+def test_card_meta_handles_commit_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify card meta handles commit failure.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
+
+    def raise_error(*args: Any, **kwargs: Any) -> None:
+        """Raise error.
+
+        Args:
+            *args: Args used by this test.
+            **kwargs: Kwargs used by this test.
+
+        Raises:
+            subprocess.CalledProcessError: When the simulated failure is
+                triggered.
+        """
         raise subprocess.CalledProcessError(1, ["git"])
 
     monkeypatch.setattr(subprocess, "check_output", raise_error)
@@ -148,7 +210,8 @@ def test_card_meta_handles_commit_failure(monkeypatch):
     assert "Example PIV" in card
 
 
-def test_frontmatter_safely_encodes_special_characters():
+def test_frontmatter_safely_encodes_special_characters() -> None:
+    """Verify frontmatter safely encodes special characters."""
     # ``pretty_name`` with quotes/backslashes must produce parseable YAML.
     meta = DatasetCardMeta(
         name="example-piv",
@@ -168,7 +231,8 @@ def test_frontmatter_safely_encodes_special_characters():
     assert "with\\backslash" in fm["tags"]
 
 
-def test_citation_with_triple_backticks_uses_longer_fence():
+def test_citation_with_triple_backticks_uses_longer_fence() -> None:
+    """Verify citation with triple backticks uses longer fence."""
     # Citations that embed ``` must not close the surrounding fence.
     embedded = "before\n```\ncode block inside citation\n```\nafter"
     meta = DatasetCardMeta(
@@ -187,7 +251,8 @@ def test_citation_with_triple_backticks_uses_longer_fence():
     assert "````" in card
 
 
-def test_card_handles_empty_reynolds_map():
+def test_card_handles_empty_reynolds_map() -> None:
+    """Verify card handles empty reynolds map."""
     layout = LayoutSummary(
         splits={"train": 1},
         subdirs_by_split={"train": []},

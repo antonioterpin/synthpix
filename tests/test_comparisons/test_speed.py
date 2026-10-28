@@ -2,15 +2,20 @@
 
 This module compares the execution speed of the data loading stacks,
 evaluating Grain's multi-threading capabilities and comparing its
-performance against the single-threaded legacy baseline across different
-file formats and configurations.
+performance against the single-threaded legacy baseline across
+different file formats and configurations.
 """
+
+from __future__ import annotations
 
 import gc
 import os
 import threading
 import time
 import timeit
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
 
 import grain.python as grain
 import pytest
@@ -34,15 +39,21 @@ pytestmark = pytest.mark.benchmark
     [{"num_files": 200, "dims": {"height": 256, "width": 256}}],
     indirect=True,
 )
-def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
+def test_benchmark_legacy_vs_grain(
+    tmp_path: Path, mock_mat_files: tuple[list[str], dict[str, int]]
+) -> None:
     """Benchmark and compare the throughput of Legacy and Grain schedulers.
 
     Iterates through batches using both stacks and prints a performance
     table comparing Legacy (fixed baseline) against Grain with varying
     thread counts.
 
-    Uses 256x256 input files (via fixture) to match output shape, eliminating
-    resize overhead to isolate I/O.
+    Uses 256x256 input files (via fixture) to match output shape,
+    eliminating resize overhead to isolate I/O.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
     """
     # Unpack fixture
     _, _ = mock_mat_files  # Files are already created in tmp_path
@@ -54,10 +65,22 @@ def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
     grain_thread_counts = [None, 1, 2, 4, 8, 16, 32, 64]
 
     print(
-        f"\n[Benchmark] Running {steps} steps per configuration (256x256 input)..."
+        f"\n[Benchmark] Running {steps}"
+        f" steps per configuration (256x256 input)..."
     )
 
-    def loop_system(sys_next_fn, reset_fn, n_steps):
+    def loop_system(
+        sys_next_fn: Callable[[], Any],
+        reset_fn: Callable[[], None],
+        n_steps: int,
+    ) -> None:
+        """Loop system.
+
+        Args:
+            sys_next_fn: Sys next fn used by this test.
+            reset_fn: Reset fn used by this test.
+            n_steps: N steps used by this test.
+        """
         count = 0
         while count < n_steps:
             try:
@@ -90,7 +113,8 @@ def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
 
     print(f"\nLegacy Baseline: {t_legacy:.4f} s")
     print(
-        f"\n{'Grain Threads':<15} | {'Duration (s)':<15} | {'Speedup vs Legacy':<20}"
+        f"\n{'Grain Threads':<15} | {'Duration (s)':<15} | "
+        f"{'Speedup vs Legacy':<20}"
     )
     print("-" * 55)
 
@@ -132,7 +156,7 @@ def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
         grain_adapter = GrainEpisodicAdapter(grain_loader)
 
         t_grain = timeit.timeit(
-            lambda: loop_system(
+            lambda grain_adapter=grain_adapter: loop_system(
                 lambda: grain_adapter.get_batch(batch_size),
                 grain_adapter.reset,
                 steps,
@@ -146,7 +170,7 @@ def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
 
         # Cleanup goggles if active
         try:
-            import goggles as gg
+            import goggles as gg  # noqa: PLC0415 - optional or intentionally lazy import
 
             gg.finish()
         except ImportError:
@@ -160,16 +184,20 @@ def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
         print(f"{label:<15} | {t_grain:<15.4f} | {speedup:<20.2f}x")
 
     # Assertions for speedup
-    # Grain should be at least slightly faster even with 1 thread due to better implementation,
+    # Grain should be at least slightly faster even with 1 thread due to better
+    # implementation,
     # and significantly faster with multiple threads/default config.
     assert results[1] < t_legacy * 1.5, (
-        f"Grain with 1 thread is too slow: {results[1]:.4f}s vs Legacy {t_legacy:.4f}s"
+        f"Grain with 1 thread is too slow: {results[1]:.4f}"
+        f"s vs Legacy {t_legacy:.4f}s"
     )
     assert results[16] < t_legacy, (
-        f"Grain with 16 threads should be faster than Legacy: {results[16]:.4f}s vs {t_legacy:.4f}s"
+        f"Grain with 16 threads should be faster than Legacy: "
+        f"{results[16]:.4f}s vs {t_legacy:.4f}s"
     )
     assert results[None] < t_legacy, (
-        f"Grain default should be faster than Legacy: {results[None]:.4f}s vs {t_legacy:.4f}s"
+        f"Grain default should be faster than Legacy: "
+        f"{results[None]:.4f}s vs {t_legacy:.4f}s"
     )
 
 
@@ -178,11 +206,17 @@ def test_benchmark_legacy_vs_grain(tmp_path, mock_mat_files):
     [{"num_files": 200, "dims": {"height": 256, "width": 256}}],
     indirect=True,
 )
-def test_benchmark_numpy_speed(tmp_path, mock_numpy_files):
+def test_benchmark_numpy_speed(
+    tmp_path: Path, mock_numpy_files: tuple[list[str], dict[str, int]]
+) -> None:
     """Benchmark Grain with NumpyDataSource to show threading scaling.
 
-    Unlike HDF5/MAT, Numpy (~np.load) releases the GIL, allowing Grain to
-    actually parallelize data loading across multiple threads.
+    Unlike HDF5/MAT, Numpy (~np.load) releases the GIL, allowing Grain
+    to actually parallelize data loading across multiple threads.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+        mock_numpy_files: Temporary NumPy file paths and dimensions.
     """
     # Unpack fixture
     _, _ = mock_numpy_files
@@ -197,7 +231,18 @@ def test_benchmark_numpy_speed(tmp_path, mock_numpy_files):
     print(f"\n{'Threads':<10} | {'Duration (s)':<15} | {'Speedup vs 1T':<15}")
     print("-" * 45)
 
-    def loop_system(sys_next_fn, reset_fn, n_steps):
+    def loop_system(
+        sys_next_fn: Callable[[], Any],
+        reset_fn: Callable[[], None],
+        n_steps: int,
+    ) -> None:
+        """Loop system.
+
+        Args:
+            sys_next_fn: Sys next fn used by this test.
+            reset_fn: Reset fn used by this test.
+            n_steps: N steps used by this test.
+        """
         count = 0
         while count < n_steps:
             try:
@@ -238,7 +283,7 @@ def test_benchmark_numpy_speed(tmp_path, mock_numpy_files):
         adapter = GrainEpisodicAdapter(loader)
 
         t = timeit.timeit(
-            lambda: loop_system(
+            lambda adapter=adapter: loop_system(
                 lambda: adapter.get_batch(batch_size),
                 adapter.reset,
                 steps,
@@ -255,7 +300,7 @@ def test_benchmark_numpy_speed(tmp_path, mock_numpy_files):
         del adapter
         gc.collect()
         try:
-            import goggles as gg
+            import goggles as gg  # noqa: PLC0415 - optional or intentionally lazy import
 
             gg.finish()
         except ImportError:
@@ -265,7 +310,9 @@ def test_benchmark_numpy_speed(tmp_path, mock_numpy_files):
 
     # Verify scaling: 4 threads should be noticeably faster than 1 thread
     assert results[4] < results[1] * 0.9, (
-        f"Expected at least 10% speedup with 4 threads for Numpy, but got {results[4]:.4f}s vs {results[1]:.4f}s"
+        f"Expected at least 10% speedup with 4 threads"
+        f" for Numpy, but got {results[4]:.4f}s vs "
+        f"{results[1]:.4f}s"
     )
 
 
@@ -276,26 +323,45 @@ class SleepingDataSource(grain.RandomAccessDataSource):
     loading across multiple threads or processes.
     """
 
-    def __init__(self, size=10, sleep_time=0.1):
+    def __init__(self, size: int = 10, sleep_time: float = 0.1) -> None:
+        """Initialize the test double.
+
+        Args:
+            size: Size for this test case.
+            sleep_time: Sleep time for this test case.
+        """
         super().__init__()
         self.size = size
         self.sleep_time = sleep_time
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """Return the number of records.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         return self.size
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> dict[str, Any]:
+        """Return the record at the requested index.
+
+        Args:
+            idx: Idx for this test case.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         time.sleep(self.sleep_time)
         return {"idx": idx, "pid": os.getpid(), "thread": threading.get_ident()}
 
 
-def test_grain_threading_speedup():
-    """Verify that Grain achieves significant speedup using multi-threading.
+def test_grain_threading_speedup() -> None:
+    """Verify Grain achieves significant speedup using multi-threading.
 
-    Compares the total duration of loading 'slow' records across different
-    thread counts to verify parallel execution. Also verifies that Grain's
-    default configuration (worker_count=0, read_options=None) enables
-    multi-threading automatically.
+    Compares the total duration of loading 'slow' records across
+    different thread counts to verify parallel execution. Also verifies
+    that Grain's default configuration (worker_count=0,
+    read_options=None) enables multi-threading automatically.
     """
     size = 64
     sleep_time = 0.1
@@ -304,7 +370,8 @@ def test_grain_threading_speedup():
     results = {}
 
     print(
-        f"\n{'Threads':<10} | {'Duration (s)':<15} | {'Unique Threads':<15} | {'Speedup':<10}"
+        f"\n{'Threads':<10} | {'Duration (s)':<15} | "
+        f"{'Unique Threads':<15} | {'Speedup':<10}"
     )
     print("-" * 60)
 
@@ -349,18 +416,21 @@ def test_grain_threading_speedup():
         label = "Default" if num_threads is None else str(num_threads)
         speedup = one_thread_duration / duration if one_thread_duration else 1.0
         print(
-            f"{label:<10} | {duration:<15.4f} | {num_unique_threads:<15} | {speedup:<10.2f}x"
+            f"{label:<10} | {duration:<15.4f} | "
+            f"{num_unique_threads:<15} | {speedup:<10.2f}x"
         )
 
     # Verify that multi-threading actually happened and improved performance
     # 1. Single thread should take at least size * sleep_time
     assert results[1][0] >= (size * sleep_time), (
-        f"Expected 1 thread to take >= {size * sleep_time}s, got {results[1][0]:.4f}s"
+        f"Expected 1 thread to take >= {size * sleep_time}"
+        f"s, got {results[1][0]:.4f}s"
     )
 
     # 2. Max threads should be faster than single thread
     assert results[16][0] < results[1][0], (
-        f"Expected 16 threads ({results[16][0]:.4f}s) to be faster than 1 thread ({results[1][0]:.4f}s)"
+        f"Expected 16 threads ({results[16][0]:.4f}"
+        f"s) to be faster than 1 thread ({results[1][0]:.4f}s)"
     )
 
     # 3. Max threads should use multiple threads
@@ -368,13 +438,16 @@ def test_grain_threading_speedup():
         f"Expected 16 threads to use > 1 unique thread ID, got {results[16][1]}"
     )
 
-    # 4. Check for scaling: 4 threads should be roughly faster than 2 threads, etc.
+    # 4. Check for scaling: 4 threads should be roughly faster than 2 threads,
+    # etc.
     # We use a lenient margin because overhead/GIL can reduce ideal scaling.
     assert results[4][0] < results[1][0], (
-        f"Expected 4 threads ({results[4][0]:.4f}s) to be faster than 1 thread ({results[1][0]:.4f}s)"
+        f"Expected 4 threads ({results[4][0]:.4f}"
+        f"s) to be faster than 1 thread ({results[1][0]:.4f}s)"
     )
     assert results[8][0] < results[2][0], (
-        f"Expected 8 threads ({results[8][0]:.4f}s) to be faster than 2 threads ({results[2][0]:.4f}s)"
+        f"Expected 8 threads ({results[8][0]:.4f}"
+        f"s) to be faster than 2 threads ({results[2][0]:.4f}s)"
     )
 
     # 5. Verify Default configuration (read_options=None)

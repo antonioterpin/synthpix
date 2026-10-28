@@ -90,7 +90,9 @@ class SynthpixBatch:
         flow_fields: Flow field between the two images. (B, H, W, 2)
         params: Parameters used to generate the images. (B,)
         done: Whether the flow field is valid. (B,)
-        mask: Mask indicating the valid images in the batch. (B,)
+        mask: Boolean mask indicating valid images in the batch. (B,)
+            Samplers always provide a mask; without scheduler metadata,
+            every returned image is valid.
         files: File paths of the images. (B,)
         epoch: Epoch of the images. (B,)
         seeds: Seeds used to generate the images. (B,)
@@ -186,7 +188,7 @@ class SchedulerData:
         flow_fields: Array of shape (B, H, W, 2) containing the flow fields.
         images1: Array of shape (B, H, W) containing the first set of images.
         images2: Array of shape (B, H, W) containing the second set of images.
-        mask: Mask indicating the valid images in the batch. (B,)
+        mask: Optional mask indicating valid images in the batch. (B,)
         files: File paths of the images. (B,)
         epoch: Epoch of the images. (B,)
         jax_seed: JAX PRNG key used to generate the images. (B, 2)

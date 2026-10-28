@@ -1,10 +1,16 @@
 """Tests for comprehensive checkpointing functionality.
 
-These tests check the edge cases of checkpointing and resuming from a Grain iterator.
+These tests check the edge cases of checkpointing and resuming from
+a Grain iterator.
 """
 
+from __future__ import annotations
+
+import glob
 import os
 import shutil
+from pathlib import Path
+from typing import Any
 
 import h5py
 import jax.numpy as jnp
@@ -16,9 +22,22 @@ from synthpix import make, save_checkpoint
 
 
 def get_valid_config(
-    paths, source_type, include_images=False, episode_length=0
-):
-    """Returns a valid configuration dictionary for testing."""
+    paths: list[str],
+    source_type: str,
+    include_images: bool = False,
+    episode_length: int = 0,
+) -> dict[str, Any]:
+    """Returns a valid configuration dictionary for testing.
+
+    Args:
+        paths: Paths for this test case.
+        source_type: Source type for this test case.
+        include_images: Include images for this test case.
+        episode_length: Episode length for this test case.
+
+    Returns:
+        The value produced for the test scenario.
+    """
     config = {
         "scheduler_class": source_type,
         "file_list": paths,
@@ -60,8 +79,17 @@ def get_valid_config(
 @pytest.mark.parametrize("source_type", [".h5", ".mat", ".npy"])
 @pytest.mark.parametrize("mode", ["non-episodic", "episodic"])
 @pytest.mark.parametrize("include_images", [True, False])
-def test_checkpoint_matrix(source_type, mode, include_images, tmp_path):
-    """Verify bit-perfect reproducibility across data sources and modes."""
+def test_checkpoint_matrix(
+    source_type: str, mode: str, include_images: bool, tmp_path: Path
+) -> None:
+    """Verify bit-perfect reproducibility across data sources and modes.
+
+    Args:
+        source_type: Source type for this test case.
+        mode: Mode for this test case.
+        include_images: Include images for this test case.
+        tmp_path: Temporary directory for this test.
+    """
     # 1. Constraints Check
     if source_type == ".h5" and include_images:
         pytest.skip("HDF5DataSource does not support images yet.")
@@ -113,8 +141,6 @@ def test_checkpoint_matrix(source_type, mode, include_images, tmp_path):
                 src = paths[idx]
                 dst = epi_dir / os.path.basename(src)
                 shutil.copy(src, dst)
-        # Scan for files in subdirs
-        import glob
 
         paths = glob.glob(str(tmp_path / "epi*/*") + source_type)
 
@@ -127,8 +153,8 @@ def test_checkpoint_matrix(source_type, mode, include_images, tmp_path):
     sampler = make(config, use_grain_scheduler=True)
 
     # Run a few steps
-    batch0 = next(sampler)
-    batch1 = next(sampler)
+    next(sampler)
+    next(sampler)
 
     save_checkpoint(checkpoint_dir, sampler, step=2)
 
@@ -150,13 +176,22 @@ def test_checkpoint_matrix(source_type, mode, include_images, tmp_path):
     assert resumed_batch.epoch == gt_batch.epoch
 
     if gt_batch.seeds is not None:
+        assert resumed_batch.seeds is not None
         assert jnp.array_equal(resumed_batch.seeds, gt_batch.seeds)
     else:
         assert resumed_batch.seeds is None
 
 
-def test_legacy_scheduler_exclusion(mock_mat_files, tmp_path):
-    """Verify that legacy scheduler (Grain=False) does NOT support checkpointing."""
+def test_legacy_scheduler_exclusion(
+    mock_mat_files: tuple[list[str], dict[str, int]], tmp_path: Path
+) -> None:
+    """Verify legacy scheduler (Grain=False) does NOT support
+    checkpointing.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
+        tmp_path: Temporary directory for this test.
+    """
     paths, _ = mock_mat_files
     checkpoint_dir = tmp_path / "checkpoints_legacy"
 
@@ -164,7 +199,8 @@ def test_legacy_scheduler_exclusion(mock_mat_files, tmp_path):
     config = get_valid_config(paths, ".mat")
 
     # 1. Restoration failure
-    # First create a valid checkpoint using Grain (we need a dir with checkpoints)
+    # First create a valid checkpoint using Grain (we need a dir with
+    # checkpoints)
     grain_sampler = make(config, use_grain_scheduler=True)
     _ = next(grain_sampler)
     save_checkpoint(checkpoint_dir, grain_sampler, step=1)
@@ -172,7 +208,10 @@ def test_legacy_scheduler_exclusion(mock_mat_files, tmp_path):
     # Try to load into legacy sampler
     with pytest.raises(
         ValueError,
-        match="Sampler does not provide access to Grain iterator|does not expose Grain iterator",
+        match=(
+            r"Sampler does not provide access to Grain "
+            r"iterator|does not expose Grain iterator"
+        ),
     ):
         make(config, use_grain_scheduler=False, load_from=checkpoint_dir)
 
@@ -184,8 +223,16 @@ def test_legacy_scheduler_exclusion(mock_mat_files, tmp_path):
         save_checkpoint(tmp_path / "fail", legacy_sampler, step=1)
 
 
-def test_edge_case_modified_file_list(mock_mat_files, tmp_path):
-    """Verify that restoring with a different file list fails or warns (Grain detects mismatch)."""
+def test_edge_case_modified_file_list(
+    mock_mat_files: tuple[list[str], dict[str, int]], tmp_path: Path
+) -> None:
+    """Verify restoring with a different file list fails or warns (Grain
+    detects mismatch).
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
+        tmp_path: Temporary directory for this test.
+    """
     paths, _ = mock_mat_files
     checkpoint_dir = tmp_path / "checkpoints_drift"
 
@@ -200,16 +247,27 @@ def test_edge_case_modified_file_list(mock_mat_files, tmp_path):
     new_config = dict(config)
     new_config["file_list"] = paths[:1]  # Drop one file
 
-    # Grain validation should catch this because the DataSource or Sampler repr will change
+    # Grain validation should catch this because the DataSource or Sampler repr
+    # will change
     with pytest.raises(
         ValueError,
-        match="match dataloader sampler|DataSource in checkpoint does not match",
+        match=(
+            r"match dataloader sampler|DataSource in "
+            r"checkpoint does not match"
+        ),
     ):
         make(new_config, use_grain_scheduler=True, load_from=checkpoint_dir)
 
 
-def test_edge_case_missing_files(mock_mat_files, tmp_path):
-    """Verify behavior when files are deleted after checkpointing."""
+def test_edge_case_missing_files(
+    mock_mat_files: tuple[list[str], dict[str, int]], tmp_path: Path
+) -> None:
+    """Verify behavior when files are deleted after checkpointing.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
+        tmp_path: Temporary directory for this test.
+    """
     paths, _ = mock_mat_files
     checkpoint_dir = tmp_path / "checkpoints_missing"
 
@@ -232,13 +290,20 @@ def test_edge_case_missing_files(mock_mat_files, tmp_path):
     # next() should fail because it tries to load a non-existent file
     with pytest.raises(
         (FileNotFoundError, ValueError),
-        match=".*not found.*|.*Failed to load.*",
+        match=r".*not found.*|.*Failed to load.*",
     ):
         _ = next(resumed_sampler)
 
 
-def test_edge_case_config_drift(mock_mat_files, tmp_path):
-    """Verify behavior when critical config parameters (like seed) change."""
+def test_edge_case_config_drift(
+    mock_mat_files: tuple[list[str], dict[str, int]], tmp_path: Path
+) -> None:
+    """Verify behavior when critical config parameters (like seed) change.
+
+    Args:
+        mock_mat_files: Temporary MATLAB file paths and dimensions.
+        tmp_path: Temporary directory for this test.
+    """
     paths, _ = mock_mat_files
     checkpoint_dir = tmp_path / "checkpoints_drift_params"
 

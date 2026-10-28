@@ -1,14 +1,17 @@
 """Tests for synthetic particle image generation from discrete data.
 
-These tests verify the core rendering logic that converts particle positions,
-diameters, and intensities into a grayscale grayscale image, including
-noise addition and performance benchmarking.
+These tests verify the core rendering logic that converts particle
+positions, diameters, and intensities into a grayscale grayscale
+image, including noise addition and performance benchmarking.
 """
+
+from __future__ import annotations
 
 import timeit
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
@@ -35,18 +38,28 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_IMG_GEN"]
     "noise_gaussian_mean, noise_gaussian_std", [(0.0, 0.0), (10.0, 2.0)]
 )
 def test_generate_image_from_data(
-    seed,
-    image_shape,
-    particle_positions,
-    noise_uniform,
-    noise_gaussian_mean,
-    noise_gaussian_std,
-    visualize=False,
-):
+    seed: int,
+    image_shape: tuple[int, int],
+    particle_positions: jax.Array,
+    noise_uniform: float,
+    noise_gaussian_mean: float,
+    noise_gaussian_std: float,
+    visualize: bool = False,
+) -> None:
     """Test the generation of a synthetic particle image from raw data.
 
     Verifies that particles are correctly rendered and that noise is
-    applied without violating pixel intensity bounds or image dimensions.
+    applied without violating pixel intensity bounds or image
+    dimensions.
+
+    Args:
+        seed: Seed for this test case.
+        image_shape: Height and width of the output images.
+        particle_positions: Particle positions for this test case.
+        noise_uniform: Noise uniform for this test case.
+        noise_gaussian_mean: Noise gaussian mean for this test case.
+        noise_gaussian_std: Noise gaussian std for this test case.
+        visualize: Visualize for this test case.
     """
     key = jax.random.PRNGKey(seed)
     diameters_x = jnp.ones(particle_positions.shape[0])
@@ -72,8 +85,7 @@ def test_generate_image_from_data(
     )
 
     if visualize:
-        import matplotlib.pyplot as plt
-        import numpy as np
+        import matplotlib.pyplot as plt  # noqa: PLC0415 - optional or intentionally lazy import
 
         plt.imsave("img.png", np.array(img), cmap="gray")
         plt.imsave("img_background.png", np.array(img_background), cmap="gray")
@@ -98,12 +110,23 @@ def test_generate_image_from_data(
 @pytest.mark.parametrize("intensity_range", [(100, 200)])
 @pytest.mark.parametrize("rho_range", [(-0.2, 0.2)])
 def test_speed_img_gen(
-    seeding_density, image_shape, diameter_range, intensity_range, rho_range
-):
+    seeding_density: float,
+    image_shape: tuple[int, int],
+    diameter_range: tuple[float, float],
+    intensity_range: tuple[float, float],
+    rho_range: tuple[float, float],
+) -> None:
     """Benchmark performance of GPU-parallelized image generation.
 
     Uses `shard_map` to distribute the rendering task across multiple
     GPUs and verifies that the execution time is within expected bounds.
+
+    Args:
+        seeding_density: Seeding density for this test case.
+        image_shape: Height and width of the output images.
+        diameter_range: Diameter range for this test case.
+        intensity_range: Intensity range for this test case.
+        rho_range: Rho range for this test case.
     """
 
     # Name of the axis for the device mesh
@@ -169,7 +192,8 @@ def test_speed_img_gen(
     )
 
     # Sending the variables to the devices
-    # To make the test also consider the time of sending the variables to the devices
+    # To make the test also consider the time of sending the variables to the
+    # devices
     # comment the next lines
     particles = jax.device_put(
         particles, NamedSharding(mesh, PartitionSpec(shard_particles))
@@ -194,12 +218,26 @@ def test_speed_img_gen(
     jax.block_until_ready(intensities)
     jax.block_until_ready(rho)
 
-    _img_gen_fun = (
-        lambda particles,
-        diameters_x,
-        diameters_y,
-        intensities,
-        rho: img_gen_from_data(
+    def _img_gen_fun(
+        particles: jax.Array,
+        diameters_x: jax.Array,
+        diameters_y: jax.Array,
+        intensities: jax.Array,
+        rho: jax.Array,
+    ) -> jax.Array:
+        """Render particles using the benchmark image shape.
+
+        Args:
+            particles: Particles for this test case.
+            diameters_x: Diameters x for this test case.
+            diameters_y: Diameters y for this test case.
+            intensities: Intensities for this test case.
+            rho: Rho for this test case.
+
+        Returns:
+            The value produced for the test scenario.
+        """
+        return img_gen_from_data(
             image_shape=image_shape,
             particle_positions=particles,
             diameters_x=diameters_x,
@@ -207,7 +245,6 @@ def test_speed_img_gen(
             intensities=intensities,
             rho=rho,
         )
-    )
 
     # 2. Create the jit function
     img_gen_from_data_jit = jax.jit(
@@ -225,7 +262,8 @@ def test_speed_img_gen(
         )
     )
 
-    def run_img_gen_jit():
+    def run_img_gen_jit() -> None:
+        """Run img gen jit."""
         img = img_gen_from_data_jit(
             particles,
             diameters_x,

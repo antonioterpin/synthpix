@@ -1,16 +1,24 @@
 """Tests for the Grain-based scheduler creation in the `make` module.
 
-These tests verify that the `make` function correctly instantiates the Grain
-data loading stack, including adapters, samplers, and data sources, when
-`use_grain_scheduler=True` is provided. It uses extensive monkeypatching to
-isolate the factory logic from actual Grain or JAX execution.
+These tests verify that the `make` function correctly instantiates
+the Grain data loading stack, including adapters, samplers, and data
+sources, when `use_grain_scheduler=True` is provided. It uses
+extensive monkeypatching to isolate the factory logic from actual
+Grain or JAX execution.
 """
 
+from __future__ import annotations
+
 import importlib
-from typing import Any
+from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
+from typing_extensions import Self
+
+from synthpix.make import get_data_source_class
 
 # Import the module to be tested
 make_mod = importlib.import_module("synthpix.make")
@@ -18,51 +26,119 @@ make = make_mod.make
 
 
 class DummyDataSource:
-    def __init__(self, *args, **kwargs):
+    """Dummy Data Source test double."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the test double.
+
+        Args:
+            *args: Positional arguments accepted by the test double.
+            **kwargs: Keyword arguments accepted by the test double.
+        """
         self.args = args
         self.kwargs = kwargs
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """Return the number of records.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         return 10
 
 
 class DummyEpisodicDataSource:
-    def __init__(self, source, batch_size, episode_length, seed):
+    """Dummy Episodic Data Source test double."""
+
+    def __init__(
+        self, source: Any, batch_size: int, episode_length: int, seed: int
+    ) -> None:
+        """Initialize the test double.
+
+        Args:
+            source: Source for this test case.
+            batch_size: Number of samples requested in each batch.
+            episode_length: Episode length for this test case.
+            seed: Seed for this test case.
+        """
         self.source = source
         self.batch_size = batch_size
         self.episode_length = episode_length
         self.seed = seed
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """Return the number of records.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         return 100
 
 
 class DummyKinematicDataSource:
-    def __init__(self, **kwargs):
+    """Dummy Kinematic Data Source test double."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize the test double.
+
+        Args:
+            **kwargs: Keyword arguments accepted by the test double.
+        """
         self.kwargs = kwargs
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """Return the number of records.
+
+        Returns:
+            The value produced for the test scenario.
+        """
         return 50
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config: dict[str, Any]) -> Self:
+        """From config.
+
+        Args:
+            config: Config used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return cls(config=config)
 
 
 class DummyGrainAdapter:
-    def __init__(self, loader):
+    """Dummy Grain Adapter test double."""
+
+    def __init__(self, loader: Any) -> None:
+        """Initialize the test double.
+
+        Args:
+            loader: Loader for this test case.
+        """
         self.loader = loader
 
 
 class DummyLoader:
+    """Dummy Loader test double."""
+
     def __init__(
         self,
-        data_source,
-        sampler,
-        operations,
-        worker_count=0,
-        read_options=None,
-    ):
+        data_source: Any,
+        sampler: Any,
+        operations: Any,
+        worker_count: int = 0,
+        read_options: Any = None,
+    ) -> None:
+        """Initialize the test double.
+
+        Args:
+            data_source: Data source for this test case.
+            sampler: Sampler for this test case.
+            operations: Operations for this test case.
+            worker_count: Worker count for this test case.
+            read_options: Read options for this test case.
+        """
         self.data_source = data_source
         self.sampler = sampler
         self.operations = operations
@@ -71,19 +147,48 @@ class DummyLoader:
 
 
 class DummySampler:
-    def __init__(self, scheduler, batch_size, *args, **kwargs):
+    """Dummy Sampler test double."""
+
+    def __init__(
+        self,
+        scheduler: Any,
+        batch_size: int,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize the test double.
+
+        Args:
+            scheduler: Scheduler fixture or test double under test.
+            batch_size: Number of samples requested in each batch.
+            *args: Positional arguments accepted by the test double.
+            **kwargs: Keyword arguments accepted by the test double.
+        """
         self.scheduler = scheduler
         self.batch_size = batch_size
         self.kwargs = kwargs
 
     @classmethod
-    def from_config(cls, scheduler, config):
+    def from_config(cls, scheduler: Any, config: dict[str, Any]) -> Self:
+        """From config.
+
+        Args:
+            scheduler: Scheduler fixture or test double under test.
+            config: Config used by this test.
+
+        Returns:
+            The result used by the test assertions.
+        """
         return cls(scheduler, config["batch_size"], config=config)
 
 
 @pytest.fixture
-def patch_grain(monkeypatch):
-    """Patch Grain and DataSource symbols."""
+def patch_grain(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Patch Grain and DataSource symbols.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+    """
     # Mock Grain
     mock_grain = SimpleNamespace()
     mock_grain.IndexSampler = lambda **kwargs: "IndexSampler"
@@ -91,13 +196,21 @@ def patch_grain(monkeypatch):
     mock_grain.NoSharding = lambda: "NoSharding"
 
     class MockReadOptions:
-        def __init__(self, num_threads=None, **kwargs):
+        """Mock Read Options test double."""
+
+        def __init__(
+            self, num_threads: int | None = None, **kwargs: Any
+        ) -> None:
+            """Initialize the test double.
+
+            Args:
+                num_threads: Num threads for this test case.
+                **kwargs: Keyword arguments accepted by the test double.
+            """
             self.num_threads = num_threads
             self.kwargs = kwargs
 
     mock_grain.ReadOptions = MockReadOptions
-
-    from unittest.mock import MagicMock
 
     mock_grain.Batch = MagicMock(return_value="Batch")
 
@@ -130,12 +243,18 @@ def patch_grain(monkeypatch):
     )
 
 
-def test_make_grain_basic(patch_grain, monkeypatch):
+def test_make_grain_basic(
+    patch_grain: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test standard Grain path instantiation for non-episodic data.
 
-    Verifies that the `make` function correctly sets up a `MATDataSource`
-    (mocked), wraps it in a Grain `DataLoader`, and connects it to a
-    `GrainSchedulerAdapter`.
+    Verifies that the `make` function correctly sets up a
+    `MATDataSource` (mocked), wraps it in a Grain `DataLoader`, and
+    connects it to a `GrainSchedulerAdapter`.
+
+    Args:
+        patch_grain: Fixture installing the Grain test doubles.
+        monkeypatch: Fixture that restores patched state after the test.
     """
     cfg = {
         "scheduler_class": ".mat",
@@ -161,15 +280,20 @@ def test_make_grain_basic(patch_grain, monkeypatch):
     )
     # Check that file_list was passed correctly
     assert loader.data_source.kwargs["dataset_path"] == ["file1.mat"], (
-        f"Expected dataset_path ['file1.mat'], got {loader.data_source.kwargs['dataset_path']}"
+        f"Expected dataset_path ['file1.mat'], got "
+        f"{loader.data_source.kwargs['dataset_path']}"
     )
 
 
-def test_make_grain_episodic(patch_grain):
+def test_make_grain_episodic(patch_grain: dict[str, Any]) -> None:
     """Test standard Grain path instantiation for episodic data.
 
     When `episode_length > 0` is specified, the factory should insert an
-    `EpisodicDataSource` into the stack and use the `GrainEpisodicAdapter`.
+    `EpisodicDataSource` into the stack and use the
+    `GrainEpisodicAdapter`.
+
+    Args:
+        patch_grain: Fixture installing the Grain test doubles.
     """
     cfg = {
         "scheduler_class": ".npy",
@@ -191,15 +315,19 @@ def test_make_grain_episodic(patch_grain):
         f"Expected episode_length 10, got {loader.data_source.episode_length}"
     )
     assert isinstance(loader.data_source.source, DummyDataSource), (
-        f"Expected underlying source to be DummyDataSource, got {type(loader.data_source.source)}"
+        f"Expected underlying source to be DummyDataSource, got "
+        f"{type(loader.data_source.source)}"
     )
 
 
-def test_make_grain_include_images(patch_grain):
+def test_make_grain_include_images(patch_grain: dict[str, Any]) -> None:
     """Test standard Grain path instantiation when images are requested.
 
     Verifies that `include_images=True` is propagated to the data source
     and that a `RealImageSampler` (mocked) is created.
+
+    Args:
+        patch_grain: Fixture installing the Grain test doubles.
     """
     cfg = {
         "scheduler_class": ".mat",
@@ -235,7 +363,8 @@ def test_make_grain_kinematic(patch_grain: Any) -> None:
     `DataLoader`, and drive a `SyntheticImageSampler` (mocked).
 
     Args:
-        patch_grain: Pytest fixture that patches Grain and DataSource symbols.
+        patch_grain: Pytest fixture that patches Grain and DataSource
+            symbols.
     """
     cfg = {
         "scheduler_class": "kinematic",
@@ -265,7 +394,8 @@ def test_make_grain_kinematic_include_images_raises(patch_grain: Any) -> None:
     """The kinematic source rejects `include_images: true`.
 
     Args:
-        patch_grain: Pytest fixture that patches Grain and DataSource symbols.
+        patch_grain: Pytest fixture that patches Grain and DataSource
+            symbols.
     """
     cfg = {
         "scheduler_class": "kinematic",
@@ -281,7 +411,8 @@ def test_make_kinematic_episodic_raises(patch_grain: Any) -> None:
     """The kinematic source rejects episodic iteration.
 
     Args:
-        patch_grain: Pytest fixture that patches Grain and DataSource symbols.
+        patch_grain: Pytest fixture that patches Grain and DataSource
+            symbols.
     """
     cfg = {
         "scheduler_class": "kinematic",
@@ -297,7 +428,8 @@ def test_make_kinematic_requires_grain(patch_grain: Any) -> None:
     """The kinematic source is only available on the Grain path.
 
     Args:
-        patch_grain: Pytest fixture that patches Grain and DataSource symbols.
+        patch_grain: Pytest fixture that patches Grain and DataSource
+            symbols.
     """
     cfg = {
         "scheduler_class": "kinematic",
@@ -307,26 +439,35 @@ def test_make_kinematic_requires_grain(patch_grain: Any) -> None:
         make(cfg, use_grain_scheduler=False)
 
 
-def test_make_grain_invalid_datasource(patch_grain):
+def test_make_grain_invalid_datasource(patch_grain: dict[str, Any]) -> None:
     """Test that an unsupported file extension raises a ValueError.
 
     This ensures the factory correctly identifies and rejects file types
     it doesn't have a registered `DataSource` for.
+
+    Args:
+        patch_grain: Fixture installing the Grain test doubles.
     """
     cfg = {
         "scheduler_class": ".invalid",
         "batch_size": 4,
     }
-    with pytest.raises(ValueError, match="DataSource class .invalid not found"):
+    with pytest.raises(
+        ValueError, match=r"DataSource class .invalid not found"
+    ):
         make(cfg, use_grain_scheduler=True)
 
 
-def test_make_grain_padding(patch_grain):
-    """Test that Grain padding is correctly configured via `drop_remainder`.
+def test_make_grain_padding(patch_grain: dict[str, Any]) -> None:
+    """Test that Grain padding is correctly configured via
+    `drop_remainder`.
 
     When `loop=False` and the dataset size isn't a multiple of the batch
-    size, Grain should be configured to NOT drop the remainder by default
-    (to ensure all data is seen).
+    size, Grain should be configured to NOT drop the remainder by
+    default (to ensure all data is seen).
+
+    Args:
+        patch_grain: Fixture installing the Grain test doubles.
     """
     cfg = {
         "scheduler_class": ".mat",
@@ -347,14 +488,19 @@ def test_make_grain_padding(patch_grain):
     )
 
 
-def test_make_grain_worker_count(patch_grain, monkeypatch):
+def test_make_grain_worker_count(
+    patch_grain: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test the configuration of multi-process workers in Grain.
 
     Verifies that `worker_count` is passed to the `DataLoader` and that
     a warning is issued when using multiple workers with non-episodic
     data (due to potential serialization issues).
+
+    Args:
+        patch_grain: Fixture installing the Grain test doubles.
+        monkeypatch: Fixture that restores patched state after the test.
     """
-    from unittest.mock import MagicMock
 
     mock_logger = MagicMock()
     monkeypatch.setattr(make_mod, "logger", mock_logger)
@@ -381,11 +527,14 @@ def test_make_grain_worker_count(patch_grain, monkeypatch):
     )
 
 
-def test_make_grain_threading(patch_grain):
+def test_make_grain_threading(patch_grain: dict[str, Any]) -> None:
     """Test passing `num_threads` and `buffer_size` via the configuration.
 
     These parameters should be correctly encapsulated into Grain's
     `ReadOptions` and passed to the `DataLoader`.
+
+    Args:
+        patch_grain: Fixture installing the Grain test doubles.
     """
     cfg = {
         "scheduler_class": ".mat",
@@ -408,15 +557,19 @@ def test_make_grain_threading(patch_grain):
     )
     # Check buffer size (passed to kwargs of ReadOptions mock)
     assert loader.read_options.kwargs["prefetch_buffer_size"] == 1000, (
-        f"Expected prefetch_buffer_size 1000, got {loader.read_options.kwargs['prefetch_buffer_size']}"
+        f"Expected prefetch_buffer_size 1000, got "
+        f"{loader.read_options.kwargs['prefetch_buffer_size']}"
     )
 
 
-def test_make_grain_episodic_worker_error(patch_grain):
+def test_make_grain_episodic_worker_error(patch_grain: dict[str, Any]) -> None:
     """Test that multiple workers are rejected for episodic data.
 
-    Using `worker_count > 0` with episodic data is prohibited because
-    it can break the strictly sequential order required for episodes.
+    Using `worker_count > 0` with episodic data is prohibited because it
+    can break the strictly sequential order required for episodes.
+
+    Args:
+        patch_grain: Fixture installing the Grain test doubles.
     """
     cfg = {
         "scheduler_class": ".mat",
@@ -431,16 +584,24 @@ def test_make_grain_episodic_worker_error(patch_grain):
         make(cfg, use_grain_scheduler=True)
 
 
-def test_get_data_source_class_invalid():
+def test_get_data_source_class_invalid() -> None:
     """Directly test get_data_source_class with invalid extension."""
-    from synthpix.make import get_data_source_class
 
-    with pytest.raises(ValueError, match="DataSource class .invalid not found"):
+    with pytest.raises(
+        ValueError, match=r"DataSource class .invalid not found"
+    ):
         get_data_source_class(".invalid")
 
 
-def test_make_config_not_dict(monkeypatch, tmp_path):
-    """Test that make raises TypeError if loaded config is not a dict."""
+def test_make_config_not_dict(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Test that make raises TypeError if loaded config is not a dict.
+
+    Args:
+        monkeypatch: Fixture that restores patched state after the test.
+        tmp_path: Temporary directory for this test.
+    """
     config_file = tmp_path / "config.yaml"
     config_file.write_text("dummy")
     monkeypatch.setattr(make_mod, "load_configuration", lambda _: "not a dict")

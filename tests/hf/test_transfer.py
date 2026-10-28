@@ -6,13 +6,22 @@ import os
 import threading
 import time
 
-from synthpix.hf import _transfer
+import pytest
 
+from synthpix.hf import _transfer
 
 _FLAG = "HF_HUB_ENABLE_HF_TRANSFER"
 
 
-def test_enable_hf_transfer_sets_env_when_available(monkeypatch):
+def test_enable_hf_transfer_sets_env_when_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify enable hf transfer sets env when available.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     monkeypatch.delenv(_FLAG, raising=False)
     monkeypatch.setattr(_transfer, "_hf_transfer_available", lambda: True)
 
@@ -22,7 +31,15 @@ def test_enable_hf_transfer_sets_env_when_available(monkeypatch):
     assert _FLAG not in os.environ
 
 
-def test_enable_hf_transfer_no_op_when_missing(monkeypatch):
+def test_enable_hf_transfer_no_op_when_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify enable hf transfer no op when missing.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     monkeypatch.delenv(_FLAG, raising=False)
     monkeypatch.setattr(_transfer, "_hf_transfer_available", lambda: False)
 
@@ -42,7 +59,15 @@ def test_enable_hf_transfer_no_op_when_missing(monkeypatch):
     assert "hf_transfer" in warnings[0]
 
 
-def test_enable_hf_transfer_restores_existing_value(monkeypatch):
+def test_enable_hf_transfer_restores_existing_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify enable hf transfer restores existing value.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     monkeypatch.setenv(_FLAG, "0")
     monkeypatch.setattr(_transfer, "_hf_transfer_available", lambda: True)
 
@@ -52,16 +77,22 @@ def test_enable_hf_transfer_restores_existing_value(monkeypatch):
     assert os.environ[_FLAG] == "0"
 
 
-def test_no_op_branch_clears_stale_flag(monkeypatch):
+def test_no_op_branch_clears_stale_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify no op branch clears stale flag.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     # If ``hf_transfer`` is missing but the environment still carries a
     # stale ``HF_HUB_ENABLE_HF_TRANSFER=1``, ``huggingface_hub`` will try
     # the accelerated path and fail. The context manager must clear it for
     # the duration of the block and restore it afterwards.
     monkeypatch.setenv(_FLAG, "1")
     monkeypatch.setattr(_transfer, "_hf_transfer_available", lambda: False)
-    monkeypatch.setattr(
-        _transfer.logger, "warning", lambda *a, **kw: None
-    )
+    monkeypatch.setattr(_transfer.logger, "warning", lambda *a, **kw: None)
 
     with _transfer.enable_hf_transfer():
         assert _FLAG not in os.environ
@@ -69,7 +100,13 @@ def test_no_op_branch_clears_stale_flag(monkeypatch):
     assert os.environ[_FLAG] == "1"
 
 
-def test_nested_enable_is_reentrant(monkeypatch):
+def test_nested_enable_is_reentrant(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify nested enable is reentrant.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     # Nested calls must not let an inner exit pop the flag while an outer
     # context still expects it to be set.
     monkeypatch.delenv(_FLAG, raising=False)
@@ -84,7 +121,15 @@ def test_nested_enable_is_reentrant(monkeypatch):
     assert _FLAG not in os.environ
 
 
-def test_overlapping_threads_do_not_leak_flag(monkeypatch):
+def test_overlapping_threads_do_not_leak_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify overlapping threads do not leak flag.
+
+    Args:
+        monkeypatch: Fixture for restoring patched attributes and
+            environment variables.
+    """
     # Two threads entering and leaving overlapping contexts must not leak
     # the flag or restore it in the wrong order.
     monkeypatch.delenv(_FLAG, raising=False)
@@ -92,7 +137,8 @@ def test_overlapping_threads_do_not_leak_flag(monkeypatch):
 
     barrier = threading.Barrier(2)
 
-    def worker():
+    def worker() -> None:
+        """Worker."""
         barrier.wait()
         with _transfer.enable_hf_transfer():
             time.sleep(0.01)

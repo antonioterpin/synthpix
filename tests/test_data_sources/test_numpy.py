@@ -1,12 +1,15 @@
 r"""Tests for NumpyDataSource.
 
-NumpyDataSource is used to load flow fields (and optionally images) stored as
-NumPy (.npy) files. It expects a specific filename pattern r"flow_(\d+).npy"
-when paired images are requested, to correctly match flow fields with their
-corresponding images.
+NumpyDataSource is used to load flow fields (and optionally images)
+stored as NumPy (.npy) files. It expects a specific filename pattern
+r"flow_(\d+).npy" when paired images are requested, to correctly
+match flow fields with their corresponding images.
 """
 
+from __future__ import annotations
+
 import os
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -14,13 +17,19 @@ import pytest
 from synthpix.data_sources import NumpyDataSource
 
 
-def test_numpy_simple(mock_numpy_files):
+def test_numpy_simple(
+    mock_numpy_files: tuple[list[str], dict[str, int]],
+) -> None:
     """Test standard loading of NumPy flow files without images.
 
-    Verifies that the data source correctly identifies the number of files
-    and that retrieved items contain 'flow_fields' but not 'images1'.
+    Verifies that the data source correctly identifies the number of
+    files and that retrieved items contain 'flow_fields' but not
+    'images1'.
+
+    Args:
+        mock_numpy_files: Temporary NumPy file paths and dimensions.
     """
-    file_paths, dims = mock_numpy_files
+    file_paths, _dims = mock_numpy_files
     root = os.path.dirname(file_paths[0])
 
     ds = NumpyDataSource([root], include_images=False)
@@ -34,8 +43,14 @@ def test_numpy_simple(mock_numpy_files):
     )
 
 
-def test_numpy_with_images(mock_numpy_files):
-    """Test loading Numpy flow with paired images using fixture."""
+def test_numpy_with_images(
+    mock_numpy_files: tuple[list[str], dict[str, int]],
+) -> None:
+    """Test loading Numpy flow with paired images using fixture.
+
+    Args:
+        mock_numpy_files: Temporary NumPy file paths and dimensions.
+    """
     file_paths, dims = mock_numpy_files
     root = os.path.dirname(file_paths[0])
 
@@ -49,12 +64,18 @@ def test_numpy_with_images(mock_numpy_files):
         dims["width"],
         3,
     ), (
-        f"Image shape mismatch. Expected {(dims['height'], dims['width'], 3)}, got {item['images1'].shape}"
+        f"Image shape mismatch. Expected "
+        f"{(dims['height'], dims['width'], 3)}, got "
+        f"{item['images1'].shape}"
     )
 
 
-def test_numpy_missing_images(tmp_path):
-    """Test FileNotFoundError when paired images are missing."""
+def test_numpy_missing_images(tmp_path: Path) -> None:
+    """Test FileNotFoundError when paired images are missing.
+
+    Args:
+        tmp_path: Temporary directory for this test.
+    """
     p_flow = tmp_path / "flow_1.npy"
     np.save(p_flow, np.random.rand(64, 64, 2))
     # Missing images img_0.jpg and img_1.jpg
@@ -63,30 +84,39 @@ def test_numpy_missing_images(tmp_path):
         NumpyDataSource([str(tmp_path)], include_images=True)
 
 
-def test_numpy_invalid_extension(tmp_path):
-    """Test that ValueError is raised if files do not have the .npy extension.
+def test_numpy_invalid_extension(tmp_path: Path) -> None:
+    """Test that ValueError is raised if files do not have the .npy
+    extension.
 
     NumpyDataSource explicitly validates that all files in its file list
     are NumPy files. This test verifies that providing a non-npy file
     triggers the appropriate ValueError.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     p_txt = tmp_path / "test.txt"
     p_txt.write_text("dummy")
 
     # Pass the text file directly to bypass directory glob filtering.
-    # The base FileDataSource does not filter individual files passed in the list,
+    # The base FileDataSource does not filter individual files passed in the
+    # list,
     # so the subclass validation logic will catch this.
     with pytest.raises(ValueError, match="must be numpy files"):
         NumpyDataSource([str(p_txt)])
 
 
-def test_numpy_bad_filename_format(tmp_path):
-    r"""Test ValueError for filenames that don't match the `flow_(\d+).npy` pattern.
+def test_numpy_bad_filename_format(tmp_path: Path) -> None:
+    r"""Test ValueError for filenames that don't match the `flow_(\d+).npy`
+    pattern.
 
-    When `include_images=True`, the data source requires a specific naming
-    convention to pair flows with images (e.g., flow_1.npy -> img_1.jpg).
-    Filenames that don't match this pattern should cause a ValueError during
-    initialization.
+    When `include_images=True`, the data source requires a specific
+    naming convention to pair flows with images (e.g., flow_1.npy ->
+    img_1.jpg). Filenames that don't match this pattern should cause a
+    ValueError during initialization.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     # This check `mb = re.match` happens in __init__ if include_images=True.
     p = tmp_path / "flow_abc.npy"
@@ -96,12 +126,15 @@ def test_numpy_bad_filename_format(tmp_path):
         NumpyDataSource([str(tmp_path)], include_images=True)
 
 
-def test_numpy_load_file_bad_filename(tmp_path):
+def test_numpy_load_file_bad_filename(tmp_path: Path) -> None:
     """Test ValueError in load_file if filename is bad (defensive check).
 
-    This test dynamically sets `include_images=True` on a data source that
-    was initialized without images, to verify that `load_file` also
+    This test dynamically sets `include_images=True` on a data source
+    that was initialized without images, to verify that `load_file` also
     performs the filename pattern check.
+
+    Args:
+        tmp_path: Temporary directory for this test.
     """
     p = tmp_path / "flow_abc.npy"
     np.save(p, np.random.rand(32, 32, 2))
@@ -114,7 +147,9 @@ def test_numpy_load_file_bad_filename(tmp_path):
         ds.load_file(str(p))
 
 
-def test_numpy_manual_list_validation():
-    """Test validation if file list contains non-npy file (manual injection)."""
+def test_numpy_manual_list_validation() -> None:
+    """Test validation if file list contains non-npy file (manual
+    injection).
+    """
     with pytest.raises(ValueError, match="must be numpy files"):
         NumpyDataSource(["file.txt"])

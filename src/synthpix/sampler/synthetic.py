@@ -652,9 +652,9 @@ class SyntheticImageSampler(Sampler):
             params=params,
             done=None,
             mask=(
-                jnp.array(self._mask_scheduler)
+                jnp.asarray(self._mask_scheduler, dtype=jnp.bool_)
                 if self._mask_scheduler is not None
-                else None
+                else jnp.ones(self.batch_size, dtype=jnp.bool_)
             ),
             files=self._files_scheduler,
             epoch=(
@@ -690,58 +690,6 @@ class SyntheticImageSampler(Sampler):
                 "jax_seeds": self._jax_seeds,
             }
         )
-        return state_dict
-
-    @property
-    def restore_state(self) -> dict[str, Any]:
-        """Returns the state schema of the sampler for restoration.
-
-        Returns:
-            A dictionary containing the sampler state schema.
-        """
-        state_dict = self.state
-        if state_dict["current_flows"] is None:
-            # Calculate expected shape based on utils.flow_field_adapter logic
-            h_bounds_raw = (
-                self.position_bounds[0]
-                / self.resolution
-                * self.flow_field_res_y
-            )
-            w_bounds_raw = (
-                self.position_bounds[1]
-                / self.resolution
-                * self.flow_field_res_x
-            )
-
-            h_bounds = max(1, int(h_bounds_raw))
-            w_bounds = max(1, int(w_bounds_raw))
-
-            shape = (self.batch_size, h_bounds, w_bounds, 2)
-
-            state_dict["current_flows"] = jax.ShapeDtypeStruct(
-                shape, jnp.float32
-            )
-
-        if state_dict["mask_scheduler"] is None:
-            # mask_scheduler is expanded to batch_size in _get_next
-            state_dict["mask_scheduler"] = jax.ShapeDtypeStruct(
-                (self.batch_size,), jnp.bool_
-            )
-
-        if state_dict["scheduler_epoch"] is None:
-            # scheduler_epoch is expanded to batch_size in _get_next
-            # Assuming int32 or int64 for epoch
-            state_dict["scheduler_epoch"] = jax.ShapeDtypeStruct(
-                (self.batch_size,), jnp.int32
-            )
-
-        if state_dict["files_scheduler"] is None:
-            # files_scheduler is encoded as uint8 array of variable length
-            # Use np.nan to indicate unknown dimension size for restoration
-            state_dict["files_scheduler"] = jax.ShapeDtypeStruct(
-                (np.nan,), jnp.uint8
-            )
-
         return state_dict
 
     @state.setter
