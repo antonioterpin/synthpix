@@ -74,7 +74,11 @@ class RealImageSampler(Sampler):
             flow_fields=flow_fields,
             params=None,
             done=None,
-            mask=jnp.array(batch.mask) if batch.mask is not None else None,
+            mask=(
+                jnp.asarray(batch.mask, dtype=jnp.bool_)
+                if batch.mask is not None
+                else jnp.ones(batch.flow_fields.shape[0], dtype=jnp.bool_)
+            ),
             files=batch.files,
             epoch=jnp.array(batch.epoch) if batch.epoch is not None else None,
             seeds=jnp.array(batch.jax_seed)
